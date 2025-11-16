@@ -1,0 +1,18 @@
+{
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.extraPaths": [
+    "../2026/venv/lib/python3.10/site-packages"
+  ],
+  "python.defaultInterpreterPath": "../2026/venv/bin/python",
+  "python.analysis.stubPath": "../2026/venv/lib/python3.10/site-packages",
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportAttributeAccessIssue": "none",
+    "reportGeneralTypeIssues": "warning",
+    "reportMissingImports": "warning",
+    "reportMissingTypeStubs": "none"
+  },
+  "pyrightconfig.disableLanguageServices": false
+}
+
