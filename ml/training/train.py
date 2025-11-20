@@ -1,17 +1,4 @@
-"""
-Fixed Training Script for MaxSight CNN
-
-Key improvements:
-
-1. Proper gradient accumulation
-
-2. Fixed EMA timing
-
-3. Correct scheduler coordination
-
-4. Better checkpoint management
-
-"""
+"""Training script with gradient accumulation, EMA, and checkpointing."""
 
 import torch
 import torch.nn as nn
@@ -21,10 +8,9 @@ from typing import Dict, Optional
 from pathlib import Path
 import copy
 
-# Mixed precision support
 try:
-    from torch.amp import autocast  # New autocast API (device-agnostic)
-    from torch.cuda.amp import GradScaler  # GradScaler still from cuda.amp
+    from torch.amp import autocast
+    from torch.cuda.amp import GradScaler
     AMP_AVAILABLE = True
 except ImportError:
     class DummyAutocast:
@@ -38,7 +24,7 @@ except ImportError:
 
 
 class EMA:
-    """Exponential Moving Average for model weights"""
+    """EMA for model weights (smooths training)."""
     
     def __init__(self, model: nn.Module, decay: float = 0.9999):
         self.model = model
@@ -75,7 +61,7 @@ class EMA:
 
 
 class Trainer:
-    """Improved Trainer class for MaxSight CNN"""
+    """Training loop with mixed precision, EMA, and early stopping."""
     
     def __init__(
         self,
@@ -156,7 +142,7 @@ class Trainer:
         self.best_val_loss = float('inf')
     
     def _get_lr_scale(self, step: int) -> float:
-        """Get learning rate scale based on warmup and cosine decay"""
+        """LR scale: linear warmup then cosine decay."""
         if step < self.warmup_steps:
             # Linear warmup
             return step / self.warmup_steps
@@ -166,23 +152,21 @@ class Trainer:
             return 0.5 * (1 + torch.cos(torch.tensor(progress * 3.14159)).item())
     
     def _update_lr(self, step: int):
-        """Update learning rate with warmup + cosine schedule"""
+        """Update LR using warmup + cosine schedule."""
         lr_scale = self._get_lr_scale(step)
         for i, param_group in enumerate(self.optimizer.param_groups):
             base_lr = self.base_lr * 0.1 if i == 0 else self.base_lr  # Backbone vs heads
             param_group['lr'] = base_lr * lr_scale
     
     def freeze_backbone(self):
-        """Freeze ResNet backbone"""
+        """Freeze ResNet backbone."""
         for param in self.backbone_params:
             param.requires_grad = False
-        print("✓ Backbone frozen")
     
     def unfreeze_backbone(self):
-        """Unfreeze ResNet backbone"""
+        """Unfreeze ResNet backbone."""
         for param in self.backbone_params:
             param.requires_grad = True
-        print("✓ Backbone unfrozen for fine-tuning")
     
     def train_epoch(self, epoch: int) -> Dict[str, float]:
         """Train for one epoch"""
@@ -190,11 +174,14 @@ class Trainer:
         total_loss = 0.0
         total_samples = 0
         
-        # Freeze/unfreeze backbone
-        if epoch == 1:
-            self.freeze_backbone()
-        elif epoch == self.freeze_backbone_epochs + 1:
-            self.unfreeze_backbone()
+        # Freeze/unfreeze backbone dynamically
+        if self.freeze_backbone_epochs > 0:
+            if epoch <= self.freeze_backbone_epochs:
+                if not all(not p.requires_grad for p in self.backbone_params):
+                    self.freeze_backbone()
+            else:
+                if not all(p.requires_grad for p in self.backbone_params):
+                    self.unfreeze_backbone()
         
         self.optimizer.zero_grad()
         
@@ -216,18 +203,20 @@ class Trainer:
             if self.criterion is None:
                 raise ValueError("Criterion (loss function) must be provided to Trainer")
             
-            if self.use_mixed_precision and self.scaler is not None:
-                device_type = 'cuda' if self.device == 'cuda' else 'mps'  # Determine device type for autocast
-                with autocast(device_type=device_type):  # type: ignore  # FP16 forward pass (new API, type stubs may be outdated)
+            # Use AMP if available (speeds up on GPU, saves memory)
+            if self.use_mixed_precision and AMP_AVAILABLE and self.device.type == 'cuda':
+                with autocast(device_type='cuda'):  # type: ignore
                     outputs = self.model(images)
                     loss_dict = self.criterion(outputs, targets)
                     loss = loss_dict['total_loss'] / self.gradient_accumulation_steps
-                
-                self.scaler.scale(loss).backward()
             else:
                 outputs = self.model(images)
                 loss_dict = self.criterion(outputs, targets)
                 loss = loss_dict['total_loss'] / self.gradient_accumulation_steps
+            
+            if self.scaler:
+                self.scaler.scale(loss).backward()
+            else:
                 loss.backward()
             
             # Gradient accumulation
@@ -291,9 +280,8 @@ class Trainer:
                 if self.criterion is None:
                     raise ValueError("Criterion (loss function) must be provided to Trainer")
                 
-                if self.use_mixed_precision and self.scaler is not None:
-                    device_type = 'cuda' if self.device == 'cuda' else 'mps'  # Determine device type for autocast
-                    with autocast(device_type=device_type):  # type: ignore  # FP16 forward pass (new API, type stubs may be outdated)
+                if self.use_mixed_precision and AMP_AVAILABLE and self.device.type == 'cuda':
+                    with autocast(device_type='cuda'):  # type: ignore
                         outputs = self.model(images)
                         loss_dict = self.criterion(outputs, targets)
                 else:
@@ -302,18 +290,7 @@ class Trainer:
                 
                 total_loss += loss_dict['total_loss'].item()
                 
-                # Calculate accuracy (top-1 classification)
-                # Use objectness to find most confident detection
-                for b in range(images.size(0)):
-                    obj_scores = outputs['objectness'][b]  # [N]
-                    top_idx = obj_scores.argmax()
-                    pred_cls = outputs['classifications'][b, top_idx].argmax()
-                    
-                    # Compare to first ground truth object
-                    gt_cls = targets['labels'][b, 0]
-                    if pred_cls == gt_cls:
-                        correct += 1
-                    total += 1
+                # TODO: Replace with mAP from DetectionMetrics (accuracy is wrong for detection)
         
         # Restore original weights
         if use_ema and self.ema is not None:
@@ -332,18 +309,13 @@ class Trainer:
         # Set total steps for LR schedule
         self.total_steps = num_epochs * len(self.train_loader)
         
-        print(f"\n{'='*60}")
-        print(f"Starting Training - {num_epochs} epochs")
-        print(f"Device: {self.device}")
-        print(f"Mixed Precision: {self.use_mixed_precision}")
-        print(f"Gradient Accumulation: {self.gradient_accumulation_steps}")
-        print(f"EMA: {self.ema is not None}")
-        print(f"Warmup Epochs: {self.warmup_epochs}")
-        print(f"{'='*60}\n")
+        print(f"\nStarting Training - {num_epochs} epochs")
+        print(f"Device: {self.device}, Mixed Precision: {self.use_mixed_precision}")
+        print(f"Gradient Accumulation: {self.gradient_accumulation_steps}, EMA: {self.ema is not None}")
+        print(f"Warmup Epochs: {self.warmup_epochs}\n")
         
         for epoch in range(1, num_epochs + 1):
             print(f"\nEpoch {epoch}/{num_epochs}")
-            print("-" * 60)
             
             # Train
             train_metrics = self.train_epoch(epoch)
@@ -382,7 +354,7 @@ class Trainer:
                     if self.ema is not None:
                         self.ema.restore()
                     
-                    print(f"✓ Saved best model (val_loss: {self.best_val_loss:.4f})")
+                    print(f"Saved best model (val_loss: {self.best_val_loss:.4f})")
                 else:
                     self.patience_counter += 1
                     if self.patience_counter >= self.early_stopping_patience:
@@ -410,9 +382,21 @@ class Trainer:
         if self.ema is not None:
             self.ema.restore()
         
-        print(f"\n{'='*60}")
-        print("Training Complete!")
+        # Save training history
+        history_path = save_path / 'training_history.json'
+        import json
+        with open(history_path, 'w') as f:
+            # Convert tensors to floats for JSON serialization
+            json_history = {
+                'train_loss': [float(x) for x in self.history['train_loss']],
+                'val_loss': [float(x) for x in self.history['val_loss']],
+                'val_acc': [float(x) for x in self.history['val_acc']],
+                'learning_rates': [float(x) for x in self.history['learning_rates']]
+            }
+            json.dump(json_history, f, indent=2)
+        
+        print(f"\nTraining Complete!")
         print(f"Best Val Loss: {self.best_val_loss:.4f}")
-        print(f"{'='*60}\n")
+        print(f"History saved to: {history_path}")
         
         return self.history

@@ -3,5 +3,10 @@
 # Supports: COCO (80 classes, ~200K images), AudioSet (audio), synthetic data (testing)
 # Complexity: O(N) dataset size, but lazy loading - only batches in memory (critical for large datasets)
 # Relationship: Provides training data pipeline - required for training on real-world environmental scenes
-# Usage: from ml.data.download_datasets import download_coco
+# Usage: from ml.data.dataset import MaxSightDataset
+
+from ml.data.dataset import MaxSightDataset
+from ml.data.generate_annotations import generate_annotations_from_coco
+
+__all__ = ['MaxSightDataset', 'generate_annotations_from_coco']
 

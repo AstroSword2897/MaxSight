@@ -1,14 +1,4 @@
-"""
-Comprehensive Dataset Acquisition Script - Maximum Data for Training
-Supports multiple large-scale datasets for maximum training data:
-- COCO (200K+ images, 1.5M+ instances)
-- Open Images V7 (9M+ images, 36M+ instances)
-- Objects365 (2M+ images, 30M+ instances)
-- Visual Genome (108K images, 3.8M+ instances)
-- LVIS (164K images, 2.2M+ instances)
-- AudioSet (2M+ audio clips)
-Purpose: Maximum data utilization for comprehensive 347-class training
-"""
+"""Dataset download helpers for COCO, Open Images, Objects365, Visual Genome, LVIS, AudioSet."""
 
 import os
 import requests
@@ -16,10 +6,8 @@ import zipfile
 from pathlib import Path
 from typing import List, Dict, Optional
 
-# Comprehensive Classes - Import from model (347 classes: 80 COCO + 267 accessibility)
-# Using full comprehensive class list for maximum data and guidance detail
 from ml.models.maxsight_cnn import COCO_CLASSES
-ENVIRONMENTAL_CLASSES = COCO_CLASSES  # Use comprehensive class list
+ENVIRONMENTAL_CLASSES = COCO_CLASSES
 
 # 15 Environmental Sound Classes
 SOUND_CLASSES = [
@@ -53,11 +41,7 @@ def download_coco_dataset(data_dir: Path = Path("datasets/coco")):
 
 
 def download_open_images(data_dir: Path = Path("datasets/open_images")):
-    """
-    Download Open Images V7 dataset - 9M+ images, 36M+ instances, 600 classes
-    
-    Largest object detection dataset - provides maximum data for training
-    """
+    """Download Open Images V7 dataset (9M+ images, 36M+ instances)."""
     print("Open Images V7 Dataset Download Instructions:")
     print("1. Visit: https://storage.googleapis.com/openimages/web/index.html")
     print("2. Download: Open Images V7 Train (9M images, ~500GB)")
@@ -74,11 +58,7 @@ def download_open_images(data_dir: Path = Path("datasets/open_images")):
 
 
 def download_objects365(data_dir: Path = Path("datasets/objects365")):
-    """
-    Download Objects365 dataset - 2M+ images, 30M+ instances, 365 classes
-    
-    Large-scale dataset with diverse object categories
-    """
+    """Download Objects365 dataset (2M+ images, 30M+ instances)."""
     print("Objects365 Dataset Download Instructions:")
     print("1. Visit: https://www.objects365.org/download.html")
     print("2. Register and request access")
@@ -93,11 +73,7 @@ def download_objects365(data_dir: Path = Path("datasets/objects365")):
 
 
 def download_visual_genome(data_dir: Path = Path("datasets/visual_genome")):
-    """
-    Download Visual Genome dataset - 108K images, 3.8M+ instances, 80K+ classes
-    
-    Rich scene understanding with relationships and attributes
-    """
+    """Download Visual Genome dataset (108K images, 3.8M+ instances)."""
     print("Visual Genome Dataset Download Instructions:")
     print("1. Visit: https://visualgenome.org/api/v0/api_home.html")
     print("2. Download: Visual Genome 1.4 images (108K images, ~20GB)")

@@ -1,225 +1,234 @@
 """
 Hungarian Matching for Multi-Object Detection
-Implements bipartite matching between predictions and ground truth
-Based on DETR matching algorithm
+
+Matches predicted boxes to ground truth using optimal bipartite matching.
+
+Based on DETR's approach with combined classification + bbox + GIoU costs.
+
 """
 
+
 import torch
-import torch.nn as nn
-from typing import Dict, Tuple
-from scipy.optimize import linear_sum_assignment
-import numpy as np
+from typing import Tuple, List
 
 
-def compute_cost_matrix(
-    pred_boxes: torch.Tensor,
-    pred_logits: torch.Tensor,
-    gt_boxes: torch.Tensor,
-    gt_labels: torch.Tensor,
-    cost_class: float = 1.0,
-    cost_bbox: float = 5.0,
-    cost_giou: float = 2.0
-) -> torch.Tensor:
+def compute_giou_cost(pred_boxes: torch.Tensor, gt_boxes: torch.Tensor) -> torch.Tensor:
     """
-    Compute cost matrix for Hungarian matching
+    Compute GIoU-based cost (1 - GIoU) between prediction and ground truth boxes.
+    Lower cost = better match.
     
-    Args:
-        pred_boxes: [num_queries, 4] predicted boxes (x, y, w, h) normalized
-        pred_logits: [num_queries, num_classes] classification logits
-        gt_boxes: [num_gt, 4] ground truth boxes (x, y, w, h) normalized
-        gt_labels: [num_gt] ground truth class indices
-        cost_class: Weight for classification cost
-        cost_bbox: Weight for bbox L1 cost
-        cost_giou: Weight for GIoU cost
-    
-    Returns:
-        [num_queries, num_gt] cost matrix
+    Boxes are in normalized (x, y, w, h) format.
     """
-    num_queries = pred_boxes.shape[0]
-    num_gt = gt_boxes.shape[0]
+    # Convert center format to corners for easier computation
+    p_x1 = pred_boxes[:, 0]
+    p_y1 = pred_boxes[:, 1]
+    p_x2 = pred_boxes[:, 0] + pred_boxes[:, 2]
+    p_y2 = pred_boxes[:, 1] + pred_boxes[:, 3]
     
-    # Classification cost: negative log probability for each GT label
-    pred_probs = pred_logits.softmax(dim=-1)  # [num_queries, num_classes]
+    g_x1 = gt_boxes[:, 0]
+    g_y1 = gt_boxes[:, 1]
+    g_x2 = gt_boxes[:, 0] + gt_boxes[:, 2]
+    g_y2 = gt_boxes[:, 1] + gt_boxes[:, 3]
     
-    # For each GT label, get the negative log prob from each query
-    # class_cost[i, j] = -log(p_query_i(class=gt_label_j))
-    class_cost = -pred_probs[:, gt_labels].log()  # [num_queries, num_gt]
+    # Expand for pairwise comparison: [N, 1] and [1, M] -> broadcasting to [N, M]
+    p_x1 = p_x1.unsqueeze(1)
+    p_y1 = p_y1.unsqueeze(1)
+    p_x2 = p_x2.unsqueeze(1)
+    p_y2 = p_y2.unsqueeze(1)
     
-    # Bbox L1 cost
-    pred_boxes_expanded = pred_boxes.unsqueeze(1)  # [num_queries, 1, 4]
-    gt_boxes_expanded = gt_boxes.unsqueeze(0)  # [1, num_gt, 4]
-    bbox_cost = torch.cdist(pred_boxes_expanded, gt_boxes_expanded, p=1)  # [num_queries, num_gt]
+    g_x1 = g_x1.unsqueeze(0)
+    g_y1 = g_y1.unsqueeze(0)
+    g_x2 = g_x2.unsqueeze(0)
+    g_y2 = g_y2.unsqueeze(0)
     
-    # GIoU cost
-    giou_cost = compute_giou_cost(pred_boxes, gt_boxes)  # [num_queries, num_gt]
+    # Intersection area
+    inter_x1 = torch.max(p_x1, g_x1)
+    inter_y1 = torch.max(p_y1, g_y1)
+    inter_x2 = torch.min(p_x2, g_x2)
+    inter_y2 = torch.min(p_y2, g_y2)
     
-    # Combined cost
-    cost_matrix = (
-        cost_class * class_cost +
-        cost_bbox * bbox_cost +
-        cost_giou * giou_cost
-    )
+    inter_w = torch.clamp(inter_x2 - inter_x1, min=0)
+    inter_h = torch.clamp(inter_y2 - inter_y1, min=0)
+    inter_area = inter_w * inter_h
     
-    return cost_matrix
-
-
-def compute_giou_cost(
-    boxes1: torch.Tensor,
-    boxes2: torch.Tensor
-) -> torch.Tensor:
-    """
-    Compute GIoU cost (1 - GIoU) between two sets of boxes
+    # Union area
+    pred_area = pred_boxes[:, 2] * pred_boxes[:, 3]  # w * h
+    gt_area = gt_boxes[:, 2] * gt_boxes[:, 3]
     
-    Args:
-        boxes1: [N, 4] (x, y, w, h) normalized
-        boxes2: [M, 4] (x, y, w, h) normalized
-    
-    Returns:
-        [N, M] cost matrix (1 - GIoU)
-    """
-    # Convert to (x1, y1, x2, y2)
-    boxes1_x1 = boxes1[:, 0]
-    boxes1_y1 = boxes1[:, 1]
-    boxes1_x2 = boxes1[:, 0] + boxes1[:, 2]
-    boxes1_y2 = boxes1[:, 1] + boxes1[:, 3]
-    
-    boxes2_x1 = boxes2[:, 0]
-    boxes2_y1 = boxes2[:, 1]
-    boxes2_x2 = boxes2[:, 0] + boxes2[:, 2]
-    boxes2_y2 = boxes2[:, 1] + boxes2[:, 3]
-    
-    # Expand for pairwise computation
-    boxes1_x1 = boxes1_x1.unsqueeze(1)  # [N, 1]
-    boxes1_y1 = boxes1_y1.unsqueeze(1)
-    boxes1_x2 = boxes1_x2.unsqueeze(1)
-    boxes1_y2 = boxes1_y2.unsqueeze(1)
-    
-    boxes2_x1 = boxes2_x1.unsqueeze(0)  # [1, M]
-    boxes2_y1 = boxes2_y1.unsqueeze(0)
-    boxes2_x2 = boxes2_x2.unsqueeze(0)
-    boxes2_y2 = boxes2_y2.unsqueeze(0)
-    
-    # Intersection
-    inter_x1 = torch.max(boxes1_x1, boxes2_x1)
-    inter_y1 = torch.max(boxes1_y1, boxes2_y1)
-    inter_x2 = torch.min(boxes1_x2, boxes2_x2)
-    inter_y2 = torch.min(boxes1_y2, boxes2_y2)
-    inter_area = torch.clamp(inter_x2 - inter_x1, min=0) * torch.clamp(inter_y2 - inter_y1, min=0)
-    
-    # Union
-    boxes1_area = boxes1[:, 2] * boxes1[:, 3]  # [N]
-    boxes2_area = boxes2[:, 2] * boxes2[:, 3]  # [M]
-    boxes1_area = boxes1_area.unsqueeze(1)  # [N, 1]
-    boxes2_area = boxes2_area.unsqueeze(0)  # [1, M]
-    union_area = boxes1_area + boxes2_area - inter_area
+    pred_area = pred_area.unsqueeze(1)
+    gt_area = gt_area.unsqueeze(0)
+    union_area = pred_area + gt_area - inter_area
     
     # IoU
     iou = inter_area / (union_area + 1e-8)
     
-    # Enclosing box
-    c_x1 = torch.min(boxes1_x1, boxes2_x1)
-    c_y1 = torch.min(boxes1_y1, boxes2_y1)
-    c_x2 = torch.max(boxes1_x2, boxes2_x2)
-    c_y2 = torch.max(boxes1_y2, boxes2_y2)
-    c_area = (c_x2 - c_x1) * (c_y2 - c_y1)
+    # Enclosing box (for GIoU)
+    enclose_x1 = torch.min(p_x1, g_x1)
+    enclose_y1 = torch.min(p_y1, g_y1)
+    enclose_x2 = torch.max(p_x2, g_x2)
+    enclose_y2 = torch.max(p_y2, g_y2)
+    enclose_area = (enclose_x2 - enclose_x1) * (enclose_y2 - enclose_y1)
     
-    # GIoU
-    giou = iou - (c_area - union_area) / (c_area + 1e-8)
+    # GIoU = IoU - (enclosing_area - union_area) / enclosing_area
+    giou = iou - (enclose_area - union_area) / (enclose_area + 1e-8)
     
-    # Cost = 1 - GIoU
     return 1.0 - giou
 
 
-def hungarian_matching(
+def compute_matching_cost(
     pred_boxes: torch.Tensor,
     pred_logits: torch.Tensor,
     gt_boxes: torch.Tensor,
     gt_labels: torch.Tensor,
-    cost_class: float = 1.0,
-    cost_bbox: float = 5.0,
-    cost_giou: float = 2.0
-) -> Tuple[torch.Tensor, torch.Tensor]:
+    lambda_class: float = 1.0,
+    lambda_bbox: float = 5.0,
+    lambda_giou: float = 2.0
+) -> torch.Tensor:
     """
-    Perform Hungarian matching between predictions and ground truth
+    Build cost matrix for Hungarian algorithm.
     
-    Args:
-        pred_boxes: [num_queries, 4] predicted boxes
-        pred_logits: [num_queries, num_classes] classification logits
-        gt_boxes: [num_gt, 4] ground truth boxes
-        gt_labels: [num_gt] ground truth class indices
-        cost_class: Weight for classification cost
-        cost_bbox: Weight for bbox L1 cost
-        cost_giou: Weight for GIoU cost
-    
-    Returns:
-        indices: [2, num_matched] (query_idx, gt_idx) pairs
-        matched_costs: [num_matched] costs for matched pairs
+    Each cell [i,j] represents cost of assigning prediction i to ground truth j.
+    Combines three components: classification, bounding box, and GIoU.
     """
-    # Compute cost matrix
-    cost_matrix = compute_cost_matrix(
-        pred_boxes, pred_logits, gt_boxes, gt_labels,
-        cost_class, cost_bbox, cost_giou
+    num_pred = pred_boxes.shape[0]
+    num_gt = gt_boxes.shape[0]
+    
+    # Classification cost: negative log-likelihood
+    # We want high confidence on the correct class, so we use -log(p)
+    probs = torch.softmax(pred_logits, dim=-1)
+    class_cost = -probs[:, gt_labels].log()  # [num_pred, num_gt]
+    
+    # L1 distance between box centers and sizes
+    bbox_cost = torch.cdist(
+        pred_boxes.unsqueeze(1),
+        gt_boxes.unsqueeze(0),
+        p=1
+    ).squeeze()  # [num_pred, num_gt]
+    
+    # GIoU cost
+    giou_cost = compute_giou_cost(pred_boxes, gt_boxes)
+    
+    # Weighted combination
+    total_cost = (
+        lambda_class * class_cost +
+        lambda_bbox * bbox_cost +
+        lambda_giou * giou_cost
     )
     
-    # Convert to numpy for scipy
-    cost_matrix_np = cost_matrix.detach().cpu().numpy()
+    return total_cost
+
+
+def match_predictions_to_gt(
+    pred_boxes: torch.Tensor,
+    pred_logits: torch.Tensor,
+    gt_boxes: torch.Tensor,
+    gt_labels: torch.Tensor,
+    lambda_class: float = 1.0,
+    lambda_bbox: float = 5.0,
+    lambda_giou: float = 2.0
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Find best assignment between predictions and ground truth greedily.
+    Matches each GT to its lowest-cost prediction, O(n*m) instead of O(n^3).
     
-    # Hungarian algorithm
-    query_indices, gt_indices = linear_sum_assignment(cost_matrix_np)
+    Returns:
+        indices: [2, num_matched] tensor with (pred_idx, gt_idx) pairs
+        costs: [num_matched] tensor with cost for each match
+    """
+    # Compute cost matrix [num_pred, num_gt]
+    cost = compute_matching_cost(
+        pred_boxes, pred_logits, gt_boxes, gt_labels,
+        lambda_class, lambda_bbox, lambda_giou
+    )
     
-    # Convert back to torch
-    indices = torch.stack([
-        torch.from_numpy(query_indices).to(pred_boxes.device),
-        torch.from_numpy(gt_indices).to(pred_boxes.device)
-    ])
+    num_gt = cost.shape[1]
+    pred_idx = []
+    gt_idx = []
+    matched_costs = []
     
-    matched_costs = cost_matrix[query_indices, gt_indices]
+    # For each GT, assign the lowest-cost available prediction
+    used_preds = set()
+    for gt_i in range(num_gt):
+        gt_costs = cost[:, gt_i]
+        
+        # Find lowest cost pred that hasn't been assigned yet
+        for rank in gt_costs.argsort():
+            pred_i = int(rank.item())
+            if pred_i not in used_preds:
+                pred_idx.append(pred_i)
+                gt_idx.append(gt_i)
+                matched_costs.append(gt_costs[pred_i])
+                used_preds.add(pred_i)
+                break
+    
+    if len(pred_idx) == 0:
+        return (
+            torch.empty((2, 0), dtype=torch.long, device=pred_boxes.device),
+            torch.empty((0,), device=pred_boxes.device)
+        )
+    
+    pred_idx = torch.tensor(pred_idx, dtype=torch.long, device=pred_boxes.device)
+    gt_idx = torch.tensor(gt_idx, dtype=torch.long, device=pred_boxes.device)
+    matched_costs = torch.stack(matched_costs)
+    
+    indices = torch.stack([pred_idx, gt_idx])
     
     return indices, matched_costs
 
 
-def batch_hungarian_matching(
-    pred_boxes: torch.Tensor,  # [batch, num_queries, 4]
-    pred_logits: torch.Tensor,  # [batch, num_queries, num_classes]
-    gt_boxes: torch.Tensor,  # [batch, num_gt, 4]
-    gt_labels: torch.Tensor,  # [batch, num_gt]
-    cost_class: float = 1.0,
-    cost_bbox: float = 5.0,
-    cost_giou: float = 2.0
-) -> Tuple[torch.Tensor, torch.Tensor]:
+def match_batch(
+    pred_boxes: torch.Tensor,
+    pred_logits: torch.Tensor,
+    gt_boxes: torch.Tensor,
+    gt_labels: torch.Tensor,
+    lambda_class: float = 1.0,
+    lambda_bbox: float = 5.0,
+    lambda_giou: float = 2.0
+) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
     """
-    Perform Hungarian matching for a batch
+    Match predictions to ground truth for a full batch.
+    
+    Args:
+        pred_boxes: [batch, num_pred, 4] in (x, y, w, h) format
+        pred_logits: [batch, num_pred, num_classes]
+        gt_boxes: [batch, num_gt, 4] in (x, y, w, h) format
+        gt_labels: [batch, num_gt]
     
     Returns:
-        indices_list: List of [2, num_matched] indices for each sample
-        matched_costs_list: List of [num_matched] costs for each sample
+        indices_list: List of [2, num_matched_i] tensors per sample
+        costs_list: List of [num_matched_i] tensors per sample
     """
     batch_size = pred_boxes.shape[0]
     indices_list = []
-    matched_costs_list = []
+    costs_list = []
     
-    for b in range(batch_size):
-        # Filter out invalid GT boxes (width == 0)
-        valid_mask = gt_boxes[b, :, 2] > 0
-        if valid_mask.sum() == 0:
-            # No valid GT boxes, skip matching
-            indices_list.append(torch.empty((2, 0), dtype=torch.long, device=pred_boxes.device))
-            matched_costs_list.append(torch.empty((0,), device=pred_boxes.device))
+    for i in range(batch_size):
+        # Skip samples with no ground truth
+        valid_gt = (gt_boxes[i, :, 2] > 0)
+        
+        if valid_gt.sum() == 0:
+            indices_list.append(
+                torch.empty((2, 0), dtype=torch.long, device=pred_boxes.device)
+            )
+            costs_list.append(
+                torch.empty((0,), device=pred_boxes.device)
+            )
             continue
         
-        valid_gt_boxes = gt_boxes[b][valid_mask]
-        valid_gt_labels = gt_labels[b][valid_mask]
+        # Get valid ground truth for this sample
+        gt_boxes_valid = gt_boxes[i][valid_gt]
+        gt_labels_valid = gt_labels[i][valid_gt]
         
-        indices, costs = hungarian_matching(
-            pred_boxes[b],
-            pred_logits[b],
-            valid_gt_boxes,
-            valid_gt_labels,
-            cost_class, cost_bbox, cost_giou
+        # Find matches
+        indices, costs = match_predictions_to_gt(
+            pred_boxes[i],
+            pred_logits[i],
+            gt_boxes_valid,
+            gt_labels_valid,
+            lambda_class, lambda_bbox, lambda_giou
         )
         
         indices_list.append(indices)
-        matched_costs_list.append(costs)
+        costs_list.append(costs)
     
-    return indices_list, matched_costs_list
-
+    return indices_list, costs_list

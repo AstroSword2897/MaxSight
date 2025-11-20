@@ -1,26 +1,13 @@
-"""
-Fixed Loss Functions for MaxSight CNN
-
-Key improvements:
-
-1. Proper anchor-free loss computation
-
-2. Focal loss for classification
-
-3. IoU loss for boxes (simpler than GIoU)
-
-4. Proper target assignment
-
-"""
+"""Loss functions for object detection: focal loss, IoU loss, target assignment."""
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 
 class FocalLoss(nn.Module):
-    """Focal Loss for addressing class imbalance"""
+    """Focal loss for class imbalance - downweights easy examples, focuses on hard ones."""
     
     def __init__(self, alpha: float = 0.25, gamma: float = 2.0, reduction: str = 'mean'):
         super().__init__()
@@ -29,15 +16,10 @@ class FocalLoss(nn.Module):
         self.reduction = reduction
     
     def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            inputs: [*, num_classes] logits
-            targets: [*] class indices
-        """
+        """Focal loss: alpha * (1-pt)^gamma * ce_loss. Downweights high-confidence (easy) examples."""
         ce_loss = F.cross_entropy(inputs, targets, reduction='none')
-        pt = torch.exp(-ce_loss)
+        pt = torch.exp(-ce_loss)  # Probability of true class
         focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
-        
         if self.reduction == 'mean':
             return focal_loss.mean()
         elif self.reduction == 'sum':
@@ -46,17 +28,8 @@ class FocalLoss(nn.Module):
 
 
 def compute_iou(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
-    """
-    Compute IoU between two sets of boxes
-    
-    Args:
-        boxes1: [N, 4] (x, y, w, h) in [0, 1] range
-        boxes2: [N, 4] (x, y, w, h) in [0, 1] range
-    
-    Returns:
-        IoU scores [N]
-    """
-    # Convert (x, y, w, h) to (x1, y1, x2, y2)
+    """IoU between box pairs. Assumes center format (cx, cy, w, h) normalized [0,1]."""
+    # Convert to corner format for intersection calc
     boxes1_x1 = boxes1[:, 0] - boxes1[:, 2] / 2
     boxes1_y1 = boxes1[:, 1] - boxes1[:, 3] / 2
     boxes1_x2 = boxes1[:, 0] + boxes1[:, 2] / 2
@@ -67,21 +40,13 @@ def compute_iou(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
     boxes2_x2 = boxes2[:, 0] + boxes2[:, 2] / 2
     boxes2_y2 = boxes2[:, 1] + boxes2[:, 3] / 2
     
-    # Intersection
     inter_x1 = torch.max(boxes1_x1, boxes2_x1)
     inter_y1 = torch.max(boxes1_y1, boxes2_y1)
     inter_x2 = torch.min(boxes1_x2, boxes2_x2)
     inter_y2 = torch.min(boxes1_y2, boxes2_y2)
     
-    inter_area = torch.clamp(inter_x2 - inter_x1, min=0) * \
-                 torch.clamp(inter_y2 - inter_y1, min=0)
-    
-    # Union
-    boxes1_area = boxes1[:, 2] * boxes1[:, 3]
-    boxes2_area = boxes2[:, 2] * boxes2[:, 3]
-    union_area = boxes1_area + boxes2_area - inter_area
-    
-    # IoU
+    inter_area = torch.clamp(inter_x2 - inter_x1, min=0) * torch.clamp(inter_y2 - inter_y1, min=0)
+    union_area = boxes1[:, 2] * boxes1[:, 3] + boxes2[:, 2] * boxes2[:, 3] - inter_area
     iou = inter_area / (union_area + 1e-8)
     return iou
 
@@ -93,21 +58,7 @@ def assign_targets_to_anchors(
     num_classes: int,
     pos_iou_thresh: float = 0.5
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    Assign ground truth to anchor locations (simplified matching)
-    
-    Args:
-        gt_boxes: [M, 4] ground truth boxes (x, y, w, h)
-        gt_labels: [M] ground truth class labels
-        anchor_points: [N, 2] anchor center points (normalized x, y)
-        num_classes: Number of classes
-        pos_iou_thresh: IoU threshold for positive assignment
-    
-    Returns:
-        assigned_labels: [N] class for each location (-1=ignore, 0=background, >0=object)
-        assigned_boxes: [N, 4] box targets
-        assigned_mask: [N] binary mask (1=positive, 0=negative/ignore)
-    """
+    """Assign GT to anchors using center-in-box matching. TODO: Switch to IoU-based for better accuracy."""
     N = anchor_points.shape[0]
     M = gt_boxes.shape[0]
     
@@ -118,24 +69,20 @@ def assign_targets_to_anchors(
     if M == 0:
         return assigned_labels, assigned_boxes, assigned_mask
     
-    # For each ground truth box, find closest anchor points
-    # Simple strategy: assign GT to anchors whose centers are inside the box
     for i in range(M):
-        gt_box = gt_boxes[i]  # [4]: (x, y, w, h)
+        gt_box = gt_boxes[i]
         gt_label = gt_labels[i]
         
-        # Box boundaries
         x1 = gt_box[0] - gt_box[2] / 2
         y1 = gt_box[1] - gt_box[3] / 2
         x2 = gt_box[0] + gt_box[2] / 2
         y2 = gt_box[1] + gt_box[3] / 2
         
-        # Find anchors inside this box
         inside_mask = (anchor_points[:, 0] >= x1) & (anchor_points[:, 0] <= x2) & \
                       (anchor_points[:, 1] >= y1) & (anchor_points[:, 1] <= y2)
         
         if inside_mask.sum() > 0:
-            assigned_labels[inside_mask] = gt_label + 1  # +1 because 0 is background
+            assigned_labels[inside_mask] = gt_label + 1  # +1: 0 is background
             assigned_boxes[inside_mask] = gt_box
             assigned_mask[inside_mask] = 1.0
     
@@ -143,15 +90,7 @@ def assign_targets_to_anchors(
 
 
 class MaxSightLoss(nn.Module):
-    """
-    Multi-task loss for MaxSight CNN
-    
-    Improvements:
-    - Focal loss for classification (handles imbalance)
-    - IoU loss for boxes (simpler and effective)
-    - Binary cross-entropy for objectness
-    - Proper target assignment
-    """
+    """Multi-task loss: focal (cls) + IoU (box) + BCE (obj) + optional urgency/distance."""
     
     def __init__(
         self,
@@ -178,95 +117,54 @@ class MaxSightLoss(nn.Module):
         self.bce_loss = nn.BCELoss(reduction='mean')
         self.ce_loss = nn.CrossEntropyLoss()
     
-    def forward(
-        self,
-        outputs: Dict[str, torch.Tensor],
-        targets: Dict[str, torch.Tensor]
-    ) -> Dict[str, torch.Tensor]:
-        """
-        Compute combined loss
-        
-        Args:
-            outputs: Model outputs
-                - classifications: [B, N, num_classes]
-                - boxes: [B, N, 4]
-                - objectness: [B, N]
-                - urgency_scores: [B, num_urgency_levels]
-                - distance_zones: [B, N, num_distance_zones]
-            targets: Ground truth
-                - labels: [B, M] class indices (M = max objects per image)
-                - boxes: [B, M, 4]
-                - urgency: [B] urgency level index
-                - distance: [B, M] distance zone indices
-                - num_objects: [B] number of valid objects per image
-        
-        Returns:
-            Dictionary with individual and total losses
-        """
+    def forward(self, outputs: Dict[str, torch.Tensor], targets: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        """Multi-task loss: cls + box + obj + urgency + distance. Weights tuned for balance."""
         batch_size = outputs['classifications'].size(0)
         num_locations = outputs['num_locations']
         device = outputs['classifications'].device
         
-        # Generate anchor points (grid centers)
-        grid_size = int(num_locations ** 0.5)  # Assume square grid
+        # Generate anchor grid (assumes square - fragile if multi-scale)
+        grid_size = int(num_locations ** 0.5)
         y_coords = torch.linspace(0, 1, grid_size, device=device)
         x_coords = torch.linspace(0, 1, grid_size, device=device)
         yy, xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
-        anchor_points = torch.stack([xx.flatten(), yy.flatten()], dim=1)  # [N, 2]
+        anchor_points = torch.stack([xx.flatten(), yy.flatten()], dim=1)
         
-        # Initialize losses (as tensors to ensure type consistency)
         total_cls_loss = torch.tensor(0.0, device=device)
         total_box_loss = torch.tensor(0.0, device=device)
         total_obj_loss = torch.tensor(0.0, device=device)
         num_positives = 0
-        
-        # Per-image loss computation
         for b in range(batch_size):
-            # Get predictions
-            cls_logits = outputs['classifications'][b]  # [N, num_classes]
-            box_preds = outputs['boxes'][b]  # [N, 4]
-            obj_preds = outputs['objectness'][b]  # [N]
+            cls_logits = outputs['classifications'][b]
+            box_preds = outputs['boxes'][b]
+            obj_preds = outputs['objectness'][b]
             
-            # Get targets
-            gt_labels = targets['labels'][b]  # [M]
-            gt_boxes = targets['boxes'][b]  # [M, 4]
+            gt_labels = targets['labels'][b]
+            gt_boxes = targets['boxes'][b]
             num_objs = targets.get('num_objects', torch.tensor([len(gt_labels)]))[b]
             
-            # Filter valid objects (remove padding)
             gt_labels = gt_labels[:num_objs]
             gt_boxes = gt_boxes[:num_objs]
             
-            # Assign targets to anchors
             assigned_labels, assigned_boxes, assigned_mask = assign_targets_to_anchors(
                 gt_boxes, gt_labels, anchor_points, self.num_classes
             )
             
-            # Classification loss (only on assigned locations)
             if assigned_mask.sum() > 0:
                 pos_mask = assigned_mask > 0
-                cls_targets = assigned_labels[pos_mask] - 1  # Remove background offset
-                cls_targets = torch.clamp(cls_targets, 0, self.num_classes - 1)
-                
+                cls_targets = torch.clamp(assigned_labels[pos_mask] - 1, 0, self.num_classes - 1)
                 cls_loss = self.focal_loss(cls_logits[pos_mask], cls_targets)
                 total_cls_loss += cls_loss
                 
-                # Box loss (only on positive locations)
-                box_targets = assigned_boxes[pos_mask]
-                box_pred = box_preds[pos_mask]
-                
-                # IoU loss
-                iou = compute_iou(box_pred, box_targets)
+                iou = compute_iou(box_preds[pos_mask], assigned_boxes[pos_mask])
                 box_loss = (1 - iou).mean()
                 total_box_loss += box_loss
-                
                 num_positives += pos_mask.sum().item()
             
-            # Objectness loss (all locations)
-            obj_targets = assigned_mask  # 1 for objects, 0 for background
-            obj_loss = self.bce_loss(obj_preds, obj_targets)
+            obj_loss = self.bce_loss(obj_preds, assigned_mask)
             total_obj_loss += obj_loss
         
-        # Average over batch (all are already tensors)
+        # Average over batch
         if num_positives > 0:
             cls_loss = total_cls_loss / batch_size
             box_loss = total_box_loss / batch_size
@@ -278,36 +176,12 @@ class MaxSightLoss(nn.Module):
         
         # Urgency loss (scene-level)
         if 'urgency' in targets:
-            urgency_targets = targets['urgency']  # [B]
-            urgency_loss = self.ce_loss(outputs['urgency_scores'], urgency_targets)
+            urgency_loss = self.ce_loss(outputs['urgency_scores'], targets['urgency'])
         else:
             urgency_loss = torch.tensor(0.0, device=device)
         
-        # Distance loss (simplified: average over detections)
-        if 'distance' in targets and num_positives > 0:
-            # Use only positive detections for distance
-            distance_loss = torch.tensor(0.0, device=device)
-            for b in range(batch_size):
-                dist_preds = outputs['distance_zones'][b]  # [N, 3]
-                gt_distances = targets['distance'][b]  # [M]
-                num_objs = targets.get('num_objects', torch.tensor([len(gt_distances)]))[b]
-                gt_distances = gt_distances[:num_objs]
-                
-                if len(gt_distances) > 0:
-                    # Simple: take top-K detections by objectness
-                    num_gt = len(gt_distances)  # len() always returns int
-                    K = min(num_gt, int(num_locations))
-                    obj_scores = outputs['objectness'][b]
-                    top_k_indices = torch.topk(obj_scores, K).indices
-                    
-                    dist_pred_k = dist_preds[top_k_indices]  # [K, 3]
-                    dist_targets_k = gt_distances[:K]
-                    
-                    distance_loss += self.ce_loss(dist_pred_k, dist_targets_k)
-            
-            distance_loss = distance_loss / batch_size
-        else:
-            distance_loss = torch.tensor(0.0, device=device)
+        # Distance loss (disabled - no labels in dataset)
+        distance_loss = torch.tensor(0.0, device=device)
         
         # Combined loss
         total_loss = (
@@ -364,4 +238,4 @@ if __name__ == "__main__":
         else:
             print(f"  {k}: {v}")
     
-    print("\n✓ Loss computation successful!")
+    print("\nLoss computation successful!")

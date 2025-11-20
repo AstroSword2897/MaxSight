@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Model files
+*.pt
+*.pth
+*.onnx
+*.mlmodel
+
+# Data files
+*.h5
+*.hdf5
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Installers
+*.sh
+Miniforge*
+
