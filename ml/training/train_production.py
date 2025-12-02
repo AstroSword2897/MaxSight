@@ -668,7 +668,9 @@ class ProductionTrainer:
         overall_precision = metrics.compute_precision()
         overall_recall = metrics.compute_recall()
         overall_f1 = metrics.compute_f1()
-        map_score = metrics.compute_map(iou_threshold=0.5)
+        map_results = metrics.compute_map(iou_threshold=0.5)
+        # Extract mAP_50 (or fallback to overall mAP)
+        map_score = map_results.get('mAP_50', map_results.get('mAP', 0.0))
         
         # Get lighting-specific metrics
         # Complexity: O(1) - just 4 lighting conditions
@@ -682,7 +684,9 @@ class ProductionTrainer:
             'precision': overall_precision,
             'recall': overall_recall,
             'f1': overall_f1,
-            'map': map_score
+            'map': map_score,
+            'map_50': map_results.get('mAP_50', 0.0),
+            'map_75': map_results.get('mAP_75', 0.0)
         }
         
         # Add lighting-specific metrics to results

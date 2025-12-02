@@ -3,6 +3,7 @@
 import os
 import requests
 import zipfile
+import json
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -17,6 +18,72 @@ SOUND_CLASSES = [
     'human voice', 'dog bark', 'cat meow',
     'phone ringing', 'alarm clock', 'vehicle engine'
 ]
+
+
+def verify_coco_dataset(data_dir: Path = Path("datasets/coco")) -> Dict[str, bool]:
+    """
+    Verify COCO dataset is properly downloaded and structured.
+    
+    Returns:
+        Dictionary with verification status for each component
+    """
+    status = {
+        'train_images': False,
+        'val_images': False,
+        'annotations': False,
+        'train_annotations': False,
+        'val_annotations': False
+    }
+    
+    # Check directories
+    train_img_dir = data_dir / "train2017"
+    val_img_dir = data_dir / "val2017"
+    ann_dir = data_dir / "annotations"
+    
+    # Check image directories
+    if train_img_dir.exists():
+        img_count = len(list(train_img_dir.glob("*.jpg")))
+        status['train_images'] = img_count > 100000  # Should have ~118K images
+        if status['train_images']:
+            print(f"✓ Train images: {img_count} images found")
+        else:
+            print(f"⚠ Train images: Only {img_count} images found (expected ~118K)")
+    
+    if val_img_dir.exists():
+        img_count = len(list(val_img_dir.glob("*.jpg")))
+        status['val_images'] = img_count > 4000  # Should have ~5K images
+        if status['val_images']:
+            print(f"✓ Val images: {img_count} images found")
+        else:
+            print(f"⚠ Val images: Only {img_count} images found (expected ~5K)")
+    
+    # Check annotations
+    if ann_dir.exists():
+        status['annotations'] = True
+        train_ann = ann_dir / "instances_train2017.json"
+        val_ann = ann_dir / "instances_val2017.json"
+        
+        if train_ann.exists():
+            try:
+                with open(train_ann, 'r') as f:
+                    data = json.load(f)
+                    status['train_annotations'] = len(data.get('images', [])) > 100000
+                    if status['train_annotations']:
+                        print(f"✓ Train annotations: {len(data.get('images', []))} images")
+            except:
+                status['train_annotations'] = False
+        
+        if val_ann.exists():
+            try:
+                with open(val_ann, 'r') as f:
+                    data = json.load(f)
+                    status['val_annotations'] = len(data.get('images', [])) > 4000
+                    if status['val_annotations']:
+                        print(f"✓ Val annotations: {len(data.get('images', []))} images")
+            except:
+                status['val_annotations'] = False
+    
+    return status
 
 
 def download_coco_dataset(data_dir: Path = Path("datasets/coco")):
@@ -38,6 +105,14 @@ def download_coco_dataset(data_dir: Path = Path("datasets/coco")):
     
     data_dir.mkdir(parents=True, exist_ok=True)
     print(f"\nDataset directory created: {data_dir}")
+    
+    # Verify if dataset already exists
+    print("\nVerifying existing dataset...")
+    status = verify_coco_dataset(data_dir)
+    if all(status.values()):
+        print("✓ COCO dataset fully verified!")
+    else:
+        print("⚠ COCO dataset incomplete. Please download missing components.")
 
 
 def download_open_images(data_dir: Path = Path("datasets/open_images")):
@@ -253,6 +328,18 @@ if __name__ == "__main__":
     
     # Save class mappings
     save_class_mappings()
+    
+    # Final verification summary
+    print("\n" + "=" * 70)
+    print("Dataset Verification Summary:")
+    print("=" * 70)
+    coco_status = verify_coco_dataset()
+    if any(coco_status.values()):
+        print("\nCOCO Dataset Status:")
+        for key, status in coco_status.items():
+            print(f"  {key}: {'✓' if status else '✗'}")
+    else:
+        print("\n⚠ No datasets verified. Please download datasets first.")
     
     print("\n" + "=" * 70)
     print("Total Available Training Data:")

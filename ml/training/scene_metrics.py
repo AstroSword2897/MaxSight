@@ -1,6 +1,8 @@
 """Scene-level metrics: distance estimation accuracy, urgency prediction accuracy."""
 
 import torch
+import time
+import numpy as np
 from typing import Dict, Optional
 from collections import defaultdict
 
@@ -36,6 +38,9 @@ class SceneMetrics:
         # Per-urgency-level accuracy
         self.urgency_level_correct = defaultdict(int)
         self.urgency_level_total = defaultdict(int)
+        
+        # Latency tracking
+        self.inference_times = []  # Store inference times in milliseconds
     
     def update_urgency(
         self,
@@ -125,5 +130,33 @@ class SceneMetrics:
         for level, acc in per_urgency.items():
             metrics[f'urgency_level_{level}_accuracy'] = acc
         
+        # Add latency stats if available
+        if len(self.inference_times) > 0:
+            latency_stats = self.get_latency_stats()
+            metrics.update(latency_stats)
+        
         return metrics
+    
+    def record_inference_time(self, inference_time_ms: float) -> None:
+        """Record inference latency for a single forward pass."""
+        self.inference_times.append(inference_time_ms)
+    
+    def get_latency_stats(self) -> Dict[str, float]:
+        """Get latency statistics from recorded inference times."""
+        if len(self.inference_times) == 0:
+            return {}
+        
+        times = np.array(self.inference_times)
+        return {
+            'mean_latency_ms': float(np.mean(times)),
+            'median_latency_ms': float(np.median(times)),
+            'min_latency_ms': float(np.min(times)),
+            'max_latency_ms': float(np.max(times)),
+            'p95_latency_ms': float(np.percentile(times, 95)),
+            'p99_latency_ms': float(np.percentile(times, 99))
+        }
+    
+    def reset_latency(self) -> None:
+        """Reset latency tracking."""
+        self.inference_times = []
 
