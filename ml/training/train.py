@@ -1,12 +1,10 @@
-"""Training script with gradient accumulation, EMA, and checkpointing."""
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from typing import Dict, Optional
 from pathlib import Path
-import copy
+import math
 
 try:
     from torch.amp import autocast
@@ -24,44 +22,41 @@ except ImportError:
 
 
 class EMA:
-    """EMA for model weights (smooths training)."""
-    
     def __init__(self, model: nn.Module, decay: float = 0.9999):
         self.model = model
         self.decay = decay
         self.shadow = {}
         self.backup = {}
-        
+
         for name, param in model.named_parameters():
             if param.requires_grad:
                 self.shadow[name] = param.data.clone()
-    
+
     def update(self):
-        """Update shadow weights"""
         for name, param in self.model.named_parameters():
             if param.requires_grad and name in self.shadow:
                 self.shadow[name] = (
                     self.decay * self.shadow[name] + 
-                    (1 - self.decay) * param.data
+                    (1 - self.decay) * param.data.detach()
                 )
-    
+
     def apply_shadow(self):
-        """Apply shadow weights to model"""
         for name, param in self.model.named_parameters():
             if param.requires_grad and name in self.shadow:
                 self.backup[name] = param.data.clone()
                 param.data = self.shadow[name]
-    
+
     def restore(self):
-        """Restore original weights"""
         for name, param in self.model.named_parameters():
             if param.requires_grad and name in self.backup:
                 param.data = self.backup[name]
         self.backup = {}
 
 
+
+
 class Trainer:
-    """Training loop with mixed precision, EMA, and early stopping."""
+    # Training loop with mixed precision, EMA, and early stopping.
     
     def __init__(
         self,
@@ -90,7 +85,7 @@ class Trainer:
         self.patience_counter = 0
         
         # Mixed precision
-        self.use_mixed_precision = use_mixed_precision and AMP_AVAILABLE and device == 'cuda'
+        self.use_mixed_precision = use_mixed_precision and AMP_AVAILABLE and (device == 'cuda' or str(device).startswith('cuda'))
         if self.use_mixed_precision and GradScaler is not None:
             self.scaler = GradScaler()
         else:
@@ -126,7 +121,9 @@ class Trainer:
         # Scheduler
         self.base_lr = learning_rate
         self.warmup_steps = warmup_epochs * len(train_loader)
-        self.total_steps = 0  # Track total training steps
+        # Track total training steps
+        self.total_steps = 0
+        self.global_step = 0
         
         # Cosine annealing (will be set in train())
         self.scheduler = None
@@ -145,11 +142,12 @@ class Trainer:
         """LR scale: linear warmup then cosine decay."""
         if step < self.warmup_steps:
             # Linear warmup
-            return step / self.warmup_steps
+            return max(1e-6, (step + 1) / max(1, self.warmup_steps))
         else:
             # Cosine decay after warmup
-            progress = (step - self.warmup_steps) / max(1, self.total_steps - self.warmup_steps)
-            return 0.5 * (1 + torch.cos(torch.tensor(progress * 3.14159)).item())
+            den = max(1, self.total_steps - self.warmup_steps)
+            progress = min(1.0, max(0.0, (step - self.warmup_steps) / den)) 
+            return 0.5 * (1 + math.cos(progress * math.pi))
     
     def _update_lr(self, step: int):
         """Update LR using warmup + cosine schedule."""
@@ -159,9 +157,17 @@ class Trainer:
             param_group['lr'] = base_lr * lr_scale
     
     def freeze_backbone(self):
-        """Freeze ResNet backbone."""
+        #Freeze ResNet backbone and its BatchNorm layers.
         for param in self.backbone_params:
             param.requires_grad = False
+
+        #Freeze BatchNorm Running stats
+        for name, module in self.model.named_modules():
+            if any(x in name for x in ['conv1', 'bn1', 'layer1', 'layer2', 'layer3', 'layer4']):
+                if isinstance(module, (nn.BatchNorm2d, nn.BatchNorm1d)):
+                    module.eval()
+                    for p in module.parameters():
+                        p.requires_grad = False
     
     def unfreeze_backbone(self):
         """Unfreeze ResNet backbone."""
@@ -177,11 +183,9 @@ class Trainer:
         # Freeze/unfreeze backbone dynamically
         if self.freeze_backbone_epochs > 0:
             if epoch <= self.freeze_backbone_epochs:
-                if not all(not p.requires_grad for p in self.backbone_params):
-                    self.freeze_backbone()
+                self.freeze_backbone()
             else:
-                if not all(p.requires_grad for p in self.backbone_params):
-                    self.unfreeze_backbone()
+                self.unfreeze_backbone()
         
         self.optimizer.zero_grad()
         
@@ -192,24 +196,19 @@ class Trainer:
                 'boxes': batch['boxes'].to(self.device),
                 'urgency': batch.get('urgency', torch.zeros(images.size(0), dtype=torch.long)).to(self.device),
                 'distance': batch.get('distance', torch.zeros_like(batch['labels'])).to(self.device),
-                'num_objects': batch.get('num_objects', torch.tensor([batch['labels'].size(1)] * images.size(0)))
+                'num_objects': batch.get('num_objects', torch.full((images.size(0),), batch['labels'].size(1), device=self.device, dtype=torch.long))
             }
             
             # Update learning rate
-            step = (epoch - 1) * len(self.train_loader) + batch_idx
-            self._update_lr(step)
+            self.global_step += 1
+            self._update_lr(self.global_step)
             
             # Forward pass with mixed precision
             if self.criterion is None:
                 raise ValueError("Criterion (loss function) must be provided to Trainer")
             
             # Use AMP if available (speeds up on GPU, saves memory)
-            if self.use_mixed_precision and AMP_AVAILABLE and self.device.type == 'cuda':
-                with autocast(device_type='cuda'):  # type: ignore
-                    outputs = self.model(images)
-                    loss_dict = self.criterion(outputs, targets)
-                    loss = loss_dict['total_loss'] / self.gradient_accumulation_steps
-            else:
+            with autocast(enabled=self.use_mixed_precision):  # type: ignore
                 outputs = self.model(images)
                 loss_dict = self.criterion(outputs, targets)
                 loss = loss_dict['total_loss'] / self.gradient_accumulation_steps
@@ -219,19 +218,20 @@ class Trainer:
             else:
                 loss.backward()
             
-            # Gradient accumulation
+            # Gradient accumulation for the final batch
             if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
-                # Gradient clipping
-                if self.use_mixed_precision and self.scaler is not None:
+                if self.scaler:
                     self.scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+
+                if self.scaler:
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     self.optimizer.step()
-                
+
                 self.optimizer.zero_grad()
+
                 
                 # Update EMA after optimizer step
                 if self.ema is not None:
@@ -249,6 +249,23 @@ class Trainer:
                       f'Obj: {loss_dict["objectness_loss"].item():.4f}, '
                       f'LR: {current_lr:.6f}')
         
+        # Final partial accumalation - Handled
+        if (batch_idx + 1) % self.gradient_accumulation_steps != 0:
+            has_grad = any(p.grad is not None for p in self.model.parameters())
+            if has_grad:
+                if self.scaler:
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    self.optimizer.step()
+                
+                self.optimizer.zero_grad()
+                if self.ema:
+                    self.ema.update()
+
         avg_loss = total_loss / len(self.train_loader)
         return {'loss': avg_loss}
     
@@ -263,8 +280,6 @@ class Trainer:
         
         self.model.eval()
         total_loss = 0.0
-        correct = 0
-        total = 0
         
         with torch.no_grad():
             for batch in self.val_loader:
@@ -274,14 +289,22 @@ class Trainer:
                     'boxes': batch['boxes'].to(self.device),
                     'urgency': batch.get('urgency', torch.zeros(images.size(0), dtype=torch.long)).to(self.device),
                     'distance': batch.get('distance', torch.zeros_like(batch['labels'])).to(self.device),
-                    'num_objects': batch.get('num_objects', torch.tensor([batch['labels'].size(1)] * images.size(0)))
+                    'num_objects': batch.get(
+                        'num_objects',
+                        torch.full(
+                            (images.size(0),),
+                            batch['labels'].size(1),
+                            device=self.device,
+                            dtype=torch.long
+                        )
+                    )
+
                 }
                 
                 if self.criterion is None:
                     raise ValueError("Criterion (loss function) must be provided to Trainer")
-                
-                if self.use_mixed_precision and AMP_AVAILABLE and self.device.type == 'cuda':
-                    with autocast(device_type='cuda'):  # type: ignore
+                if self.use_mixed_precision:
+                    with autocast(enabled=self.use_mixed_precision):  # type: ignore
                         outputs = self.model(images)
                         loss_dict = self.criterion(outputs, targets)
                 else:
@@ -297,9 +320,7 @@ class Trainer:
             self.ema.restore()
         
         avg_loss = total_loss / len(self.val_loader)
-        accuracy = 100.0 * correct / total if total > 0 else 0.0
-        
-        return {'loss': avg_loss, 'accuracy': accuracy}
+        return {'loss': avg_loss}
     
     def train(self, num_epochs: int, save_dir: str = 'checkpoints'):
         """Main training loop"""
@@ -332,7 +353,6 @@ class Trainer:
                 
                 print(f"\nTrain Loss: {train_metrics['loss']:.4f}")
                 print(f"Val Loss: {val_loss:.4f}")
-                print(f"Val Acc: {val_acc:.2f}%")
                 
                 # Early stopping
                 if val_loss < self.best_val_loss:
@@ -367,7 +387,6 @@ class Trainer:
             self.history['learning_rates'].append(current_lr)
             print(f"Learning Rate: {current_lr:.6f}")
         
-        # Save final model
         if self.ema is not None:
             self.ema.apply_shadow()
         
@@ -386,11 +405,10 @@ class Trainer:
         history_path = save_path / 'training_history.json'
         import json
         with open(history_path, 'w') as f:
-            # Convert tensors to floats for JSON serialization
+            # JSON serialization form
             json_history = {
                 'train_loss': [float(x) for x in self.history['train_loss']],
                 'val_loss': [float(x) for x in self.history['val_loss']],
-                'val_acc': [float(x) for x in self.history['val_acc']],
                 'learning_rates': [float(x) for x in self.history['learning_rates']]
             }
             json.dump(json_history, f, indent=2)

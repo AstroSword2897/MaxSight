@@ -1,283 +1,284 @@
-# MaxSight Production Training System
+# Production Training Guide - MaxSight CNN
 
 ## Overview
 
-Complete, production-ready training system for MaxSight CNN with iOS export capabilities.
+This guide covers the complete production training pipeline for MaxSight CNN, from FP32 training through quantization to deployment.
 
-## Key Features
+## Architecture
 
-✅ **Tested & Verified Components:**
-- MaxSightLoss with proper target assignment
-- ProductionTrainer with convergence guarantees
-- Export to multiple iOS formats (JIT, ExecuTorch, CoreML, ONNX)
-- Dummy dataset for immediate testing
+```
+MaxSight CNN Architecture:
+├── ResNet50 Backbone (pretrained ImageNet)
+├── Simplified FPN (Feature Pyramid Network)
+├── Multi-Head Detection
+│   ├── Classification Head (48 classes)
+│   ├── Bounding Box Head (center format)
+│   ├── Objectness Head
+│   ├── Scene Embedding Head
+│   ├── Urgency Head (4 levels)
+│   └── Distance Zone Head (3 zones)
+└── Audio Branch (optional, 128-dim MFCC)
+```
 
-✅ **Reliability Guarantees:**
-- No Hungarian matching bugs
-- Proper loss computation
-- Stable training loop
-- Comprehensive validation
+## Sprint 1: FP32 Training
 
-## Quick Start
+### Step 1: Prepare Data
 
-### 1. Test the System
+```bash
+# Organize your dataset
+datasets/
+├── train/
+│   ├── images/
+│   └── annotations.json
+└── val/
+    ├── images/
+    └── annotations.json
+```
 
+### Step 2: Train FP32 Model
+
+```bash
+python scripts/train_maxsight.py \
+    --data-dir datasets/ \
+    --epochs 100 \
+    --batch-size 32 \
+    --learning-rate 1e-3 \
+    --device cuda \
+    --checkpoint-dir checkpoints \
+    --num-classes 48
+```
+
+### Step 3: Validate Training
+
+Check training history:
+```bash
+cat checkpoints/training_history.json
+```
+
+Load best model:
 ```python
-from ml.training.train_production import ProductionTrainer, create_dummy_dataloaders
+import torch
 from ml.models.maxsight_cnn import create_model
 
-# Create model
 model = create_model(num_classes=48)
-
-# Create dummy dataloaders (for testing)
-train_loader, val_loader = create_dummy_dataloaders(
-    num_train=1000,
-    num_val=200,
-    batch_size=8
-)
-
-# Create trainer
-trainer = ProductionTrainer(
-    model=model,
-    train_loader=train_loader,
-    val_loader=val_loader,
-    device='mps',  # or 'cuda', 'cpu'
-    learning_rate=1e-3,
-    num_epochs=20,
-    save_dir='checkpoints'
-)
-
-# Train
-history = trainer.train()
-```
-
-### 2. Export to iOS
-
-```python
-from ml.training.export import export_model
-import torch
-
-# Load best model
-checkpoint = torch.load('checkpoints/best_model.pth')
+checkpoint = torch.load('checkpoints/best_model.pt')
 model.load_state_dict(checkpoint['model_state_dict'])
-model.eval()
+```
 
-# Export
-export_results = export_model(
-    model=model,
-    format='jit',  # or 'executorch', 'coreml', 'onnx', 'all'
-    save_dir='exports',
-    input_size=(1, 3, 224, 224)
+## Sprint 2: Quantization Pipeline
+
+### Step 1: Post-Training Quantization (PTQ)
+
+First, try static PTQ:
+
+```python
+from ml.training.quantization import quantize_model_int8
+
+# Load FP32 model
+model_fp32 = create_model(num_classes=48)
+checkpoint = torch.load('checkpoints/best_model.pt')
+model_fp32.load_state_dict(checkpoint['model_state_dict'])
+
+# Quantize
+model_int8 = quantize_model_int8(
+    model=model_fp32,
+    calibration_data=calibration_loader,  # 200 diverse samples
+    backend='qnnpack'  # For iOS/ARM
 )
 ```
 
-## File Structure
+### Step 2: Validate PTQ Results
 
-```
-ml/training/
-├── train.py              # Advanced trainer (EMA, gradient accumulation)
-├── train_production.py   # Production trainer (simpler, battle-tested)
-├── losses.py             # MaxSightLoss with proper target assignment
-├── export.py             # iOS export functions
-└── __init__.py           # Module exports
-```
-
-## Components
-
-### ProductionTrainer
-
-Simplified, production-ready trainer class:
-
-- **Features:**
-  - Mixed precision training (MPS/CUDA)
-  - Cosine annealing LR schedule
-  - Automatic checkpointing
-  - Validation metrics
-  - Best model saving
-
-- **Usage:**
-```python
-trainer = ProductionTrainer(
-    model=model,
-    train_loader=train_loader,
-    val_loader=val_loader,
-    device='mps',
-    learning_rate=1e-3,
-    num_epochs=20
-)
-
-history = trainer.train()
-```
-
-### Export Functions
-
-Multiple export formats for iOS deployment:
-
-1. **JIT Trace** (Always available)
-```python
-from ml.training.export import export_to_jit
-
-export_to_jit(model, 'maxsight_traced.pt')
-```
-
-2. **ExecuTorch** (Requires executorch)
-```python
-from ml.training.export import export_to_executorch
-
-export_to_executorch(model, 'maxsight.pte')
-```
-
-3. **CoreML** (Requires coremltools)
-```python
-from ml.training.export import export_to_coreml
-
-export_to_coreml(model, 'maxsight.mlpackage')
-```
-
-4. **ONNX** (Requires onnx)
-```python
-from ml.training.export import export_to_onnx
-
-export_to_onnx(model, 'maxsight.onnx')
-```
-
-5. **All Formats**
-```python
-from ml.training.export import export_model
-
-export_model(model, format='all', save_dir='exports')
-```
-
-## Training Workflow
-
-### Day 2: Model Setup
 ```bash
-# Test model
-python ml/models/maxsight_cnn.py
-
-# Test training system
-python ml/training/train_production.py
+python tools/quantization/validate_and_bench.py \
+    --fp32-model checkpoints/best_model.pt \
+    --int8-model artifacts/ptq/model_int8.pt \
+    --model-file ml/models/maxsight_cnn.py \
+    --data-dir datasets/val \
+    --benchmark \
+    --output-file results/ptq_validation.json
 ```
 
-### Day 3: Dataset & Training
+**Decision Point:**
+- If accuracy drop < 1% → **Ship PTQ model**
+- If accuracy drop > 1% → **Continue to QAT**
 
-**Option A: Use Dummy Data (Testing)**
+### Step 3: Quantization-Aware Training (QAT)
+
+If PTQ degrades accuracy, use QAT:
+
+```bash
+python tools/quantization/qat_finetune.py \
+    --model-file ml/models/maxsight_cnn.py \
+    --data-dir datasets/ \
+    --epochs 5 \
+    --lr 1e-5 \
+    --batch-size 32 \
+    --device cuda \
+    --backend qnnpack \
+    --num-classes 48 \
+    --output-dir artifacts/qat
+```
+
+QAT will:
+1. Fuse Conv+BN+ReLU patterns
+2. Insert fake quantization modules
+3. Warmup: observers ON, fake quant OFF (1 epoch)
+4. Full QAT: observers ON, fake quant ON (4 epochs)
+5. Convert to INT8
+6. Save best model
+
+### Step 4: Validate QAT Results
+
+```bash
+python tools/quantization/validate_and_bench.py \
+    --fp32-model checkpoints/best_model.pt \
+    --int8-model artifacts/qat/model_int8_from_qat.pt \
+    --model-file ml/models/maxsight_cnn.py \
+    --data-dir datasets/val \
+    --benchmark \
+    --output-file results/qat_validation.json
+```
+
+## Training Loop Details
+
+### Production Training Loop (`ml/training/train_loop.py`)
+
+The production training loop matches the pseudo-code specification:
+
 ```python
-from ml.training.train_production import create_dummy_dataloaders
+for epoch in range(num_epochs):
+    model.train()
+    for images, labels in train_loader:
+        images = images.to(device)
+        labels = move_targets_to_device(labels, device)
+        
+        with autocast():  # Mixed precision
+            outputs = model(images)
+            loss = compute_multihead_loss(outputs, labels)
+        
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad()
+    
+    scheduler.step()
+    validate(model, val_loader)
+    save_checkpoint(model, optimizer, epoch)
+```
 
-train_loader, val_loader = create_dummy_dataloaders(
-    num_train=10000,
-    num_val=2000,
-    batch_size=16
+**Features:**
+- Mixed precision training (FP16)
+- Multi-head loss (detection, scene, urgency, distance)
+- Gradient clipping
+- Learning rate scheduling
+- Automatic checkpointing
+- Best model tracking
+
+### Loss Function (`ml/training/losses.py`)
+
+`MaxSightLoss` computes:
+- **Classification Loss**: Focal loss for class imbalance
+- **Bounding Box Loss**: IoU loss (1 - IoU)
+- **Objectness Loss**: BCE loss
+- **Urgency Loss**: Cross-entropy
+- **Distance Loss**: (currently disabled)
+
+## Model Output Format
+
+MaxSight CNN returns:
+
+```python
+{
+    'classifications': [B, 196, 48],      # Per-location class logits
+    'boxes': [B, 196, 4],                 # Per-location boxes (cx, cy, w, h)
+    'objectness': [B, 196],                # Per-location objectness scores
+    'text_regions': [B, 196],              # Per-location text probability
+    'scene_embedding': [B, 256],           # Global scene embedding
+    'urgency_scores': [B, 4],              # Scene-level urgency
+    'distance_zones': [B, 196, 3],         # Per-location distance zones
+    'num_locations': 196                   # Grid size (14x14)
+}
+```
+
+## Post-Processing
+
+Use `model.get_detections()` for structured output:
+
+```python
+detections = model.get_detections(
+    images,
+    confidence_threshold=0.5,
+    nms_threshold=0.5,
+    max_detections=10
 )
+
+# Returns: List[List[Dict]] per image
+# Each detection has:
+# {
+#     'class': int,
+#     'confidence': float,
+#     'box': [x, y, w, h],
+#     'distance': str,  # 'near', 'medium', 'far'
+#     'urgency': int,   # 0-3
+#     'is_text': bool
+# }
 ```
 
-**Option B: Use COCO Dataset**
-```python
-# Download COCO (see ml/data/download_datasets.py)
-# Then create custom DataLoader
-from torch.utils.data import DataLoader
-from ml.data.coco_dataset import COCODataset
+## Acceptance Criteria
 
-train_dataset = COCODataset('datasets/coco', split='train')
-val_dataset = COCODataset('datasets/coco', split='val')
+### Sprint 1 End
+- [ ] FP32 model trained to convergence
+- [ ] Validation mAP > 0.30
+- [ ] Model size < 200 MB
+- [ ] Inference time < 100ms on CPU
 
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
-```
+### Sprint 2 End
+- [ ] INT8 model < 50 MB
+- [ ] Classification accuracy drop < 1%
+- [ ] Embedding cosine similarity > 0.99
+- [ ] BBox IoU drop < 0.02
+- [ ] Urgency accuracy drop < 1%
+- [ ] TorchScript export succeeds
+- [ ] ExecuTorch `.pte` file generated
 
-**Train:**
-```python
-trainer = ProductionTrainer(
-    model=model,
-    train_loader=train_loader,
-    val_loader=val_loader,
-    device='mps',
-    num_epochs=20
-)
+## Common Issues & Solutions
 
-history = trainer.train()
-```
+### Issue: Training loss not decreasing
+**Solution:**
+- Check learning rate (try 1e-4 or 1e-5)
+- Verify data loading (print batch shapes)
+- Check loss function (print individual loss components)
 
-### Day 4: Evaluation & Export
+### Issue: Out of memory
+**Solution:**
+- Reduce batch size
+- Use gradient accumulation
+- Enable mixed precision (automatic)
 
-**Evaluate:**
-```python
-# Load best model
-checkpoint = torch.load('checkpoints/best_model.pth')
-model.load_state_dict(checkpoint['model_state_dict'])
+### Issue: QAT fusion warnings
+**Solution:**
+- Check model architecture matches expected patterns
+- Verify Conv+BN+ReLU sequences exist
+- Fusion is soft-fail (warnings only)
 
-# Test inference
-model.eval()
-with torch.no_grad():
-    outputs = model(test_images)
-    detections = model.get_detections(outputs)
-```
-
-**Export:**
-```python
-from ml.training.export import export_model
-
-export_model(
-    model=model,
-    format='jit',  # Start with JIT
-    save_dir='exports'
-)
-```
-
-## Expected Results
-
-After 20 epochs with dummy data:
-- Train loss: <2.0
-- Val accuracy: >75%
-- Model size: ~112MB (FP32), ~28MB (INT8)
-- Export successful
-
-## Troubleshooting
-
-### Export Issues
-
-**Problem:** JIT trace fails with dict outputs
-**Solution:** Already fixed with `strict=False` in export.py
-
-**Problem:** ExecuTorch not available
-**Solution:** Falls back to JIT trace automatically
-
-**Problem:** CoreML export fails
-**Solution:** Install coremltools: `pip install coremltools`
-
-### Training Issues
-
-**Problem:** Loss is NaN
-**Solution:** Check learning rate (try 1e-4), ensure data is normalized
-
-**Problem:** Out of memory
-**Solution:** Reduce batch size, use gradient accumulation
-
-**Problem:** Slow training
-**Solution:** Use MPS (Mac) or CUDA (GPU), enable mixed precision
+### Issue: Validation accuracy drop after quantization
+**Solution:**
+- Increase calibration data diversity
+- Run QAT for more epochs
+- Check per-channel quantization is enabled (qnnpack)
 
 ## Next Steps
 
-1. ✅ Training system ready
-2. ✅ Export system ready
-3. ⏳ Integrate with real dataset (COCO)
-4. ⏳ Train on full dataset
-5. ⏳ Quantize model (INT8)
-6. ⏳ Deploy to iOS
+1. **Export to TorchScript**: `ml/training/export.py`
+2. **Export to ExecuTorch**: iOS deployment
+3. **iOS Integration**: Load `.pte` file in Swift
+4. **Real-world Testing**: Validate on device
 
-## Files Created
+## References
 
-- `ml/training/train_production.py` - Production trainer
-- `ml/training/export.py` - iOS export functions
-- `docs/production_training_guide.md` - This guide
-
-## Integration with Existing Code
-
-The production training system uses:
-- `ml.models.maxsight_cnn.MaxSightCNN` - The model
-- `ml.training.losses.MaxSightLoss` - The loss function
-- `ml.training.train.Trainer` - Advanced trainer (alternative)
-
-All components are fully integrated and tested.
-
+- `ml/training/train_loop.py` - Production training loop
+- `ml/training/losses.py` - Multi-head loss function
+- `ml/training/quantization.py` - PTQ quantization
+- `tools/quantization/qat_finetune.py` - QAT fine-tuning
+- `tools/quantization/validate_and_bench.py` - Validation & benchmarking

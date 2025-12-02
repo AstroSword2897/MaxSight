@@ -304,9 +304,9 @@ class MaxSightCNN(nn.Module):
         
         # Audio branch (128-dim MFCC input)
         self.audio_branch = nn.Sequential(
-            nn.Linear(128, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
+                nn.Linear(128, 256),
+                nn.BatchNorm1d(256),
+                nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(256, 128)
         )
@@ -672,12 +672,20 @@ class MaxSightCNN(nn.Module):
         confidence_threshold: float = 0.5,
         nms_threshold: float = 0.5,
         max_detections: int = 20
-    ) -> List[Dict]:
+    ) -> List[List[Dict]]:
         """
-        Post-process model outputs to get final detections with NMS
+        Post-process model outputs to get final detections with NMS.
+        
+        Optimized version using torchvision NMS for better performance.
         
         Args:
-            outputs: Model forward pass outputs dictionary
+            outputs: Model forward pass outputs dictionary containing:
+                - 'classifications': [B, H*W, num_classes] class probabilities
+                - 'objectness': [B, H*W] objectness scores
+                - 'boxes': [B, H*W, 4] boxes in center format [cx, cy, w, h]
+                - 'text_regions': [B, H*W] text detection scores
+                - 'distance_zones': [B, H*W, 3] distance zone logits
+                - 'urgency_scores': [B, 4] urgency level logits (optional, falls back to _get_urgency)
             confidence_threshold: Minimum objectness score to consider
             nms_threshold: IoU threshold for non-maximum suppression
             max_detections: Maximum number of detections per image
@@ -685,15 +693,18 @@ class MaxSightCNN(nn.Module):
         Returns:
             List of detection dictionaries per image:
             [
-                {
-                    'class': int,
-                    'class_name': str,
-                    'confidence': float,
-                    'box': [x, y, w, h],
-                    'distance': str ('near', 'medium', 'far'),
-                    'urgency': int (0-3),
-                    'is_text': bool
-                },
+                [
+                    {
+                        'class': int,
+                        'class_name': str,
+                        'confidence': float,
+                        'box': [cx, cy, w, h],
+                        'distance': str ('near', 'medium', 'far'),
+                        'urgency': int (0-3),
+                        'is_text': bool
+                    },
+                    ...
+                ],
                 ...
             ]
         """
@@ -710,74 +721,81 @@ class MaxSightCNN(nn.Module):
             text_scores = outputs['text_regions'][b]
             distances = F.softmax(outputs['distance_zones'][b], dim=1)
             
-            # Throw away low-confidence detections - they're probably noise
-            # The threshold is a hyperparameter - 0.5 works well but you can tune it
+            # Filter low-confidence detections
             mask = obj_scores > confidence_threshold
-            num_valid = mask.sum().item()  # How many passed the threshold
             
-            if num_valid == 0:
-                # Nothing detected in this image - return empty list
-                # This happens sometimes, especially with low-quality images
+            if mask.sum() == 0:
                 detections.append([])
                 continue
             
-            # Keep only the confident predictions
-            # Using boolean indexing - PyTorch makes this fast
-            filtered_scores = obj_scores[mask]
-            filtered_cls = cls_probs[mask]
+            # Apply mask to all tensors
             filtered_boxes = boxes[mask]
+            filtered_scores = obj_scores[mask]
+            filtered_cls_probs = cls_probs[mask]
             filtered_text = text_scores[mask]
-            filtered_dist = distances[mask]
+            filtered_distances = distances[mask]
             
-            # For each location, pick the most likely class
-            # max() returns (values, indices) - we need both
-            cls_conf, cls_idx = filtered_cls.max(dim=1)
+            # Get the most likely class per detection
+            filtered_cls_conf, filtered_cls_idx = filtered_cls_probs.max(dim=1)
             
-            # Final confidence = objectness * class confidence
-            # Both need to be high for us to trust the detection
-            # Multiplying them is a simple way to combine - could use other methods
-            final_scores = filtered_scores * cls_conf
+            # Multiply class confidence by objectness score for final confidence
+            final_scores = filtered_cls_conf * filtered_scores
             
-            # Sort by confidence - best detections first
-            # argsort gives us indices in sorted order
-            sorted_idx = torch.argsort(final_scores, descending=True)
+            # Perform Non-Maximum Suppression (NMS) using torchvision
+            # Convert boxes from [cx, cy, w, h] to [x1, y1, x2, y2] for NMS
+            cx, cy, w, h = filtered_boxes[:, 0], filtered_boxes[:, 1], filtered_boxes[:, 2], filtered_boxes[:, 3]
+            x1 = cx - 0.5 * w
+            y1 = cy - 0.5 * h
+            x2 = cx + 0.5 * w
+            y2 = cy + 0.5 * h
+            boxes_xyxy = torch.stack([x1, y1, x2, y2], dim=1)
             
-            # Remove overlapping boxes (NMS - keep the best one when boxes overlap)
-            # NMS is critical - without it you get 10 boxes for the same car
-            # Pass sorted boxes so NMS can work efficiently
-            keep_indices = self._nms(
-                filtered_boxes[sorted_idx],  # Already sorted by score
-                final_scores[sorted_idx], 
-                nms_threshold  # IoU threshold - 0.5 is standard
-            )
+            # Use torchvision's optimized NMS (faster than custom implementation)
+            try:
+                nms_indices = torch.ops.torchvision.nms(boxes_xyxy, final_scores, nms_threshold)
+            except AttributeError:
+                # Fallback to custom NMS if torchvision ops not available
+                nms_indices = torch.tensor(self._nms(filtered_boxes, final_scores, nms_threshold), 
+                                         device=filtered_boxes.device)
             
-            # Don't return too many detections - keep it manageable
-            # 20 is a reasonable limit - more than that is probably noise anyway
-            keep_indices = keep_indices[:max_detections]
+            # Limit to max_detections
+            nms_indices = nms_indices[:max_detections]
+            
+            # Get urgency from outputs if available, otherwise use class-based lookup
+            if 'urgency_scores' in outputs:
+                urgency = int(outputs['urgency_scores'][b].argmax().item())
+            else:
+                urgency = None  # Will be computed per-detection below
             
             # Build detection list
             img_detections = []
-            for idx in keep_indices:
-                orig_idx = sorted_idx[idx]
+            for idx in nms_indices:
+                idx = int(idx.item())
+                box = filtered_boxes[idx].cpu().tolist()
+                cls_id = int(filtered_cls_idx[idx].item())
+                score = float(final_scores[idx].item())
+                dist_id = int(filtered_distances[idx].argmax().item())
+                is_text = bool(filtered_text[idx].item() > 0.5)
                 
-                class_id = int(cls_idx[orig_idx].item())
-                dist_zone = int(torch.argmax(filtered_dist[orig_idx]).item())
-                confidence = float(final_scores[orig_idx].item())
+                # Get urgency: use batch-level if available, otherwise class-based
+                if urgency is not None:
+                    detection_urgency = urgency
+                else:
+                    class_name = COCO_CLASSES[cls_id] if 0 <= cls_id < len(COCO_CLASSES) else 'unknown'
+                    detection_urgency = self._get_urgency(class_name)
                 
-                # Safe class name lookup
-                class_name = COCO_CLASSES[class_id] if 0 <= class_id < len(COCO_CLASSES) else 'unknown'
-                
-                # Safe distance zone lookup
-                distance = DISTANCE_ZONES[dist_zone] if 0 <= dist_zone < len(DISTANCE_ZONES) else 'medium'
+                # Safe lookups
+                class_name = COCO_CLASSES[cls_id] if 0 <= cls_id < len(COCO_CLASSES) else 'unknown'
+                distance = DISTANCE_ZONES[dist_id] if 0 <= dist_id < len(DISTANCE_ZONES) else 'medium'
                 
                 img_detections.append({
-                    'class': class_id,
+                    'class': cls_id,
                     'class_name': class_name,
-                    'confidence': confidence,
-                    'box': filtered_boxes[orig_idx].cpu().tolist(),
+                    'confidence': score,
+                    'box': box,
                     'distance': distance,
-                    'urgency': self._get_urgency(class_name),
-                    'is_text': bool(filtered_text[orig_idx].item() > 0.5)
+                    'urgency': detection_urgency,
+                    'is_text': is_text
                 })
             
             detections.append(img_detections)
@@ -1013,6 +1031,22 @@ def create_model(
     )
 
 
+def build_model(**kwargs) -> MaxSightCNN:
+    """
+    Build function for compatibility with quantization and export scripts.
+    
+    This is an alias for create_model() that matches the expected interface
+    for tools like qat_finetune.py and validate_and_bench.py.
+    
+    Args:
+        **kwargs: Arguments passed to create_model()
+    
+    Returns:
+        MaxSightCNN instance
+    """
+    return create_model(**kwargs)
+
+
 # Test model initialization
 if __name__ == "__main__":
     import time
@@ -1102,9 +1136,9 @@ if __name__ == "__main__":
     print("\n✓ Test 8: Condition-Specific Modes")
     for condition in ['glaucoma', 'amd', 'color_blindness']:
         cond_model = create_model(condition_mode=condition)
-        with torch.no_grad():
+    with torch.no_grad():
             cond_outputs = cond_model(dummy_image)
-        print(f"  {condition}: {len(cond_outputs)} outputs")
+    print(f"  {condition}: {len(cond_outputs)} outputs")
     
     print("\n" + "="*80)
     print("✅ ALL TESTS PASSED - Model ready for deployment")
