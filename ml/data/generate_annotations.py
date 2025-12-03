@@ -281,7 +281,7 @@ if __name__ == "__main__":
         train_split=args.train_split
     )
     
-    print("\n✅ Annotation generation complete!")
+    print("\nAnnotation generation complete!")
     print(f"Training annotations: {train_file}")
     print(f"Validation annotations: {val_file}")
 

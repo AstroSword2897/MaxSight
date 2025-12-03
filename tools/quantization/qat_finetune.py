@@ -81,7 +81,7 @@ def fuse_maxsight_model(model: nn.Module):
         except Exception as e:
             warnings.warn(f"Could not fuse pattern {p}: {e}")
     
-    print(f"✓ Fused {fused_count} module patterns")
+    print(f"Fused {fused_count} module patterns")
     return model
 
 
@@ -156,7 +156,7 @@ class QATTrainer:
         if self.fuse:
             try:
                 model_qat = fuse_maxsight_model(model_qat)
-                print("✓ Fusion completed")
+                print("Fusion completed")
             except Exception as e:
                 warnings.warn(f"Fusion failed: {e}")
         
@@ -178,7 +178,7 @@ class QATTrainer:
         # Prepare for QAT (inserts fake quantization modules)
         model_qat = quantization.prepare_qat(model_qat, inplace=False)
         
-        print(f"✓ Model prepared for QAT with {self.backend} backend")
+        print(f"Model prepared for QAT with {self.backend} backend")
         return model_qat.to(self.device)
     
     def train_epoch(self, model: nn.Module, optimizer, epoch: int) -> float:
@@ -294,9 +294,7 @@ class QATTrainer:
         Run full QAT training loop.
         Returns dict with best model path and training history.
         """
-        print("=" * 70)
         print("Starting Quantization-Aware Training (QAT)")
-        print("=" * 70)
         
         # Prepare model for QAT
         model_qat = self.prepare_model_for_qat()
@@ -306,7 +304,7 @@ class QATTrainer:
             # Freeze backbone initially
             for param in self.backbone_params:
                 param.requires_grad = False
-            print("✓ Backbone frozen for QAT fine-tuning (training heads only)")
+            print("Backbone frozen for QAT fine-tuning (training heads only)")
             # Only optimize heads
             optimizer = AdamW(
                 self.head_params,
@@ -343,7 +341,7 @@ class QATTrainer:
             if self.freeze_backbone and epoch == self.freeze_backbone_epochs:
                 for param in self.backbone_params:
                     param.requires_grad = True
-                print("✓ Backbone unfrozen (full model QAT)")
+                print("Backbone unfrozen (full model QAT)")
                 # Recreate optimizer with all parameters
                 param_groups = [
                     {'params': self.backbone_params, 'lr': self.lr * 0.1},
@@ -377,7 +375,7 @@ class QATTrainer:
                 best_val_loss = val_loss
                 best_epoch = epoch
                 best_model_state = deepcopy(model_qat.state_dict())
-                print(f"  ✓ New best model (loss: {best_val_loss:.4f})")
+                print(f"  New best model (loss: {best_val_loss:.4f})")
             
             # Step scheduler
             scheduler.step()
@@ -393,9 +391,7 @@ class QATTrainer:
                 'val_loss': val_loss,
             }, checkpoint_path)
         
-        print("\n" + "=" * 70)
-        print(f"QAT Training Complete! Best epoch: {best_epoch+1}")
-        print("=" * 70)
+        print(f"\nQAT Training Complete! Best epoch: {best_epoch+1}")
         
         # Load best model and convert to INT8
         if best_model_state is not None:
@@ -428,9 +424,9 @@ class QATTrainer:
                 'best_val_loss': best_val_loss,
             }, f, indent=2)
         
-        print(f"\n✓ Best QAT model saved: {qat_model_path}")
-        print(f"✓ INT8 model saved: {int8_model_path}")
-        print(f"✓ Training history saved: {history_path}")
+        print(f"\nBest QAT model saved: {qat_model_path}")
+        print(f"INT8 model saved: {int8_model_path}")
+        print(f"Training history saved: {history_path}")
         
         return {
             'qat_model_path': str(qat_model_path),
@@ -520,10 +516,8 @@ if __name__ == "__main__":
     # Run QAT
     results = trainer.train()
     
-    print("\n" + "=" * 70)
-    print("QAT Results:")
+    print("\nQAT Results:")
     print(f"  Best model: {results['qat_model_path']}")
     print(f"  INT8 model: {results['int8_model_path']}")
     print(f"  Best validation loss: {results['best_val_loss']:.4f}")
-    print("=" * 70)
 

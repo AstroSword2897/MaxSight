@@ -179,13 +179,13 @@ class ProductionTrainLoop:
         """Freeze ResNet backbone parameters."""
         for param in self.backbone_params:
             param.requires_grad = False
-        print("✓ Backbone frozen (only heads will be trained)")
+        print("Backbone frozen (only heads will be trained)")
     
     def _unfreeze_backbone(self):
         """Unfreeze ResNet backbone parameters."""
         for param in self.backbone_params:
             param.requires_grad = True
-        print("✓ Backbone unfrozen (full model training)")
+        print("Backbone unfrozen (full model training)")
     
     def compute_multihead_loss(
         self,
@@ -351,7 +351,7 @@ class ProductionTrainLoop:
         if is_best:
             best_path = self.checkpoint_dir / 'best_model.pt'
             torch.save(checkpoint, best_path)
-            print(f"  ✓ Saved best model (val_loss: {val_loss:.4f})")
+            print(f"  Saved best model (val_loss: {val_loss:.4f})")
         
         # Clean up old checkpoints if save_best_only
         if self.save_best_only and not is_best:
@@ -364,16 +364,13 @@ class ProductionTrainLoop:
         Returns:
             Dictionary with training history and best model path
         """
-        print("=" * 70)
         print("Starting Production Training Loop")
-        print("=" * 70)
         print(f"Device: {self.device}")
         print(f"Mixed Precision: {self.use_mixed_precision}")
         print(f"Epochs: {self.num_epochs}")
         print(f"Train batches: {len(self.train_loader)}")
         if self.val_loader:
             print(f"Val batches: {len(self.val_loader)}")
-        print("=" * 70)
         
         start_time = time.time()
         
@@ -422,13 +419,10 @@ class ProductionTrainLoop:
         with open(history_path, 'w') as f:
             json.dump(self.history, f, indent=2)
         
-        print("\n" + "=" * 70)
-        print("Training Complete!")
-        print("=" * 70)
+        print("\nTraining Complete!")
         print(f"Best validation loss: {self.best_val_loss:.4f}")
         print(f"Total time: {elapsed_time/3600:.2f} hours")
         print(f"Checkpoints saved to: {self.checkpoint_dir}")
-        print("=" * 70)
         
         return {
             'best_val_loss': self.best_val_loss,

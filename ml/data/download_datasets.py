@@ -45,7 +45,7 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco")) -> Dict[str, boo
         img_count = len(list(train_img_dir.glob("*.jpg")))
         status['train_images'] = img_count > 100000  # Should have ~118K images
         if status['train_images']:
-            print(f"✓ Train images: {img_count} images found")
+            print(f"Train images: {img_count} images found")
         else:
             print(f"⚠ Train images: Only {img_count} images found (expected ~118K)")
     
@@ -53,7 +53,7 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco")) -> Dict[str, boo
         img_count = len(list(val_img_dir.glob("*.jpg")))
         status['val_images'] = img_count > 4000  # Should have ~5K images
         if status['val_images']:
-            print(f"✓ Val images: {img_count} images found")
+            print(f"Val images: {img_count} images found")
         else:
             print(f"⚠ Val images: Only {img_count} images found (expected ~5K)")
     
@@ -69,7 +69,7 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco")) -> Dict[str, boo
                     data = json.load(f)
                     status['train_annotations'] = len(data.get('images', [])) > 100000
                     if status['train_annotations']:
-                        print(f"✓ Train annotations: {len(data.get('images', []))} images")
+                        print(f"Train annotations: {len(data.get('images', []))} images")
             except:
                 status['train_annotations'] = False
         
@@ -79,7 +79,7 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco")) -> Dict[str, boo
                     data = json.load(f)
                     status['val_annotations'] = len(data.get('images', [])) > 4000
                     if status['val_annotations']:
-                        print(f"✓ Val annotations: {len(data.get('images', []))} images")
+                        print(f"Val annotations: {len(data.get('images', []))} images")
             except:
                 status['val_annotations'] = False
     
@@ -110,7 +110,7 @@ def download_coco_dataset(data_dir: Path = Path("datasets/coco")):
     print("\nVerifying existing dataset...")
     status = verify_coco_dataset(data_dir)
     if all(status.values()):
-        print("✓ COCO dataset fully verified!")
+        print("COCO dataset fully verified!")
     else:
         print("⚠ COCO dataset incomplete. Please download missing components.")
 
@@ -282,10 +282,8 @@ def get_all_datasets_info() -> Dict[str, Dict]:
 
 
 if __name__ == "__main__":
-    print("=" * 70)
     print("MaxSight Comprehensive Dataset Acquisition")
     print("Maximum Data for 347-Class Training")
-    print("=" * 70)
     
     # Create dataset directories
     datasets_dir = Path("datasets")
@@ -306,9 +304,7 @@ if __name__ == "__main__":
         print(f"  URL: {info['url']}")
     
     # Download instructions for all datasets
-    print("\n" + "=" * 70)
-    print("Dataset Download Instructions:")
-    print("=" * 70)
+    print("\nDataset Download Instructions:")
     
     download_coco_dataset()
     print("\n" + "-" * 70)
@@ -323,26 +319,22 @@ if __name__ == "__main__":
     download_audioset()
     
     # Create synthetic impairment info
-    print("\n" + "=" * 70)
     create_synthetic_impairments()
     
     # Save class mappings
     save_class_mappings()
     
     # Final verification summary
-    print("\n" + "=" * 70)
-    print("Dataset Verification Summary:")
-    print("=" * 70)
+    print("\nDataset Verification Summary:")
     coco_status = verify_coco_dataset()
     if any(coco_status.values()):
         print("\nCOCO Dataset Status:")
         for key, status in coco_status.items():
-            print(f"  {key}: {'✓' if status else '✗'}")
+            print(f"  {key}: {'PASS' if status else 'FAIL'}")
     else:
         print("\n⚠ No datasets verified. Please download datasets first.")
     
-    print("\n" + "=" * 70)
-    print("Total Available Training Data:")
+    print("\nTotal Available Training Data:")
     print("  - COCO: 200K+ images, 1.5M+ instances")
     print("  - Open Images: 9M+ images, 36M+ instances")
     print("  - Objects365: 2M+ images, 30M+ instances")
@@ -350,5 +342,4 @@ if __name__ == "__main__":
     print("  - LVIS: 164K images, 2.2M+ instances")
     print("  - AudioSet: 2M+ audio clips")
     print("\n  TOTAL: 11M+ images, 70M+ instances for maximum training data")
-    print("=" * 70)
 

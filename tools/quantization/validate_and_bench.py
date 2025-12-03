@@ -262,9 +262,7 @@ class QuantizationValidator:
         Run comprehensive validation across all MaxSight heads.
         Returns detailed metrics dictionary.
         """
-        print("=" * 70)
         print("Running Full Quantization Validation")
-        print("=" * 70)
         
         all_metrics = {
             'classification': [],
@@ -378,9 +376,7 @@ class QuantizationValidator:
         
         aggregated['num_batches'] = num_batches
         
-        print("\n" + "=" * 70)
-        print("Validation Complete")
-        print("=" * 70)
+        print("\nValidation Complete")
         
         return aggregated
 
@@ -522,12 +518,10 @@ if __name__ == "__main__":
     with open(output_path, 'w') as f:
         json.dump(validation_results, f, indent=2)
     
-    print(f"\n✓ Results saved to: {output_path}")
+    print(f"\nResults saved to: {output_path}")
     
     # Print summary
-    print("\n" + "=" * 70)
-    print("VALIDATION SUMMARY")
-    print("=" * 70)
+    print("\nVALIDATION SUMMARY")
     
     for head, metrics in validation_results.items():
         if head == 'num_batches' or head == 'benchmark':

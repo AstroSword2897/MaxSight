@@ -84,9 +84,7 @@ def benchmark_inference(
 
 def print_benchmark_results(results: Dict[str, Dict[str, float]]) -> None:
     """Print benchmark results in readable format."""
-    print("\n" + "=" * 70)
-    print("Inference Latency Benchmark Results")
-    print("=" * 70)
+    print("\nInference Latency Benchmark Results")
     
     for key, stats in results.items():
         if key == 'overall':
@@ -104,7 +102,7 @@ def print_benchmark_results(results: Dict[str, Dict[str, float]]) -> None:
         print(f"\nOverall (batch_size=1):")
         print(f"  Mean:   {overall['mean_ms']:.2f} ms")
         print(f"  Target: <500 ms")
-        print(f"  Status: {'✓ PASS' if overall['mean_ms'] < 500 else '✗ FAIL'}")
+        print(f"  Status: {'PASS' if overall['mean_ms'] < 500 else 'FAIL'}")
     
-    print("=" * 70 + "\n")
+    print()
 

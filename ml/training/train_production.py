@@ -702,11 +702,9 @@ class ProductionTrainer:
         # Full training loop - trains model for specified epochs with validation and checkpointing
         # Complexity: O(E*B*N) where E=epochs, B=batches, N=forward/backward pass complexity
         # Relationship: Main entry point for training - orchestrates train_epoch() and validate() calls
-        print(f"\n{'='*70}")
-        print(f"Training MaxSight CNN - {self.num_epochs} epochs")
+        print(f"\nTraining MaxSight CNN - {self.num_epochs} epochs")
         print(f"Device: {self.device}")
-        print(f"Mixed Precision: {self.use_amp}")
-        print(f"{'='*70}\n")
+        print(f"Mixed Precision: {self.use_amp}\n")
         
         for epoch in range(1, self.num_epochs + 1):
             print(f"\nEpoch {epoch}/{self.num_epochs}")
@@ -782,13 +780,13 @@ class ProductionTrainer:
                     'val_map': val_map,  # Mean Average Precision
                     'lighting_metrics': {k: v for k, v in val_metrics.items() if any(light in k for light in ['bright', 'normal', 'dim', 'dark'])}  # Lighting-specific metrics
                 }, self.save_dir / 'best_model.pth')  # Save best model checkpoint
-                print(f"✓ Saved best model (val_loss: {val_loss:.4f}, recall: {val_recall:.4f})")
+                print(f"Saved best model (val_loss: {val_loss:.4f}, recall: {val_recall:.4f})")
             else:
                 # No improvement - increment patience counter for early stopping
                 # Complexity: O(1) - simple increment
                 self.patience_counter += 1
                 if self.patience_counter >= self.patience:
-                    print(f"\n⚠️  Early stopping triggered: No improvement for {self.patience} epochs")
+                    print(f"\nEarly stopping triggered: No improvement for {self.patience} epochs")
                     print(f"   Best val_loss: {self.best_val_loss:.4f}")
                     break  # Stop training early
             
@@ -808,10 +806,8 @@ class ProductionTrainer:
             'history': self.history  # Training history (losses, accuracies over epochs)
         }, self.save_dir / 'final_model.pth')
         
-        print(f"\n{'='*70}")
-        print("Training Complete!")
-        print(f"Best Val Loss: {self.best_val_loss:.4f}")
-        print(f"{'='*70}\n")
+        print(f"\nTraining Complete!")
+        print(f"Best Val Loss: {self.best_val_loss:.4f}\n")
         
         return self.history  # Return training history for analysis/plotting
 
@@ -1010,7 +1006,6 @@ def create_dummy_dataloaders(
 
 if __name__ == "__main__":
     print("MaxSight Training System - Production Ready")
-    print("="*70)
     
     # Determine device
     if torch.cuda.is_available():
@@ -1026,7 +1021,7 @@ if __name__ == "__main__":
     print("Creating MaxSight model...")
     print(f"  Using {NUM_CLASSES} classes (80 COCO + {NUM_CLASSES - 80} accessibility classes)")
     model = create_model(num_classes=NUM_CLASSES)
-    print(f"✓ Model created: {sum(p.numel() for p in model.parameters()):,} parameters\n")
+    print(f"Model created: {sum(p.numel() for p in model.parameters()):,} parameters\n")
     
     # Create dummy dataloaders (replace with real dataset)
     print("Creating dataloaders...")
@@ -1035,8 +1030,8 @@ if __name__ == "__main__":
         num_val=200,
         batch_size=8
     )
-    print(f"✓ Train batches: {len(train_loader)}")
-    print(f"✓ Val batches: {len(val_loader)}\n")
+    print(f"Train batches: {len(train_loader)}")
+    print(f"Val batches: {len(val_loader)}\n")
     
     # Test loss computation
     print("Testing loss computation...")
@@ -1055,7 +1050,7 @@ if __name__ == "__main__":
         outputs = model(images)
         losses = criterion(outputs, targets)
     
-    print("\n✓ Loss computation test:")
+    print("\nLoss computation test:")
     for k, v in losses.items():
         if isinstance(v, torch.Tensor):
             print(f"  {k}: {v.item():.4f}")
@@ -1063,7 +1058,6 @@ if __name__ == "__main__":
             print(f"  {k}: {v}")
     
     # Create trainer
-    print("\n" + "="*70)
     trainer = ProductionTrainer(
         model=model,
         train_loader=train_loader,
@@ -1078,9 +1072,7 @@ if __name__ == "__main__":
     history = trainer.train()
     
     # Export model
-    print("\n" + "="*70)
-    print("Exporting model to iOS formats...")
-    print("="*70)
+    print("\nExporting model to iOS formats...")
     
     # Load best model
     checkpoint = torch.load('checkpoints/best_model.pth', map_location=device)
@@ -1095,6 +1087,6 @@ if __name__ == "__main__":
         input_size=(1, 3, 224, 224)
     )
     
-    print("\n✅ Training system ready!")
-    print("✅ Model exported for iOS deployment!")
+    print("\nTraining system ready!")
+    print("Model exported for iOS deployment!")
 

@@ -1,0 +1,329 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MaxSight Accessibility Output Schema",
+  "description": "Complete output schema for MaxSight accessibility intelligence system",
+  "type": "object",
+  "required": ["frame_id", "timestamp", "detections", "scene_analysis"],
+  "properties": {
+    "frame_id": {
+      "type": "string",
+      "description": "Unique identifier for this frame"
+    },
+    "timestamp": {
+      "type": "number",
+      "description": "Unix timestamp in seconds"
+    },
+    "user_profile_id": {
+      "type": "string",
+      "description": "ID of user profile for personalization"
+    },
+    "detections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["class", "class_name", "confidence", "box", "distance", "urgency", "priority"],
+        "properties": {
+          "class": {
+            "type": "integer",
+            "description": "Class ID"
+          },
+          "class_name": {
+            "type": "string",
+            "description": "Human-readable class name"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Detection confidence score"
+          },
+          "box": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 4,
+            "maxItems": 4,
+            "description": "Bounding box [cx, cy, w, h] normalized"
+          },
+          "distance": {
+            "type": "string",
+            "enum": ["near", "medium", "far"],
+            "description": "Distance zone"
+          },
+          "urgency": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3,
+            "description": "Urgency level: 0=safe, 1=caution, 2=warning, 3=danger"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Priority score: 90-100=hazard, 70-89=navigation, 40-69=useful, 0-39=non-essential"
+          },
+          "findability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "How easy to find this object (0-1)"
+          },
+          "recognizability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "How recognizable under low vision (0-1)"
+          },
+          "color_discrimination_demand": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "How much color distinction is needed (0-1)"
+          }
+        }
+      }
+    },
+    "scene_analysis": {
+      "type": "object",
+      "required": ["scene_type", "lighting_class", "contrast_sensitivity"],
+      "properties": {
+        "scene_type": {
+          "type": "string",
+          "enum": ["kitchen", "bathroom", "classroom", "street", "crosswalk", "hallway", "parking_lot", "office", "bedroom", "living_room", "unknown"],
+          "description": "Type of scene/environment"
+        },
+        "lighting_class": {
+          "type": "string",
+          "enum": ["bright", "dim", "backlit", "mixed", "fluorescent_flicker"],
+          "description": "Lighting condition"
+        },
+        "contrast_sensitivity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Contrast sensitivity score (0-1)"
+        },
+        "glare_risk_level": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Glare risk: 0=none, 1=low, 2=medium, 3=high"
+        },
+        "motion_perception_difficulty": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Motion perception difficulty (0-1)"
+        },
+        "navigation_difficulty": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Navigation difficulty rating (0-1)"
+        },
+        "hazard_density_heatmap": {
+          "type": "string",
+          "description": "Base64-encoded heatmap image"
+        }
+      }
+    },
+    "functional_vision": {
+      "type": "object",
+      "properties": {
+        "field_of_view_usable": {
+          "type": "object",
+          "properties": {
+            "left": {"type": "number", "minimum": 0, "maximum": 1},
+            "right": {"type": "number", "minimum": 0, "maximum": 1},
+            "upper": {"type": "number", "minimum": 0, "maximum": 1},
+            "lower": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        },
+        "contrast_sensitivity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "glare_risk_level": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "motion_perception_difficulty": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "social_context": {
+      "type": "object",
+      "properties": {
+        "people": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "integer"},
+              "box": {
+                "type": "array",
+                "items": {"type": "number"},
+                "minItems": 4,
+                "maxItems": 4
+              },
+              "body_orientation": {
+                "type": "string",
+                "enum": ["facing_user", "facing_away", "sideways"]
+              },
+              "gesture": {
+                "type": "string",
+                "enum": ["waving", "pointing", "stop_gesture", "beckoning", "none"]
+              },
+              "interaction_intent": {
+                "type": "string",
+                "enum": ["approaching", "looking_at_user", "ignoring"]
+              },
+              "distance": {
+                "type": "string",
+                "enum": ["near", "medium", "far"]
+              }
+            }
+          }
+        },
+        "crowd_flow": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Crowd flow direction vector [x, y]"
+        }
+      }
+    },
+    "spatial_mapping": {
+      "type": "object",
+      "properties": {
+        "semantic_segmentation": {
+          "type": "string",
+          "description": "Base64-encoded segmentation mask"
+        },
+        "room_zones": {
+          "type": "object",
+          "properties": {
+            "walkable": {"type": "number"},
+            "obstacles": {"type": "number"},
+            "walls": {"type": "number"},
+            "furniture": {"type": "number"},
+            "entry_exit": {"type": "number"}
+          }
+        },
+        "pathfinding": {
+          "type": "object",
+          "properties": {
+            "recommended_path": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {"type": "number"},
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            "chokepoints": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {"type": "number"},
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            "optimal_direction": {
+              "type": "array",
+              "items": {"type": "number"},
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        }
+      }
+    },
+    "output_recommendations": {
+      "type": "object",
+      "properties": {
+        "audio": {
+          "type": "object",
+          "properties": {
+            "spatial_beacons": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "object_id": {"type": "integer"},
+                  "pan": {"type": "number", "minimum": -1, "maximum": 1},
+                  "frequency": {"type": "number"},
+                  "duration": {"type": "number"}
+                }
+              }
+            },
+            "scene_summary": {"type": "string"}
+          }
+        },
+        "haptic": {
+          "type": "object",
+          "properties": {
+            "vibrations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["right_wrist", "left_wrist", "both", "long", "pulsing"]
+                  },
+                  "intensity": {"type": "number", "minimum": 0, "maximum": 1},
+                  "pattern": {
+                    "type": "string",
+                    "enum": ["single", "double", "pulsing", "ramping"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "visual": {
+          "type": "object",
+          "properties": {
+            "highlight_regions": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {"type": "number"},
+                "minItems": 4,
+                "maxItems": 4
+              }
+            },
+            "text_overlays": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {"type": "string"},
+                  "position": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "size": {
+                    "type": "string",
+                    "enum": ["small", "medium", "large"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

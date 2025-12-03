@@ -129,11 +129,9 @@ def main():
     # Train
     results = trainer.train()
     
-    print("\n" + "=" * 70)
-    print("Training Results:")
+    print("\nTraining Results:")
     print(f"  Best model: {results['best_model_path']}")
     print(f"  Best validation loss: {results['best_val_loss']:.4f}")
-    print("=" * 70)
 
 
 if __name__ == '__main__':

@@ -75,7 +75,7 @@ def _fuse_maxsight_modules(model: nn.Module) -> nn.Module:
             continue
     
     if fused_count > 0:
-        print(f"✓ Fused {fused_count} Conv+BN+ReLU patterns for better performance")
+        print(f"Fused {fused_count} Conv+BN+ReLU patterns for better performance")
     else:
         warnings.warn("No modules were fused. Model may not have standard Conv+BN+ReLU patterns.")
     
@@ -198,7 +198,7 @@ def quantize_model_int8(
     print("Converting to int8...")
     model_int8 = quantization.convert(model_prepared, inplace=False)
     
-    print(f"✓ Quantization complete ({batch_count} calibration batches used)")
+    print(f"Quantization complete ({batch_count} calibration batches used)")
     print(f"  Backend: {backend} ({'ARM/iOS ready' if backend == 'qnnpack' else 'x86'})")
     return model_int8
 
@@ -431,9 +431,7 @@ def print_quantization_results(
     verbose: bool = True
 ) -> None:
     """Print quantization results in readable format."""
-    print("\n" + "=" * 70)
-    print("Model Quantization Results")
-    print("=" * 70)
+    print("\nModel Quantization Results")
     
     print("\nModel Statistics:")
     print(f"  Total Parameters:     {size_info['total_parameters']:,}")
@@ -446,7 +444,7 @@ def print_quantization_results(
         print(f"  Compression:      {size_info['compression_ratio']:.1f}x")
         print(f"  Size Reduction:   {size_info.get('size_reduction', 'N/A')}")
         print(f"  Target:           <50 MB")
-        print(f"  Status:           {'✓ PASS' if size_info.get('meets_target', False) else '✗ FAIL'}")
+        print(f"  Status:           {'PASS' if size_info.get('meets_target', False) else 'FAIL'}")
     
     if size_info.get('disk_sizes'):
         print("\nActual Disk Sizes:")
@@ -461,7 +459,7 @@ def print_quantization_results(
         else:
             print(f"  Accuracy Loss:      {validation['accuracy_loss_percent']:.2f}%")
         print(f"  Target:             <1%")
-        print(f"  Status:             {'✓ PASS' if validation.get('meets_tolerance', False) else '✗ FAIL'}")
+        print(f"  Status:             {'PASS' if validation.get('meets_tolerance', False) else 'FAIL'}")
         
         if verbose and 'additional_metrics' in validation:
             print("\nDetailed Metrics:")
@@ -475,7 +473,7 @@ def print_quantization_results(
     else:
         print(f"  Error: {validation.get('error', 'Unknown error')}")
     
-    print("=" * 70 + "\n")
+    print()
 
 
 def quantize_and_validate(
@@ -527,14 +525,12 @@ def quantize_and_validate(
         )
         
         if results['ready_for_export']:
-            print("✓ Model ready for ExecuTorch export (Week 2)")
+            print("Model ready for ExecuTorch export (Week 2)")
             # Next: Export to .pte format
         else:
-            print("✗ Quantization failed validation - check accuracy loss")
+            print("Quantization failed validation - check accuracy loss")
     """
-    print("\n" + "=" * 70)
-    print("Week 1: Model Quantization Pipeline")
-    print("=" * 70)
+    print("\nWeek 1: Model Quantization Pipeline")
     
     # Step 1: Quantize
     print("\n[Step 1/3] Quantizing model to INT8...")
@@ -610,7 +606,7 @@ def quantize_and_validate(
         # Save quantized model state dict
         int8_path = output_dir / "model_int8.pth"
         torch.save(model_int8.state_dict(), int8_path)
-        print(f"✓ Saved quantized model to {int8_path}")
+        print(f"Saved quantized model to {int8_path}")
         
         # Save results summary
         results_summary = {
@@ -631,18 +627,17 @@ def quantize_and_validate(
                 json_summary[k] = str(v) if not isinstance(v, (int, float, bool)) else v
         with open(summary_path, 'w') as f:
             json.dump(json_summary, f, indent=2)
-        print(f"✓ Saved results summary to {summary_path}")
+        print(f"Saved results summary to {summary_path}")
     
-    print("\n" + "=" * 70)
     if ready_for_export:
-        print("✅ QUANTIZATION COMPLETE - Model ready for ExecuTorch export (Week 2)")
+        print("\nQUANTIZATION COMPLETE - Model ready for ExecuTorch export (Week 2)")
     else:
-        print("⚠️  QUANTIZATION COMPLETE - Model may need tuning before export")
+        print("\nQUANTIZATION COMPLETE - Model may need tuning before export")
         if not size_info.get('meets_target', False):
             print("   - Size target not met")
         if not validation.get('meets_tolerance', False):
             print("   - Accuracy loss exceeds 1% threshold")
-    print("=" * 70 + "\n")
+    print()
     
     return {
         'model_int8': model_int8,

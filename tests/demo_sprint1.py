@@ -19,9 +19,7 @@ from ml.utils.preprocessing import (
 
 def demo_basic_inference():
     """Demo 1: Basic object detection inference."""
-    print("\n" + "=" * 80)
-    print("DEMO 1: Basic Object Detection")
-    print("=" * 80)
+    print("\nDEMO 1: Basic Object Detection")
     
     model = create_model()
     model.eval()
@@ -57,9 +55,7 @@ def demo_basic_inference():
 
 def demo_condition_specific():
     """Demo 2: Condition-specific adaptations."""
-    print("\n" + "=" * 80)
-    print("DEMO 2: Condition-Specific Adaptations")
-    print("=" * 80)
+    print("\nDEMO 2: Condition-Specific Adaptations")
     
     model = create_model()
     model.eval()
@@ -88,9 +84,7 @@ def demo_condition_specific():
 
 def demo_impairment_simulation():
     """Demo 3: Impairment simulation robustness."""
-    print("\n" + "=" * 80)
-    print("DEMO 3: Impairment Simulation Robustness")
-    print("=" * 80)
+    print("\nDEMO 3: Impairment Simulation Robustness")
     
     model = create_model()
     model.eval()
@@ -126,9 +120,7 @@ def demo_impairment_simulation():
 
 def demo_performance():
     """Demo 4: Performance benchmarks."""
-    print("\n" + "=" * 80)
-    print("DEMO 4: Performance Benchmarks")
-    print("=" * 80)
+    print("\nDEMO 4: Performance Benchmarks")
     
     model = create_model()
     
@@ -147,10 +139,8 @@ def demo_performance():
 
 def main():
     """Run all demos."""
-    print("=" * 80)
     print("MaxSight CNN - Sprint 1 Demo")
     print("Mission: Remove barriers through environmental structuring")
-    print("=" * 80)
     
     try:
         demo_basic_inference()
@@ -158,12 +148,10 @@ def main():
         demo_impairment_simulation()
         demo_performance()
         
-        print("\n" + "=" * 80)
-        print("✅ ALL DEMOS COMPLETED")
-        print("=" * 80)
+        print("\nALL DEMOS COMPLETED")
         
     except Exception as e:
-        print(f"\n❌ Demo failed: {e}")
+        print(f"\nDemo failed: {e}")
         import traceback
         traceback.print_exc()
 

@@ -21,9 +21,7 @@ from ml.utils.preprocessing import (
 
 def test_condition_robustness():
     """Test model performance with each impairment simulation."""
-    print("=" * 80)
     print("Condition-Specific Robustness Testing")
-    print("=" * 80)
     
     model = create_model()
     model.eval()
@@ -73,7 +71,7 @@ def test_condition_robustness():
         print(f"   Degradation: {degradation:.1f}%")
         
         # Check if degradation is acceptable (<10%)
-        status = "✓ PASS" if degradation < 10.0 else "✗ FAIL"
+        status = "PASS" if degradation < 10.0 else "FAIL"
         print(f"   Status: {status} (<10% degradation target)")
         
         results.append({
@@ -85,16 +83,14 @@ def test_condition_robustness():
         })
     
     # Summary
-    print("\n" + "=" * 80)
-    print("Summary")
-    print("=" * 80)
+    print("\nSummary")
     
     passed = sum(1 for r in results if r['passed'])
     total = len(results)
     
     print(f"Passed: {passed}/{total}")
     print(f"Target: All conditions <10% degradation")
-    print(f"Status: {'✓ ALL TESTS PASSED' if passed == total else '✗ SOME TESTS FAILED'}")
+    print(f"Status: {'ALL TESTS PASSED' if passed == total else 'SOME TESTS FAILED'}")
     
     return results
 

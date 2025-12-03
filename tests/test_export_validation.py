@@ -175,9 +175,7 @@ def validate_exported_model(
 
 def test_all_exports():
     """Test all export formats."""
-    print("=" * 80)
     print("Model Export Validation")
-    print("=" * 80)
     
     # Create model
     model = create_model()
@@ -229,9 +227,7 @@ def test_all_exports():
         results.append({'format': 'coreml', 'status': 'error', 'reason': str(e)})
     
     # Summary
-    print("\n" + "=" * 80)
-    print("Summary")
-    print("=" * 80)
+    print("\nSummary")
     
     passed = sum(1 for r in results if r.get('status') == 'passed')
     total = len([r for r in results if r.get('status') in ['passed', 'failed']])
@@ -242,7 +238,6 @@ def test_all_exports():
         print(f"  {format_name.upper()}: {status}")
     
     print(f"\nPassed: {passed}/{total}")
-    print("=" * 80 + "\n")
     
     return results
 
