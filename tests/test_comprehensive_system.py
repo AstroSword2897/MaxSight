@@ -15,7 +15,6 @@ from ml.models.maxsight_cnn import (
     create_model, MaxSightCNN
 )
 from ml.training.train_loop import ProductionTrainLoop
-from ml.models.maxsight_cnn import COCO_CLASSES
 from ml.training.losses import MaxSightLoss
 from ml.utils.preprocessing import ImagePreprocessor
 from collections import Counter
