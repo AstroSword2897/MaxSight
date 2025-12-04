@@ -1,7 +1,7 @@
 """Evaluation report generator with lighting-aware metrics analysis."""
 
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 import json
 from ml.training.scene_metrics import SceneMetrics
 from ml.training.benchmark import benchmark_inference
@@ -47,7 +47,8 @@ def generate_evaluation_report(metrics: Dict[str, float], save_path: Optional[Pa
     report.append("-" * 70)
     
     # Auto-detect lighting conditions from metrics keys
-    lighting_conditions = ['bright', 'normal', 'dim', 'dark']
+    if lighting_conditions is None:
+        lighting_conditions = ['bright', 'normal', 'dim', 'dark']
     available_lightings = [l for l in lighting_conditions if any(f'{l}_{m}' in metrics for m in ['precision', 'recall', 'f1'])]
     if not available_lightings:
         available_lightings = lighting_conditions  # Fallback to default
