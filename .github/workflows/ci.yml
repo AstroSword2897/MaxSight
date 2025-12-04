@@ -22,13 +22,15 @@ jobs:
           pip install flake8 mypy black
       - name: Lint with flake8 (critical errors only)
         run: |
-          flake8 ml/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics || echo "Critical errors found"
-      - name: Lint with flake8 (warnings)
+          flake8 ml/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics
+      - name: Lint with flake8 (warnings - non-blocking)
         run: |
-          flake8 ml/ scripts/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || echo "Style warnings found"
-      - name: Check formatting with black
+          flake8 ml/ scripts/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        continue-on-error: true
+      - name: Check formatting with black (non-blocking)
         run: |
-          black --check ml/ scripts/ || echo "Formatting issues found - run 'black ml/ scripts/' to fix"
+          black --check ml/ scripts/
+        continue-on-error: true
 
   test:
     runs-on: ubuntu-latest
@@ -44,6 +46,5 @@ jobs:
           pip install -r requirements.txt
       - name: Run tests
         run: |
-          pytest tests/ -v --tb=short || echo "Some tests failed - check output above"
-        continue-on-error: false
+          pytest tests/ -v --tb=short
 
