@@ -5,3 +5,23 @@
 # Relationship: Converts raw sensor data (camera/audio) to model-ready format for accessibility adaptations
 # Usage: from ml.utils.preprocessing import apply_glaucoma_transform, extract_mfcc
 
+from ml.utils.preprocessing import ImagePreprocessor, DistanceEstimator, TextRegionDetector
+from ml.utils.output_scheduler import OutputScheduler
+
+try:
+    from ml.utils.ocr_integration import OCRIntegration, create_text_description
+    __all__ = [
+        'ImagePreprocessor',
+        'DistanceEstimator',
+        'TextRegionDetector',
+        'OutputScheduler',
+        'OCRIntegration',
+        'create_text_description'
+    ]
+except ImportError:
+    __all__ = [
+        'ImagePreprocessor',
+        'DistanceEstimator',
+        'TextRegionDetector',
+        'OutputScheduler'
+    ]

@@ -12,7 +12,9 @@ def benchmark_inference(
     device: Optional[torch.device] = None,
     num_warmup: int = 5,
     num_runs: int = 50,
-    batch_sizes: Optional[list] = None
+    batch_sizes: Optional[list] = None,
+    input_shapes: Optional[Dict[int, tuple]] = None,
+    save_path: Optional[str] = None
 ) -> Dict[str, float]:
     """
     Benchmark model inference latency.
@@ -39,7 +41,12 @@ def benchmark_inference(
     results = {}
     
     for batch_size in batch_sizes:
-        dummy_input = torch.randn(batch_size, *input_size[1:], device=device)
+        # Support different input shapes per batch size
+        if input_shapes and batch_size in input_shapes:
+            shape = input_shapes[batch_size]
+            dummy_input = torch.randn(*shape, device=device)
+        else:
+            dummy_input = torch.randn(batch_size, *input_size[1:], device=device)
         
         # Warmup
         with torch.no_grad():
@@ -79,6 +86,10 @@ def benchmark_inference(
     if 'batch_1' in results:
         results['overall'] = results['batch_1'].copy()
     
+    # Save results if path provided
+    if save_path:
+        save_benchmark_results(results, save_path, format='json')
+    
     return results
 
 
@@ -105,4 +116,33 @@ def print_benchmark_results(results: Dict[str, Dict[str, float]]) -> None:
         print(f"  Status: {'PASS' if overall['mean_ms'] < 500 else 'FAIL'}")
     
     print()
+
+
+def save_benchmark_results(results: Dict[str, Dict[str, float]], save_path: str, format: str = 'json') -> None:
+    """Save benchmark results to JSON or CSV."""
+    save_path_obj = Path(save_path)
+    
+    if format.lower() == 'json':
+        import json
+        with open(save_path_obj, 'w') as f:
+            json.dump(results, f, indent=2)
+        print(f"Benchmark results saved to JSON: {save_path}")
+    elif format.lower() == 'csv':
+        try:
+            import pandas as pd
+            # Flatten nested dict for CSV
+            rows = []
+            for batch_key, stats in results.items():
+                if batch_key == 'overall':
+                    continue
+                row = {'batch_size': batch_key.replace('batch_', '')}
+                row.update(stats)
+                rows.append(row)
+            df = pd.DataFrame(rows)
+            df.to_csv(save_path_obj, index=False)
+            print(f"Benchmark results saved to CSV: {save_path}")
+        except ImportError:
+            print("pandas not available, cannot save CSV. Install pandas or use JSON format.")
+    else:
+        raise ValueError(f"Unsupported format: {format}. Use 'json' or 'csv'.")
 

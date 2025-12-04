@@ -1,31 +1,30 @@
-# MaxSight Training Module - Training and export utilities for MaxSight CNN
-# Components: Trainer (advanced), ProductionTrainer (simplified), MaxSightLoss (multi-task), Export functions
-# Features: Mixed precision, EMA, gradient accumulation, LR scheduling, early stopping, validation
-# Export: JIT, ExecuTorch, CoreML (recommended for iOS), ONNX
-# Usage: from ml.training.train_production import ProductionTrainer
+# MaxSight Training Module - Core training components
+from .train_loop import ProductionTrainLoop, train_model, EMA
+from .losses import MaxSightLoss
+from .metrics import DetectionMetrics
+from .matching import match_batch, match_predictions_to_gt
+from .scene_metrics import SceneMetrics
+from .evaluation import generate_evaluation_report
+from .benchmark import benchmark_inference
+from .export import export_model, export_to_jit, export_to_executorch, export_to_coreml, export_to_onnx
+from .quantization import quantize_model_int8
 
-# Import all public training components for convenient access
-from .train import Trainer  # Advanced trainer with all features
-from .losses import MaxSightLoss  # Multi-task loss function
-from .train_production import ProductionTrainer, create_dummy_dataloaders  # Production trainer and test data
-from .export import (  # Export functions for iOS deployment
-    export_model,
-    export_to_jit,
-    export_to_executorch,
-    export_to_coreml,
-    export_to_onnx
-)
-
-# Define public API - these are the symbols exported when doing: from ml.training import *
 __all__ = [
-    'Trainer',  # Advanced training class
-    'MaxSightLoss',  # Loss function
-    'ProductionTrainer',  # Production-ready trainer
-    'create_dummy_dataloaders',  # Test data generator
-    'export_model',  # Main export function
-    'export_to_jit',  # JIT export
-    'export_to_executorch',  # ExecuTorch export
-    'export_to_coreml',  # CoreML export
-    'export_to_onnx',  # ONNX export
+    'ProductionTrainLoop',
+    'train_model',
+    'EMA',
+    'MaxSightLoss',
+    'DetectionMetrics',
+    'match_batch',
+    'match_predictions_to_gt',
+    'SceneMetrics',
+    'generate_evaluation_report',
+    'benchmark_inference',
+    'export_model',
+    'export_to_jit',
+    'export_to_executorch',
+    'export_to_coreml',
+    'export_to_onnx',
+    'quantize_model_int8',
 ]
 

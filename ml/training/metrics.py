@@ -46,11 +46,18 @@ def compute_iou_matrix(pred_boxes: torch.Tensor, gt_boxes: torch.Tensor) -> torc
 class DetectionMetrics:
 
     def __init__(self, num_classes: int, iou_thresholds: Optional[List[float]] = None,
-                 device: Optional[torch.device] = None, image_size: Tuple[int, int] = (640, 640)):
+                 device: Optional[torch.device] = None, image_size: Tuple[int, int] = (640, 640),
+                 store_predictions: bool = True):
+        """
+        Args:
+            store_predictions: If False, only store TP/FP/FN counts (memory efficient).
+                              If True, store full prediction details for AP computation (default: True).
+        """
         self.num_classes = num_classes
         self.iou_thresholds = iou_thresholds or [0.5]
         self.device = device or torch.device('cpu')
         self.image_size = image_size
+        self.store_predictions = store_predictions
         self.reset()
 
     def reset(self, device: Optional[torch.device] = None):
@@ -102,58 +109,105 @@ class DetectionMetrics:
             self._handle_no_ground_truth(pred_boxes, pred_labels, pred_scores, condition)
             return
 
-        iou_matrix = compute_iou_matrix(pred_boxes, gt_boxes)
-        matched_gt = set()
+        # Vectorized matching: compute IoU matrix and match efficiently
+        iou_matrix = compute_iou_matrix(pred_boxes, gt_boxes)  # [N_pred, M_gt]
+        pred_classes = pred_labels.long()
+        gt_classes = gt_labels.long()
+        
+        # Filter valid classes
+        valid_pred_mask = (pred_classes >= 0) & (pred_classes < self.num_classes)
+        valid_gt_mask = (gt_classes >= 0) & (gt_classes < self.num_classes)
+        
+        if not valid_pred_mask.any() or not valid_gt_mask.any():
+            return
+        
+        # Sort predictions by score (descending)
         sorted_indices = torch.argsort(pred_scores, descending=True)
-
+        matched_gt = torch.zeros(len(gt_boxes), dtype=torch.bool, device=self.device)
+        
+        # Vectorized size category computation
+        pred_areas = pred_boxes[:, 2] * pred_boxes[:, 3] * (self.image_size[0] * self.image_size[1])
+        gt_areas = gt_boxes[:, 2] * gt_boxes[:, 3] * (self.image_size[0] * self.image_size[1])
+        
+        def get_size_category_vectorized(areas: torch.Tensor) -> torch.Tensor:
+            """Vectorized size category: 0=small, 1=medium, 2=large"""
+            small = areas < (32 * 32)
+            medium = (areas >= (32 * 32)) & (areas < (96 * 96))
+            large = areas >= (96 * 96)
+            return torch.where(small, 0, torch.where(medium, 1, 2))
+        
+        pred_size_cats = get_size_category_vectorized(pred_areas)
+        gt_size_cats = get_size_category_vectorized(gt_areas)
+        
+        # Match predictions to GT (vectorized where possible)
         for idx in sorted_indices:
             pred_idx = int(idx.item())
-            pred_class = int(pred_labels[pred_idx].item())
-            pred_score = pred_scores[pred_idx].item()
-            pred_box = pred_boxes[pred_idx]
-
-            if not (0 <= pred_class < self.num_classes):
+            if not valid_pred_mask[pred_idx]:
                 continue
-
-            best_iou = 0.0
-            best_gt_idx = None
-            for gt_idx in range(len(gt_boxes)):
-                if gt_idx in matched_gt or int(gt_labels[gt_idx].item()) != pred_class:
-                    continue
-                iou = iou_matrix[pred_idx, gt_idx].item()
-                if iou > best_iou:
-                    best_iou = iou
-                    best_gt_idx = gt_idx
-
-            is_tp = best_iou >= iou_threshold and best_gt_idx is not None
+            
+            pred_class = int(pred_classes[pred_idx].item())
+            pred_score = float(pred_scores[pred_idx].item())
+            pred_box = pred_boxes[pred_idx]
+            
+            # Find best matching GT of same class
+            class_match = (gt_classes == pred_class) & valid_gt_mask & (~matched_gt)
+            if not class_match.any():
+                # FP: no matching GT
+                self.class_fp[pred_class] += 1
+                if condition:
+                    self.condition_metrics[condition]['fp'] += 1
+                size_cat_idx = int(pred_size_cats[pred_idx].item())
+                size_cat = ['small', 'medium', 'large'][size_cat_idx]
+                self.size_metrics[size_cat]['fp'] += 1
+                if self.store_predictions:
+                    self.class_predictions[pred_class].append(
+                        DetectionPrediction(pred_score, 0.0, None, float(pred_areas[pred_idx].item()))
+                    )
+                continue
+            
+            # Get IoU with matching GTs
+            matching_ious = iou_matrix[pred_idx, class_match]
+            best_match_idx = torch.argmax(matching_ious)
+            best_gt_idx = torch.where(class_match)[0][best_match_idx]
+            best_iou = float(matching_ious[best_match_idx].item())
+            
+            is_tp = best_iou >= iou_threshold
             if is_tp:
                 self.class_tp[pred_class] += 1
-                matched_gt.add(best_gt_idx)
+                matched_gt[best_gt_idx] = True
                 if condition:
                     self.condition_metrics[condition]['tp'] += 1
-                size_cat = self._get_size_category(pred_box)
+                size_cat_idx = int(pred_size_cats[pred_idx].item())
+                size_cat = ['small', 'medium', 'large'][size_cat_idx]
                 self.size_metrics[size_cat]['tp'] += 1
+                if self.store_predictions:
+                    self.class_predictions[pred_class].append(
+                        DetectionPrediction(pred_score, best_iou, int(best_gt_idx.item()), float(pred_areas[pred_idx].item()))
+                    )
             else:
                 self.class_fp[pred_class] += 1
                 if condition:
                     self.condition_metrics[condition]['fp'] += 1
-                size_cat = self._get_size_category(pred_box)
+                size_cat_idx = int(pred_size_cats[pred_idx].item())
+                size_cat = ['small', 'medium', 'large'][size_cat_idx]
                 self.size_metrics[size_cat]['fp'] += 1
-
-            box_area = (pred_box[2] * pred_box[3]).item()
-            self.class_predictions[pred_class].append(
-                DetectionPrediction(pred_score, best_iou, best_gt_idx, box_area)
-            )
-
-        for gt_idx in range(len(gt_boxes)):
-            if gt_idx not in matched_gt:
-                gt_class = int(gt_labels[gt_idx].item())
-                gt_box = gt_boxes[gt_idx]
-                if 0 <= gt_class < self.num_classes:
-                    self.class_fn[gt_class] += 1
+                if self.store_predictions:
+                    self.class_predictions[pred_class].append(
+                        DetectionPrediction(pred_score, best_iou, None, float(pred_areas[pred_idx].item()))
+                    )
+        
+        # Count unmatched GTs (FN)
+        unmatched_gt_mask = ~matched_gt & valid_gt_mask
+        if unmatched_gt_mask.any():
+            unmatched_classes = gt_classes[unmatched_gt_mask]
+            unmatched_sizes = gt_size_cats[unmatched_gt_mask]
+            for gt_class, size_cat_idx in zip(unmatched_classes, unmatched_sizes):
+                gt_class_int = int(gt_class.item())
+                if 0 <= gt_class_int < self.num_classes:
+                    self.class_fn[gt_class_int] += 1
                     if condition:
                         self.condition_metrics[condition]['fn'] += 1
-                    size_cat = self._get_size_category(gt_box)
+                    size_cat = ['small', 'medium', 'large'][int(size_cat_idx.item())]
                     self.size_metrics[size_cat]['fn'] += 1
 
     def _handle_no_predictions(self, gt_boxes, gt_labels, condition):
@@ -263,9 +317,9 @@ class DetectionMetrics:
         results = {}
         for condition, counts in self.condition_metrics.items():
             tp, fp, fn = counts['tp'], counts['fp'], counts['fn']
-            precision = tp / (tp + fp) if (tp + fp) > 0 else float('nan')
-            recall = tp / (tp + fn) if (tp + fn) > 0 else float('nan')
-            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else float('nan')
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0  # Return 0.0 instead of nan
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
             results[condition] = {'precision': precision, 'recall': recall, 'f1': f1}
         return results
 
@@ -273,9 +327,9 @@ class DetectionMetrics:
         results = {}
         for size_cat, counts in self.size_metrics.items():
             tp, fp, fn = counts['tp'], counts['fp'], counts['fn']
-            precision = tp / (tp + fp) if (tp + fp) > 0 else float('nan')
-            recall = tp / (tp + fn) if (tp + fn) > 0 else float('nan')
-            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else float('nan')
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0  # Return 0.0 instead of nan
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
             results[size_cat] = {'precision': precision, 'recall': recall, 'f1': f1}
         return results
 

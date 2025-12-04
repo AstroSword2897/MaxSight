@@ -7,18 +7,44 @@ import torch
 import torch.nn as nn
 
 
-def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input_size: tuple = (1, 3, 224, 224)) -> Path:
-    """Export to PyTorch JIT format. Most reliable, always available. strict=False for dict outputs."""
+def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True) -> Path:
+    """Export to PyTorch JIT format. Most reliable, always available. strict=False for dict outputs.
+    
+    Args:
+        device: Device to export from ('cpu', 'cuda', 'mps'). If None, uses model's current device.
+        validate: If True, test exported model with dummy input to verify it works.
+    """
     print(f"Exporting to JIT format: {save_path}")
     
     model.eval()
-    model.cpu()
+    export_device = device if device else next(model.parameters()).device
+    if isinstance(export_device, torch.device):
+        export_device = str(export_device)
+    
+    # Move to export device
+    if export_device == 'cpu':
+        model.cpu()
+    elif export_device.startswith('cuda'):
+        model.cuda()
+    elif export_device == 'mps':
+        model.to('mps')
+    
     dummy_input = torch.randn(*input_size)
+    if export_device.startswith('cuda'):
+        dummy_input = dummy_input.cuda()
+    elif export_device == 'mps':
+        dummy_input = dummy_input.to('mps')
     
     try:
         traced_model = torch.jit.trace(model, dummy_input, strict=False)
-        test_output = traced_model(dummy_input)  # type: ignore
         
+        # Validate exported model if requested
+        if validate:
+            test_output = traced_model(dummy_input)  # type: ignore
+            print(f"  Validation: Exported model forward pass successful")
+        
+        # Move to CPU for saving (JIT models should be CPU)
+        traced_model.cpu()
         save_path_obj = Path(save_path)
         traced_model.save(str(save_path_obj))
         
@@ -61,7 +87,7 @@ def export_to_executorch(model: nn.Module, save_path: str = 'maxsight.pte', inpu
         return export_to_jit(model, save_path.replace('.pte', '_traced.pt'), input_size)
 
 
-def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', input_size: tuple = (1, 3, 224, 224)) -> Optional[Path]:
+def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True) -> Optional[Path]:
     """Export to CoreML format (iOS native). Requires coremltools."""
     print(f"Exporting to CoreML format: {save_path}")
     
@@ -69,15 +95,32 @@ def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', in
         import coremltools as ct
         
         model.eval()
-        model.cpu()
+        export_device = device if device else 'cpu'
+        if export_device == 'cpu':
+            model.cpu()
+        elif export_device.startswith('cuda'):
+            model.cuda()
+        elif export_device == 'mps':
+            model.to('mps')
+        
         dummy_input = torch.randn(*input_size)
+        if export_device.startswith('cuda'):
+            dummy_input = dummy_input.cuda()
+        elif export_device == 'mps':
+            dummy_input = dummy_input.to('mps')
         
         traced_model = torch.jit.trace(model, dummy_input, strict=False)
-        test_output = traced_model(dummy_input)  # type: ignore
         
-        if isinstance(test_output, dict):
+        # Validate traced model if requested
+        if validate:
+            test_output = traced_model(dummy_input)  # type: ignore
+            print(f"  Validation: Traced model forward pass successful")
+        
+        # Determine output types (try to infer from model if not validating)
+        if validate and isinstance(test_output, dict):
             output_types = [ct.TensorType(name=key) for key in test_output.keys()]
         else:
+            # Default: single output
             output_types = [ct.TensorType(name="output")]
         
         coreml_model = ct.convert(
@@ -89,6 +132,15 @@ def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', in
         
         save_path_obj = Path(save_path)
         if coreml_model is not None:
+            # Validate CoreML model if requested
+            if validate:
+                try:
+                    test_input_np = dummy_input.cpu().numpy()
+                    test_output_ml = coreml_model.predict({"image": test_input_np})
+                    print(f"  Validation: CoreML model forward pass successful")
+                except Exception as e:
+                    print(f"  Warning: CoreML validation failed: {e}")
+            
             coreml_model.save(str(save_path_obj))
         else:
             raise ValueError("CoreML conversion failed")
@@ -142,7 +194,9 @@ def export_to_onnx(model: nn.Module, save_path: str = 'maxsight.onnx', input_siz
         return None
 
 
-def export_model(model: nn.Module, format: str = 'jit', save_dir: str = 'exports', input_size: tuple = (1, 3, 224, 224)) -> dict:
+def export_model(model: nn.Module, format: str = 'jit', save_dir: str = 'exports', 
+                 input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, 
+                 validate: bool = True) -> dict:
     """Export model to specified format(s). Formats: 'jit', 'executorch', 'coreml', 'onnx', 'all'."""
     save_dir_path = Path(save_dir)
     save_dir_path.mkdir(exist_ok=True, parents=True)  # Create export directory if needed
@@ -157,7 +211,7 @@ def export_model(model: nn.Module, format: str = 'jit', save_dir: str = 'exports
     }
     
     if format == 'jit' or format == 'all':
-        path = export_to_jit(model, str(save_dir_path / 'maxsight_traced.pt'), input_size)
+        path = export_to_jit(model, str(save_dir_path / 'maxsight_traced.pt'), input_size, device, validate)
         results['exports']['jit'] = str(path)
     
     if format == 'executorch' or format == 'all':

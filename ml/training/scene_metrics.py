@@ -58,15 +58,26 @@ class SceneMetrics:
         self.urgency_correct += correct
         self.urgency_total += total
         
-        # Update confusion matrix
-        for p, g in zip(pred_urgency.flatten(), gt_urgency.flatten()):
-            p_idx = int(p.item())
-            g_idx = int(g.item())
-            if 0 <= p_idx < self.num_urgency_levels and 0 <= g_idx < self.num_urgency_levels:
-                self.urgency_confusion[g_idx, p_idx] += 1
-                self.urgency_level_total[g_idx] += 1
-                if p_idx == g_idx:
-                    self.urgency_level_correct[g_idx] += 1
+        # Update confusion matrix (vectorized)
+        pred_flat = pred_urgency.flatten().long()
+        gt_flat = gt_urgency.flatten().long()
+        
+        # Filter valid indices
+        valid_mask = (pred_flat >= 0) & (pred_flat < self.num_urgency_levels) & \
+                     (gt_flat >= 0) & (gt_flat < self.num_urgency_levels)
+        pred_valid = pred_flat[valid_mask]
+        gt_valid = gt_flat[valid_mask]
+        
+        if len(pred_valid) > 0:
+            # Vectorized confusion matrix update
+            indices = gt_valid * self.num_urgency_levels + pred_valid
+            self.urgency_confusion.view(-1).index_add_(0, indices, torch.ones_like(indices, dtype=torch.long))
+            
+            # Update per-level totals and corrects
+            for g_idx in gt_valid.unique():
+                g_idx_int = int(g_idx.item())
+                self.urgency_level_total[g_idx_int] += (gt_valid == g_idx_int).sum().item()
+                self.urgency_level_correct[g_idx_int] += ((pred_valid == g_idx_int) & (gt_valid == g_idx_int)).sum().item()
     
     def update_distance(
         self,
@@ -90,12 +101,20 @@ class SceneMetrics:
         self.distance_correct += correct
         self.distance_total += total
         
-        # Update confusion matrix
-        for p, g in zip(pred_distance.flatten(), gt_distance.flatten()):
-            p_idx = int(p.item())
-            g_idx = int(g.item())
-            if 0 <= p_idx < self.num_distance_zones and 0 <= g_idx < self.num_distance_zones:
-                self.distance_confusion[g_idx, p_idx] += 1
+        # Update confusion matrix (vectorized)
+        pred_flat = pred_distance.flatten().long()
+        gt_flat = gt_distance.flatten().long()
+        
+        # Filter valid indices
+        valid_mask = (pred_flat >= 0) & (pred_flat < self.num_distance_zones) & \
+                     (gt_flat >= 0) & (gt_flat < self.num_distance_zones)
+        pred_valid = pred_flat[valid_mask]
+        gt_valid = gt_flat[valid_mask]
+        
+        if len(pred_valid) > 0:
+            # Vectorized confusion matrix update
+            indices = gt_valid * self.num_distance_zones + pred_valid
+            self.distance_confusion.view(-1).index_add_(0, indices, torch.ones_like(indices, dtype=torch.long))
     
     def compute_urgency_accuracy(self) -> float:
         """Overall urgency prediction accuracy."""
@@ -118,6 +137,21 @@ class SceneMetrics:
             results[level] = correct / total if total > 0 else 0.0
         return results
     
+    def get_normalized_confusion_matrices(self) -> Dict[str, torch.Tensor]:
+        """Return normalized confusion matrices (percentages)."""
+        urgency_norm = self.urgency_confusion.float()
+        urgency_row_sums = urgency_norm.sum(dim=1, keepdim=True)
+        urgency_norm = urgency_norm / (urgency_row_sums + 1e-8) * 100  # Percentage
+        
+        distance_norm = self.distance_confusion.float()
+        distance_row_sums = distance_norm.sum(dim=1, keepdim=True)
+        distance_norm = distance_norm / (distance_row_sums + 1e-8) * 100  # Percentage
+        
+        return {
+            'urgency': urgency_norm,
+            'distance': distance_norm
+        }
+    
     def get_metrics(self) -> Dict[str, float]:
         """Get all scene metrics."""
         metrics = {
@@ -134,6 +168,16 @@ class SceneMetrics:
         if len(self.inference_times) > 0:
             latency_stats = self.get_latency_stats()
             metrics.update(latency_stats)
+        else:
+            # Return zeros instead of empty dict for consistency
+            metrics.update({
+                'mean_latency_ms': 0.0,
+                'median_latency_ms': 0.0,
+                'min_latency_ms': 0.0,
+                'max_latency_ms': 0.0,
+                'p95_latency_ms': 0.0,
+                'p99_latency_ms': 0.0
+            })
         
         return metrics
     

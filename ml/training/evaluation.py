@@ -31,17 +31,28 @@ def generate_evaluation_report(metrics: Dict[str, float], save_path: Optional[Pa
     if 'distance_accuracy' in metrics:
         report.append(f"  Distance Accuracy: {metrics.get('distance_accuracy', 0.0):.4f}")
     
-    # Inference latency
+    # Inference latency (integrated with benchmark results)
     if 'inference_latency_ms' in metrics:
         report.append(f"  Inference Latency: {metrics.get('inference_latency_ms', 0.0):.1f} ms")
+    elif 'mean_latency_ms' in metrics:
+        report.append(f"  Inference Latency: {metrics.get('mean_latency_ms', 0.0):.1f} ms")
+        if 'p95_latency_ms' in metrics:
+            report.append(f"  P95 Latency: {metrics.get('p95_latency_ms', 0.0):.1f} ms")
+        if 'p99_latency_ms' in metrics:
+            report.append(f"  P99 Latency: {metrics.get('p99_latency_ms', 0.0):.1f} ms")
     
     report.append("")
     
     report.append("Lighting Condition Performance:")
     report.append("-" * 70)
     
+    # Auto-detect lighting conditions from metrics keys
     lighting_conditions = ['bright', 'normal', 'dim', 'dark']
-    for lighting in lighting_conditions:
+    available_lightings = [l for l in lighting_conditions if any(f'{l}_{m}' in metrics for m in ['precision', 'recall', 'f1'])]
+    if not available_lightings:
+        available_lightings = lighting_conditions  # Fallback to default
+    
+    for lighting in available_lightings:
         p = metrics.get(f'{lighting}_precision', 0.0)
         r = metrics.get(f'{lighting}_recall', 0.0)
         f = metrics.get(f'{lighting}_f1', 0.0)
@@ -171,8 +182,15 @@ def plot_lighting_metrics(metrics: Dict[str, float], save_path: Optional[Path] =
     plt.close()
 
 
-def analyze_lighting_degradation(metrics: Dict[str, float]) -> Dict[str, Dict[str, float]]:
-    """Calculate degradation % for each lighting condition vs normal. Positive = worse."""
+def analyze_lighting_degradation(metrics: Dict[str, float], lighting_conditions: Optional[List[str]] = None) -> Dict[str, Dict[str, float]]:
+    """Calculate degradation % for each lighting condition vs normal. Positive = worse.
+    
+    Args:
+        lighting_conditions: List of lighting conditions to analyze. If None, uses ['bright', 'dim', 'dark'].
+    """
+    if lighting_conditions is None:
+        lighting_conditions = ['bright', 'dim', 'dark']
+    
     normal_metrics = {
         'precision': metrics.get('normal_precision', 0.0),
         'recall': metrics.get('normal_recall', 0.0),
@@ -180,7 +198,7 @@ def analyze_lighting_degradation(metrics: Dict[str, float]) -> Dict[str, Dict[st
     }
     
     degradations = {}
-    for lighting in ['bright', 'dim', 'dark']:
+    for lighting in lighting_conditions:
         degradations[lighting] = {}
         for metric in ['precision', 'recall', 'f1']:
             lighting_metric = metrics.get(f'{lighting}_{metric}', 0.0)

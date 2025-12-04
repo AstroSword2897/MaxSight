@@ -125,11 +125,15 @@ def match_predictions_to_gt(
     gt_labels: torch.Tensor,
     lambda_class: float = 1.0,
     lambda_bbox: float = 5.0,
-    lambda_giou: float = 2.0
+    lambda_giou: float = 2.0,
+    use_hungarian: bool = False
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Find best assignment between predictions and ground truth greedily.
-    Matches each GT to its lowest-cost prediction, O(n*m) instead of O(n^3).
+    Find best assignment between predictions and ground truth.
+    
+    Args:
+        use_hungarian: If True, use proper Hungarian algorithm (globally optimal but slower).
+                      If False, use greedy matching (faster, usually sufficient).
     
     Returns:
         indices: [2, num_matched] tensor with (pred_idx, gt_idx) pairs
@@ -141,6 +145,24 @@ def match_predictions_to_gt(
         lambda_class, lambda_bbox, lambda_giou
     )
     
+    if use_hungarian:
+        # Use proper Hungarian algorithm for globally optimal assignment
+        try:
+            from scipy.optimize import linear_sum_assignment
+            cost_np = cost.cpu().numpy()
+            pred_indices, gt_indices = linear_sum_assignment(cost_np)
+            
+            pred_idx = torch.tensor(pred_indices, dtype=torch.long, device=pred_boxes.device)
+            gt_idx = torch.tensor(gt_indices, dtype=torch.long, device=pred_boxes.device)
+            matched_costs = cost[pred_idx, gt_idx]
+            
+            indices = torch.stack([pred_idx, gt_idx])
+            return indices, matched_costs
+        except ImportError:
+            print("Warning: scipy not available, falling back to greedy matching")
+            use_hungarian = False
+    
+    # Greedy matching (faster, usually sufficient)
     num_gt = cost.shape[1]
     pred_idx = []
     gt_idx = []

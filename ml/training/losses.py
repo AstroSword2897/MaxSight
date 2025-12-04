@@ -187,26 +187,36 @@ def assign_targets_to_anchors(
     if M == 0:
         return assigned_labels, assigned_boxes, assigned_mask
     
-    for i in range(M):
-        gt_box = gt_boxes[i]
-        gt_label = gt_labels[i]
-        
-        x1 = gt_box[0] - gt_box[2] / 2
-        y1 = gt_box[1] - gt_box[3] / 2
-        x2 = gt_box[0] + gt_box[2] / 2
-        y2 = gt_box[1] + gt_box[3] / 2
-        
-        inside = (
-            (anchor_points[:, 0] >= x1) &
-            (anchor_points[:, 0] <= x2) &
-            (anchor_points[:, 1] >= y1) &
-            (anchor_points[:, 1] <= y2)
-        )
-        
-        if inside.any():
-            assigned_labels[inside] = gt_label + 1
-            assigned_boxes[inside] = gt_box
-            assigned_mask[inside] = 1.0
+    # Vectorized assignment: compute all GT box bounds at once
+    gt_x1 = gt_boxes[:, 0] - gt_boxes[:, 2] / 2  # [M]
+    gt_y1 = gt_boxes[:, 1] - gt_boxes[:, 3] / 2  # [M]
+    gt_x2 = gt_boxes[:, 0] + gt_boxes[:, 2] / 2  # [M]
+    gt_y2 = gt_boxes[:, 1] + gt_boxes[:, 3] / 2  # [M]
+    
+    # Expand for broadcasting: [N, 1] vs [1, M] -> [N, M]
+    anchor_x = anchor_points[:, 0:1]  # [N, 1]
+    anchor_y = anchor_points[:, 1:2]  # [N, 1]
+    
+    gt_x1_exp = gt_x1.unsqueeze(0)  # [1, M]
+    gt_y1_exp = gt_y1.unsqueeze(0)  # [1, M]
+    gt_x2_exp = gt_x2.unsqueeze(0)  # [1, M]
+    gt_y2_exp = gt_y2.unsqueeze(0)  # [1, M]
+    
+    # Check which anchors are inside which GT boxes: [N, M]
+    inside_matrix = (
+        (anchor_x >= gt_x1_exp) & (anchor_x <= gt_x2_exp) &
+        (anchor_y >= gt_y1_exp) & (anchor_y <= gt_y2_exp)
+    )
+    
+    # For each anchor, find the first GT box it's inside (priority to first GT)
+    inside_any, gt_indices = inside_matrix.max(dim=1)  # [N]
+    
+    # Assign labels and boxes for anchors inside any GT box
+    inside_mask = inside_any.bool()
+    if inside_mask.any():
+        assigned_labels[inside_mask] = gt_labels[gt_indices[inside_mask]] + 1
+        assigned_boxes[inside_mask] = gt_boxes[gt_indices[inside_mask]]
+        assigned_mask[inside_mask] = 1.0
     
     return assigned_labels, assigned_boxes, assigned_mask
 
