@@ -50,14 +50,15 @@ def test_model_creation():
 
 
 def test_forward_pass():
-    """Test forward pass with audio"""
+    """Test forward pass with and without audio"""
     print("Test 3: Forward Pass")
-    model = create_model()
+    model = create_model(use_audio=True)
     model.eval()
     
     dummy_image = torch.randn(2, 3, 224, 224)
     dummy_audio = torch.randn(2, 128)
     
+    # Test with audio
     with torch.no_grad():
         outputs = model(dummy_image, dummy_audio)
     
@@ -69,6 +70,12 @@ def test_forward_pass():
     assert outputs['urgency_scores'].shape == (2, 4), "Urgency scores shape mismatch (should be scene-level)"
     assert outputs['distance_zones'].shape == (2, 196, 3), "Distance zones shape mismatch"
     assert outputs['num_locations'] == 196, "Num locations should be 196 (14x14)"
+    
+    # Test without audio
+    with torch.no_grad():
+        outputs_no_audio = model(dummy_image)
+    
+    assert outputs_no_audio['classifications'].shape == (2, 196, len(COCO_CLASSES)), "Classification shape mismatch (no audio)"
     
     return True
 
@@ -84,7 +91,7 @@ def test_training_system():
 def test_detections():
     """Test detection system"""
     print("Test 5: Detection System")
-    model = create_model()
+    model = create_model(use_audio=True)
     model.eval()
     
     dummy_image = torch.randn(1, 3, 224, 224)

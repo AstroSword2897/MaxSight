@@ -71,7 +71,7 @@ def set_seed(seed: int = 42) -> None:
 
 
 def move_targets_to_device(targets: Dict[str, torch.Tensor], device: str) -> Dict[str, torch.Tensor]:
-    """Move all tensor targets to device."""
+    """Move all tensor targets to device.""""""Move all tensor targets to device."""
     return {k: v.to(device) if torch.is_tensor(v) else v for k, v in targets.items()}
 
 
