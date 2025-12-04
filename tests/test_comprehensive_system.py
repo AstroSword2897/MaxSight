@@ -14,9 +14,8 @@ from ml.models.maxsight_cnn import (
     COCO_CLASSES, COCO_BASE_CLASSES, ACCESSIBILITY_CLASSES,
     create_model, MaxSightCNN
 )
-from ml.training.train_loop import ProductionTrainLoop
-from ml.training.losses import MaxSightLoss
-from ml.utils.preprocessing import ImagePreprocessor
+# Note: ProductionTrainLoop, MaxSightLoss, ImagePreprocessor imported but not used in these tests
+# They are kept for potential future test expansion
 from collections import Counter
 
 
