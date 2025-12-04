@@ -14,8 +14,7 @@ try:
         AccessibilityDataset,
         SyntheticImpairmentEngine,
         generate_synthetic_dataset,
-        create_label_template,
-        combine_datasets
+        create_label_template
     )
     __all__ = [
         'MaxSightDataset',

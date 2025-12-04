@@ -71,7 +71,7 @@ def set_seed(seed: int = 42) -> None:
 
 
 def move_targets_to_device(targets: Dict[str, torch.Tensor], device: str) -> Dict[str, torch.Tensor]:
-    """Move all tensor targets to device.""""""Move all tensor targets to device."""
+    """Move all tensor targets to device."""
     return {k: v.to(device) if torch.is_tensor(v) else v for k, v in targets.items()}
 
 
@@ -659,7 +659,7 @@ class ProductionTrainLoop:
                         if pred_boxes.dim() == 3:
                             pred_boxes = pred_boxes.reshape(-1, 4)
                         if pred_labels.dim() > 1:
-                            pred_labels = pred_labels.argmax(dim=-1) if pred_labels.dim() > 1 else pred_labels
+                            pred_labels = pred_labels.argmax(dim=-1)
                         
                         if len(pred_boxes) > 0 and len(gt_boxes) > 0:
                             self.detection_metrics.update(
@@ -675,7 +675,7 @@ class ProductionTrainLoop:
                     continue
         
         # Restore original weights if EMA was used
-        if use_ema and self.ema is not None:
+        if use_ema and self.ema is not None and hasattr(self.ema, 'backup') and len(self.ema.backup) > 0:
             # Restore from backup
             for name, param in self.model.named_parameters():
                 if param.requires_grad and name in self.ema.backup:
