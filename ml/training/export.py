@@ -1,10 +1,13 @@
 """Model export for iOS: JIT, ExecuTorch, CoreML, ONNX. Handles dict outputs gracefully."""
 
 import json
+import logging
 from pathlib import Path
 from typing import Optional
 import torch
 import torch.nn as nn
+
+logger = logging.getLogger(__name__)
 
 
 def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True) -> Path:
@@ -14,7 +17,7 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
         device: Device to export from ('cpu', 'cuda', 'mps'). If None, uses model's current device.
         validate: If True, test exported model with dummy input to verify it works.
     """
-    print(f"Exporting to JIT format: {save_path}")
+    logger.info(f"Exporting to JIT format: {save_path}")
     
     model.eval()
     export_device = device if device else next(model.parameters()).device
@@ -41,7 +44,7 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
         # Validate exported model if requested
         if validate:
             test_output = traced_model(dummy_input)  # type: ignore
-            print(f"  Validation: Exported model forward pass successful")
+            logger.debug("Validation: Exported model forward pass successful")
         
         # Move to CPU for saving (JIT models should be CPU)
         traced_model.cpu()
@@ -49,17 +52,17 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
         traced_model.save(str(save_path_obj))
         
         size_mb = save_path_obj.stat().st_size / (1024 * 1024)
-        print(f"  Saved: {save_path}, Size: {size_mb:.1f} MB")
+        logger.info(f"Saved: {save_path}, Size: {size_mb:.1f} MB")
         
         return save_path_obj
     except Exception as e:
-        print(f"Export failed: {e}")
+        logger.error(f"Export failed: {e}", exc_info=True)
         raise
 
 
 def export_to_executorch(model: nn.Module, save_path: str = 'maxsight.pte', input_size: tuple = (1, 3, 224, 224)) -> Optional[Path]:
     """Export to ExecuTorch format. Falls back to JIT if not installed."""
-    print(f"Exporting to ExecuTorch format: {save_path}")
+    logger.info(f"Exporting to ExecuTorch format: {save_path}")
     
     try:
         from executorch.extension.pybind11.portable import to_edge  # type: ignore
@@ -76,20 +79,20 @@ def export_to_executorch(model: nn.Module, save_path: str = 'maxsight.pte', inpu
             f.write(executorch_program.buffer)
         
         size_mb = save_path_obj.stat().st_size / (1024 * 1024)
-        print(f"  Saved: {save_path}, Size: {size_mb:.1f} MB")
+        logger.info(f"Saved: {save_path}, Size: {size_mb:.1f} MB")
         return save_path_obj
         
     except ImportError:
-        print("ExecuTorch not installed, falling back to JIT...")
+        logger.warning("ExecuTorch not installed, falling back to JIT...")
         return export_to_jit(model, save_path.replace('.pte', '_traced.pt'), input_size)
     except Exception as e:
-        print(f"ExecuTorch export failed: {e}, falling back to JIT...")
+        logger.error(f"ExecuTorch export failed: {e}, falling back to JIT...", exc_info=True)
         return export_to_jit(model, save_path.replace('.pte', '_traced.pt'), input_size)
 
 
 def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True) -> Optional[Path]:
     """Export to CoreML format (iOS native). Requires coremltools."""
-    print(f"Exporting to CoreML format: {save_path}")
+    logger.info(f"Exporting to CoreML format: {save_path}")
     
     try:
         import coremltools as ct
@@ -114,7 +117,7 @@ def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', in
         # Validate traced model if requested
         if validate:
             test_output = traced_model(dummy_input)  # type: ignore
-            print(f"  Validation: Traced model forward pass successful")
+            logger.debug("Validation: Traced model forward pass successful")
         
         # Determine output types (try to infer from model if not validating)
         if validate and isinstance(test_output, dict):
@@ -137,29 +140,29 @@ def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', in
                 try:
                     test_input_np = dummy_input.cpu().numpy()
                     test_output_ml = coreml_model.predict({"image": test_input_np})
-                    print(f"  Validation: CoreML model forward pass successful")
+                    logger.debug("Validation: CoreML model forward pass successful")
                 except Exception as e:
-                    print(f"  Warning: CoreML validation failed: {e}")
+                    logger.warning(f"CoreML validation failed: {e}")
             
             coreml_model.save(str(save_path_obj))
         else:
             raise ValueError("CoreML conversion failed")
         
         size_mb = save_path_obj.stat().st_size / (1024 * 1024)
-        print(f"  Saved: {save_path}, Size: {size_mb:.1f} MB, iOS 15+")
+        logger.info(f"Saved: {save_path}, Size: {size_mb:.1f} MB, iOS 15+")
         return save_path_obj
         
     except ImportError:
-        print("CoreML tools not installed (pip install coremltools)")
+        logger.warning("CoreML tools not installed (pip install coremltools)")
         return None
     except Exception as e:
-        print(f"CoreML export failed: {e}")
+        logger.error(f"CoreML export failed: {e}", exc_info=True)
         return None
 
 
 def export_to_onnx(model: nn.Module, save_path: str = 'maxsight.onnx', input_size: tuple = (1, 3, 224, 224)) -> Optional[Path]:
     """Export to ONNX format. May fail with dict outputs - use JIT/CoreML for iOS."""
-    print(f"Exporting to ONNX format: {save_path}")
+    logger.info(f"Exporting to ONNX format: {save_path}")
     
     try:
         import onnx  # type: ignore
@@ -183,14 +186,14 @@ def export_to_onnx(model: nn.Module, save_path: str = 'maxsight.onnx', input_siz
         
         save_path_obj = Path(save_path)
         size_mb = save_path_obj.stat().st_size / (1024 * 1024)
-        print(f"  Saved: {save_path}, Size: {size_mb:.1f} MB")
+        logger.info(f"Saved: {save_path}, Size: {size_mb:.1f} MB")
         return save_path_obj
         
     except ImportError:
-        print("ONNX not installed (pip install onnx)")
+        logger.warning("ONNX not installed (pip install onnx)")
         return None
     except Exception as e:
-        print(f"ONNX export failed: {e}")
+        logger.error(f"ONNX export failed: {e}", exc_info=True)
         return None
 
 
@@ -233,7 +236,7 @@ def export_model(model: nn.Module, format: str = 'jit', save_dir: str = 'exports
     with open(metadata_path, 'w') as f:
         json.dump(results, f, indent=2)
     
-    print(f"Export metadata saved to: {metadata_path}\n")
+    logger.info(f"Export metadata saved to: {metadata_path}")
     
     return results
 

@@ -7,6 +7,7 @@
 
 from ml.utils.preprocessing import ImagePreprocessor, DistanceEstimator, TextRegionDetector
 from ml.utils.output_scheduler import OutputScheduler
+from ml.utils.logging_config import setup_logging, get_logger
 
 try:
     from ml.utils.ocr_integration import OCRIntegration, create_text_description
@@ -16,12 +17,16 @@ try:
         'TextRegionDetector',
         'OutputScheduler',
         'OCRIntegration',
-        'create_text_description'
+        'create_text_description',
+        'setup_logging',
+        'get_logger'
     ]
 except ImportError:
     __all__ = [
         'ImagePreprocessor',
         'DistanceEstimator',
         'TextRegionDetector',
-        'OutputScheduler'
+        'OutputScheduler',
+        'setup_logging',
+        'get_logger'
     ]

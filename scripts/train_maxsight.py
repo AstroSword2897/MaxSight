@@ -42,11 +42,14 @@ from ml.data.dataset import MaxSightDataset
 
 
 # -----------------------------------------------------
-# Logging utilities
+# Logging setup
 # -----------------------------------------------------
-def log(msg, level="INFO"):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] [{level}] {msg}")
+import logging
+from ml.utils.logging_config import setup_logging
+
+# Setup production logging
+setup_logging(log_level="INFO", log_dir=Path("logs"))
+logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------
@@ -117,26 +120,26 @@ def main():
     # -----------------------------------------------------
     device = args.device
     if device == "cuda" and not torch.cuda.is_available():
-        log("CUDA not available, falling back to CPU.", "WARN")
+        logger.warning("CUDA not available, falling back to CPU.")
         device = "cpu"
 
-    log(f"Using device: {device}")
+    logger.info(f"Using device: {device}")
     if device == "cuda":
-        log(f"GPU: {torch.cuda.get_device_name(0)}")
-        log(f"Total VRAM: {torch.cuda.get_device_properties(0).total_memory/1e9:.2f} GB")
+        logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+        logger.info(f"Total VRAM: {torch.cuda.get_device_properties(0).total_memory/1e9:.2f} GB")
 
     # -----------------------------------------------------
     # Set seed
     # -----------------------------------------------------
     set_seed(args.seed)
-    log(f"Random seed set to {args.seed}")
+    logger.info(f"Random seed set to {args.seed}")
 
     # -----------------------------------------------------
     # Create checkpoint directory
     # -----------------------------------------------------
     ckpt_dir = Path(args.checkpoint_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
-    log(f"Checkpoint directory: {ckpt_dir}")
+    logger.info(f"Checkpoint directory: {ckpt_dir}")
 
     # -----------------------------------------------------
     # Load dataset
@@ -148,14 +151,14 @@ def main():
     if not train_dir.exists() or not val_dir.exists():
         raise FileNotFoundError("Training and validation directories are required.")
 
-    log("Resolving dataset annotation files...")
+    logger.info("Resolving dataset annotation files...")
     train_ann = resolve_annotation_file(train_dir, args.annotation_file)
     val_ann = resolve_annotation_file(val_dir, args.annotation_file)
 
-    log(f"Training annotations: {train_ann}")
-    log(f"Validation annotations: {val_ann}")
+    logger.info(f"Training annotations: {train_ann}")
+    logger.info(f"Validation annotations: {val_ann}")
 
-    log("Loading datasets...")
+    logger.info("Loading datasets...")
     train_dataset = MaxSightDataset(
         data_dir=train_dir,
         annotation_file=train_ann,
@@ -167,8 +170,8 @@ def main():
         condition_mode=args.condition_mode
     )
 
-    log(f"Train samples: {len(train_dataset)}")
-    log(f"Val samples: {len(val_dataset)}")
+    logger.info(f"Train samples: {len(train_dataset)}")
+    logger.info(f"Val samples: {len(val_dataset)}")
 
     # -----------------------------------------------------
     # Data loaders
@@ -191,7 +194,7 @@ def main():
     # -----------------------------------------------------
     # Create model
     # -----------------------------------------------------
-    log("Creating model...")
+    logger.info("Creating model...")
     model = create_model(
         num_classes=args.num_classes,
         condition_mode=args.condition_mode,
@@ -199,7 +202,7 @@ def main():
     )
     model.to(device)
 
-    log(f"Model created with {sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters")
+    logger.info(f"Model created with {sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters")
 
     # -----------------------------------------------------
     # Loss function
@@ -226,15 +229,15 @@ def main():
     # -----------------------------------------------------
     # Training
     # -----------------------------------------------------
-    log("Starting training loop...")
+    logger.info("Starting training loop...")
     results = trainer.train()
 
     # -----------------------------------------------------
     # Final Summary
     # -----------------------------------------------------
-    log("Training completed.", "SUCCESS")
-    log(f"Best model saved to: {results['best_model_path']}")
-    log(f"Best validation loss: {results['best_val_loss']:.4f}")
+    logger.info("Training completed successfully")
+    logger.info(f"Best model saved to: {results['best_model_path']}")
+    logger.info(f"Best validation loss: {results['best_val_loss']:.4f}")
 
 
 if __name__ == "__main__":

@@ -29,3 +29,6 @@ scipy>=1.11.0
 # Development Tools
 matplotlib>=3.10.7  # For visualization
 
+# Production Tools
+tqdm>=4.66.0  # Progress bars
+
