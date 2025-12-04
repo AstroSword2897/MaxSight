@@ -6,7 +6,6 @@
 # Usage: from ml.utils.preprocessing import apply_glaucoma_transform, extract_mfcc
 
 from ml.utils.preprocessing import ImagePreprocessor, DistanceEstimator, TextRegionDetector
-from ml.utils.output_scheduler import OutputScheduler
 from ml.utils.logging_config import setup_logging, get_logger
 
 try:
@@ -15,7 +14,6 @@ try:
         'ImagePreprocessor',
         'DistanceEstimator',
         'TextRegionDetector',
-        'OutputScheduler',
         'OCRIntegration',
         'create_text_description',
         'setup_logging',
@@ -26,7 +24,6 @@ except ImportError:
         'ImagePreprocessor',
         'DistanceEstimator',
         'TextRegionDetector',
-        'OutputScheduler',
         'setup_logging',
         'get_logger'
     ]
