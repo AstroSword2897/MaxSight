@@ -3,6 +3,7 @@
 import time
 import torch
 from typing import Dict, Optional
+from pathlib import Path
 import statistics
 
 
@@ -136,7 +137,8 @@ def save_benchmark_results(results: Dict[str, Dict[str, float]], save_path: str,
                 if batch_key == 'overall':
                     continue
                 row = {'batch_size': batch_key.replace('batch_', '')}
-                row.update(stats)
+                # Merge stats into row dict
+                row = {**row, **stats}
                 rows.append(row)
             df = pd.DataFrame(rows)
             df.to_csv(save_path_obj, index=False)

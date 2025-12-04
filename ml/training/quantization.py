@@ -61,7 +61,7 @@ def _fuse_maxsight_modules(model: nn.Module) -> nn.Module:
     if hasattr(model, 'conv1') and hasattr(model, 'bn1') and hasattr(model, 'relu'):
         try:
             fuse_list.append(['conv1', 'bn1', 'relu'])
-        except:
+        except Exception:
             pass
     
     # Fuse all detected patterns

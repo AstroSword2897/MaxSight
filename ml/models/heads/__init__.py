@@ -16,8 +16,12 @@ Usage:
     from ml.models.heads import ContrastMapHead, MotionHead, DepthHead
 """
 
-# Phase 2 stubs - to be implemented
-# These modules are placeholders for future therapy heads
+from .contrast_head import ContrastMapHead
+from .motion_head import MotionHead
+from .depth_head import DepthHead
+from .roi_priority_head import ROIPriorityHead
+from .fatigue_head import FatigueHead
+from .uncertainty_head import UncertaintyHead
 
 __all__ = [
     'ContrastMapHead',
@@ -27,5 +31,3 @@ __all__ = [
     'FatigueHead',
     'UncertaintyHead'
 ]
-
-# Note: Actual implementations will be added in Phase 2

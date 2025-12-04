@@ -76,8 +76,8 @@ class SceneMetrics:
             # Update per-level totals and corrects
             for g_idx in gt_valid.unique():
                 g_idx_int = int(g_idx.item())
-                self.urgency_level_total[g_idx_int] += (gt_valid == g_idx_int).sum().item()
-                self.urgency_level_correct[g_idx_int] += ((pred_valid == g_idx_int) & (gt_valid == g_idx_int)).sum().item()
+                self.urgency_level_total[g_idx_int] += int((gt_valid == g_idx_int).sum().item())
+                self.urgency_level_correct[g_idx_int] += int(((pred_valid == g_idx_int) & (gt_valid == g_idx_int)).sum().item())
     
     def update_distance(
         self,

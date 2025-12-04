@@ -112,7 +112,7 @@ class QuantizationValidator:
         fp32_bbox: torch.Tensor,
         int8_bbox: torch.Tensor,
         targets_bbox: Optional[torch.Tensor] = None
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         """
         Validate bounding box head (regression).
         MaxSight format: [B, num_locations, 4] (cx, cy, w, h normalized)
@@ -286,6 +286,12 @@ class QuantizationValidator:
                 else:
                     continue
                 
+                if inputs is None:
+                    continue
+                
+                if not isinstance(inputs, torch.Tensor):
+                    continue
+                    
                 inputs = inputs.to(self.device)
                 
                 # Forward pass
@@ -479,6 +485,10 @@ if __name__ == "__main__":
     # Load model architecture
     import importlib.util
     spec = importlib.util.spec_from_file_location("model_def", args.model_file)
+    if spec is None:
+        raise SystemExit(f"Could not load model file: {args.model_file}")
+    if spec.loader is None:
+        raise SystemExit(f"Model file has no loader: {args.model_file}")
     mod = importlib.util.module_from_spec(spec)
     sys.modules["model_def"] = mod
     spec.loader.exec_module(mod)

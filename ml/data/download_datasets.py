@@ -70,7 +70,7 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco")) -> Dict[str, boo
                     status['train_annotations'] = len(data.get('images', [])) > 100000
                     if status['train_annotations']:
                         print(f"Train annotations: {len(data.get('images', []))} images")
-            except:
+            except Exception:
                 status['train_annotations'] = False
         
         if val_ann.exists():
@@ -80,7 +80,7 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco")) -> Dict[str, boo
                     status['val_annotations'] = len(data.get('images', [])) > 4000
                     if status['val_annotations']:
                         print(f"Val annotations: {len(data.get('images', []))} images")
-            except:
+            except Exception:
                 status['val_annotations'] = False
     
     return status
