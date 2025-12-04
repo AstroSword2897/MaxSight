@@ -1,17 +1,18 @@
 """
-Therapy System Module
+Therapy System Module - Phase 3 Stubs
 
-Contains therapy task generation and session management:
-- Task generator
-- Session manager
-- Task difficulty scaling
-- Performance logging
+This module contains stubs for future therapy system features:
+- TaskGenerator: Adaptive therapy task generation
+- SessionManager: Therapy session tracking and metrics
 
-See docs/therapy_system_implementation_plan.md Phase 3 for implementation details.
+Status: Phase 3 (Sprint 3) - Not yet integrated into main training pipeline
+These are placeholder implementations for future development.
+
+Usage:
+    from ml.therapy import TaskGenerator, SessionManager
 """
 
-from .task_generator import TaskGenerator, TaskType
-from .session_manager import SessionManager
+from ml.therapy.task_generator import TaskGenerator, TaskType
+from ml.therapy.session_manager import SessionManager
 
 __all__ = ['TaskGenerator', 'TaskType', 'SessionManager']
-

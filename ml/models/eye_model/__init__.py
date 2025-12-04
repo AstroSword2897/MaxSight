@@ -1,15 +1,16 @@
 """
-Eye/Face Micro-Model
+Eye/Face Micro-Model - Phase 1 Stub
 
-Tiny CNN for eye tracking and fatigue detection:
-- Blink probability
-- Fixation vs saccade patterns
-- Pupil-size proxy
+This module provides eye tracking and fatigue detection:
+- EyeModel: Blink probability, fixation patterns, pupil size
 
-See docs/therapy_system_implementation_plan.md Phase 1 for implementation details.
+Status: Phase 1 (Sprint 1) - Stub implementation, not yet integrated
+This is a placeholder for future eye tracking features.
+
+Usage:
+    from ml.models.eye_model import EyeModel
 """
 
-from .eye_model import EyeModel
+from ml.models.eye_model.eye_model import EyeModel
 
 __all__ = ['EyeModel']
-
