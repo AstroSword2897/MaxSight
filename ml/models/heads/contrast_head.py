@@ -340,14 +340,15 @@ class ContrastMapHead(nn.Module):
         edge_map = torch.sqrt(grad_x ** 2 + grad_y ** 2 + 1e-8)
         
         # Normalize to [0, 1] range (efficient: single min/max call per batch)
-        # Use view(-1) to flatten for global min/max across spatial dims
-        edge_flat = edge_map.view(edge_map.shape[0], -1)
+        # edge_map is guaranteed to be [B, 1, H, W] at this point
+        B, C, H, W = edge_map.shape
+        edge_flat = edge_map.view(B, -1)  # [B, H*W]
         edge_min = edge_flat.min(dim=1, keepdim=True)[0]  # [B, 1]
         edge_max = edge_flat.max(dim=1, keepdim=True)[0]  # [B, 1]
         
         # Reshape for broadcasting: [B, 1] -> [B, 1, 1, 1] to match [B, 1, H, W]
-        edge_min = edge_min.view(edge_map.shape[0], 1, 1, 1)
-        edge_max = edge_max.view(edge_map.shape[0], 1, 1, 1)
+        edge_min = edge_min.view(B, 1, 1, 1)
+        edge_max = edge_max.view(B, 1, 1, 1)
         
         # Avoid division by zero with efficient masking
         range_mask = (edge_max > edge_min).float()
