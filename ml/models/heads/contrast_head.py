@@ -340,19 +340,25 @@ class ContrastMapHead(nn.Module):
         edge_map = torch.sqrt(grad_x ** 2 + grad_y ** 2 + 1e-8)
         
         # Normalize to [0, 1] range (efficient: single min/max call per batch)
-        # edge_map is guaranteed to be [B, 1, H, W] at this point
-        B, C, H, W = edge_map.shape
-        edge_flat = edge_map.view(B, -1)  # [B, H*W]
-        edge_min = edge_flat.min(dim=1, keepdim=True)[0]  # [B, 1]
-        edge_max = edge_flat.max(dim=1, keepdim=True)[0]  # [B, 1]
-        
-        # Reshape for broadcasting: [B, 1] -> [B, 1, 1, 1] to match [B, 1, H, W]
-        edge_min = edge_min.view(B, 1, 1, 1)
-        edge_max = edge_max.view(B, 1, 1, 1)
-        
-        # Avoid division by zero with efficient masking
-        range_mask = (edge_max > edge_min).float()
-        edge_map = range_mask * (edge_map - edge_min) / (edge_max - edge_min + 1e-8) + (1 - range_mask) * torch.zeros_like(edge_map)
+        # edge_map is guaranteed to be [B, 1, H, W] at this point (4D)
+        if edge_map.dim() == 4:
+            B, C, H, W = edge_map.shape
+            edge_flat = edge_map.view(B, -1)  # [B, H*W]
+            edge_min = edge_flat.min(dim=1, keepdim=True)[0]  # [B, 1]
+            edge_max = edge_flat.max(dim=1, keepdim=True)[0]  # [B, 1]
+            
+            # Reshape for broadcasting: [B, 1] -> [B, 1, 1, 1] to match [B, 1, H, W]
+            edge_min = edge_min.view(B, 1, 1, 1)
+            edge_max = edge_max.view(B, 1, 1, 1)
+            
+            # Avoid division by zero with efficient masking
+            range_mask = (edge_max > edge_min).float()
+            edge_map = range_mask * (edge_map - edge_min) / (edge_max - edge_min + 1e-8) + (1 - range_mask) * torch.zeros_like(edge_map)
+        else:
+            # Fallback for unexpected shapes (shouldn't happen, but safe)
+            edge_max_val = edge_map.max()
+            if edge_max_val > 0:
+                edge_map = edge_map / (edge_max_val + 1e-8)
         
         # Restore original dimensionality if needed
         if original_dim == 2:
