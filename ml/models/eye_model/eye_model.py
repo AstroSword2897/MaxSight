@@ -12,7 +12,6 @@ This module implements eye/face tracking for fatigue detection and gaze analysis
 component for understanding user state and adapting assistance levels accordingly.
 
 WHY EYE TRACKING MATTERS:
-------------------------
 Eye tracking provides valuable information about user state:
 - Blink rate: Indicates fatigue or attention levels
 - Fixation vs saccade: Shows whether user is focused or scanning
@@ -22,13 +21,11 @@ This information enables adaptive assistance - reducing detail when user is fati
 support when attention is low, etc.
 
 HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-------------------------------------------
 The problem emphasizes "Routine Workflow" and "Skill Development" - understanding user state
 enables the system to adapt assistance appropriately, supporting both immediate needs and
 long-term skill development.
 
 TECHNICAL DESIGN DECISIONS:
----------------------------
 - Small input size (64x64): Fast inference for real-time use
 - Normalized inputs [0,1]: Ensures conv layers receive meaningful activations
 - Dropout in FC heads: Prevents degenerate outputs with small batches
@@ -51,7 +48,6 @@ class EyeImagePreprocessor:
     Preprocessor for eye/face images before feeding to EyeModel.
     
     WHY THIS CLASS EXISTS:
-    ---------------------
     Eye model requires specific preprocessing:
     1. Normalize to [0,1] range - ensures conv layers receive meaningful activations
     2. Resize/crop to [64, 64] - model expects fixed input size
@@ -96,7 +92,6 @@ class EyeImagePreprocessor:
         Adjust contrast for better eye detection.
         
         WHY CONTRAST ADJUSTMENT:
-        ------------------------
         Eye images often have low contrast, especially in varying lighting conditions.
         Contrast adjustment ensures conv layers can detect meaningful features (pupil, iris,
         eyelid edges) for accurate blink/fixation/pupil predictions.
@@ -133,7 +128,6 @@ class EyeImagePreprocessor:
         Preprocess tensor directly (for batch processing).
         
         WHY THIS FUNCTION:
-        -----------------
         Sometimes we have tensors already (from video frames). This function ensures they're
         properly normalized and resized before feeding to the model.
         
@@ -184,7 +178,6 @@ class EyeModel(nn.Module):
     Tiny CNN for eye/face tracking and fatigue detection.
     
     WHY THIS CLASS EXISTS:
-    ---------------------
     This model provides eye tracking capabilities for understanding user state (fatigue, attention,
     cognitive load). This information enables adaptive assistance - the system can adjust
     verbosity, frequency, and detail levels based on user state.
@@ -199,7 +192,6 @@ class EyeModel(nn.Module):
     Output: Dict with blink_prob, fixation_pattern, pupil_size
     
     CRITICAL REQUIREMENTS:
-    ---------------------
     1. Input must be normalized to [0,1] range - otherwise conv layers output meaningless activations
     2. Input must be exactly [B, 3, 64, 64] - model assumes this shape
     3. Training labels for fixation must match softmax format (binary 0/1 is fine)
@@ -215,7 +207,6 @@ class EyeModel(nn.Module):
         Initialize eye model.
         
         WHY THESE PARAMETERS:
-        --------------------
         - input_size: Must be (64, 64) - model architecture assumes this
         - dropout: Prevents degenerate FC outputs with small batches or poor initialization
         
@@ -274,7 +265,6 @@ class EyeModel(nn.Module):
         Initialize weights to prevent degenerate outputs.
         
         WHY PROPER INITIALIZATION:
-        --------------------------
         With only 32 features into FC heads, poor initialization can lead to NaN or constant
         outputs. Proper initialization ensures heads produce meaningful outputs from the start.
         """
@@ -296,7 +286,6 @@ class EyeModel(nn.Module):
         Forward pass through eye model.
         
         CRITICAL INPUT REQUIREMENTS:
-        ----------------------------
         1. Input must be normalized to [0,1] range
         2. Input shape must be [B, 3, 64, 64]
         3. Use EyeImagePreprocessor to ensure proper preprocessing
@@ -377,7 +366,6 @@ class EyeModel(nn.Module):
         Get expected label format for fixation head.
         
         WHY THIS FUNCTION:
-        -----------------
         Clarifies that fixation head uses softmax, so labels should be binary (0/1) for
         fixation vs saccade. If continuous probabilities are needed, use Sigmoid instead.
         

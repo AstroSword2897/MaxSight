@@ -9,7 +9,6 @@ build mental models of their environment. This is not just about remembering obj
 supporting the cognitive process of spatial understanding that sighted people develop naturally.
 
 WHY SPATIAL MEMORY MATTERS:
----------------------------
 Sighted people build mental maps of their environment through repeated visual exposure. They remember
 "the door is usually on the left" or "there are stairs ahead." Users with vision impairments need
 this same cognitive support, but cannot build these maps through vision alone.
@@ -21,25 +20,21 @@ This module provides that support by:
 4. Supporting the development of spatial awareness
 
 HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-------------------------------------------
 The problem statement emphasizes "Skill Development Across Senses" - this module directly supports
 that by helping users develop spatial cognition through consistent, structured information. It's not
 just about what's detected now, but about building understanding over time.
 
 RELATIONSHIP TO BARRIER REMOVAL METHODS:
-----------------------------------------
 1. ENVIRONMENTAL STRUCTURING: Remembers how the environment is structured ("door usually on left")
 2. SKILL DEVELOPMENT: Helps users build spatial memory skills through consistent tracking
 3. ROUTINE WORKFLOW: Adapts to user patterns by remembering frequently-seen objects
 
 HOW IT CONTRIBUTES TO VISUAL AWARENESS GOALS:
----------------------------------------------
 This directly implements "Visual Memory & Cognitive Mapping" from the comprehensive requirements.
 It transforms MaxSight from a real-time detection tool into a spatial awareness system that helps
 users understand their environment over time, not just in the current moment.
 
 TECHNICAL DESIGN DECISION:
---------------------------
 We track stability (how much objects move) because:
 - Stable objects (furniture, doors) help users build mental maps
 - Moving objects (people, vehicles) need real-time alerts, not memory
@@ -59,7 +54,6 @@ class SpatialObject:
     Represents an object in spatial memory.
     
     WHY WE TRACK THESE ATTRIBUTES:
-    ------------------------------
     - position: Where the object is (for spatial mapping)
     - size: How big it is (for distance estimation)
     - seen_count: How often seen (for stability calculation)
@@ -84,7 +78,6 @@ class SpatialMemory:
     Tracks object positions over time to help users build mental models.
     
     WHY THIS CLASS EXISTS:
-    ---------------------
     Real-time object detection tells users "what's there now" but doesn't help them understand
     "what's usually there" or "what changed." This class bridges that gap by maintaining a short-term
     memory of the environment, enabling contextual reminders and spatial awareness development.
@@ -301,14 +294,12 @@ class SpatialMemory:
         Generate contextual reminder based on spatial memory.
         
         WHY CONTEXTUAL REMINDERS MATTER:
-        ---------------------------------
         This function implements the "Visual Memory & Cognitive Mapping" goal by providing contextual
         information that helps users understand their environment over time. A sighted person notices
         "I just passed that door" or "these stairs are always here" - this function provides that same
         contextual awareness.
         
         HOW IT SUPPORTS INDEPENDENT NAVIGATION:
-        ---------------------------------------
         Contextual reminders help users:
         1. Build confidence ("I've been here before, I know what's ahead")
         2. Understand changes ("Door you just passed is now closed")
@@ -319,7 +310,6 @@ class SpatialMemory:
         develop naturally.
         
         RELATIONSHIP TO THERAPY GOALS:
-        ------------------------------
         For users with vision therapy goals, contextual reminders provide the repetition and
         reinforcement needed to develop spatial cognition. This is not just convenience - it's
         therapeutic support for building visual-spatial skills.

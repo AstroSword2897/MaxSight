@@ -9,7 +9,6 @@ that use real-world environmental information. This directly supports "Skill Dev
 Senses" by providing therapy exercises that are both practical and therapeutic.
 
 WHY THERAPY INTEGRATION MATTERS:
---------------------------------
 Therapy exercises need to be relevant to real-world use. By using actual scene descriptions in
 therapy tasks, we:
 1. Train skills that directly apply to navigation and environmental awareness
@@ -20,19 +19,16 @@ This supports the problem statement's emphasis on "Skill Development Across Sens
 therapy exercises develop skills that directly support independent interaction with the world.
 
 HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-------------------------------------------
 The problem asks for ways to help users "interact with the world like those who can." Therapy
 integration answers by providing exercises that train the specific skills needed for real-world
 navigation and environmental awareness, not just abstract vision training.
 
 RELATIONSHIP TO BARRIER REMOVAL METHODS:
-----------------------------------------
 1. SKILL DEVELOPMENT ACROSS SENSES: Core implementation - uses scene descriptions for training
 2. ENVIRONMENTAL STRUCTURING: Exercises use real environmental information
 3. GRADUAL INDEPENDENCE: Exercises adapt difficulty based on performance
 
 TECHNICAL DESIGN DECISION:
---------------------------
 We integrate scene descriptions into therapy tasks rather than using abstract exercises because:
 - Real-world context makes exercises more engaging and relevant
 - Skills learned with real scenes transfer better to actual use
@@ -57,7 +53,6 @@ class TherapyTaskIntegrator:
     Integrates scene descriptions into therapy exercises.
     
     WHY THIS CLASS EXISTS:
-    ---------------------
     This class bridges DescriptionGenerator (scene descriptions) and TaskGenerator (therapy tasks).
     It enables therapy exercises to use real-world scene descriptions, making training more
     relevant and effective for actual navigation and environmental awareness.
@@ -80,7 +75,6 @@ class TherapyTaskIntegrator:
         Create attention training task from scene description.
         
         WHY ATTENTION TASKS:
-        -------------------
         Attention training helps users focus on important objects in complex scenes. By using
         real scene descriptions, users practice the attention skills needed for navigation and
         environmental awareness.
@@ -115,7 +109,6 @@ class TherapyTaskIntegrator:
         Create contrast recognition task from scene description.
         
         WHY CONTRAST TASKS:
-        ------------------
         Contrast recognition is critical for users with vision conditions that affect contrast
         sensitivity (cataracts, glaucoma). By using real scene descriptions, users practice
         identifying objects with different contrast levels in realistic contexts.
@@ -150,7 +143,6 @@ class TherapyTaskIntegrator:
         Create edge detection task from scene description.
         
         WHY EDGE TASKS:
-        --------------
         Edge detection is fundamental for object recognition and navigation. By using real scene
         descriptions, users practice identifying edges and boundaries in realistic contexts,
         training skills that directly support navigation and obstacle avoidance.
@@ -185,7 +177,6 @@ class TherapyTaskIntegrator:
         Create spatial awareness task from scene description.
         
         WHY SPATIAL TASKS:
-        -----------------
         Spatial awareness is critical for navigation and environmental understanding. By using
         real scene descriptions, users practice understanding spatial relationships (left/right,
         near/far, above/below) in realistic contexts.
@@ -221,7 +212,6 @@ class TherapyTaskIntegrator:
         Generate therapy task from scene detections and description.
         
         WHY THIS FUNCTION:
-        ------------------
         Provides a unified interface for creating therapy tasks from real scene data. This
         enables therapy exercises to use actual environmental information, making training
         more relevant and effective.

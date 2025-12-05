@@ -9,7 +9,6 @@ for brevity and clarity. This directly addresses the "Clear, Concise Outputs" go
 information overload while maintaining useful information.
 
 WHY SEMANTIC GROUPING MATTERS:
-------------------------------
 Without grouping, users hear: "Chair. Chair. Chair. Table. Chair. Table." This is overwhelming
 and unhelpful. With semantic grouping: "Three chairs and two tables" - concise and actionable.
 
@@ -18,20 +17,17 @@ naturally understand scenes - not as individual objects, but as semantic groups 
 vehicles, etc.).
 
 HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-------------------------------------------
 The problem emphasizes "Clear Multimodal Communication" - this module ensures information is
 presented clearly and concisely, preventing cognitive overload while maintaining usefulness.
 This is especially important for users with CVI (Cortical Visual Impairment) who benefit from
 simplified, structured information.
 
 RELATIONSHIP TO BARRIER REMOVAL METHODS:
-----------------------------------------
 1. ENVIRONMENTAL STRUCTURING: Groups objects semantically for clearer understanding
 2. CLEAR MULTIMODAL COMMUNICATION: Reduces information density while maintaining clarity
 3. SKILL DEVELOPMENT: Helps users learn to recognize object groups, not just individual items
 
 TECHNICAL DESIGN DECISION:
---------------------------
 We group by:
 - Object class (same type = same group)
 - Spatial proximity (nearby objects = same group)
@@ -51,7 +47,6 @@ class SemanticGrouper:
     Groups related objects semantically for concise scene descriptions.
     
     WHY THIS CLASS EXISTS:
-    ----------------------
     Individual object descriptions can be overwhelming. This class groups related objects
     (e.g., "three chairs", "clustered furniture") to create concise, actionable descriptions
     that support "Clear Multimodal Communication" without information overload.
@@ -75,7 +70,6 @@ class SemanticGrouper:
         Initialize semantic grouper.
         
         WHY THESE PARAMETERS:
-        --------------------
         - spatial_threshold: Maximum normalized distance for objects to be considered "nearby"
           (0.2 = 20% of image width/height). This ensures objects are grouped only if they're
           actually close together, supporting accurate spatial understanding.
@@ -90,7 +84,6 @@ class SemanticGrouper:
         Get semantic category for a class name.
         
         WHY THIS MATTERS:
-        -----------------
         Grouping by semantic category (furniture, people, vehicles) creates more meaningful
         descriptions than grouping by exact class name. "Three pieces of furniture" is more
         useful than "chair, table, couch" when objects are clustered together.
@@ -119,14 +112,12 @@ class SemanticGrouper:
         Group objects semantically.
         
         WHY THIS FUNCTION EXISTS:
-        -------------------------
         This transforms a list of individual detections into semantically grouped clusters,
         enabling concise descriptions like "Three chairs and two tables" instead of listing
         each object individually. This directly supports "Clear Multimodal Communication"
         by reducing information density while maintaining usefulness.
         
         HOW IT SUPPORTS THE PROBLEM STATEMENT:
-        --------------------------------------
         The problem asks for information that helps users "interact with the world like those
         who can." Sighted people naturally group objects ("some chairs over there") - this
         function provides that same semantic understanding for users with vision impairments.
@@ -170,7 +161,6 @@ class SemanticGrouper:
         Group objects by spatial proximity.
         
         WHY PROXIMITY GROUPING:
-        -----------------------
         Objects that are close together should be described together ("three chairs clustered
         together" vs "chair, chair, chair"). This supports spatial understanding and prevents
         repetitive descriptions.
@@ -238,7 +228,6 @@ class SemanticGrouper:
         Create a grouped detection dictionary.
         
         WHY THIS STRUCTURE:
-        -------------------
         Grouped detections need to maintain all original information while adding group-level
         metadata (count, representative object, etc.). This structure enables both individual
         object access and group-level descriptions.
@@ -297,7 +286,6 @@ class SemanticGrouper:
         Create description from grouped detections.
         
         WHY GROUPED DESCRIPTIONS:
-        -------------------------
         Grouped descriptions are more concise and natural: "Three chairs and two tables" vs
         "Chair. Chair. Chair. Table. Table." This supports "Clear Multimodal Communication"
         by reducing information density while maintaining clarity.
@@ -352,7 +340,6 @@ def group_detections_semantically(
     Convenience function to group detections semantically.
     
     WHY THIS FUNCTION:
-    ------------------
     Provides a simple interface for semantic grouping that can be integrated into the
     description generation pipeline. This enables concise scene descriptions that support
     "Clear Multimodal Communication" without overwhelming users with individual object lists.

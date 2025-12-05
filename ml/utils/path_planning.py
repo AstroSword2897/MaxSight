@@ -9,25 +9,21 @@ navigation guidance. This directly addresses "Navigation Assistance" by suggesti
 not just identifying obstacles.
 
 WHY PATH PLANNING MATTERS:
---------------------------
 Obstacle detection tells users "what's there" but not "how to navigate around it." Path planning
 provides the "how" - suggesting safe routes that enable independent navigation. This is critical
 for users with vision impairments who cannot visually assess path safety.
 
 HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-------------------------------------------
 The problem asks: "What are ways that those who cannot see... be able to interact with the world
 like those who can?" Path planning answers by providing the spatial navigation guidance that
 sighted people process automatically - "clear path ahead" or "move right to avoid obstacle."
 
 RELATIONSHIP TO BARRIER REMOVAL METHODS:
-----------------------------------------
 1. ENVIRONMENTAL STRUCTURING: Provides structured navigation guidance
 2. CLEAR MULTIMODAL COMMUNICATION: Delivers path suggestions through audio/visual/haptic
 3. SAFETY: Ensures users can navigate safely around hazards
 
 TECHNICAL DESIGN DECISION:
---------------------------
 We use a simple grid-based approach rather than complex pathfinding because:
 - Real-time performance is critical (mobile deployment)
 - Simple heuristics are sufficient for immediate navigation guidance
@@ -57,7 +53,6 @@ class PathSuggestion:
     A path planning suggestion.
     
     WHY THIS STRUCTURE:
-    -------------------
     Path suggestions need to be actionable - users need clear direction, not just information.
     This structure provides:
     - direction: Where to go (forward/left/right)
@@ -76,7 +71,6 @@ class PathPlanner:
     Plans safe navigation paths based on hazards and obstacles.
     
     WHY THIS CLASS EXISTS:
-    ---------------------
     This class transforms obstacle detection into actionable navigation guidance. It analyzes
     hazards, distances, and spatial relationships to suggest safe paths, enabling users to
     navigate independently around obstacles.
@@ -94,7 +88,6 @@ class PathPlanner:
         Initialize path planner.
         
         WHY THESE PARAMETERS:
-        --------------------
         - safety_threshold: Minimum safety score for path recommendation (0.7 = 70% safe)
         - min_clearance: Minimum distance from obstacles for safe path (15% of image = safe zone)
         
@@ -117,19 +110,16 @@ class PathPlanner:
         Plan safe navigation path based on detected obstacles.
         
         WHY THIS FUNCTION:
-        ------------------
         This is the core path planning function that transforms obstacle detection into
         actionable navigation guidance. It analyzes spatial relationships to suggest safe
         paths, enabling independent navigation around hazards.
         
         HOW IT SUPPORTS THE PROBLEM STATEMENT:
-        --------------------------------------
         The problem asks for ways to help users "interact with the world like those who can."
         Path planning provides the spatial navigation guidance that sighted people process
         automatically - analyzing obstacles and suggesting safe routes.
         
         RELATIONSHIP TO OTHER COMPONENTS:
-        ---------------------------------
         - Input: Detections from MaxSightCNN (objects, positions, urgency, distances)
         - Output: Path suggestions for DescriptionGenerator and CrossModalScheduler
         - Integration: Works with SpatialMemory to consider previously seen obstacles
@@ -270,7 +260,6 @@ class PathPlanner:
         Calculate safety score for a direction.
         
         WHY THIS FUNCTION:
-        ------------------
         Safety scores enable data-driven path selection. This function analyzes obstacle
         density, urgency, and distance to calculate how safe a direction is, supporting
         informed path planning decisions.
@@ -311,7 +300,6 @@ class PathPlanner:
         Generate navigation guidance from path planning.
         
         WHY THIS FUNCTION:
-        ------------------
         Provides a simple interface for getting path planning guidance as natural language.
         This enables integration with DescriptionGenerator to create actionable navigation
         descriptions that support independent movement.

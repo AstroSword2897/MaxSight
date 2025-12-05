@@ -9,7 +9,6 @@ transforms the technical problem of "what information to present" into the human
 of "how to present information in a way that's useful, not overwhelming."
 
 WHY THIS APPROACH IS CRITICAL:
-------------------------------
 Users with vision/hearing disabilities have different needs:
 - Blind users need audio (TTS) but may also benefit from haptics
 - Deaf users need visual overlays but may also benefit from haptics
@@ -20,7 +19,6 @@ This module ensures information is presented appropriately for each user's needs
 information overload while ensuring critical information is never missed.
 
 HOW IT CONNECTS TO THE PROBLEM STATEMENT:
------------------------------------------
 The problem statement asks for "Clear, Multimodal Communication" - this module implements exactly
 that by:
 1. Supporting multiple output channels (audio, visual, haptic)
@@ -34,14 +32,12 @@ This directly supports the MVP features:
 - "Personal mode" → Customizable verbosity and frequency
 
 RELATIONSHIP TO BARRIER REMOVAL METHODS:
-----------------------------------------
 1. CLEAR MULTIMODAL COMMUNICATION: Core implementation - manages all output channels
 2. SKILL DEVELOPMENT: Adjustable frequency/verbosity supports gradual independence
 3. ROUTINE WORKFLOW: Adapts to user patterns and preferences
 4. ENVIRONMENTAL STRUCTURING: Ensures structured information is presented clearly
 
 HOW IT CONTRIBUTES TO VISUAL AWARENESS GOALS:
----------------------------------------------
 This module ensures that all the rich information from the CNN (detections, distances, urgency)
 is presented in a way that's:
 - Actionable (prioritized, clear)
@@ -50,7 +46,6 @@ is presented in a way that's:
 - Customizable (adapts to user needs)
 
 TECHNICAL DESIGN DECISION:
---------------------------
 We use priority-based scheduling rather than time-based because:
 - Hazards must interrupt everything (safety first)
 - Users need control over information density (prevent cognitive overload)
@@ -69,7 +64,6 @@ class OutputChannel(Enum):
     Output channel types for multimodal communication.
     
     WHY MULTIPLE CHANNELS:
-    ---------------------
     Different users have different sensory capabilities:
     - AUDIO: For blind users (TTS descriptions)
     - VISUAL: For deaf users (on-screen overlays, captions)
@@ -90,7 +84,6 @@ class AlertFrequency(Enum):
     Alert frequency levels for information density control.
     
     WHY FREQUENCY CONTROL MATTERS:
-    ------------------------------
     Information overload is a real problem - too many alerts can be worse than too few. This enum
     allows users to control information density:
     - LOW: Only hazards (for users who want minimal interruption)
@@ -111,7 +104,6 @@ class OutputConfig:
     Configuration for output scheduling.
     
     WHY THESE PARAMETERS EXIST:
-    ---------------------------
     Each parameter addresses a specific user need:
     - preferred_channel: Matches user's sensory capabilities
     - alert_frequency: Controls information density (prevents overload)
@@ -137,7 +129,6 @@ class ScheduledOutput:
     A scheduled output event.
     
     WHY THIS STRUCTURE:
-    ------------------
     Each output needs multiple attributes to support multimodal communication:
     - channel: Which sense to use (audio/visual/haptic)
     - priority: How urgent (affects interruption behavior)
@@ -162,7 +153,6 @@ class CrossModalScheduler:
     Manages frequency, intensity, and prioritization based on user profile and model outputs.
     
     WHY THIS CLASS IS CRITICAL:
-    ---------------------------
     Without this scheduler, the system would either:
     1. Overwhelm users with constant information (every detection announced)
     2. Miss critical information (no prioritization)
@@ -175,7 +165,6 @@ class CrossModalScheduler:
     - Rate limiting (prevent information overload)
     
     HOW IT CONNECTS TO THE OVERALL SYSTEM:
-    -------------------------------------
     This is the "presentation layer" of MaxSight:
     - Input: Detections from MaxSightCNN + model outputs (uncertainty, navigation difficulty)
     - Processing: Priority filtering, rate limiting, channel selection
@@ -200,13 +189,11 @@ class CrossModalScheduler:
         Schedule outputs based on detections and model outputs.
         
         WHY THIS METHOD IS CRITICAL:
-        ----------------------------
         This is the core orchestration method that transforms raw ML outputs into a prioritized,
         filtered, user-friendly information stream. It solves the fundamental problem of
         "information overload" - without this, users would be overwhelmed with constant alerts.
         
         HOW IT SUPPORTS THE PROBLEM STATEMENT:
-        -------------------------------------
         The problem asks for information that helps users "interact with the world like those who can."
         Sighted people naturally filter information (ignore background, focus on important things).
         This method provides that same filtering for users with vision impairments by:
@@ -216,7 +203,6 @@ class CrossModalScheduler:
         4. Rate limiting to prevent cognitive overload
         
         RELATIONSHIP TO BARRIER REMOVAL:
-        --------------------------------
         This method directly implements "Clear Multimodal Communication" by ensuring information is:
         - Prioritized (hazards first)
         - Filtered (not overwhelming)

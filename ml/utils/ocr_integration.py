@@ -9,7 +9,6 @@ environment. This directly addresses the problem statement's requirement for tex
 support, enabling users to read signs, labels, and documents.
 
 WHY OCR INTEGRATION MATTERS:
----------------------------
 Text is everywhere in the environment - signs, labels, documents, menus. Users with vision
 impairments need this text read aloud. This module provides that capability by:
 1. Detecting text regions in images
@@ -20,19 +19,16 @@ This supports "Clear Multimodal Communication" by making textual information acc
 through audio, enabling users to access information that would otherwise be inaccessible.
 
 HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-------------------------------------------
 The problem asks: "What are ways that those who cannot see... be able to interact with the
 world like those who can?" OCR integration answers by providing access to textual information
 through audio, enabling users to read signs, labels, and documents independently.
 
 RELATIONSHIP TO BARRIER REMOVAL METHODS:
-----------------------------------------
 1. ENVIRONMENTAL STRUCTURING: Makes textual information accessible and understandable
 2. CLEAR MULTIMODAL COMMUNICATION: Converts visual text to audio
 3. SKILL DEVELOPMENT: Supports reading skills through practice
 
 TECHNICAL DESIGN DECISIONS:
----------------------------
 - Cross-platform: iOS Vision framework for production, pytesseract for development
 - Adaptive preprocessing: Improves OCR accuracy in low-contrast images
 - Confidence scoring: Combines region detection and OCR confidence for reliability
@@ -146,13 +142,11 @@ class OCRIntegration:
         Cluster text pixels into regions using DBSCAN (improved) or simple distance-based method.
         
         WHY DBSCAN:
-        ----------
         DBSCAN is more efficient (O(N log N) vs O(N²)) and handles irregularly shaped regions
         better than simple distance-based clustering. For large images with many text pixels,
         this provides significant performance improvement while maintaining accuracy.
         
         HOW IT SUPPORTS THE PROBLEM STATEMENT:
-        -------------------------------------
         Efficient text region detection enables real-time text reading, supporting the "Reads
         Environment" feature. Users need text detected quickly for practical use, not just
         accurate detection.
@@ -264,7 +258,6 @@ class OCRIntegration:
         Extract text from a specific image region with confidence score.
         
         WHY CONFIDENCE SCORING:
-        -----------------------
         Combining region detection confidence with OCR engine confidence provides a more
         meaningful measure of text readability. This enables filtering unreliable text
         extractions, supporting "Practical Usability" by ensuring only reliable information
@@ -315,7 +308,6 @@ class OCRIntegration:
         This is a placeholder - actual implementation in iOS app.
         
         WHY VISION FRAMEWORK:
-        ---------------------
         iOS Vision framework provides high-quality OCR with confidence scores, making it ideal
         for production use. This interface enables Python tests to simulate iOS Vision output
         for cross-platform unit testing.
@@ -344,7 +336,6 @@ class OCRIntegration:
         Uses pytesseract if available, otherwise returns placeholder.
         
         WHY ADAPTIVE PREPROCESSING:
-        --------------------------
         Adaptive thresholding and CLAHE improve OCR accuracy in low-contrast images, which
         are common in real-world scenarios (poor lighting, reflections, etc.). This directly
         supports "Practical Usability" by ensuring text extraction works in varied conditions.
@@ -479,7 +470,6 @@ def create_text_description(text_results: List[Dict], verbosity: str = 'normal')
     Create natural language description of detected text with line/block grouping.
     
     WHY LINE/BLOCK GROUPING:
-    ------------------------
     Connected text (lines, paragraphs) should be described together, not split into
     individual words. This provides more natural descriptions and supports better
     understanding of text context.
@@ -522,7 +512,6 @@ def _group_text_by_proximity(text_results: List[Dict], proximity_threshold: floa
     Group text regions by spatial proximity (line/block grouping).
     
     WHY THIS FUNCTION:
-    -----------------
     Prevents splitting connected text (lines, paragraphs) into multiple regions. This
     provides more natural text descriptions and better context understanding.
     
@@ -588,7 +577,6 @@ def read_text_aloud(text: str) -> None:
     Read text aloud using TTS (text-to-speech).
     
     WHY TTS INTEGRATION:
-    -------------------
     Text-to-speech enables users to hear text content, supporting "Clear Multimodal
     Communication" by making textual information accessible through audio. This is critical
     for users with vision impairments who cannot read text visually.

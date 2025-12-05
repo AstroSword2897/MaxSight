@@ -10,7 +10,6 @@ methods. It's not just about logging data - it's about supporting users in devel
 spatial skills over time.
 
 WHY SESSION MANAGEMENT MATTERS:
--------------------------------
 MaxSight is designed to support both immediate assistance (environmental awareness) and long-term
 skill development (vision therapy). This module enables the latter by:
 1. Tracking user performance over time
@@ -22,20 +21,17 @@ This directly addresses the problem statement's emphasis on "Skill Development A
 don't just get information, they build skills that reduce their dependence on assistive technology.
 
 HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-------------------------------------------
 The problem asks: "What are ways that those who cannot see... be able to interact with the world
 like those who can?" This module answers by supporting skill development - helping users improve
 their visual and spatial abilities so they can interact more independently over time.
 
 RELATIONSHIP TO BARRIER REMOVAL METHODS:
-----------------------------------------
 1. SKILL DEVELOPMENT ACROSS SENSES: Core implementation - tracks and supports skill development
 2. ROUTINE WORKFLOW: Adapts to user patterns and needs based on session history
 3. ENVIRONMENTAL STRUCTURING: Provides structured feedback on environmental awareness tasks
 4. GRADUAL INDEPENDENCE: Enables reducing assistance as skills improve
 
 HOW IT CONTRIBUTES TO VISUAL AWARENESS GOALS:
----------------------------------------------
 This module supports "Adaptive Visual Assistance" and "Visual Training" goals by:
 - Tracking progress in object recognition
 - Monitoring improvement in spatial awareness
@@ -43,7 +39,6 @@ This module supports "Adaptive Visual Assistance" and "Visual Training" goals by
 - Providing feedback that reinforces learning
 
 TECHNICAL DESIGN DECISION:
---------------------------
 We track multiple metrics (reaction time, accuracy, gaze path) because different vision conditions
 affect different skills. This comprehensive tracking ensures we can adapt to each user's specific
 needs and support their unique skill development journey.
@@ -62,7 +57,6 @@ class SessionManager:
     Manages therapy sessions.
     
     WHY THIS CLASS EXISTS:
-    ---------------------
     This class bridges the gap between "assistive technology" and "therapeutic tool." It enables
     MaxSight to support both immediate assistance (helping users navigate now) and long-term skill
     development (helping users improve their abilities over time).

@@ -7,14 +7,12 @@ PROJECT PHILOSOPHY & APPROACH:
 This module is central to MaxSight's core mission: "Removing Barriers for Vision & Hearing Disabilities."
 
 WHY THIS APPROACH:
-------------------
 People with vision impairments need information about their environment in a format they can process.
 Raw bounding boxes and class names are meaningless - users need actionable, spatial descriptions that
 help them navigate and understand their surroundings. This module transforms technical ML outputs into
 human-understandable language that directly supports independent navigation.
 
 HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-------------------------------------------
 The problem statement asks: "What are ways that those who cannot see and hear be able to interact 
 with the world like those who can?" This module answers that by providing:
 
@@ -34,7 +32,6 @@ with the world like those who can?" This module answers that by providing:
    - Reinforces spatial understanding through repeated, structured descriptions
 
 HOW IT CONTRIBUTES TO VISUAL AWARENESS GOALS:
----------------------------------------------
 This directly implements the "Environmental Awareness Goals" and "Spatial Awareness & Localization"
 from the comprehensive requirements. It transforms the CNN's technical outputs (bounding boxes, 
 class probabilities) into the kind of information that helps users:
@@ -43,7 +40,6 @@ class probabilities) into the kind of information that helps users:
 - Build cognitive maps of their environment over time
 
 RELATIONSHIP TO OTHER COMPONENTS:
----------------------------------
 - Input: Receives detections from MaxSightCNN (object positions, classes, distances)
 - Output: Feeds into CrossModalScheduler for TTS/visual/haptic presentation
 - Integration: Works with SpatialMemory to provide contextual reminders
@@ -51,7 +47,6 @@ RELATIONSHIP TO OTHER COMPONENTS:
   'Door 2 meters ahead, handle left'")
 
 TECHNICAL DESIGN DECISION:
---------------------------
 We use verbosity levels (brief/normal/detailed) rather than a single format because:
 - Users with different vision conditions need different levels of detail
 - CVI (Cortical Visual Impairment) users benefit from simplified, consistent formats
@@ -70,14 +65,12 @@ class DescriptionGenerator:
     Provides directional cues, distance estimates, and contextual information.
     
     WHY THIS CLASS EXISTS:
-    ----------------------
     The CNN model outputs technical data (bounding boxes, class probabilities, distance zones).
     Users with vision impairments need this translated into actionable language. This class bridges
     that gap by converting technical ML outputs into natural descriptions that support independent
     navigation and environmental understanding.
     
     DESIGN PHILOSOPHY:
-    ------------------
     Every description is designed to answer: "Where is it, how far, and what should I do?"
     This aligns with the project's focus on practical usability - descriptions must be immediately
     actionable, not just informative.
@@ -120,7 +113,6 @@ class DescriptionGenerator:
         Get horizontal and vertical direction from bounding box center.
         
         WHY THIS MATTERS:
-        -----------------
         Directional cues are critical for navigation. A sighted person can see "door on the left"
         instantly, but a blind user needs this explicitly stated. This function converts the camera's
         perspective (bounding box position) into user-relative directions that support safe navigation.
@@ -301,7 +293,6 @@ class DescriptionGenerator:
         Generate natural language description for a single object.
         
         CORE FUNCTION - WHY THIS EXISTS:
-        ---------------------------------
         This is the heart of MaxSight's "Environmental Structuring" approach. It transforms a technical
         detection (class="door", box=[0.3, 0.5, 0.2, 0.3], distance=0) into actionable information:
         "Door 2 meters ahead, slightly left, at eye level".
@@ -311,7 +302,6 @@ class DescriptionGenerator:
         cannot act upon.
         
         HOW IT SUPPORTS DIFFERENT VISION CONDITIONS:
-        --------------------------------------------
         - Brief mode: For users who need minimal information (CVI, cognitive overload)
         - Normal mode: Standard actionable descriptions (most users)
         - Detailed mode: For users learning spatial relationships or needing full context
@@ -320,7 +310,6 @@ class DescriptionGenerator:
         detailed descriptions and gradually reduce to brief as they build spatial awareness.
         
         RELATIONSHIP TO SAFETY:
-        -----------------------
         Urgency levels are prominently featured because safety is paramount. A "door" is different
         from a "vehicle approaching" - this function ensures hazards are clearly communicated,
         supporting the "Safety-Oriented Visual Awareness" goal.
@@ -488,7 +477,6 @@ class DescriptionGenerator:
         Generate navigation guidance with path suggestions.
         
         WHY NAVIGATION GUIDANCE IS CRITICAL:
-        ------------------------------------
         This function directly addresses the core problem: helping users navigate safely when they
         cannot see obstacles. A sighted person can instantly see "obstacle on left, clear path right"
         - this function provides that same information through language.
@@ -498,13 +486,11 @@ class DescriptionGenerator:
         Awareness" goal and is essential for independent mobility.
         
         HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-        -----------------------------------------
         The problem asks: "What are ways that those who cannot see... be able to interact with the
         world like those who can?" Navigation guidance is a direct answer - it provides the spatial
         awareness that sighted people take for granted, enabling safe, independent movement.
         
         RELATIONSHIP TO OTHER FEATURES:
-        --------------------------------
         - Works with urgency scoring to prioritize hazards
         - Integrates with distance estimation to focus on immediate obstacles
         - Feeds into CrossModalScheduler for haptic/audio alerts

@@ -262,7 +262,6 @@ class MaxSightCNN(nn.Module):
     an object detector - it's a multi-task system designed specifically for accessibility.
     
     WHY MULTI-TASK ARCHITECTURE:
-    ----------------------------
     Standard object detectors answer "what" and "where." MaxSight needs more:
     - WHAT: Object class (door, stairs, vehicle)
     - WHERE: Bounding box position (for direction cues)
@@ -275,7 +274,6 @@ class MaxSightCNN(nn.Module):
     Structuring" - we need rich, structured information about the environment, not just object labels.
     
     HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-    -----------------------------------------
     The problem asks: "What are ways that those who cannot see... be able to interact with the world
     like those who can?" This model answers by providing the same rich environmental information that
     sighted people process automatically:
@@ -285,14 +283,12 @@ class MaxSightCNN(nn.Module):
     - Context understanding (what's the overall scene?)
     
     RELATIONSHIP TO BARRIER REMOVAL METHODS:
-    ----------------------------------------
     1. ENVIRONMENTAL STRUCTURING: Provides structured information (objects, positions, distances)
     2. CLEAR MULTIMODAL COMMUNICATION: Outputs feed into TTS, visual overlays, haptics
     3. SKILL DEVELOPMENT: Condition-specific adaptations support vision therapy
     4. ROUTINE WORKFLOW: Adapts to user's vision condition and needs
     
     CONDITION-SPECIFIC ADAPTATIONS:
-    ------------------------------
     Different vision conditions require different processing:
     - Glaucoma (peripheral loss): Emphasizes peripheral regions
     - AMD (central loss): Emphasizes central regions
@@ -305,7 +301,6 @@ class MaxSightCNN(nn.Module):
     visual impairments.
     
     TECHNICAL DESIGN DECISIONS:
-    ---------------------------
     1. ResNet50 + FPN: Provides multi-scale features for detecting objects of all sizes
     2. Audio fusion: Enables sound-aware environmental understanding (alarms, vehicles)
     3. Multi-head architecture: Separate heads for different tasks (detection, urgency, distance)
@@ -330,7 +325,6 @@ class MaxSightCNN(nn.Module):
         Initialize MaxSightCNN model.
         
         WHY THESE PARAMETERS:
-        --------------------
         - num_classes: 48 environmental classes (doors, stairs, vehicles, etc.) - supports "Reads Environment"
         - num_urgency_levels: 4 levels (safe/caution/warning/danger) - supports safety awareness
         - num_distance_zones: 3 zones (near/medium/far) - supports navigation and spatial awareness
@@ -641,7 +635,6 @@ class MaxSightCNN(nn.Module):
         Forward pass through MaxSightCNN.
         
         WHY THIS ARCHITECTURE:
-        ----------------------
         This forward pass implements the multi-task approach that makes MaxSight more than just
         an object detector. It produces:
         - Object detections (what, where)
@@ -654,7 +647,6 @@ class MaxSightCNN(nn.Module):
         information needed to create actionable descriptions for users.
         
         HOW IT CONNECTS TO THE OVERALL SYSTEM:
-        --------------------------------------
         - Input: Camera frames (images) + optional audio (for sound-aware detection)
         - Processing: Multi-scale feature extraction + condition-specific adaptations
         - Output: Rich structured information that feeds into DescriptionGenerator and

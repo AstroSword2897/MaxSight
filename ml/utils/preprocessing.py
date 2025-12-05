@@ -257,7 +257,6 @@ class ImagePreprocessor:
     Degree Levels" of visual impairments.
     
     WHY CONDITION-SPECIFIC PREPROCESSING:
-    ------------------------------------
     Different vision conditions require different image enhancements:
     - Cataracts (blur): Need contrast enhancement to compensate for reduced acuity
     - Glaucoma (peripheral loss): Need peripheral region emphasis
@@ -269,20 +268,17 @@ class ImagePreprocessor:
     vision condition, maximizing the usefulness of the information provided.
     
     HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-    -----------------------------------------
     The problem statement emphasizes supporting "Different Degree Levels" of visual impairments.
     This module directly implements that by providing condition-specific preprocessing that adapts
     to each user's specific needs, ensuring the system is useful regardless of the severity or
     type of vision condition.
     
     RELATIONSHIP TO BARRIER REMOVAL METHODS:
-    ---------------------------------------
     1. ENVIRONMENTAL STRUCTURING: Enhances images to make environmental information more accessible
     2. SKILL DEVELOPMENT: Condition-specific enhancements support vision therapy goals
     3. ROUTINE WORKFLOW: Adapts preprocessing to user's specific vision condition
     
     TECHNICAL DESIGN DECISION - META AI-STYLE:
-    ------------------------------------------
     We use pure PyTorch operations (no OpenCV) because:
     - GPU-friendly: All operations run on GPU, faster processing
     - Differentiable: Can be part of training pipeline if needed
@@ -306,7 +302,6 @@ class ImagePreprocessor:
         Initialize image preprocessor.
         
         WHY THESE PARAMETERS:
-        --------------------
         - image_size: Standard ImageNet size (224x224) ensures compatibility with pretrained models
         - condition_mode: Enables condition-specific adaptations that maximize usefulness for each
           user's specific vision condition

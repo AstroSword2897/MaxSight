@@ -10,7 +10,6 @@ Senses" by reducing assistance as users improve, encouraging skill development r
 dependence.
 
 WHY ADAPTIVE ASSISTANCE MATTERS:
---------------------------------
 Fixed assistance levels create dependence. Adaptive assistance:
 1. Starts with detailed descriptions (supports learning)
 2. Gradually reduces detail as skills improve (encourages independence)
@@ -21,19 +20,16 @@ This supports the problem statement's emphasis on "gradually reduced assistance"
 just get help, they develop skills that reduce their need for assistance over time.
 
 HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-------------------------------------------
 The problem asks for ways to help users "interact with the world like those who can." Adaptive
 assistance answers this by supporting skill development - as users improve their visual and
 spatial abilities, the system reduces assistance, enabling more independent interaction.
 
 RELATIONSHIP TO BARRIER REMOVAL METHODS:
-----------------------------------------
 1. SKILL DEVELOPMENT ACROSS SENSES: Core implementation - adapts assistance to support learning
 2. ROUTINE WORKFLOW: Adapts to user's demonstrated capabilities over time
 3. GRADUAL INDEPENDENCE: Reduces assistance as skills improve, increases when needed
 
 TECHNICAL DESIGN DECISION:
---------------------------
 We use performance metrics (accuracy, reaction time, skill progression) rather than time-based
 reduction because:
 - Different users improve at different rates
@@ -52,7 +48,6 @@ class PerformanceMetrics:
     Performance metrics for adaptive assistance.
     
     WHY THESE METRICS:
-    ------------------
     - accuracy: How well user identifies objects (higher = less assistance needed)
     - reaction_time: How quickly user responds (faster = more skilled)
     - skill_progression: Trend over time (improving = reduce assistance)
@@ -73,7 +68,6 @@ class AdaptiveAssistance:
     Adapts assistance levels based on user performance.
     
     WHY THIS CLASS EXISTS:
-    ---------------------
     This class bridges SessionManager (performance tracking) and OutputScheduler (assistance
     levels). It enables the system to automatically adjust verbosity, frequency, and hazard
     alert levels based on demonstrated user capabilities, supporting gradual independence
@@ -90,7 +84,6 @@ class AdaptiveAssistance:
         Initialize adaptive assistance.
         
         WHY THESE PARAMETERS:
-        --------------------
         - initial_verbosity: Start with detailed (supports learning)
         - min_verbosity: Never go below brief (maintains safety)
         - max_verbosity: Can increase to detailed when needed (supports struggling users)
@@ -119,7 +112,6 @@ class AdaptiveAssistance:
         Update performance metrics.
         
         WHY THIS MATTERS:
-        -----------------
         Performance metrics drive adaptation. This method updates the system's understanding
         of user capabilities, enabling data-driven assistance level adjustments.
         
@@ -148,7 +140,6 @@ class AdaptiveAssistance:
         Get adaptive verbosity based on performance.
         
         WHY ADAPTIVE VERBOSITY:
-        -----------------------
         Verbosity should match user needs:
         - High performance + improving = brief (encourage independence)
         - Low performance or struggling = detailed (provide support)
@@ -187,7 +178,6 @@ class AdaptiveAssistance:
         Get adaptive alert frequency based on performance.
         
         WHY ADAPTIVE FREQUENCY:
-        -----------------------
         Alert frequency should adapt to user needs:
         - High performance = low frequency (less interruption)
         - Low performance = high frequency (more guidance)
@@ -219,7 +209,6 @@ class AdaptiveAssistance:
         Get adaptive hazard alert threshold based on performance.
         
         WHY ADAPTIVE HAZARD THRESHOLDS:
-        ------------------------------
         Hazard awareness varies by user:
         - High hazard awareness = only alert to high-urgency hazards (reduce false alarms)
         - Low hazard awareness = alert to all hazards (ensure safety)
@@ -250,7 +239,6 @@ class AdaptiveAssistance:
         Get complete adaptive configuration.
         
         WHY THIS FUNCTION:
-        -------------------
         Provides a single interface for getting all adaptive settings, enabling easy
         integration with OutputScheduler and DescriptionGenerator. This ensures all
         assistance components adapt consistently based on user performance.
@@ -273,7 +261,6 @@ def create_adaptive_assistance_from_session(
     Create adaptive assistance from session manager.
     
     WHY THIS FUNCTION:
-    ------------------
     Bridges SessionManager (performance tracking) and AdaptiveAssistance (assistance adaptation).
     This enables automatic assistance level adjustment based on therapy session performance,
     supporting gradual independence through data-driven adaptation.
