@@ -121,7 +121,7 @@ class EyeImagePreprocessor:
             # Fallback: convert manually if transform didn't work
             import torchvision.transforms.functional as TF
             result = TF.to_tensor(image)
-            result = TF.resize(result.unsqueeze(0), self.target_size).squeeze(0)
+            result = TF.resize(result.unsqueeze(0), list(self.target_size)).squeeze(0)  # Convert tuple to list
         return result
     
     def preprocess_tensor(
