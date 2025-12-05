@@ -662,9 +662,6 @@ class MaxSightCNN(nn.Module):
         
         This is the "perception layer" that transforms raw sensor data into structured
         environmental understanding, enabling all of MaxSight's accessibility features.
-        """
-        """
-        Forward pass - Environmental reading
         
         Arguments:
             images: [B, 3, 224, 224]
