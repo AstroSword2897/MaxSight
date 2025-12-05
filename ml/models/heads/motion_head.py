@@ -129,7 +129,7 @@ class MotionHead(nn.Module):
         self, 
         temporal_features: torch.Tensor,
         return_features: bool = False
-    ) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
+    ) -> Union[torch.Tensor, Dict[str, Union[torch.Tensor, None]]]:
         """
         Forward pass to generate motion flow.
         
