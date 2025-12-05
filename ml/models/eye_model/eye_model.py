@@ -115,7 +115,14 @@ class EyeImagePreprocessor:
         Returns:
             Preprocessed tensor [3, 64, 64] in [0,1] range
         """
-        return self.transform(image)
+        result = self.transform(image)
+        # Ensure result is a tensor (transform should return tensor due to ToTensor())
+        if not isinstance(result, torch.Tensor):
+            # Fallback: convert manually if transform didn't work
+            import torchvision.transforms.functional as TF
+            result = TF.to_tensor(image)
+            result = TF.resize(result.unsqueeze(0), self.target_size).squeeze(0)
+        return result
     
     def preprocess_tensor(
         self,
@@ -155,7 +162,7 @@ class EyeImagePreprocessor:
         if tensor.shape[2:] != self.target_size:
             tensor = F.interpolate(
                 tensor,
-                size=self.target_size,
+                size=list(self.target_size),  # Convert tuple to list for type checker
                 mode='bilinear',
                 align_corners=False
             )
