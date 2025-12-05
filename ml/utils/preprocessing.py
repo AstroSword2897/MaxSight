@@ -942,13 +942,19 @@ def apply_glaucoma_vignette(image: torch.Tensor, center_percent: float = 0.4) ->
     
     # Create circular mask
     y, x = torch.meshgrid(
-        torch.arange(h, device=image.device),
-        torch.arange(w, device=image.device),
+        torch.arange(h, device=image.device, dtype=torch.float32),
+        torch.arange(w, device=image.device, dtype=torch.float32),
         indexing='ij'
     )
     dist = torch.sqrt((x - center_x)**2 + (y - center_y)**2)
     mask = (dist < radius).float()
-    mask = mask.unsqueeze(0).expand_as(image)
+    
+    # Expand mask to match image dimensions
+    while mask.dim() < image.dim():
+        mask = mask.unsqueeze(0)
+    # Ensure mask has same shape as image
+    if mask.shape != image.shape:
+        mask = mask.expand_as(image)
     
     return image * mask
 
@@ -961,13 +967,19 @@ def apply_amd_central_darkening(image: torch.Tensor, darken_factor: float = 0.3)
     
     # Create circular darkening mask
     y, x = torch.meshgrid(
-        torch.arange(h, device=image.device),
-        torch.arange(w, device=image.device),
+        torch.arange(h, device=image.device, dtype=torch.float32),
+        torch.arange(w, device=image.device, dtype=torch.float32),
         indexing='ij'
     )
     dist = torch.sqrt((x - center_x)**2 + (y - center_y)**2)
     mask = 1.0 - (dist < radius).float() * darken_factor
-    mask = mask.unsqueeze(0).expand_as(image)
+    
+    # Expand mask to match image dimensions
+    while mask.dim() < image.dim():
+        mask = mask.unsqueeze(0)
+    # Ensure mask has same shape as image
+    if mask.shape != image.shape:
+        mask = mask.expand_as(image)
     
     return image * mask
 
