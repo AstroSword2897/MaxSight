@@ -108,17 +108,20 @@ class ContrastMapHead(nn.Module):
         # Edge detection for edge-aware contrast (optional)
         if use_edge_aware:
             # Sobel-like edge detection kernels
-            self.register_buffer('sobel_x', torch.tensor([
+            sobel_x_tensor = torch.tensor([
                 [[-1, 0, 1],
                  [-2, 0, 2],
                  [-1, 0, 1]]
-            ], dtype=torch.float32).unsqueeze(0).repeat(1, 1, 1, 1))
+            ], dtype=torch.float32).unsqueeze(0).repeat(1, 1, 1, 1)
             
-            self.register_buffer('sobel_y', torch.tensor([
+            sobel_y_tensor = torch.tensor([
                 [[-1, -2, -1],
                  [0, 0, 0],
                  [1, 2, 1]]
-            ], dtype=torch.float32).unsqueeze(0).repeat(1, 1, 1, 1))
+            ], dtype=torch.float32).unsqueeze(0).repeat(1, 1, 1, 1)
+            
+            self.register_buffer('sobel_x', sobel_x_tensor)
+            self.register_buffer('sobel_y', sobel_y_tensor)
         
         # Initialize weights properly
         self._initialize_weights()
@@ -164,8 +167,11 @@ class ContrastMapHead(nn.Module):
         gray = features.mean(dim=1, keepdim=True)  # [B, 1, H, W]
         
         # Apply Sobel filters
-        edge_x = F.conv2d(gray, self.sobel_x, padding=1)
-        edge_y = F.conv2d(gray, self.sobel_y, padding=1)
+        # Type assertion: registered buffers are tensors
+        sobel_x = self.sobel_x  # type: ignore
+        sobel_y = self.sobel_y  # type: ignore
+        edge_x = F.conv2d(gray, sobel_x, padding=1)
+        edge_y = F.conv2d(gray, sobel_y, padding=1)
         
         # Compute edge magnitude
         edge_mag = torch.sqrt(edge_x ** 2 + edge_y ** 2 + 1e-8)
