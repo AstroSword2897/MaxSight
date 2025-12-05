@@ -108,8 +108,6 @@ def test_detections():
                 print(f"  Warning: get_detections failed: {e}")
         else:
             print("  Info: get_detections method not available")
-    
-    return True
 
 
 def test_visual_conditions():
