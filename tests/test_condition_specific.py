@@ -12,10 +12,10 @@ from ml.models.maxsight_cnn import create_model
 from ml.utils.preprocessing import (
     apply_refractive_error_blur,
     apply_cataract_contrast,
-    apply_glaucoma_peripheral_mask,
+    apply_glaucoma_vignette,
     apply_amd_central_darkening,
-    apply_rp_low_light,
-    apply_color_blindness_shift
+    apply_low_light,
+    apply_color_shift
 )
 
 
@@ -41,10 +41,10 @@ def test_condition_robustness():
     conditions = [
         ("Refractive Errors (Blur)", lambda img: apply_refractive_error_blur(img, sigma=3.0)),
         ("Cataracts (Contrast Reduction)", lambda img: apply_cataract_contrast(img, contrast_factor=0.5)),
-        ("Glaucoma (Peripheral Mask)", lambda img: apply_glaucoma_peripheral_mask(img)),
+        ("Glaucoma (Peripheral Mask)", lambda img: apply_glaucoma_vignette(img)),
         ("AMD (Central Darkening)", lambda img: apply_amd_central_darkening(img)),
-        ("Retinitis Pigmentosa (Low Light)", lambda img: apply_rp_low_light(img)),
-        ("Color Blindness (Color Shift)", lambda img: apply_color_blindness_shift(img, mode='protanopia')),
+        ("Retinitis Pigmentosa (Low Light)", lambda img: apply_low_light(img)),
+        ("Color Blindness (Color Shift)", lambda img: apply_color_shift(img, shift_type='red_green')),
     ]
     
     results = []
