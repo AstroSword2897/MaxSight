@@ -323,10 +323,11 @@ class ContrastMapHead(nn.Module):
         
         # Apply Sobel filters with padding (buffers already on correct device)
         # Cast sobel filters to match input dtype for efficiency
-        sobel_x = self.sobel_x.to(dtype=x.dtype)
-        sobel_y = self.sobel_y.to(dtype=x.dtype)
-        grad_x = F.conv2d(gray, sobel_x, padding=1)
-        grad_y = F.conv2d(gray, sobel_y, padding=1)
+        # Type assertion: buffers are guaranteed to be tensors
+        sobel_x_tensor: torch.Tensor = self.sobel_x.to(dtype=x.dtype)  # type: ignore
+        sobel_y_tensor: torch.Tensor = self.sobel_y.to(dtype=x.dtype)  # type: ignore
+        grad_x = F.conv2d(gray, sobel_x_tensor, padding=1)
+        grad_y = F.conv2d(gray, sobel_y_tensor, padding=1)
         
         # Compute gradient magnitude (vectorized)
         edge_map = torch.sqrt(grad_x ** 2 + grad_y ** 2 + 1e-8)
