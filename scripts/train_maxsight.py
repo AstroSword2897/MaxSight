@@ -41,9 +41,7 @@ from ml.training.train_loop import ProductionTrainLoop
 from ml.data.dataset import MaxSightDataset
 
 
-# -----------------------------------------------------
 # Logging setup
-# -----------------------------------------------------
 import logging
 from ml.utils.logging_config import setup_logging
 
@@ -52,9 +50,7 @@ setup_logging(log_level="INFO", log_dir=Path("logs"))
 logger = logging.getLogger(__name__)
 
 
-# -----------------------------------------------------
 # Seeding
-# -----------------------------------------------------
 def set_seed(seed: int):
     random.seed(seed)
     np.random.seed(seed)
@@ -64,9 +60,7 @@ def set_seed(seed: int):
     torch.backends.cudnn.benchmark = False
 
 
-# -----------------------------------------------------
 # Annotation file helper
-# -----------------------------------------------------
 def resolve_annotation_file(directory: Path, provided_file: str | None):
     if provided_file:
         f = Path(provided_file)
@@ -84,9 +78,7 @@ def resolve_annotation_file(directory: Path, provided_file: str | None):
     )
 
 
-# -----------------------------------------------------
 # Main
-# -----------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Train MaxSight CNN (Enhanced)")
 
