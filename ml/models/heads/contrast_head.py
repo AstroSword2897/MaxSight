@@ -167,9 +167,9 @@ class ContrastMapHead(nn.Module):
         gray = features.mean(dim=1, keepdim=True)  # [B, 1, H, W]
         
         # Apply Sobel filters
-        # Type assertion: registered buffers are tensors
-        sobel_x = self.sobel_x  # type: ignore
-        sobel_y = self.sobel_y  # type: ignore
+        # Registered buffers are tensors, but type checker needs explicit cast
+        sobel_x: torch.Tensor = self.sobel_x  # type: ignore[assignment]
+        sobel_y: torch.Tensor = self.sobel_y  # type: ignore[assignment]
         edge_x = F.conv2d(gray, sobel_x, padding=1)
         edge_y = F.conv2d(gray, sobel_y, padding=1)
         
