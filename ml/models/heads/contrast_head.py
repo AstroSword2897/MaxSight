@@ -242,8 +242,8 @@ class ContrastMapHead(nn.Module):
         better perceptual quality and more useful therapy feedback.
         
         Arguments:
-            pred_contrast: Predicted contrast map [B, H, W]
-            target_contrast: Ground truth contrast map [B, H, W]
+            pred_contrast: Predicted contrast map [B, H, W] or [B, C, H, W]
+            target_contrast: Ground truth contrast map [B, H, W] or [B, C, H, W]
             use_edge_aware: Override instance setting for edge-aware loss
         
         Returns:
@@ -267,13 +267,87 @@ class ContrastMapHead(nn.Module):
         
         # Edge-aware loss (weighted by edge strength)
         if use_edge and pred_contrast.dim() == 4:
-            # Compute edge map from target (assumes target is image-like)
-            # For actual implementation, would need to pass edge map or compute from features
-            edge_aware_loss = l1_loss  # Placeholder - would weight by edge map
+            # Ensure target has channel dimension for edge computation
+            if target_contrast.dim() == 3:
+                target_4d = target_contrast.unsqueeze(1)  # [B, H, W] -> [B, 1, H, W]
+            else:
+                target_4d = target_contrast
+            
+            # Compute edge map from target using Sobel filters
+            edge_map = self._compute_edge_map(target_4d)
+            
+            # Ensure pred has same dimensions as target_4d
+            if pred_contrast.dim() == 3:
+                pred_4d = pred_contrast.unsqueeze(1)  # [B, H, W] -> [B, 1, H, W]
+            else:
+                pred_4d = pred_contrast
+            
+            # Weight the pixel-wise loss by edge strength
+            pixel_wise_loss = torch.abs(pred_4d - target_4d)
+            edge_weighted_loss = pixel_wise_loss * (1.0 + edge_map)
+            edge_aware_loss = edge_weighted_loss.mean()
+            
             losses['edge_aware_loss'] = edge_aware_loss
             losses['total_loss'] = 0.5 * l1_loss + 0.5 * edge_aware_loss
         else:
             losses['total_loss'] = l1_loss
         
         return losses
+    
+    def _compute_edge_map(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Compute edge map using Sobel filters.
+        
+        WHY THIS METHOD:
+        ----------------
+        Edge maps are computed directly from the input tensor using Sobel filters, which detect
+        gradients (edges) in the image. This is more flexible than using pre-computed edge maps
+        and works with any input tensor shape.
+        
+        Arguments:
+            x: Input tensor of shape [B, C, H, W] or [B, H, W]
+        
+        Returns:
+            Edge magnitude map of shape [B, 1, H, W]
+        """
+        # Ensure 4D tensor
+        if x.dim() == 3:
+            x = x.unsqueeze(1)  # [B, H, W] -> [B, 1, H, W]
+        
+        # Sobel kernels (created on same device/dtype as input)
+        sobel_x = torch.tensor(
+            [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
+            dtype=x.dtype,
+            device=x.device
+        ).view(1, 1, 3, 3)
+        
+        sobel_y = torch.tensor(
+            [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
+            dtype=x.dtype,
+            device=x.device
+        ).view(1, 1, 3, 3)
+        
+        # Convert to grayscale if multichannel
+        if x.shape[1] > 1:
+            # Use standard RGB to grayscale weights
+            gray = 0.299 * x[:, 0:1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:3]
+        else:
+            gray = x
+        
+        # Apply Sobel filters with padding
+        grad_x = F.conv2d(gray, sobel_x, padding=1)
+        grad_y = F.conv2d(gray, sobel_y, padding=1)
+        
+        # Compute gradient magnitude
+        edge_map = torch.sqrt(grad_x ** 2 + grad_y ** 2 + 1e-8)
+        
+        # Normalize to [0, 1] range
+        edge_min = edge_map.min()
+        edge_max = edge_map.max()
+        if edge_max > edge_min:
+            edge_map = (edge_map - edge_min) / (edge_max - edge_min + 1e-8)
+        else:
+            edge_map = torch.zeros_like(edge_map)
+        
+        return edge_map
 
