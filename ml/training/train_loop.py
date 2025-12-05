@@ -80,7 +80,7 @@ def parse_batch(batch: Any) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     Parse batch from dataloader with validation.
     Supports tuple (images, targets) or dict format.
     
-    Args:
+        Arguments:
         batch: Batch from DataLoader (tuple or dict)
     
     Returns:
@@ -121,7 +121,7 @@ class EMA:
         """
         Initialize EMA.
         
-        Args:
+        Arguments:
             model: Model to track
             decay: EMA decay factor
             total_steps: Total training steps for bias correction
@@ -214,7 +214,7 @@ class ProductionTrainLoop:
         """
         Initialize production training loop.
         
-        Args:
+        Arguments:
             model: Model to train
             train_loader: Training data loader
             val_loader: Validation data loader (optional)
@@ -447,7 +447,7 @@ class ProductionTrainLoop:
         """
         Compute multi-head loss with safe .get() defaults.
         
-        Args:
+        Arguments:
             outputs: Model outputs dictionary
             targets: Target labels dictionary
         
@@ -609,7 +609,7 @@ class ProductionTrainLoop:
         """
         Validate model with DetectionMetrics integration.
         
-        Args:
+        Arguments:
             epoch: Current epoch number
             use_ema: If True, always use EMA weights for validation (default: True)
         

@@ -32,7 +32,7 @@ class TherapySimulator:
         """
         Start simulation.
         
-        Args:
+        Arguments:
             video_source: Optional video file path or camera index
         """
         self.is_running = True
@@ -44,7 +44,7 @@ class TherapySimulator:
         """
         Process a single frame.
         
-        Args:
+        Arguments:
             frame: Input frame [H, W, 3]
         
         Returns:

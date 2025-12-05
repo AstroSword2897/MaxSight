@@ -3,6 +3,51 @@ Session Manager
 
 Manages therapy sessions, tracks performance, and generates progress reports.
 
+PROJECT PHILOSOPHY & APPROACH:
+=============================
+This module implements "Skill Development Across Senses" and "Routine Workflow" barrier removal
+methods. It's not just about logging data - it's about supporting users in developing visual and
+spatial skills over time.
+
+WHY SESSION MANAGEMENT MATTERS:
+-------------------------------
+MaxSight is designed to support both immediate assistance (environmental awareness) and long-term
+skill development (vision therapy). This module enables the latter by:
+1. Tracking user performance over time
+2. Identifying skill improvements
+3. Adapting difficulty based on progress
+4. Supporting gradual independence (reducing reliance on app)
+
+This directly addresses the problem statement's emphasis on "Skill Development Across Senses" - users
+don't just get information, they build skills that reduce their dependence on assistive technology.
+
+HOW IT CONNECTS TO THE PROBLEM STATEMENT:
+------------------------------------------
+The problem asks: "What are ways that those who cannot see... be able to interact with the world
+like those who can?" This module answers by supporting skill development - helping users improve
+their visual and spatial abilities so they can interact more independently over time.
+
+RELATIONSHIP TO BARRIER REMOVAL METHODS:
+----------------------------------------
+1. SKILL DEVELOPMENT ACROSS SENSES: Core implementation - tracks and supports skill development
+2. ROUTINE WORKFLOW: Adapts to user patterns and needs based on session history
+3. ENVIRONMENTAL STRUCTURING: Provides structured feedback on environmental awareness tasks
+4. GRADUAL INDEPENDENCE: Enables reducing assistance as skills improve
+
+HOW IT CONTRIBUTES TO VISUAL AWARENESS GOALS:
+---------------------------------------------
+This module supports "Adaptive Visual Assistance" and "Visual Training" goals by:
+- Tracking progress in object recognition
+- Monitoring improvement in spatial awareness
+- Adapting assistance levels based on performance
+- Providing feedback that reinforces learning
+
+TECHNICAL DESIGN DECISION:
+--------------------------
+We track multiple metrics (reaction time, accuracy, gaze path) because different vision conditions
+affect different skills. This comprehensive tracking ensures we can adapt to each user's specific
+needs and support their unique skill development journey.
+
 Phase 3: Task Generator & Session Manager
 See docs/therapy_system_implementation_plan.md for implementation details.
 """
@@ -15,6 +60,19 @@ import json
 class SessionManager:
     """
     Manages therapy sessions.
+    
+    WHY THIS CLASS EXISTS:
+    ---------------------
+    This class bridges the gap between "assistive technology" and "therapeutic tool." It enables
+    MaxSight to support both immediate assistance (helping users navigate now) and long-term skill
+    development (helping users improve their abilities over time).
+    
+    This dual purpose is critical because:
+    - Immediate assistance: Users need help navigating safely right now
+    - Skill development: Users want to improve their abilities to reduce dependence
+    
+    By tracking sessions and performance, this class enables MaxSight to adapt and support both
+    goals simultaneously.
     
     Logs:
     - All attempts
@@ -34,7 +92,7 @@ class SessionManager:
         """
         Start a new therapy session.
         
-        Args:
+        Arguments:
             session_config: Optional session configuration
         
         Returns:
@@ -64,7 +122,7 @@ class SessionManager:
         """
         Log a task attempt.
         
-        Args:
+        Arguments:
             task_type: Type of task
             task_config: Task configuration
             result: Task result with:

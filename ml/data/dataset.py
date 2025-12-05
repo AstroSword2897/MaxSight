@@ -29,7 +29,7 @@ class MaxSightDataset(Dataset):
         """
         Initialize MaxSight dataset.
         
-        Args:
+        Arguments:
             data_dir: Root directory containing dataset
             annotation_file: Path to JSON annotation file (COCO format or custom)
             image_dir: Directory containing images (default: data_dir/images)
@@ -152,7 +152,7 @@ class MaxSightDataset(Dataset):
         Loads image, applies condition-specific preprocessing and lighting augmentation,
         loads audio clip if available, and formats targets for training.
         
-        Args:
+        Arguments:
             idx: Sample index
         
         Returns:

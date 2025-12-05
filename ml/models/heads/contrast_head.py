@@ -39,7 +39,7 @@ class ContrastMapHead(nn.Module):
         """
         Forward pass.
         
-        Args:
+        Arguments:
             features: Detection features [B, C, H, W]
         
         Returns:

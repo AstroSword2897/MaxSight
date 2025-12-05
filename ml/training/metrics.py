@@ -49,7 +49,7 @@ class DetectionMetrics:
                  device: Optional[torch.device] = None, image_size: Tuple[int, int] = (640, 640),
                  store_predictions: bool = True):
         """
-        Args:
+        Arguments:
             store_predictions: If False, only store TP/FP/FN counts (memory efficient).
                               If True, store full prediction details for AP computation (default: True).
         """

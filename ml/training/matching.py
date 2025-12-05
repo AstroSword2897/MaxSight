@@ -131,7 +131,7 @@ def match_predictions_to_gt(
     """
     Find best assignment between predictions and ground truth.
     
-    Args:
+        Arguments:
         use_hungarian: If True, use proper Hungarian algorithm (globally optimal but slower).
                       If False, use greedy matching (faster, usually sufficient).
     
@@ -210,7 +210,7 @@ def match_batch(
     """
     Match predictions to ground truth for a full batch.
     
-    Args:
+        Arguments:
         pred_boxes: [batch, num_pred, 4] in (x, y, w, h) format
         pred_logits: [batch, num_pred, num_classes]
         gt_boxes: [batch, num_gt, 4] in (x, y, w, h) format

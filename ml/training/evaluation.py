@@ -185,7 +185,7 @@ def plot_lighting_metrics(metrics: Dict[str, float], save_path: Optional[Path] =
 def analyze_lighting_degradation(metrics: Dict[str, float], lighting_conditions: Optional[List[str]] = None) -> Dict[str, Dict[str, float]]:
     """Calculate degradation % for each lighting condition vs normal. Positive = worse.
     
-    Args:
+        Arguments:
         lighting_conditions: List of lighting conditions to analyze. If None, uses ['bright', 'dim', 'dark'].
     """
     if lighting_conditions is None:

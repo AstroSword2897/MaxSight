@@ -40,7 +40,7 @@ class MotionHead(nn.Module):
         """
         Forward pass.
         
-        Args:
+        Arguments:
             temporal_features: Temporal features [B, C, H, W]
         
         Returns:

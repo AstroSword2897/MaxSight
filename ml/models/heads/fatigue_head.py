@@ -63,7 +63,7 @@ class FatigueHead(nn.Module):
         """
         Forward pass.
         
-        Args:
+        Arguments:
             eye_features: Eye model features [B, eye_dim] (flattened from eye model outputs)
             temporal_features: Temporal features [B, temporal_dim]
         

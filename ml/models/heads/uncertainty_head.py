@@ -41,7 +41,7 @@ class UncertaintyHead(nn.Module):
         """
         Forward pass.
         
-        Args:
+        Arguments:
             scene_embedding: Scene embedding [B, scene_dim]
         
         Returns:

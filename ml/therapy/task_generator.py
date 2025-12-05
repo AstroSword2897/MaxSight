@@ -51,7 +51,7 @@ class TaskGenerator:
         """
         Generate next therapy task.
         
-        Args:
+        Arguments:
             uncertainty: Current uncertainty score [0, 1]
             fatigue_score: Current fatigue score [0, 1]
             recent_performance: List of recent task results

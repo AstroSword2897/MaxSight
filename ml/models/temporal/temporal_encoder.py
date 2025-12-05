@@ -75,7 +75,7 @@ class TemporalEncoder(nn.Module):
         """
         Forward pass through temporal encoder.
         
-        Args:
+        Arguments:
             frames: Video frames [B, C, T, H, W] or [B, T, C, H, W]
         
         Returns:

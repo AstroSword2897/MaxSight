@@ -23,7 +23,7 @@ def validate_model_inputs(
     """
     Validate model input tensors.
     
-    Args:
+        Arguments:
         images: Input image tensor
         expected_shape: Expected tensor dimensions (e.g., (4,) for [B, C, H, W])
     
@@ -56,7 +56,7 @@ def validate_model_outputs(
     """
     Validate model output dictionary.
     
-    Args:
+        Arguments:
         outputs: Model outputs dictionary
         expected_keys: Optional list of expected keys
     
@@ -85,7 +85,7 @@ def validate_batch(
     """
     Validate and parse training batch.
     
-    Args:
+        Arguments:
         batch: Batch from DataLoader
         required_keys: Optional list of required keys in targets
     
@@ -127,7 +127,7 @@ def validate_checkpoint(
     """
     Validate checkpoint dictionary.
     
-    Args:
+        Arguments:
         checkpoint: Checkpoint dictionary
         required_keys: Optional list of required keys
     

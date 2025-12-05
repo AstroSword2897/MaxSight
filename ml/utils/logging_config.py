@@ -22,7 +22,7 @@ def setup_logging(
     """
     Setup production-grade logging configuration.
     
-    Args:
+        Arguments:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         log_file: Optional specific log file path
         log_dir: Directory for log files
@@ -86,7 +86,7 @@ def get_logger(name: str) -> logging.Logger:
     """
     Get a logger instance for a module.
     
-    Args:
+        Arguments:
         name: Logger name (typically __name__)
     
     Returns:

@@ -43,7 +43,7 @@ class OverlayEngine:
         """
         Add subtle halo overlay.
         
-        Args:
+        Arguments:
             center: (x, y) center position [0, 1]
             radius: Radius in pixels
             intensity: Opacity [0, 1]
@@ -70,7 +70,7 @@ class OverlayEngine:
         """
         Add edge glow for contrast reinforcement.
         
-        Args:
+        Arguments:
             edges: List of (x, y) edge points
             width: Glow width in pixels
             intensity: Opacity [0, 1]
@@ -96,7 +96,7 @@ class OverlayEngine:
         """
         Add depth "soft fog" for near objects.
         
-        Args:
+        Arguments:
             depth_map: Depth map [H, W] with values [0, 1]
             near_threshold: Threshold for "near" objects
         
@@ -121,7 +121,7 @@ class OverlayEngine:
         """
         Add motion trace for tracking tasks.
         
-        Args:
+        Arguments:
             path: List of (x, y) positions
             width: Trace width in pixels
         
@@ -146,7 +146,7 @@ class OverlayEngine:
         """
         Add gaze position indicator.
         
-        Args:
+        Arguments:
             position: (x, y) gaze position [0, 1]
             size: Indicator size in pixels
         
@@ -172,7 +172,7 @@ class OverlayEngine:
         """
         Add gentle arrow for guidance.
         
-        Args:
+        Arguments:
             start: (x, y) start position [0, 1]
             end: (x, y) end position [0, 1]
             width: Arrow width in pixels
@@ -195,7 +195,7 @@ class OverlayEngine:
         """
         Render all active overlays onto base image.
         
-        Args:
+        Arguments:
             base_image: Base image [H, W, 3]
         
         Returns:

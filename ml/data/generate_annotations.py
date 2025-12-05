@@ -13,7 +13,7 @@ def map_coco_to_environmental(coco_category_name: str) -> str:
     """
     Map COCO category to environmental category in comprehensive class list.
     
-    Args:
+        Arguments:
         coco_category_name: COCO category name (e.g., 'person', 'car', 'stop sign')
     
     Returns:
@@ -36,7 +36,7 @@ def assign_urgency_score(category_name: str, box_size: float) -> int:
     
     Vehicles and hazards near the camera get high urgency scores, while safe objects get low scores.
     
-    Args:
+        Arguments:
         category_name: Object category name
         box_size: Normalized box area (0-1)
     
@@ -78,7 +78,7 @@ def estimate_distance_zone(box_size: float, image_size: Tuple[int, int] = (224, 
     Complexity: O(1) - simple calculation
     Relationship: Used during annotation generation to assign distance zones to objects.
     
-    Args:
+        Arguments:
         box_size: Normalized box area (width * height, 0-1)
         image_size: Image dimensions (not used, but kept for consistency)
     
@@ -151,7 +151,7 @@ def generate_annotations_from_coco(
     Relationship: Preprocessing step before training - generates annotation files that
                  MaxSightDataset loads.
     
-    Args:
+        Arguments:
         coco_annotation_file: Path to COCO annotation JSON file
         image_dir: Directory containing COCO images
         output_file: Base path for output annotation files (will create train/val versions)

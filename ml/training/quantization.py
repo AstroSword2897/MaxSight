@@ -31,7 +31,7 @@ def _fuse_maxsight_modules(model: nn.Module) -> nn.Module:
     - cls_head, box_head, obj_head, text_head
     - ResNet backbone layers (if applicable)
     
-    Args:
+        Arguments:
         model: MaxSightCNN model to fuse
     
     Returns:
@@ -98,7 +98,7 @@ def quantize_model_int8(
     - Robust error handling
     - ExecuTorch-ready output
     
-    Args:
+        Arguments:
         model: Model to quantize (MaxSightCNN)
         calibration_data: DataLoader for calibration (optional, uses dummy data if None)
         num_calibration_batches: Number of batches to use for calibration
@@ -212,7 +212,7 @@ def compare_model_sizes(
     """
     Compare model sizes (FP32 vs INT8) with optional disk size measurement.
     
-    Args:
+        Arguments:
         model_fp32: Original FP32 model
         model_int8: Quantized INT8 model
         save_models: Whether to save models and measure actual disk size
@@ -280,7 +280,7 @@ def validate_quantized_model(
     """
     Validate quantized model by comparing outputs with FP32 model.
     
-    Args:
+        Arguments:
         model_fp32: Original FP32 model
         model_int8: Quantized INT8 model
         test_inputs: Test input tensor(s) - can be single tensor or list
@@ -493,7 +493,7 @@ def quantize_and_validate(
     3. Compares model sizes
     4. Saves results
     
-    Args:
+        Arguments:
         model_fp32: Trained FP32 model (from checkpoint)
         calibration_data: DataLoader for quantization calibration
         test_data: DataLoader for validation (uses calibration_data if None)

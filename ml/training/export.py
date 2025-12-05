@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True) -> Path:
     """Export to PyTorch JIT format. Most reliable, always available. strict=False for dict outputs.
     
-    Args:
+        Arguments:
         device: Device to export from ('cpu', 'cuda', 'mps'). If None, uses model's current device.
         validate: If True, test exported model with dummy input to verify it works.
     """

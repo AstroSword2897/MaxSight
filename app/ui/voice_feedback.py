@@ -41,7 +41,7 @@ class VoiceFeedback:
         """
         Speak a voice prompt.
         
-        Args:
+        Arguments:
             prompt: VoicePrompt enum value
             priority: Priority level (higher = more urgent)
         """
@@ -56,7 +56,7 @@ class VoiceFeedback:
         """
         Speak custom text.
         
-        Args:
+        Arguments:
             text: Custom text to speak
             priority: Priority level
         """

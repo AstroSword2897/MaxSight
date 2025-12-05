@@ -253,7 +253,67 @@ class SimplifiedFPN(nn.Module):
 
 
 class MaxSightCNN(nn.Module):
-    """Object detection model with condition-specific adaptations. Multi-task: detection + urgency + distance."""
+    """
+    Object detection model with condition-specific adaptations. Multi-task: detection + urgency + distance.
+    
+    PROJECT PHILOSOPHY & APPROACH:
+    =============================
+    This is the core ML model that powers MaxSight's "Environmental Reading" capability. It's not just
+    an object detector - it's a multi-task system designed specifically for accessibility.
+    
+    WHY MULTI-TASK ARCHITECTURE:
+    ----------------------------
+    Standard object detectors answer "what" and "where." MaxSight needs more:
+    - WHAT: Object class (door, stairs, vehicle)
+    - WHERE: Bounding box position (for direction cues)
+    - HOW FAR: Distance zone (near/medium/far for navigation)
+    - HOW URGENT: Urgency level (safe/caution/warning/danger for safety)
+    - HOW FINDABLE: Object findability (for users with low vision)
+    - SCENE CONTEXT: Scene embedding (for natural language descriptions)
+    
+    This multi-task approach directly supports the problem statement's requirement for "Environmental
+    Structuring" - we need rich, structured information about the environment, not just object labels.
+    
+    HOW IT CONNECTS TO THE PROBLEM STATEMENT:
+    -----------------------------------------
+    The problem asks: "What are ways that those who cannot see... be able to interact with the world
+    like those who can?" This model answers by providing the same rich environmental information that
+    sighted people process automatically:
+    - Object recognition (what's there)
+    - Spatial awareness (where it is, how far)
+    - Safety assessment (is it dangerous?)
+    - Context understanding (what's the overall scene?)
+    
+    RELATIONSHIP TO BARRIER REMOVAL METHODS:
+    ----------------------------------------
+    1. ENVIRONMENTAL STRUCTURING: Provides structured information (objects, positions, distances)
+    2. CLEAR MULTIMODAL COMMUNICATION: Outputs feed into TTS, visual overlays, haptics
+    3. SKILL DEVELOPMENT: Condition-specific adaptations support vision therapy
+    4. ROUTINE WORKFLOW: Adapts to user's vision condition and needs
+    
+    CONDITION-SPECIFIC ADAPTATIONS:
+    ------------------------------
+    Different vision conditions require different processing:
+    - Glaucoma (peripheral loss): Emphasizes peripheral regions
+    - AMD (central loss): Emphasizes central regions
+    - Cataracts (blur): Contrast enhancement
+    - Color blindness: Color detection and announcement
+    - Retinitis pigmentosa (night blindness): Brightness enhancement
+    
+    These adaptations ensure the model provides useful information regardless of the user's specific
+    vision condition, supporting the project's goal of addressing "Different Degree Levels" of
+    visual impairments.
+    
+    TECHNICAL DESIGN DECISIONS:
+    ---------------------------
+    1. ResNet50 + FPN: Provides multi-scale features for detecting objects of all sizes
+    2. Audio fusion: Enables sound-aware environmental understanding (alarms, vehicles)
+    3. Multi-head architecture: Separate heads for different tasks (detection, urgency, distance)
+    4. Accessibility features: Contrast sensitivity, glare risk, navigation difficulty
+    
+    These design decisions ensure the model provides the rich, structured information needed for
+    effective environmental awareness and navigation support.
+    """
     
     def __init__(
         self,
@@ -266,6 +326,21 @@ class MaxSightCNN(nn.Module):
         detection_threshold: float = 0.5,
         enable_accessibility_features: bool = True
     ):
+        """
+        Initialize MaxSightCNN model.
+        
+        WHY THESE PARAMETERS:
+        --------------------
+        - num_classes: 48 environmental classes (doors, stairs, vehicles, etc.) - supports "Reads Environment"
+        - num_urgency_levels: 4 levels (safe/caution/warning/danger) - supports safety awareness
+        - num_distance_zones: 3 zones (near/medium/far) - supports navigation and spatial awareness
+        - use_audio: Audio-visual fusion - supports "Listens and Alerts" feature
+        - condition_mode: Condition-specific adaptations - supports different vision conditions
+        - enable_accessibility_features: Contrast, glare, findability - supports fine-grained visual assistance
+        
+        These parameters ensure the model provides the comprehensive information needed for effective
+        accessibility support, not just basic object detection.
+        """
         super().__init__()
         
         self.num_classes = num_classes
@@ -563,9 +638,35 @@ class MaxSightCNN(nn.Module):
         audio_features: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
         """
+        Forward pass through MaxSightCNN.
+        
+        WHY THIS ARCHITECTURE:
+        ----------------------
+        This forward pass implements the multi-task approach that makes MaxSight more than just
+        an object detector. It produces:
+        - Object detections (what, where)
+        - Distance estimates (how far)
+        - Urgency scores (how dangerous)
+        - Scene context (overall understanding)
+        - Accessibility features (contrast, glare, findability)
+        
+        This rich output directly supports "Environmental Structuring" by providing all the
+        information needed to create actionable descriptions for users.
+        
+        HOW IT CONNECTS TO THE OVERALL SYSTEM:
+        --------------------------------------
+        - Input: Camera frames (images) + optional audio (for sound-aware detection)
+        - Processing: Multi-scale feature extraction + condition-specific adaptations
+        - Output: Rich structured information that feeds into DescriptionGenerator and
+          CrossModalScheduler for user presentation
+        
+        This is the "perception layer" that transforms raw sensor data into structured
+        environmental understanding, enabling all of MaxSight's accessibility features.
+        """
+        """
         Forward pass - Environmental reading
         
-        Args:
+        Arguments:
             images: [B, 3, 224, 224]
             audio_features: [B, 128] optional
         
@@ -788,7 +889,7 @@ class MaxSightCNN(nn.Module):
         
         Optimized version using torchvision NMS for better performance.
         
-        Args:
+        Arguments:
             outputs: Model forward pass outputs dictionary containing:
                 - 'classifications': [B, H*W, num_classes] class probabilities
                 - 'objectness': [B, H*W] objectness scores
@@ -1010,7 +1111,7 @@ class MaxSightCNN(nn.Module):
         """
         Compute IoU between box1 (center format) and all boxes2 (center format)
         
-        Args:
+        Arguments:
             box1: [1, 4] or [N, 4] tensor in center format (x, y, w, h)
             boxes2: [M, 4] tensor in center format (x, y, w, h)
         
@@ -1207,7 +1308,7 @@ def build_model(**kwargs) -> MaxSightCNN:
     This is an alias for create_model() that matches the expected interface
     for tools like qat_finetune.py and validate_and_bench.py.
     
-    Args:
+        Arguments:
         **kwargs: Arguments passed to create_model()
     
     Returns:

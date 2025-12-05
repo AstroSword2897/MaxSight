@@ -35,7 +35,7 @@ class HapticFeedback:
         """
         Trigger haptic feedback pattern.
         
-        Args:
+        Arguments:
             pattern: HapticPattern enum value
             intensity: Intensity [0, 1]
         """

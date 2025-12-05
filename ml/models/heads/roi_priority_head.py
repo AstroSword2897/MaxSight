@@ -44,7 +44,7 @@ class ROIPriorityHead(nn.Module):
         """
         Forward pass.
         
-        Args:
+        Arguments:
             scene_embedding: Scene embedding [B, scene_dim]
             roi_features: ROI features [B, N, roi_dim]
         

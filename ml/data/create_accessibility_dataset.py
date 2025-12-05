@@ -46,7 +46,7 @@ class AccessibilityDataset(Dataset):
     - Fast __getitem__ (no augmentation overhead)
     - Clean separation of real vs synthetic data
     
-    Args:
+        Arguments:
         image_dir: Directory containing images
         label_file: Path to JSON label file
         target_size: Target image size (height, width)
@@ -153,7 +153,7 @@ class SyntheticImpairmentEngine:
         Simulates reduced contrast sensitivity (cataracts, visual acuity issues).
         Uses mean-preserving contrast reduction (not linear scaling).
         
-        Args:
+        Arguments:
             img: PIL Image
             level: Contrast level [0, 1] where 1.0 = full contrast, 0.0 = no contrast
         
@@ -178,7 +178,7 @@ class SyntheticImpairmentEngine:
         Simulates lens flare, bright light sensitivity, veiling glare.
         Uses Gaussian-based glare mask (not random).
         
-        Args:
+        Arguments:
             img: PIL Image
             intensity: Glare intensity [0, 1]
         
@@ -215,7 +215,7 @@ class SyntheticImpairmentEngine:
         Simulates visual field loss, glaucoma, peripheral vision issues.
         Blur increases from center to periphery (not isotropic).
         
-        Args:
+        Arguments:
             img: PIL Image
             amount: Blur amount (sigma for Gaussian) [0, 10]
         
@@ -246,7 +246,7 @@ class SyntheticImpairmentEngine:
         Simulates reduced depth perception, stereopsis issues.
         Reduces contrast in depth cues.
         
-        Args:
+        Arguments:
             img: PIL Image
             strength: Flattening strength [0, 1]
         
@@ -271,7 +271,7 @@ class SyntheticImpairmentEngine:
         Simulates post-cataract surgery halos, lens artifacts.
         Creates bright rings around high-contrast edges.
         
-        Args:
+        Arguments:
             img: PIL Image
             intensity: Halo intensity [0, 1]
         
@@ -301,7 +301,7 @@ class SyntheticImpairmentEngine:
         
         Simulates reduced visual acuity, low-resolution vision.
         
-        Args:
+        Arguments:
             img: PIL Image
             acuity_drop: Acuity reduction factor [0, 1] where 1.0 = severe reduction
         
@@ -326,7 +326,7 @@ class SyntheticImpairmentEngine:
         """
         Create radial mask (center = 1.0, edges = 0.0).
         
-        Args:
+        Arguments:
             shape: (height, width)
         
         Returns:
@@ -365,7 +365,7 @@ def generate_synthetic_dataset(
     - Separate from real labels (no corruption)
     - Medically-grounded augmentations
     
-    Args:
+        Arguments:
         source: Source image directory
         output: Output directory for synthetic images
         n_per_image: Number of augmentations per source image
@@ -499,7 +499,7 @@ def create_label_template(path: Path):
     """
     Create labeling template for user annotation.
     
-    Args:
+        Arguments:
         path: Path to save template JSON file
     """
     template = {
@@ -535,7 +535,7 @@ def combine_datasets(
     """
     Combine real and synthetic datasets into unified structure.
     
-    Args:
+        Arguments:
         real_dir: Directory with real images
         real_labels: Path to real labels JSON
         synthetic_dir: Directory with synthetic images

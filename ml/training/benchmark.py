@@ -20,7 +20,7 @@ def benchmark_inference(
     """
     Benchmark model inference latency.
     
-    Args:
+        Arguments:
         model: Model to benchmark
         input_size: Input tensor shape (batch, channels, height, width)
         device: Device to run on (default: model's device)

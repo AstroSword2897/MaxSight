@@ -20,7 +20,7 @@ def validate_exported_model(
     """
     Validate exported model by comparing outputs with PyTorch model.
     
-    Args:
+        Arguments:
         model_pytorch: Original PyTorch model
         exported_path: Path to exported model
         format: Export format ('jit', 'executorch', 'coreml')

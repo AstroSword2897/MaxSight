@@ -52,7 +52,7 @@ class DepthHead(nn.Module):
         """
         Forward pass.
         
-        Args:
+        Arguments:
             features: Fused FPN + temporal features [B, C, H, W]
         
         Returns:

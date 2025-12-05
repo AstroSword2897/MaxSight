@@ -1,6 +1,61 @@
 """
 Cross-Modal Output Scheduler
 Manages frequency, intensity, and channel prioritization for accessibility outputs.
+
+PROJECT PHILOSOPHY & APPROACH:
+=============================
+This module is central to MaxSight's "Clear Multimodal Communication" barrier removal method. It
+transforms the technical problem of "what information to present" into the human-centered problem
+of "how to present information in a way that's useful, not overwhelming."
+
+WHY THIS APPROACH IS CRITICAL:
+------------------------------
+Users with vision/hearing disabilities have different needs:
+- Blind users need audio (TTS) but may also benefit from haptics
+- Deaf users need visual overlays but may also benefit from haptics
+- Users with partial vision/hearing need hybrid approaches
+- All users need information prioritized (hazards first, details second)
+
+This module ensures information is presented appropriately for each user's needs, preventing
+information overload while ensuring critical information is never missed.
+
+HOW IT CONNECTS TO THE PROBLEM STATEMENT:
+-----------------------------------------
+The problem statement asks for "Clear, Multimodal Communication" - this module implements exactly
+that by:
+1. Supporting multiple output channels (audio, visual, haptic)
+2. Prioritizing information (urgent alerts interrupt low-priority)
+3. Adapting to user preferences (verbosity, frequency, channel)
+4. Preventing information overload (rate limiting, uncertainty suppression)
+
+This directly supports the MVP features:
+- "Reads environment" → Audio descriptions for blind users
+- "Listens and alerts" → Visual/haptic alerts for deaf users
+- "Personal mode" → Customizable verbosity and frequency
+
+RELATIONSHIP TO BARRIER REMOVAL METHODS:
+----------------------------------------
+1. CLEAR MULTIMODAL COMMUNICATION: Core implementation - manages all output channels
+2. SKILL DEVELOPMENT: Adjustable frequency/verbosity supports gradual independence
+3. ROUTINE WORKFLOW: Adapts to user patterns and preferences
+4. ENVIRONMENTAL STRUCTURING: Ensures structured information is presented clearly
+
+HOW IT CONTRIBUTES TO VISUAL AWARENESS GOALS:
+---------------------------------------------
+This module ensures that all the rich information from the CNN (detections, distances, urgency)
+is presented in a way that's:
+- Actionable (prioritized, clear)
+- Non-overwhelming (rate limited, filtered)
+- Appropriate (matches user's sensory capabilities)
+- Customizable (adapts to user needs)
+
+TECHNICAL DESIGN DECISION:
+--------------------------
+We use priority-based scheduling rather than time-based because:
+- Hazards must interrupt everything (safety first)
+- Users need control over information density (prevent cognitive overload)
+- Different vision conditions need different information frequencies
+- This supports the "Practical Usability & Safety Goals"
 """
 
 from typing import Dict, List, Optional, Tuple
@@ -10,7 +65,20 @@ import torch
 
 
 class OutputChannel(Enum):
-    """Output channel types"""
+    """
+    Output channel types for multimodal communication.
+    
+    WHY MULTIPLE CHANNELS:
+    ---------------------
+    Different users have different sensory capabilities:
+    - AUDIO: For blind users (TTS descriptions)
+    - VISUAL: For deaf users (on-screen overlays, captions)
+    - HAPTIC: For all users (directional vibration patterns)
+    - HYBRID: For users who benefit from multiple modalities
+    
+    This supports "Clear Multimodal Communication" by ensuring information is accessible regardless
+    of which senses are available to the user.
+    """
     AUDIO = "audio"
     HAPTIC = "haptic"
     VISUAL = "visual"
@@ -18,7 +86,20 @@ class OutputChannel(Enum):
 
 
 class AlertFrequency(Enum):
-    """Alert frequency levels"""
+    """
+    Alert frequency levels for information density control.
+    
+    WHY FREQUENCY CONTROL MATTERS:
+    ------------------------------
+    Information overload is a real problem - too many alerts can be worse than too few. This enum
+    allows users to control information density:
+    - LOW: Only hazards (for users who want minimal interruption)
+    - MEDIUM: Hazards + important objects (balanced approach)
+    - HIGH: Continuous narration (for users learning spatial awareness)
+    
+    This supports "Skill Development Across Senses" - users can start with HIGH frequency and
+    gradually reduce to LOW as they build spatial awareness, supporting gradual independence.
+    """
     LOW = "low"      # Only hazards
     MEDIUM = "medium"  # Hazards + important objects
     HIGH = "high"     # Continuous narration
@@ -26,7 +107,20 @@ class AlertFrequency(Enum):
 
 @dataclass
 class OutputConfig:
-    """Configuration for output scheduling"""
+    """
+    Configuration for output scheduling.
+    
+    WHY THESE PARAMETERS EXIST:
+    ---------------------------
+    Each parameter addresses a specific user need:
+    - preferred_channel: Matches user's sensory capabilities
+    - alert_frequency: Controls information density (prevents overload)
+    - verbosity: Adapts detail level to user needs (CVI users need brief, learners need detailed)
+    - uncertainty_threshold: Suppresses unreliable information (prevents confusion)
+    
+    This configuration system supports "Routine Workflow" - users can set preferences once and
+    the system adapts to their needs, making the app more usable over time.
+    """
     preferred_channel: OutputChannel = OutputChannel.AUDIO
     alert_frequency: AlertFrequency = AlertFrequency.MEDIUM
     audio_volume: float = 0.7
@@ -34,11 +128,25 @@ class OutputConfig:
     visual_contrast: float = 0.9
     reaction_time_ms: float = 250.0
     uncertainty_threshold: float = 0.3  # Suppress alerts if uncertainty > threshold
+    verbosity: str = 'normal'  # 'brief', 'normal', or 'detailed'
 
 
 @dataclass
 class ScheduledOutput:
-    """A scheduled output event"""
+    """
+    A scheduled output event.
+    
+    WHY THIS STRUCTURE:
+    ------------------
+    Each output needs multiple attributes to support multimodal communication:
+    - channel: Which sense to use (audio/visual/haptic)
+    - priority: How urgent (affects interruption behavior)
+    - intensity: How strong (volume, brightness, vibration strength)
+    - spatial_position: Where in space (for directional audio/haptics)
+    
+    This structure enables the "Clear Multimodal Communication" approach by providing all the
+    information needed to present information appropriately across different sensory channels.
+    """
     channel: OutputChannel
     priority: int  # 0-100
     intensity: float  # 0-1
@@ -52,6 +160,29 @@ class CrossModalScheduler:
     """
     Schedules outputs across audio, haptic, and visual channels.
     Manages frequency, intensity, and prioritization based on user profile and model outputs.
+    
+    WHY THIS CLASS IS CRITICAL:
+    ---------------------------
+    Without this scheduler, the system would either:
+    1. Overwhelm users with constant information (every detection announced)
+    2. Miss critical information (no prioritization)
+    3. Ignore user preferences (one-size-fits-all approach)
+    
+    This class solves all three problems by intelligently scheduling outputs based on:
+    - Priority (hazards interrupt everything)
+    - User preferences (verbosity, frequency, channel)
+    - Uncertainty (suppress unreliable information)
+    - Rate limiting (prevent information overload)
+    
+    HOW IT CONNECTS TO THE OVERALL SYSTEM:
+    -------------------------------------
+    This is the "presentation layer" of MaxSight:
+    - Input: Detections from MaxSightCNN + model outputs (uncertainty, navigation difficulty)
+    - Processing: Priority filtering, rate limiting, channel selection
+    - Output: Scheduled outputs for TTS, visual overlays, haptic patterns
+    
+    It bridges the gap between "what the model detected" and "what the user experiences," ensuring
+    the technical capabilities translate into practical usability.
     """
     
     def __init__(self, config: OutputConfig):
@@ -68,7 +199,31 @@ class CrossModalScheduler:
         """
         Schedule outputs based on detections and model outputs.
         
-        Args:
+        WHY THIS METHOD IS CRITICAL:
+        ----------------------------
+        This is the core orchestration method that transforms raw ML outputs into a prioritized,
+        filtered, user-friendly information stream. It solves the fundamental problem of
+        "information overload" - without this, users would be overwhelmed with constant alerts.
+        
+        HOW IT SUPPORTS THE PROBLEM STATEMENT:
+        -------------------------------------
+        The problem asks for information that helps users "interact with the world like those who can."
+        Sighted people naturally filter information (ignore background, focus on important things).
+        This method provides that same filtering for users with vision impairments by:
+        1. Prioritizing hazards and important objects
+        2. Filtering based on user preferences (frequency settings)
+        3. Suppressing unreliable information (uncertainty threshold)
+        4. Rate limiting to prevent cognitive overload
+        
+        RELATIONSHIP TO BARRIER REMOVAL:
+        --------------------------------
+        This method directly implements "Clear Multimodal Communication" by ensuring information is:
+        - Prioritized (hazards first)
+        - Filtered (not overwhelming)
+        - Appropriate (matches user's sensory capabilities)
+        - Actionable (clear, concise descriptions)
+        
+        Arguments:
             detections: List of detection dictionaries with priority, findability, etc.
             model_outputs: Model outputs including uncertainty, navigation_difficulty, etc.
             timestamp: Current timestamp for rate limiting
@@ -79,42 +234,56 @@ class CrossModalScheduler:
         scheduled = []
         
         # Get uncertainty - suppress if too high
+        # WHY: Unreliable information is worse than no information - prevents confusion and
+        #      supports user trust in the system. This directly supports "Practical Usability"
+        #      by ensuring only reliable information is presented.
         uncertainty = model_outputs.get('uncertainty', torch.tensor(0.0))
         if isinstance(uncertainty, torch.Tensor):
             uncertainty = uncertainty.item()
         
         if uncertainty > self.config.uncertainty_threshold:
             # High uncertainty - only output high-priority items
+            # WHY: Safety first - even with uncertainty, hazards must be communicated
             priority_threshold = 90
         else:
             # Normal operation - use frequency-based threshold
+            # WHY: Adapts to user preferences - some users want more info, others want less
             priority_threshold = self._get_priority_threshold()
         
         # Filter detections by priority and frequency settings
+        # WHY: Prevents information overload while ensuring important information is communicated
         filtered_detections = [
             d for d in detections
             if d.get('priority', 0) >= priority_threshold
         ]
         
         # Sort by priority (highest first)
+        # WHY: Ensures hazards and important objects are communicated first - safety priority
         filtered_detections.sort(key=lambda x: x.get('priority', 0), reverse=True)
         
         # Limit number of outputs based on frequency
+        # WHY: Cognitive accessibility - too many simultaneous alerts are overwhelming and
+        #      counterproductive. This supports "Practical Usability & Safety Goals."
         max_outputs = self._get_max_outputs()
         filtered_detections = filtered_detections[:max_outputs]
         
         # Schedule each detection
+        # WHY: Transforms technical detections into user-friendly outputs with appropriate
+        #      channels, timing, and descriptions
         for det in filtered_detections:
             output = self._create_output_for_detection(det, model_outputs, timestamp)
             if output:
                 scheduled.append(output)
                 self.last_output_time[det.get('class_name', 'unknown')] = timestamp
         
-        # Add scene-level outputs (navigation difficulty, glare warnings, etc.)
-        scene_outputs = self._create_scene_outputs(model_outputs, timestamp)
+        # Add scene-level outputs (navigation difficulty, glare warnings, navigation guidance)
+        # WHY: Scene-level information (navigation difficulty, path guidance) is as important as
+        #      object-level information. This supports "Navigation Assistance" and "Safety" goals.
+        scene_outputs = self._create_scene_outputs(model_outputs, detections, timestamp)
         scheduled.extend(scene_outputs)
         
         # Store history
+        # WHY: Enables analysis of information patterns and supports future improvements
         self.output_history.extend(scheduled)
         if len(self.output_history) > 100:  # Keep last 100 outputs
             self.output_history = self.output_history[-100:]
@@ -263,26 +432,50 @@ class CrossModalScheduler:
             return 0.1  # Short for useful objects
     
     def _generate_content(self, detection: Dict, model_outputs: Dict) -> str:
-        """Generate content description for output"""
+        """Generate content description for output using enhanced description generator"""
+        from .description_generator import DescriptionGenerator
+        
         class_name = detection.get('class_name', 'object')
-        distance = detection.get('distance', 'medium')
+        box = detection.get('box')
+        distance_zone = detection.get('distance', 1)
+        urgency = detection.get('urgency', 0)
         priority = detection.get('priority', 0)
         
-        # Simple content generation
-        if priority >= 90:
-            return f"Warning: {class_name} ahead"
-        elif priority >= 70:
-            return f"{class_name} {distance}"
+        # Get verbosity from config
+        verbosity = getattr(self.config, 'verbosity', 'normal')
+        desc_gen = DescriptionGenerator(verbosity=verbosity)
+        
+        # Generate enhanced description
+        if box is not None:
+            box_tensor = torch.tensor(box) if not isinstance(box, torch.Tensor) else box
+            if urgency >= 2:
+                # Use hazard alert for high urgency
+                return desc_gen.generate_hazard_alert(class_name, box_tensor, distance_zone, urgency)
+            else:
+                # Use standard object description
+                return desc_gen.generate_object_description(
+                    class_name, box_tensor, distance_zone, urgency, priority, verbosity
+                )
         else:
-            return class_name
+            # Fallback to simple description
+            if priority >= 90:
+                return f"Warning: {class_name} ahead"
+            elif priority >= 70:
+                return f"{class_name} {distance_zone}"
+            else:
+                return class_name
     
     def _create_scene_outputs(
         self,
         model_outputs: Dict[str, torch.Tensor],
+        detections: List[Dict],
         timestamp: float
     ) -> List[ScheduledOutput]:
-        """Create scene-level outputs (navigation difficulty, glare warnings, etc.)"""
+        """Create scene-level outputs (navigation difficulty, glare warnings, navigation guidance)"""
+        from .description_generator import DescriptionGenerator
+        
         outputs = []
+        desc_gen = DescriptionGenerator(verbosity=self.config.verbosity)
         
         # Navigation difficulty warning
         nav_difficulty = model_outputs.get('navigation_difficulty', None)
@@ -297,6 +490,19 @@ class CrossModalScheduler:
                     frequency=2.0,
                     duration=0.2,
                     content="Difficult navigation ahead"
+                ))
+        
+        # Navigation guidance (if detections available)
+        if detections:
+            nav_guidance = desc_gen.generate_navigation_guidance(detections)
+            if nav_guidance != "Clear path ahead" or self.config.verbosity == 'detailed':
+                outputs.append(ScheduledOutput(
+                    channel=self.config.preferred_channel,
+                    priority=55,
+                    intensity=0.5,
+                    frequency=1.0,
+                    duration=0.3,
+                    content=nav_guidance
                 ))
         
         # Glare warning
