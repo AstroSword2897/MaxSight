@@ -984,15 +984,24 @@ def apply_color_shift(image: torch.Tensor, shift_type: str = 'red_green') -> tor
         # Mix red and green channels
         # Handle both 3D [C, H, W] and 4D [B, C, H, W] tensors
         if image.dim() == 4:
-            # [B, C, H, W]
+            # [B, C, H, W] - ensure we have 3 channels
+            if image.shape[1] != 3:
+                # If channels dimension is wrong, return original
+                return image
             r, g, b = image[:, 0], image[:, 1], image[:, 2]
             mixed = (r + g) / 2
             image = torch.stack([mixed, mixed, b], dim=1)
-        else:
-            # [C, H, W]
+        elif image.dim() == 3:
+            # [C, H, W] - ensure we have 3 channels
+            if image.shape[0] != 3:
+                # If channels dimension is wrong, return original
+                return image
             r, g, b = image[0], image[1], image[2]
             mixed = (r + g) / 2
             image = torch.stack([mixed, mixed, b], dim=0)
+        else:
+            # Unexpected shape, return original
+            return image
     return image
 
 
