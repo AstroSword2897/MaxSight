@@ -44,7 +44,7 @@ See docs/therapy_system_implementation_plan.md for implementation details.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 
 class MotionHead(nn.Module):
@@ -129,7 +129,7 @@ class MotionHead(nn.Module):
         self, 
         temporal_features: torch.Tensor,
         return_features: bool = False
-    ) -> torch.Tensor:
+    ) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Forward pass to generate motion flow.
         
