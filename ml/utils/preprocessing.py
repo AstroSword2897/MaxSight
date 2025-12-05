@@ -982,9 +982,17 @@ def apply_color_shift(image: torch.Tensor, shift_type: str = 'red_green') -> tor
     if shift_type == 'red_green':
         # Simulate red-green color blindness
         # Mix red and green channels
-        r, g, b = image[0], image[1], image[2]
-        mixed = (r + g) / 2
-        image = torch.stack([mixed, mixed, b], dim=0)
+        # Handle both 3D [C, H, W] and 4D [B, C, H, W] tensors
+        if image.dim() == 4:
+            # [B, C, H, W]
+            r, g, b = image[:, 0], image[:, 1], image[:, 2]
+            mixed = (r + g) / 2
+            image = torch.stack([mixed, mixed, b], dim=1)
+        else:
+            # [C, H, W]
+            r, g, b = image[0], image[1], image[2]
+            mixed = (r + g) / 2
+            image = torch.stack([mixed, mixed, b], dim=0)
     return image
 
 
