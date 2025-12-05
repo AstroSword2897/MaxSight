@@ -231,13 +231,15 @@ class OCRIntegration:
         Uses pytesseract if available, otherwise returns placeholder.
         """
         try:
-            import pytesseract
+            import pytesseract  # type: ignore
             # Preprocess image for better OCR
             # Convert to grayscale, enhance contrast
             gray = image.convert('L')
-            # Simple threshold
+            # Simple threshold using helper function
             threshold = 128
-            binary = gray.point(lambda p: 255 if p > threshold else 0, mode='1')
+            def threshold_func(p: int) -> int:
+                return 255 if p > threshold else 0
+            binary = gray.point(threshold_func, mode='1')
             
             # Extract text
             text = pytesseract.image_to_string(binary, config='--psm 7')

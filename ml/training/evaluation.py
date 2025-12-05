@@ -47,11 +47,10 @@ def generate_evaluation_report(metrics: Dict[str, float], save_path: Optional[Pa
     report.append("-" * 70)
     
     # Auto-detect lighting conditions from metrics keys
-    if lighting_conditions is None:
-        lighting_conditions = ['bright', 'normal', 'dim', 'dark']
-    available_lightings = [l for l in lighting_conditions if any(f'{l}_{m}' in metrics for m in ['precision', 'recall', 'f1'])]
+    default_lighting_conditions = ['bright', 'normal', 'dim', 'dark']
+    available_lightings = [l for l in default_lighting_conditions if any(f'{l}_{m}' in metrics for m in ['precision', 'recall', 'f1'])]
     if not available_lightings:
-        available_lightings = lighting_conditions  # Fallback to default
+        available_lightings = default_lighting_conditions  # Fallback to default
     
     for lighting in available_lightings:
         p = metrics.get(f'{lighting}_precision', 0.0)

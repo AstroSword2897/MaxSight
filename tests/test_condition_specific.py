@@ -40,7 +40,7 @@ def test_condition_robustness():
     # Test each condition
     conditions = [
         ("Refractive Errors (Blur)", lambda img: apply_refractive_error_blur(img, sigma=3.0)),
-        ("Cataracts (Contrast Reduction)", lambda img: apply_cataract_contrast(img, factor=0.5)),
+        ("Cataracts (Contrast Reduction)", lambda img: apply_cataract_contrast(img, contrast_factor=0.5)),
         ("Glaucoma (Peripheral Mask)", lambda img: apply_glaucoma_peripheral_mask(img)),
         ("AMD (Central Darkening)", lambda img: apply_amd_central_darkening(img)),
         ("Retinitis Pigmentosa (Low Light)", lambda img: apply_rp_low_light(img)),

@@ -7,7 +7,7 @@ Phase 3: Task Generator & Session Manager
 See docs/therapy_system_implementation_plan.md for implementation details.
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, cast
 from datetime import datetime
 import json
 
@@ -77,6 +77,10 @@ class SessionManager:
         if not self.current_session:
             self.start_session()
         
+        # Type narrowing: current_session is guaranteed to be non-None after start_session
+        if self.current_session is None:
+            raise RuntimeError("Failed to initialize session")
+        
         attempt = {
             'timestamp': datetime.now().isoformat(),
             'task_type': task_type,
@@ -126,6 +130,9 @@ class SessionManager:
     
     def _generate_skill_curve(self) -> List[Dict[str, Any]]:
         """Generate skill progression curve from session tasks."""
+        if self.current_session is None:
+            return []
+        
         curve = []
         for i, task in enumerate(self.current_session['tasks']):
             success = task['result'].get('success', False)
@@ -143,6 +150,9 @@ class SessionManager:
     
     def _generate_summary(self) -> Dict[str, Any]:
         """Generate session summary."""
+        if self.current_session is None:
+            return {}
+        
         metrics = self.current_session['metrics']
         total = metrics['total_tasks']
         
