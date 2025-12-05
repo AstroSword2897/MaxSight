@@ -181,11 +181,15 @@ class MotionHead(nn.Module):
             )
         
         if return_features:
-            return {
+            result: Dict[str, Union[torch.Tensor, None]] = {
                 'flow': motion,
                 'features': features,
-                'coarse_flow': coarse_flow if self.use_refinement else None
             }
+            if self.use_refinement:
+                result['coarse_flow'] = coarse_flow
+            else:
+                result['coarse_flow'] = None
+            return result
         
         return motion
     
