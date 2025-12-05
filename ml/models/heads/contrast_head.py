@@ -305,14 +305,21 @@ class ContrastMapHead(nn.Module):
         and works with any input tensor shape.
         
         Arguments:
-            x: Input tensor of shape [B, C, H, W] or [B, H, W]
+            x: Input tensor of shape [B, C, H, W] or [B, H, W] or [H, W]
         
         Returns:
-            Edge magnitude map of shape [B, 1, H, W]
+            Edge magnitude map of shape [B, 1, H, W] or [1, H, W]
         """
-        # Ensure 4D tensor
-        if x.dim() == 3:
+        # Ensure 4D tensor - handle all input shapes
+        original_dim = x.dim()
+        if x.dim() == 2:
+            x = x.unsqueeze(0).unsqueeze(0)  # [H, W] -> [1, 1, H, W]
+            squeeze_output = True
+        elif x.dim() == 3:
             x = x.unsqueeze(1)  # [B, H, W] -> [B, 1, H, W]
+            squeeze_output = False
+        else:
+            squeeze_output = False
         
         # Convert to grayscale if multichannel (vectorized)
         if x.shape[1] > 1:
@@ -345,6 +352,12 @@ class ContrastMapHead(nn.Module):
         # Avoid division by zero with efficient masking
         range_mask = (edge_max > edge_min).float()
         edge_map = range_mask * (edge_map - edge_min) / (edge_max - edge_min + 1e-8) + (1 - range_mask) * torch.zeros_like(edge_map)
+        
+        # Restore original dimensionality if needed
+        if original_dim == 2:
+            edge_map = edge_map.squeeze(0).squeeze(0)  # [1, 1, H, W] -> [H, W]
+        elif original_dim == 3:
+            edge_map = edge_map.squeeze(1)  # [B, 1, H, W] -> [B, H, W]
         
         return edge_map
 
