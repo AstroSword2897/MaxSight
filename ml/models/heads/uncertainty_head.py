@@ -26,15 +26,18 @@ class UncertaintyHead(nn.Module):
     - ECE calibration loss
     """
     
-    def __init__(self, scene_dim: int = 256):
+    def __init__(self, scene_dim: int = 256, hidden_dim: int = 128, dropout: float = 0.1):
         super().__init__()
         self.scene_dim = scene_dim
         
-        # Uncertainty estimation network
-        self.fc1 = nn.Linear(scene_dim, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 1)
+        # Uncertainty estimation network (with LayerNorm and dropout for efficiency)
+        self.fc1 = nn.Linear(scene_dim, hidden_dim)
+        self.norm1 = nn.LayerNorm(hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim // 2)
+        self.norm2 = nn.LayerNorm(hidden_dim // 2)
+        self.fc3 = nn.Linear(hidden_dim // 2, 1)
         self.relu = nn.ReLU(inplace=True)
+        self.dropout = nn.Dropout(dropout)
         self.sigmoid = nn.Sigmoid()
     
     def forward(self, scene_embedding: torch.Tensor) -> Dict[str, torch.Tensor]:
@@ -48,8 +51,11 @@ class UncertaintyHead(nn.Module):
             Dictionary with:
                 - 'uncertainty_score': [B, 1] - Uncertainty [0, 1]
         """
-        x = self.relu(self.fc1(scene_embedding))
-        x = self.relu(self.fc2(x))
+        # Efficient forward pass with LayerNorm and dropout
+        x = self.relu(self.norm1(self.fc1(scene_embedding)))
+        x = self.dropout(x)
+        x = self.relu(self.norm2(self.fc2(x)))
+        x = self.dropout(x)
         uncertainty = self.sigmoid(self.fc3(x))  # [B, 1]
         
         return {

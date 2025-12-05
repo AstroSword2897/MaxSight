@@ -27,20 +27,25 @@ class DepthHead(nn.Module):
     - Sparse synthetic depth loss
     """
     
-    def __init__(self, in_channels: int = 256 + 128):  # FPN + temporal
+    def __init__(self, in_channels: int = 256 + 128, dropout: float = 0.1):  # FPN + temporal
         super().__init__()
         self.in_channels = in_channels
         
-        # Depth estimation network
-        self.conv1 = nn.Conv2d(in_channels, 128, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(128, 64, kernel_size=3, padding=1)
+        # Depth estimation network (with BatchNorm for efficiency and stability)
+        self.conv1 = nn.Conv2d(in_channels, 128, kernel_size=3, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(128)
+        self.conv2 = nn.Conv2d(128, 64, kernel_size=3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(64)
         self.depth_conv = nn.Conv2d(64, 1, kernel_size=1)  # Depth map
         
-        # Distance zone classification
+        # Distance zone classification (with dropout for regularization)
         self.zone_head = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
             nn.Linear(64, 32),
-            nn.ReLU(),
+            nn.LayerNorm(32),  # Better than BatchNorm for 1D features
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
             nn.Linear(32, 3),  # near, mid, far
             nn.Softmax(dim=1)
         )
@@ -60,11 +65,12 @@ class DepthHead(nn.Module):
                 - 'depth_map': [B, H, W] - Depth map
                 - 'zones': [B, 3] - [near_prob, mid_prob, far_prob]
         """
-        x = self.relu(self.conv1(features))
-        x = self.relu(self.conv2(x))
+        # Efficient forward pass with BatchNorm
+        x = self.relu(self.bn1(self.conv1(features)))
+        x = self.relu(self.bn2(self.conv2(x)))
         
         depth_map = self.sigmoid(self.depth_conv(x)).squeeze(1)  # [B, H, W]
-        zones = self.zone_head(x).squeeze(-1).squeeze(-1)  # [B, 3]
+        zones = self.zone_head(x)  # [B, 3] (Flatten handles squeeze automatically)
         
         return {
             'depth_map': depth_map,

@@ -197,13 +197,14 @@ class ROIPriorityHead(nn.Module):
             # Residual connection with normalization
             roi_features = self.norm1(roi_features + attended_rois)
         
-        # Expand scene embedding to match each ROI
+        # Expand scene embedding to match each ROI (efficient broadcasting)
+        # Use unsqueeze + expand for memory efficiency (no copy until needed)
         scene_expanded = scene_embedding.unsqueeze(1).expand(B, N, -1)  # [B, N, scene_dim]
         
-        # Concatenate scene context with ROI features
+        # Concatenate scene context with ROI features (vectorized)
         combined = torch.cat([scene_expanded, roi_features], dim=2)  # [B, N, scene_dim + roi_dim]
         
-        # Score each ROI
+        # Score each ROI (batched, efficient)
         scores = self.sigmoid(self.scorer(combined)).squeeze(-1)  # [B, N]
         
         # Apply mask if provided (set invalid ROIs to 0)
@@ -247,23 +248,26 @@ class ROIPriorityHead(nn.Module):
         
         B, N = scores.shape
         
-        # Create pairwise comparisons
+        # Optimized pairwise comparisons (vectorized)
         # score_diff[i, j] = score[i] - score[j]
         score_diff = scores.unsqueeze(2) - scores.unsqueeze(1)  # [B, N, N]
         # rank_diff[i, j] = rank[i] - rank[j]
         rank_diff = rankings.unsqueeze(2) - rankings.unsqueeze(1)  # [B, N, N]
         
-        # Loss when score order doesn't match rank order
+        # Loss when score order doesn't match rank order (vectorized)
         # Should have score_i > score_j when rank_i > rank_j
         # sign(rank_diff) = +1 if rank_i > rank_j, -1 if rank_i < rank_j
         # We want score_diff * sign(rank_diff) > margin
-        loss = F.relu(margin - score_diff * torch.sign(rank_diff))
+        loss_matrix = F.relu(margin - score_diff * torch.sign(rank_diff))
         
-        # Only consider valid pairs (where rankings differ)
+        # Only consider valid pairs (where rankings differ) - efficient masking
         valid_pairs = (rank_diff != 0).float()
-        if valid_pairs.sum() > 0:
-            loss = (loss * valid_pairs).sum() / valid_pairs.sum()
+        valid_count = valid_pairs.sum()
+        
+        if valid_count > 0:
+            # Efficient: sum only valid pairs, divide by count
+            loss = (loss_matrix * valid_pairs).sum() / valid_count
         else:
-            loss = torch.tensor(0.0, device=scores.device)
+            loss = torch.tensor(0.0, device=scores.device, dtype=scores.dtype)
         
         return loss

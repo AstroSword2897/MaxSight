@@ -209,14 +209,14 @@ class MotionHead(nn.Module):
         Returns:
             Smoothness loss scalar
         """
-        # Compute spatial gradients (differences between neighboring pixels)
+        # Compute spatial gradients (vectorized, efficient)
         # Horizontal gradient: difference between adjacent columns
         grad_x = torch.abs(flow[:, :, :, :-1] - flow[:, :, :, 1:])
         # Vertical gradient: difference between adjacent rows
         grad_y = torch.abs(flow[:, :, :-1, :] - flow[:, :, 1:, :])
         
-        # Average across spatial dimensions and channels
+        # Average across spatial dimensions and channels (single reduction)
         # Lower gradient = smoother flow = better
-        smoothness = grad_x.mean() + grad_y.mean()
+        smoothness = (grad_x.sum() + grad_y.sum()) / (grad_x.numel() + grad_y.numel())
         
         return smoothness

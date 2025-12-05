@@ -314,40 +314,32 @@ class ContrastMapHead(nn.Module):
         if x.dim() == 3:
             x = x.unsqueeze(1)  # [B, H, W] -> [B, 1, H, W]
         
-        # Sobel kernels (created on same device/dtype as input)
-        sobel_x = torch.tensor(
-            [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
-            dtype=x.dtype,
-            device=x.device
-        ).view(1, 1, 3, 3)
-        
-        sobel_y = torch.tensor(
-            [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
-            dtype=x.dtype,
-            device=x.device
-        ).view(1, 1, 3, 3)
-        
-        # Convert to grayscale if multichannel
+        # Convert to grayscale if multichannel (vectorized)
         if x.shape[1] > 1:
-            # Use standard RGB to grayscale weights
+            # Use standard RGB to grayscale weights (efficient broadcasting)
             gray = 0.299 * x[:, 0:1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:3]
         else:
             gray = x
         
-        # Apply Sobel filters with padding
+        # Apply Sobel filters with padding (buffers already on correct device)
+        # Cast sobel filters to match input dtype for efficiency
+        sobel_x = self.sobel_x.to(dtype=x.dtype)
+        sobel_y = self.sobel_y.to(dtype=x.dtype)
         grad_x = F.conv2d(gray, sobel_x, padding=1)
         grad_y = F.conv2d(gray, sobel_y, padding=1)
         
-        # Compute gradient magnitude
+        # Compute gradient magnitude (vectorized)
         edge_map = torch.sqrt(grad_x ** 2 + grad_y ** 2 + 1e-8)
         
-        # Normalize to [0, 1] range
-        edge_min = edge_map.min()
-        edge_max = edge_map.max()
-        if edge_max > edge_min:
-            edge_map = (edge_map - edge_min) / (edge_max - edge_min + 1e-8)
-        else:
-            edge_map = torch.zeros_like(edge_map)
+        # Normalize to [0, 1] range (efficient: single min/max call per batch)
+        # Use view(-1) to flatten for global min/max across spatial dims
+        edge_flat = edge_map.view(edge_map.shape[0], -1)
+        edge_min = edge_flat.min(dim=1, keepdim=True)[0].unsqueeze(-1).unsqueeze(-1)
+        edge_max = edge_flat.max(dim=1, keepdim=True)[0].unsqueeze(-1).unsqueeze(-1)
+        
+        # Avoid division by zero with efficient masking
+        range_mask = (edge_max > edge_min).float()
+        edge_map = range_mask * (edge_map - edge_min) / (edge_max - edge_min + 1e-8) + (1 - range_mask) * torch.zeros_like(edge_map)
         
         return edge_map
 
