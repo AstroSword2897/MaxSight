@@ -107,9 +107,7 @@ def main():
 
     args = parser.parse_args()
 
-    # -----------------------------------------------------
     # Validate device
-    # -----------------------------------------------------
     device = args.device
     if device == "cuda" and not torch.cuda.is_available():
         logger.warning("CUDA not available, falling back to CPU.")
@@ -120,22 +118,16 @@ def main():
         logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
         logger.info(f"Total VRAM: {torch.cuda.get_device_properties(0).total_memory/1e9:.2f} GB")
 
-    # -----------------------------------------------------
     # Set seed
-    # -----------------------------------------------------
     set_seed(args.seed)
     logger.info(f"Random seed set to {args.seed}")
 
-    # -----------------------------------------------------
     # Create checkpoint directory
-    # -----------------------------------------------------
     ckpt_dir = Path(args.checkpoint_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Checkpoint directory: {ckpt_dir}")
 
-    # -----------------------------------------------------
     # Load dataset
-    # -----------------------------------------------------
     data_dir = Path(args.data_dir)
     train_dir = data_dir / "train"
     val_dir = data_dir / "val"
@@ -165,9 +157,7 @@ def main():
     logger.info(f"Train samples: {len(train_dataset)}")
     logger.info(f"Val samples: {len(val_dataset)}")
 
-    # -----------------------------------------------------
     # Data loaders
-    # -----------------------------------------------------
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -183,9 +173,7 @@ def main():
         pin_memory=(device == "cuda")
     )
 
-    # -----------------------------------------------------
     # Create model
-    # -----------------------------------------------------
     logger.info("Creating model...")
     model = create_model(
         num_classes=args.num_classes,
@@ -196,14 +184,10 @@ def main():
 
     logger.info(f"Model created with {sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters")
 
-    # -----------------------------------------------------
     # Loss function
-    # -----------------------------------------------------
     loss_fn = MaxSightLoss(num_classes=args.num_classes)
 
-    # -----------------------------------------------------
     # Trainer
-    # -----------------------------------------------------
     trainer = ProductionTrainLoop(
         model=model,
         train_loader=train_loader,
@@ -218,15 +202,11 @@ def main():
         use_mixed_precision=args.fp16
     )
 
-    # -----------------------------------------------------
     # Training
-    # -----------------------------------------------------
     logger.info("Starting training loop...")
     results = trainer.train()
 
-    # -----------------------------------------------------
     # Final Summary
-    # -----------------------------------------------------
     logger.info("Training completed successfully")
     logger.info(f"Best model saved to: {results['best_model_path']}")
     logger.info(f"Best validation loss: {results['best_val_loss']:.4f}")
