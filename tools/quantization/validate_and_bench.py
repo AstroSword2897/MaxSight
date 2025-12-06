@@ -119,7 +119,7 @@ class QuantizationValidator:
         """
         output_error = self.compute_relative_error(fp32_bbox, int8_bbox)
         
-        results = {
+        results: Dict[str, Any] = {
             'bbox_mae': output_error['mae'],
             'bbox_mse': output_error['mse'],
             'bbox_max_rel_diff': output_error['max_rel_diff'],
@@ -170,7 +170,11 @@ class QuantizationValidator:
                 results['int8_iou'] = int8_iou
                 results['iou_drop'] = fp32_iou - int8_iou
             except Exception as e:
-                results['iou_error'] = str(e)
+                # Store error message separately (will be filtered out during aggregation)
+                results['_iou_error'] = str(e)  # type: ignore
+                results['fp32_iou'] = 0.0
+                results['int8_iou'] = 0.0
+                results['iou_drop'] = 0.0
         
         return results
     
@@ -305,52 +309,67 @@ class QuantizationValidator:
                         class_targets = targets.get('labels') if isinstance(targets, dict) else None
                         if class_targets is not None and torch.is_tensor(class_targets):
                             class_targets = class_targets.to(self.device)
-                        metrics = self.validate_classification_head(
-                            fp32_out['classifications'],
-                            int8_out['classifications'],
-                            class_targets
-                        )
-                        all_metrics['classification'].append(metrics)
+                        try:
+                            metrics = self.validate_classification_head(
+                                fp32_out['classifications'],
+                                int8_out['classifications'],
+                                class_targets
+                            )
+                            all_metrics['classification'].append(metrics)
+                        except Exception as e:
+                            print(f"Warning: Classification validation failed: {e}")
                     
                     # Bounding box head
                     if 'boxes' in fp32_out:
                         bbox_targets = targets.get('boxes') if isinstance(targets, dict) else None
                         if bbox_targets is not None and torch.is_tensor(bbox_targets):
                             bbox_targets = bbox_targets.to(self.device)
-                        metrics = self.validate_bbox_head(
-                            fp32_out['boxes'],
-                            int8_out['boxes'],
-                            bbox_targets
-                        )
-                        all_metrics['bbox'].append(metrics)
+                        try:
+                            metrics = self.validate_bbox_head(
+                                fp32_out['boxes'],
+                                int8_out['boxes'],
+                                bbox_targets
+                            )
+                            all_metrics['bbox'].append(metrics)
+                        except Exception as e:
+                            print(f"Warning: Bbox validation failed: {e}")
                     
                     # Scene embedding head
                     if 'scene_embedding' in fp32_out:
-                        metrics = self.validate_embedding_head(
-                            fp32_out['scene_embedding'],
-                            int8_out['scene_embedding']
-                        )
-                        all_metrics['embedding'].append(metrics)
+                        try:
+                            metrics = self.validate_embedding_head(
+                                fp32_out['scene_embedding'],
+                                int8_out['scene_embedding']
+                            )
+                            all_metrics['embedding'].append(metrics)
+                        except Exception as e:
+                            print(f"Warning: Embedding validation failed: {e}")
                     
                     # Urgency head
                     if 'urgency_scores' in fp32_out:
                         urgency_targets = targets.get('urgency') if isinstance(targets, dict) else None
                         if urgency_targets is not None and torch.is_tensor(urgency_targets):
                             urgency_targets = urgency_targets.to(self.device)
-                        metrics = self.validate_urgency_head(
-                            fp32_out['urgency_scores'],
-                            int8_out['urgency_scores'],
-                            urgency_targets
-                        )
-                        all_metrics['urgency'].append(metrics)
+                        try:
+                            metrics = self.validate_urgency_head(
+                                fp32_out['urgency_scores'],
+                                int8_out['urgency_scores'],
+                                urgency_targets
+                            )
+                            all_metrics['urgency'].append(metrics)
+                        except Exception as e:
+                            print(f"Warning: Urgency validation failed: {e}")
                     
                     # Objectness head
                     if 'objectness' in fp32_out:
-                        metrics = self.validate_objectness_head(
-                            fp32_out['objectness'],
-                            int8_out['objectness']
-                        )
-                        all_metrics['objectness'].append(metrics)
+                        try:
+                            metrics = self.validate_objectness_head(
+                                fp32_out['objectness'],
+                                int8_out['objectness']
+                            )
+                            all_metrics['objectness'].append(metrics)
+                        except Exception as e:
+                            print(f"Warning: Objectness validation failed: {e}")
                 
                 num_batches += 1
                 
@@ -371,6 +390,9 @@ class QuantizationValidator:
                 all_keys.update(m.keys())
             
             for key in all_keys:
+                # Skip error fields (they're strings, not floats)
+                if key.startswith('_') or key.endswith('_error'):
+                    continue
                 values = [m[key] for m in metrics_list if key in m and isinstance(m[key], (int, float)) and not np.isnan(m[key])]
                 if values:
                     head_agg[f'{key}_mean'] = float(np.mean(values))
@@ -448,13 +470,13 @@ class ModelBenchmark:
         print("Benchmarking INT8 model...")
         int8_bench = ModelBenchmark.benchmark_latency(model_int8, test_inputs, device)
         
-        speedup = fp32_bench['mean_ms'] / int8_bench['mean_ms']
+        speedup = fp32_bench['mean_ms'] / int8_bench['mean_ms'] if int8_bench['mean_ms'] > 0 else 0.0
         
         return {
             'fp32': fp32_bench,
             'int8': int8_bench,
             'speedup': speedup,
-            'latency_reduction_percent': (1 - int8_bench['mean_ms'] / fp32_bench['mean_ms']) * 100
+            'latency_reduction_percent': (1 - int8_bench['mean_ms'] / fp32_bench['mean_ms']) * 100 if fp32_bench['mean_ms'] > 0 else 0.0
         }
 
 

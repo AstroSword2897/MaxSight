@@ -84,7 +84,10 @@ class FatigueHead(nn.Module):
         eye_dim: int = 4, 
         temporal_dim: int = 128,
         hidden_dim: int = 64,
-        dropout: float = 0.1
+        dropout: float = 0.1,
+        use_lstm: bool = True,
+        lstm_hidden_size: int = 32,
+        lstm_num_layers: int = 2
     ):
         """
         Initialize fatigue head.
@@ -94,36 +97,54 @@ class FatigueHead(nn.Module):
             temporal_dim: Dimension of temporal features from temporal encoder
             hidden_dim: Hidden layer dimension for shared backbone
             dropout: Dropout probability for regularization
+            use_lstm: Enable LSTM for temporal context (default: True)
+            lstm_hidden_size: LSTM hidden state size
+            lstm_num_layers: Number of LSTM layers
         """
         super().__init__()
         self.eye_dim = eye_dim
         self.temporal_dim = temporal_dim
         self.hidden_dim = hidden_dim
+        self.use_lstm = use_lstm
         
-        # Shared feature extraction with dropout for regularization
-        # WHY SHARED BACKBONE:
-        # - Reduces parameters (more efficient)
-        # - Encourages learning common features across tasks
-        # - Better generalization with shared representations
-        self.shared_net = nn.Sequential(
+        # Initial feature extraction (before LSTM)
+        self.initial_net = nn.Sequential(
             nn.Linear(eye_dim + temporal_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim),  # Better than BatchNorm for variable batch sizes
+            nn.LayerNorm(hidden_dim),
             nn.ReLU(inplace=True),
-            nn.Dropout(dropout),  # Regularization to prevent overfitting
-            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.Dropout(dropout)
+        )
+        
+        # LSTM for temporal context (if enabled)
+        if use_lstm:
+            self.lstm = nn.LSTM(
+                input_size=hidden_dim,
+                hidden_size=lstm_hidden_size,
+                num_layers=lstm_num_layers,
+                batch_first=True,
+                dropout=dropout if lstm_num_layers > 1 else 0.0
+            )
+            lstm_output_dim = lstm_hidden_size
+        else:
+            self.lstm = None
+            lstm_output_dim = hidden_dim
+        
+        # Shared feature extraction after LSTM (if used)
+        self.shared_net = nn.Sequential(
+            nn.Linear(lstm_output_dim, hidden_dim // 2),
             nn.LayerNorm(hidden_dim // 2),
             nn.ReLU(inplace=True),
             nn.Dropout(dropout)
         )
         
-        # Task-specific heads with residual connections
-        # WHY TASK-SPECIFIC HEADS:
-        # - Allows fine-tuning for each output while sharing features
-        # - More expressive than single shared head
+        # Task-specific heads
         head_input_dim = hidden_dim // 2
         self.fatigue_head = self._make_head(head_input_dim)
         self.blink_rate_head = self._make_head(head_input_dim)
         self.fixation_stability_head = self._make_head(head_input_dim)
+        
+        # LSTM hidden state (for temporal continuity)
+        self.lstm_hidden = None
     
     def _make_head(self, input_dim: int) -> nn.Module:
         """
@@ -183,9 +204,27 @@ class FatigueHead(nn.Module):
         if temporal_features.shape[1] != self.temporal_dim:
             raise ValueError(f"Expected temporal_dim={self.temporal_dim}, got {temporal_features.shape[1]}")
         
-        # Combine and extract shared features
+        # Combine inputs
         combined = torch.cat([eye_features, temporal_features], dim=1)
-        shared = self.shared_net(combined)
+        
+        # Initial feature extraction
+        initial_features = self.initial_net(combined)  # [B, hidden_dim]
+        
+        # Apply LSTM if enabled (adds temporal context)
+        if self.use_lstm and self.lstm is not None:
+            # Add sequence dimension: [B, hidden_dim] -> [B, 1, hidden_dim]
+            initial_seq = initial_features.unsqueeze(1)  # [B, 1, hidden_dim]
+            
+            # LSTM forward pass
+            lstm_out, self.lstm_hidden = self.lstm(initial_seq, self.lstm_hidden)
+            
+            # Remove sequence dimension: [B, 1, lstm_hidden_size] -> [B, lstm_hidden_size]
+            lstm_features = lstm_out.squeeze(1)
+        else:
+            lstm_features = initial_features
+        
+        # Final shared feature extraction
+        shared = self.shared_net(lstm_features)
         
         # Validate shared features
         if torch.isnan(shared).any() or torch.isinf(shared).any():

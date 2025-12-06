@@ -224,11 +224,20 @@ class SyntheticImpairmentEngine:
         """
         arr = np.array(img).astype(np.float32)
         
-        # Apply Gaussian blur
-        blurred = ndimage.gaussian_filter(arr, sigma=amount)
+        # Apply Gaussian blur (handles both grayscale and RGB)
+        if len(arr.shape) == 3:
+            # Multi-channel: apply filter to each channel
+            blurred = np.stack([
+                ndimage.gaussian_filter(arr[:, :, i], sigma=amount)
+                for i in range(arr.shape[2])
+            ], axis=2)
+        else:
+            # Grayscale: single channel
+            blurred = ndimage.gaussian_filter(arr, sigma=amount)
         
         # Create radial mask (center clear, periphery blurred)
-        mask = SyntheticImpairmentEngine._radial_mask(arr.shape[:2])
+        h, w = arr.shape[:2]
+        mask = SyntheticImpairmentEngine._radial_mask((h, w))
         
         # Blend: center = original, periphery = blurred
         if len(arr.shape) == 3:

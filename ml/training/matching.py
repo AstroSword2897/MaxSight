@@ -126,7 +126,7 @@ def match_predictions_to_gt(
     lambda_class: float = 1.0,
     lambda_bbox: float = 5.0,
     lambda_giou: float = 2.0,
-    use_hungarian: bool = False
+    use_hungarian: bool = True  # Default to Hungarian for optimal matching
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Find best assignment between predictions and ground truth.

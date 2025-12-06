@@ -171,43 +171,44 @@ class OCRIntegration:
         if use_dbscan:
             try:
                 from sklearn.cluster import DBSCAN
-                
-                # Use DBSCAN for efficient clustering
-                # eps = cluster_distance in normalized coordinates
-                # min_samples = 2 (at least 2 pixels per cluster)
-                dbscan = DBSCAN(eps=cluster_distance, min_samples=2, metric='euclidean')
-                labels = dbscan.fit_predict(coords)
-                
-                # Group pixels by cluster label
-                regions = []
-                unique_labels = set(labels)
-                unique_labels.discard(-1)  # Remove noise label
-                
-                for label in unique_labels:
-                    cluster_mask = labels == label
-                    cluster_coords = coords[cluster_mask]
-                    
-                    if len(cluster_coords) > 0:
-                        x_min = int(cluster_coords[:, 0].min())
-                        y_min = int(cluster_coords[:, 1].min())
-                        x_max = int(cluster_coords[:, 0].max())
-                        y_max = int(cluster_coords[:, 1].max())
-                        
-                        # Add padding
-                        padding = 2
-                        x_min = max(0, x_min - padding)
-                        y_min = max(0, y_min - padding)
-                        x_max = min(w - 1, x_max + padding)
-                        y_max = min(h - 1, y_max + padding)
-                        
-                        if x_max > x_min and y_max > y_min:
-                            regions.append((x_min, y_min, x_max, y_max))
-                
-                return regions
-            
             except ImportError:
-                # Fallback to simple clustering if scikit-learn not available
-                pass
+                raise RuntimeError(
+                    "scikit-learn required for text region clustering. "
+                    "Install: pip install scikit-learn"
+                )
+            
+            # Use DBSCAN for efficient clustering
+            # eps = cluster_distance in normalized coordinates
+            # min_samples = 2 (at least 2 pixels per cluster)
+            dbscan = DBSCAN(eps=cluster_distance, min_samples=2, metric='euclidean')
+            labels = dbscan.fit_predict(coords)
+            
+            # Group pixels by cluster label
+            regions = []
+            unique_labels = set(labels)
+            unique_labels.discard(-1)  # Remove noise label
+            
+            for label in unique_labels:
+                cluster_mask = labels == label
+                cluster_coords = coords[cluster_mask]
+                
+                if len(cluster_coords) > 0:
+                    x_min = int(cluster_coords[:, 0].min())
+                    y_min = int(cluster_coords[:, 1].min())
+                    x_max = int(cluster_coords[:, 0].max())
+                    y_max = int(cluster_coords[:, 1].max())
+                    
+                    # Add padding
+                    padding = 2
+                    x_min = max(0, x_min - padding)
+                    y_min = max(0, y_min - padding)
+                    x_max = min(w - 1, x_max + padding)
+                    y_max = min(h - 1, y_max + padding)
+                    
+                    if x_max > x_min and y_max > y_min:
+                        regions.append((x_min, y_min, x_max, y_max))
+            
+            return regions
         
         # Simple distance-based clustering (fallback)
         regions = []
@@ -444,23 +445,36 @@ class OCRIntegration:
         text_regions.sort(key=lambda x: x['confidence'], reverse=True)
         text_regions = text_regions[:max_regions]
         
-        # Extract text from each region with combined confidence
+        # Extract text from each region with combined confidence (parallel processing)
         results = []
-        for region in text_regions:
-            text, ocr_confidence = self.extract_text_from_region(image, region['box'])
-            if text:
-                # Combine region detection confidence with OCR confidence
-                # WHY: More meaningful confidence measure - both detection and extraction matter
-                combined_confidence = (region['confidence'] * 0.5 + ocr_confidence * 0.5)
-                
-                results.append({
-                    'box': region['box'],
-                    'text': text,
-                    'confidence': combined_confidence,  # Combined confidence
-                    'detection_confidence': region['confidence'],
-                    'ocr_confidence': ocr_confidence,
-                    'region_id': region['region_id']
-                })
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {
+                executor.submit(self.extract_text_from_region, image, region['box']): region
+                for region in text_regions
+            }
+            
+            for future in as_completed(futures):
+                region = futures[future]
+                try:
+                    text, ocr_confidence = future.result(timeout=5.0)
+                    if text:
+                        # Combine region detection confidence with OCR confidence
+                        # WHY: More meaningful confidence measure - both detection and extraction matter
+                        combined_confidence = (region['confidence'] * 0.5 + ocr_confidence * 0.5)
+                        
+                        results.append({
+                            'box': region['box'],
+                            'text': text,
+                            'confidence': combined_confidence,  # Combined confidence
+                            'detection_confidence': region['confidence'],
+                            'ocr_confidence': ocr_confidence,
+                            'region_id': region['region_id']
+                        })
+                except Exception as e:
+                    import logging
+                    logging.warning(f"OCR failed for region {region.get('region_id', 'unknown')}: {e}")
         
         return results
 

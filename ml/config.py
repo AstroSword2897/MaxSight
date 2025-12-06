@@ -1,136 +1,202 @@
 """
-Production-grade configuration management for MaxSight.
-
-Centralized configuration with:
-- Environment variable support
-- Type validation
-- Default values
-- Documentation
+MaxSight Configuration and Dependency Management
+Centralized configuration with versioning and dependency tracking.
 """
 
-import os
-from pathlib import Path
-from typing import Optional, Dict, Any
 from dataclasses import dataclass, field
-
-
-@dataclass
-class TrainingConfig:
-    """Training configuration with validation."""
-    learning_rate: float = 1e-3
-    weight_decay: float = 1e-4
-    num_epochs: int = 100
-    batch_size: int = 32
-    gradient_clip_norm: float = 1.0
-    gradient_accumulation_steps: int = 1
-    use_mixed_precision: bool = True
-    ema_decay: float = 0.9999
-    scheduler_type: str = 'cosine'
-    warmup_epochs: int = 5
-    freeze_backbone_epochs: int = 0
-    freeze_bn_stats: bool = True
-    
-    def __post_init__(self):
-        """Validate configuration values."""
-        if self.learning_rate <= 0:
-            raise ValueError(f"learning_rate must be > 0, got {self.learning_rate}")
-        if self.num_epochs <= 0:
-            raise ValueError(f"num_epochs must be > 0, got {self.num_epochs}")
-        if self.batch_size <= 0:
-            raise ValueError(f"batch_size must be > 0, got {self.batch_size}")
-        if self.scheduler_type not in ['cosine', 'onecycle', 'cosine_restarts', 'constant']:
-            raise ValueError(f"Invalid scheduler_type: {self.scheduler_type}")
+from typing import Dict, List, Optional, Any
+from pathlib import Path
+import json
+from datetime import datetime
 
 
 @dataclass
 class ModelConfig:
-    """Model configuration with validation."""
-    num_classes: int = 48
+    """Model architecture configuration with versioning."""
+    version: str = "1.0.0"
+    num_classes: int = 80
     num_urgency_levels: int = 4
     num_distance_zones: int = 3
-    use_audio: bool = True
-    condition_mode: Optional[str] = None
     fpn_channels: int = 256
     detection_threshold: float = 0.5
+    enable_accessibility_features: bool = True
     
-    def __post_init__(self):
-        """Validate configuration values."""
-        if self.num_classes <= 0:
-            raise ValueError(f"num_classes must be > 0, got {self.num_classes}")
-        if self.num_urgency_levels <= 0:
-            raise ValueError(f"num_urgency_levels must be > 0, got {self.num_urgency_levels}")
-        if self.detection_threshold < 0 or self.detection_threshold > 1:
-            raise ValueError(f"detection_threshold must be in [0, 1], got {self.detection_threshold}")
+    # Head dependencies
+    head_dependencies: Dict[str, List[str]] = field(default_factory=lambda: {
+        'classification': [],
+        'box_regression': ['classification'],
+        'objectness': [],
+        'text_region': [],
+        'urgency': ['scene_embedding'],
+        'distance': ['scene_embedding', 'box_regression'],
+        'contrast': ['shared_scene_embedding'],
+        'glare': ['shared_scene_embedding'],
+        'findability': ['detection_features'],
+        'navigation_difficulty': ['shared_scene_embedding'],
+        'uncertainty': ['shared_scene_embedding'],
+    })
+    
+    # Head execution order (for dependency resolution)
+    head_execution_order: List[str] = field(default_factory=lambda: [
+        'scene_embedding',
+        'shared_scene_embedding',
+        'detection_features',
+        'classification',
+        'box_regression',
+        'objectness',
+        'text_region',
+        'urgency',
+        'distance',
+        'contrast',
+        'glare',
+        'findability',
+        'navigation_difficulty',
+        'uncertainty',
+    ])
 
 
 @dataclass
-class DataConfig:
-    """Data configuration with validation."""
-    data_dir: Path = Path("datasets")
-    train_split: float = 0.8
-    val_split: float = 0.1
-    test_split: float = 0.1
-    num_workers: int = 4
-    pin_memory: bool = True
+class RuntimeConfig:
+    """Runtime configuration for inference and deployment."""
+    # Performance constraints
+    max_latency_ms: float = 500.0  # Target: <500ms for mobile
+    max_memory_mb: float = 50.0    # Target: <50MB quantized
     
-    def __post_init__(self):
-        """Validate configuration values."""
-        if not (0 < self.train_split < 1):
-            raise ValueError(f"train_split must be in (0, 1), got {self.train_split}")
-        if abs(self.train_split + self.val_split + self.test_split - 1.0) > 1e-6:
-            raise ValueError("train_split + val_split + test_split must equal 1.0")
-        if self.num_workers < 0:
-            raise ValueError(f"num_workers must be >= 0, got {self.num_workers}")
+    # Head execution
+    enable_all_heads: bool = True
+    enabled_heads: List[str] = field(default_factory=lambda: [
+        'classification', 'box_regression', 'objectness', 'text_region',
+        'urgency', 'distance', 'contrast', 'glare', 'findability',
+        'navigation_difficulty', 'uncertainty'
+    ])
+    
+    # Fallback configuration
+    enable_fallbacks: bool = True
+    fallback_on_error: bool = True
+    fallback_on_uncertainty: bool = True
+    uncertainty_threshold: float = 0.7  # If uncertainty > 0.7, use fallback
+    
+    # Error handling
+    max_retries: int = 1
+    timeout_ms: float = 1000.0
 
 
 @dataclass
-class Config:
-    """Main configuration class."""
-    training: TrainingConfig = field(default_factory=TrainingConfig)
-    model: ModelConfig = field(default_factory=ModelConfig)
-    data: DataConfig = field(default_factory=DataConfig)
-    device: str = 'cuda'
-    seed: int = 42
-    checkpoint_dir: Path = Path("checkpoints")
-    log_dir: Path = Path("logs")
+class DependencyGraph:
+    """Tracks dependencies between components."""
+    components: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
+        'model': {
+            'version': '1.0.0',
+            'dependencies': [],
+            'outputs': ['classifications', 'boxes', 'objectness', 'text_regions', 
+                       'urgency_scores', 'distance_zones', 'scene_embedding']
+        },
+        'preprocessing': {
+            'version': '1.0.0',
+            'dependencies': [],
+            'outputs': ['preprocessed_image']
+        },
+        'ocr': {
+            'version': '1.0.0',
+            'dependencies': ['model.text_regions'],
+            'outputs': ['text_results']
+        },
+        'description_generator': {
+            'version': '1.0.0',
+            'dependencies': ['model.detections', 'model.urgency_scores', 'ocr.text_results'],
+            'outputs': ['scene_description']
+        },
+        'spatial_memory': {
+            'version': '1.0.0',
+            'dependencies': ['model.detections'],
+            'outputs': ['spatial_context']
+        },
+        'path_planner': {
+            'version': '1.0.0',
+            'dependencies': ['spatial_memory.spatial_context'],
+            'outputs': ['path_info']
+        },
+        'output_scheduler': {
+            'version': '1.0.0',
+            'dependencies': ['model.detections', 'model.urgency_scores', 'model.uncertainty'],
+            'outputs': ['scheduled_outputs']
+        },
+        'therapy_integration': {
+            'version': '1.0.0',
+            'dependencies': ['model.detections', 'session_manager'],
+            'outputs': ['therapy_feedback']
+        },
+    })
     
-    @classmethod
-    def from_env(cls) -> 'Config':
-        """Load configuration from environment variables."""
-        return cls(
-            training=TrainingConfig(
-                learning_rate=float(os.getenv('LEARNING_RATE', '1e-3')),
-                num_epochs=int(os.getenv('NUM_EPOCHS', '100')),
-                batch_size=int(os.getenv('BATCH_SIZE', '32')),
-                use_mixed_precision=os.getenv('USE_MIXED_PRECISION', 'true').lower() == 'true'
-            ),
-            model=ModelConfig(
-                num_classes=int(os.getenv('NUM_CLASSES', '48')),
-                use_audio=os.getenv('USE_AUDIO', 'true').lower() == 'true',
-                condition_mode=os.getenv('CONDITION_MODE', None)
-            ),
-            data=DataConfig(
-                data_dir=Path(os.getenv('DATA_DIR', 'datasets')),
-                num_workers=int(os.getenv('NUM_WORKERS', '4'))
-            ),
-            device=os.getenv('DEVICE', 'cuda'),
-            seed=int(os.getenv('SEED', '42')),
-            checkpoint_dir=Path(os.getenv('CHECKPOINT_DIR', 'checkpoints')),
-            log_dir=Path(os.getenv('LOG_DIR', 'logs'))
-        )
+    def get_dependencies(self, component: str) -> List[str]:
+        """Get dependencies for a component."""
+        if component in self.components:
+            return self.components[component].get('dependencies', [])
+        return []
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert configuration to dictionary."""
-        return {
-            'training': self.training.__dict__,
-            'model': self.model.__dict__,
-            'data': {
-                **self.data.__dict__,
-                'data_dir': str(self.data.data_dir)
-            },
-            'device': self.device,
-            'seed': self.seed,
-            'checkpoint_dir': str(self.checkpoint_dir),
-            'log_dir': str(self.log_dir)
+    def validate_dependencies(self, outputs: Dict[str, Any]) -> Dict[str, bool]:
+        """Validate that all dependencies are available."""
+        validation = {}
+        for component, config in self.components.items():
+            deps = config.get('dependencies', [])
+            valid = True
+            for dep in deps:
+                # Check if dependency output exists
+                dep_parts = dep.split('.')
+                if len(dep_parts) == 2:
+                    source, output_key = dep_parts
+                    if source not in outputs or output_key not in outputs[source]:
+                        valid = False
+                        break
+            validation[component] = valid
+        return validation
+
+
+def get_config() -> ModelConfig:
+    """Get current model configuration."""
+    return ModelConfig()
+
+
+def get_runtime_config() -> RuntimeConfig:
+    """Get current runtime configuration."""
+    return RuntimeConfig()
+
+
+def save_config(config: ModelConfig, filepath: Path):
+    """Save configuration with versioning."""
+    config_dict = {
+        'version': config.version,
+        'timestamp': datetime.now().isoformat(),
+        'config': {
+            'num_classes': config.num_classes,
+            'num_urgency_levels': config.num_urgency_levels,
+            'num_distance_zones': config.num_distance_zones,
+            'fpn_channels': config.fpn_channels,
+            'detection_threshold': config.detection_threshold,
+            'enable_accessibility_features': config.enable_accessibility_features,
+            'head_dependencies': config.head_dependencies,
+            'head_execution_order': config.head_execution_order,
         }
+    }
+    
+    with open(filepath, 'w') as f:
+        json.dump(config_dict, f, indent=2)
 
+
+def load_config(filepath: Path) -> ModelConfig:
+    """Load configuration from file."""
+    with open(filepath, 'r') as f:
+        data = json.load(f)
+    
+    config_data = data.get('config', {})
+    return ModelConfig(
+        version=data.get('version', '1.0.0'),
+        num_classes=config_data.get('num_classes', 80),
+        num_urgency_levels=config_data.get('num_urgency_levels', 4),
+        num_distance_zones=config_data.get('num_distance_zones', 3),
+        fpn_channels=config_data.get('fpn_channels', 256),
+        detection_threshold=config_data.get('detection_threshold', 0.5),
+        enable_accessibility_features=config_data.get('enable_accessibility_features', True),
+        head_dependencies=config_data.get('head_dependencies', {}),
+        head_execution_order=config_data.get('head_execution_order', [])
+    )

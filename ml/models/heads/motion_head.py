@@ -180,9 +180,13 @@ class MotionHead(nn.Module):
                 "NaN/Inf detected in motion flow. Check input features and model initialization."
             )
         
+        # Compute motion magnitude (speed)
+        flow_magnitude = torch.sqrt(motion[:, 0]**2 + motion[:, 1]**2)  # [B, H, W]
+        
         if return_features:
             result: Dict[str, Union[torch.Tensor, None]] = {
                 'flow': motion,
+                'flow_magnitude': flow_magnitude,
                 'features': features,
             }
             if self.use_refinement:
@@ -193,30 +197,59 @@ class MotionHead(nn.Module):
         
         return motion
     
-    def compute_smoothness_loss(self, flow: torch.Tensor) -> torch.Tensor:
+    def compute_smoothness_loss(
+        self, 
+        flow: torch.Tensor, 
+        image: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
-        Compute smoothness regularization loss.
+        Compute edge-aware smoothness regularization loss.
         
-        WHY SMOOTHNESS LOSS:
-        --------------------
-        Real optical flow fields are typically smooth (neighboring pixels move similarly).
-        Smoothness loss encourages this property, leading to more realistic and stable
-        flow predictions that are better for therapy exercises and scene understanding.
+        WHY EDGE-AWARE SMOOTHNESS:
+        --------------------------
+        Real optical flow fields are smooth except at motion boundaries (edges).
+        Edge-aware smoothness loss allows discontinuities at image edges, leading to
+        more accurate flow predictions that respect object boundaries.
         
         Arguments:
             flow: Predicted flow [B, 2, H, W]
+            image: Optional input image [B, C, H, W] for edge detection
         
         Returns:
             Smoothness loss scalar
         """
-        # Compute spatial gradients (vectorized, efficient)
-        # Horizontal gradient: difference between adjacent columns
-        grad_x = torch.abs(flow[:, :, :, :-1] - flow[:, :, :, 1:])
-        # Vertical gradient: difference between adjacent rows
-        grad_y = torch.abs(flow[:, :, :-1, :] - flow[:, :, 1:, :])
+        # Compute flow gradients
+        flow_grad_x = torch.abs(flow[:, :, :, :-1] - flow[:, :, :, 1:])  # [B, 2, H, W-1]
+        flow_grad_y = torch.abs(flow[:, :, :-1, :] - flow[:, :, 1:, :])  # [B, 2, H-1, W]
         
-        # Average across spatial dimensions and channels (single reduction)
-        # Lower gradient = smoother flow = better
-        smoothness = (grad_x.sum() + grad_y.sum()) / (grad_x.numel() + grad_y.numel())
+        if image is not None:
+            # Compute image gradients for edge detection
+            # Convert to grayscale if multi-channel
+            if image.shape[1] == 3:
+                gray = image.mean(dim=1, keepdim=True)  # [B, 1, H, W]
+            else:
+                gray = image
+            
+            # Image gradients
+            img_grad_x = torch.abs(gray[:, :, :, :-1] - gray[:, :, :, 1:])  # [B, 1, H, W-1]
+            img_grad_y = torch.abs(gray[:, :, :-1, :] - gray[:, :, 1:, :])  # [B, 1, H-1, W]
+            
+            # Weight flow gradients inversely by image gradients
+            # Less smoothness penalty at edges (where image gradients are high)
+            weight_x = torch.exp(-img_grad_x.mean(dim=1, keepdim=True))  # [B, 1, H, W-1]
+            weight_y = torch.exp(-img_grad_y.mean(dim=1, keepdim=True))  # [B, 1, H-1, W]
+            
+            # Expand weights to match flow gradient dimensions
+            weight_x = weight_x.expand_as(flow_grad_x)
+            weight_y = weight_y.expand_as(flow_grad_y)
+            
+            # Weighted smoothness
+            smoothness = (
+                (flow_grad_x * weight_x).mean() + 
+                (flow_grad_y * weight_y).mean()
+            )
+        else:
+            # Standard smoothness (no edge awareness)
+            smoothness = (flow_grad_x.mean() + flow_grad_y.mean())
         
         return smoothness

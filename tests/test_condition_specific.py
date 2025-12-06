@@ -92,7 +92,8 @@ def test_condition_robustness():
     print(f"Target: All conditions <10% degradation")
     print(f"Status: {'ALL TESTS PASSED' if passed == total else 'SOME TESTS FAILED'}")
     
-    return results
+    # Test passed - assert instead of return
+    assert passed == total, f"Expected all {total} conditions to pass, but {total - passed} failed"
 
 
 if __name__ == "__main__":

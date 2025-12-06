@@ -226,7 +226,7 @@ class ROIPriorityHead(nn.Module):
         margin: float = 0.1
     ) -> torch.Tensor:
         """
-        Compute pairwise ranking loss.
+        Compute pairwise ranking loss with proper tie handling.
         
         WHY RANKING LOSS:
         ----------------
@@ -247,6 +247,43 @@ class ROIPriorityHead(nn.Module):
             raise ValueError(f"Shape mismatch: scores {scores.shape} vs rankings {rankings.shape}")
         
         B, N = scores.shape
+        
+        if N < 2:
+            # Need at least 2 ROIs for ranking
+            return torch.tensor(0.0, device=scores.device)
+        
+        total_loss = torch.tensor(0.0, device=scores.device)
+        valid_pairs = 0
+        
+        # Process each sample in batch
+        for b in range(B):
+            batch_scores = scores[b]  # [N]
+            batch_rankings = rankings[b]  # [N]
+            
+            # Generate all pairs
+            for i in range(N):
+                for j in range(i + 1, N):
+                    rank_diff = batch_rankings[i] - batch_rankings[j]
+                    score_diff = batch_scores[i] - batch_scores[j]
+                    
+                    # Only consider pairs where rankings differ (exclude ties)
+                    if abs(rank_diff) > 1e-6:  # Not a tie
+                        valid_pairs += 1
+                        
+                        # Expected: sign(score_diff) == sign(rank_diff)
+                        # Loss when order doesn't match
+                        expected_sign = torch.sign(rank_diff)
+                        loss = torch.clamp(margin - score_diff * expected_sign, min=0.0)
+                        
+                        # Weight by rank difference magnitude (larger differences more important)
+                        loss = loss * abs(rank_diff)
+                        total_loss += loss
+        
+        # Average over valid pairs
+        if valid_pairs > 0:
+            return total_loss / valid_pairs
+        else:
+            return torch.tensor(0.0, device=scores.device)
         
         # Optimized pairwise comparisons (vectorized)
         # score_diff[i, j] = score[i] - score[j]

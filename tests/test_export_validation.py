@@ -239,7 +239,8 @@ def test_all_exports():
     
     print(f"\nPassed: {passed}/{total}")
     
-    return results
+    # Test passed - assert instead of return
+    assert passed > 0, "At least one export format should pass"
 
 
 if __name__ == "__main__":

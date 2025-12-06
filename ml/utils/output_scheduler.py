@@ -177,6 +177,9 @@ class CrossModalScheduler:
     def __init__(self, config: OutputConfig):
         self.config = config
         self.last_output_time: Dict[str, float] = {}
+        # Cross-channel rate limiting to prevent sensory overload
+        self.last_output_by_channel: Dict[OutputChannel, float] = {}
+        self.min_channel_interval = 0.3  # 300ms between ANY outputs (except emergencies)
         self.output_history: List[ScheduledOutput] = []
         
     def schedule_outputs(
@@ -219,7 +222,12 @@ class CrossModalScheduler:
         """
         scheduled = []
         
-        # Get uncertainty - suppress if too high
+        # CRITICAL: Always process high-urgency items regardless of uncertainty
+        # WHY: Safety-critical - hazards must be communicated even with model uncertainty
+        critical_detections = [d for d in detections if d.get('urgency', 0) >= 3]
+        normal_detections = [d for d in detections if d.get('urgency', 0) < 3]
+        
+        # Get uncertainty - suppress if too high (only for normal detections)
         # WHY: Unreliable information is worse than no information - prevents confusion and
         #      supports user trust in the system. This directly supports "Practical Usability"
         #      by ensuring only reliable information is presented.
@@ -228,7 +236,7 @@ class CrossModalScheduler:
             uncertainty = uncertainty.item()
         
         if uncertainty > self.config.uncertainty_threshold:
-            # High uncertainty - only output high-priority items
+            # High uncertainty - only output high-priority items (but critical always goes through)
             # WHY: Safety first - even with uncertainty, hazards must be communicated
             priority_threshold = 90
         else:
@@ -236,12 +244,15 @@ class CrossModalScheduler:
             # WHY: Adapts to user preferences - some users want more info, others want less
             priority_threshold = self._get_priority_threshold()
         
-        # Filter detections by priority and frequency settings
+        # Filter normal detections by priority and frequency settings
         # WHY: Prevents information overload while ensuring important information is communicated
-        filtered_detections = [
-            d for d in detections
+        filtered_normal = [
+            d for d in normal_detections
             if d.get('priority', 0) >= priority_threshold
         ]
+        
+        # Combine critical and filtered normal detections
+        filtered_detections = critical_detections + filtered_normal
         
         # Sort by priority (highest first)
         # WHY: Ensures hazards and important objects are communicated first - safety priority
@@ -307,12 +318,12 @@ class CrossModalScheduler:
         findability = detection.get('findability', 0.5)
         urgency = detection.get('urgency', 0)
         
-        # Check rate limiting
-        if self._should_suppress(class_name, timestamp, priority):
-            return None
-        
-        # Determine channel
+        # Determine channel first (needed for rate limiting check)
         channel = self._select_channel(priority, urgency)
+        
+        # Check rate limiting (including cross-channel)
+        if self._should_suppress(class_name, timestamp, priority, channel):
+            return None
         
         # Calculate intensity based on priority and findability
         intensity = self._calculate_intensity(priority, findability, urgency)
@@ -329,6 +340,10 @@ class CrossModalScheduler:
         # Spatial position from bounding box center
         spatial_pos = (box[0], box[1]) if len(box) >= 2 else None
         
+        # Update rate limiting timestamps
+        self.last_output_time[class_name] = timestamp
+        self.last_output_by_channel[channel] = timestamp
+        
         return ScheduledOutput(
             channel=channel,
             priority=priority,
@@ -339,8 +354,18 @@ class CrossModalScheduler:
             spatial_position=spatial_pos
         )
     
-    def _should_suppress(self, class_name: str, timestamp: float, priority: int) -> bool:
+    def _should_suppress(self, class_name: str, timestamp: float, priority: int, channel: Optional[OutputChannel] = None) -> bool:
         """Check if output should be suppressed due to rate limiting"""
+        # Emergency alerts (priority >= 90) always go through
+        if priority >= 90:
+            return False
+        
+        # Check cross-channel rate limiting
+        if channel is not None:
+            last_time = self.last_output_by_channel.get(channel, 0.0)
+            if (timestamp - last_time) < self.min_channel_interval:
+                return True
+        
         if class_name not in self.last_output_time:
             return False
         

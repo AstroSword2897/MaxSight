@@ -49,13 +49,13 @@ def rgb_to_lab_tensor(rgb: torch.Tensor) -> torch.Tensor:
     if rgb.dim() == 3:  # [C, H, W]
         xyz = torch.einsum('ij,jhw->ihw', transform, rgb_linear)
         # Normalize by D65 white point for 3D tensor
-        xyz[0, :, :] = xyz[0, :, :] / 0.95047
-        xyz[2, :, :] = xyz[2, :, :] / 1.08883
+        white_point = torch.tensor([0.95047, 1.0, 1.08883], device=xyz.device, dtype=xyz.dtype).view(3, 1, 1)
+        xyz = xyz / white_point
     else:  # [B, C, H, W]
         xyz = torch.einsum('ij,bjhw->bihw', transform, rgb_linear)
         # Normalize by D65 white point for 4D tensor
-        xyz[:, 0, :, :] = xyz[:, 0, :, :] / 0.95047
-        xyz[:, 2, :, :] = xyz[:, 2, :, :] / 1.08883
+        white_point = torch.tensor([0.95047, 1.0, 1.08883], device=xyz.device, dtype=xyz.dtype).view(1, 3, 1, 1)
+        xyz = xyz / white_point
     
     # XYZ to LAB
     def f(t: torch.Tensor) -> torch.Tensor:
@@ -67,13 +67,15 @@ def rgb_to_lab_tensor(rgb: torch.Tensor) -> torch.Tensor:
         )
     
     if xyz.dim() == 3:
-        fx = f(xyz[0, :, :] / 0.95047)
+        # xyz already normalized by white point above
+        fx = f(xyz[0, :, :])
         fy = f(xyz[1, :, :])
-        fz = f(xyz[2, :, :] / 1.08883)
+        fz = f(xyz[2, :, :])
     else:
-        fx = f(xyz[:, 0, :, :] / 0.95047)
+        # xyz already normalized by white point above
+        fx = f(xyz[:, 0, :, :])
         fy = f(xyz[:, 1, :, :])
-        fz = f(xyz[:, 2, :, :] / 1.08883)
+        fz = f(xyz[:, 2, :, :])
     
     L = 116.0 * fy - 16.0
     a = 500.0 * (fx - fy)
@@ -145,24 +147,69 @@ def lab_to_rgb_tensor(lab: torch.Tensor) -> torch.Tensor:
     return torch.clamp(rgb, 0.0, 1.0)
 
 
+def apply_clahe_tensor_fast(
+    image: torch.Tensor,
+    clip_limit: float = 2.0
+) -> torch.Tensor:
+    """
+    Fast CLAHE using torchvision's equalize or simple contrast enhancement.
+    
+    This is much faster than tile-based CLAHE for real-time processing.
+    
+    Arguments:
+        image: Tensor [C, H, W] or [B, C, H, W] in range [0, 1]
+        clip_limit: Contrast limiting factor (not used in fast version)
+    
+    Returns:
+        Enhanced tensor with same shape and range
+    """
+    if image.dim() == 3:
+        image = image.unsqueeze(0)
+        squeeze = True
+    else:
+        squeeze = False
+    
+    # Use built-in equalize if available, else simple contrast enhancement
+    try:
+        from torchvision.transforms.functional import equalize
+        # Convert to uint8 for equalize
+        image_uint8 = (image * 255.0).clamp(0, 255).to(torch.uint8)
+        enhanced = equalize(image_uint8).float() / 255.0
+    except (ImportError, AttributeError):
+        # Fallback: simple contrast enhancement
+        mean = image.mean(dim=(-2, -1), keepdim=True)
+        enhanced = (image - mean) * 1.2 + mean
+        enhanced = torch.clamp(enhanced, 0.0, 1.0)
+    
+    if squeeze:
+        enhanced = enhanced.squeeze(0)
+    return enhanced
+
+
 def apply_clahe_tensor(
     image: torch.Tensor,
     clip_limit: float = 2.0,
-    tile_grid_size: Tuple[int, int] = (8, 8)
+    tile_grid_size: Tuple[int, int] = (8, 8),
+    use_fast: bool = True
 ) -> torch.Tensor:
     """
     Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) using PyTorch.
     
     Meta AI-style: Pure tensor operations, GPU-accelerated, differentiable.
     
-        Arguments:
+    Arguments:
         image: Tensor [C, H, W] or [B, C, H, W] in range [0, 1]
         clip_limit: Contrast limiting factor
         tile_grid_size: Grid size for adaptive processing (tiles_y, tiles_x)
+        use_fast: If True, use fast approximation (recommended for real-time)
     
     Returns:
         Enhanced tensor with same shape and range
     """
+    if use_fast:
+        return apply_clahe_tensor_fast(image, clip_limit)
+    
+    # Original slow implementation (kept for compatibility)
     if image.dim() == 3:
         image = image.unsqueeze(0)  # Add batch dimension
         squeeze_output = True

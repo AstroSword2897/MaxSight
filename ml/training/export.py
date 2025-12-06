@@ -91,7 +91,7 @@ def export_to_executorch(model: nn.Module, save_path: str = 'maxsight.pte', inpu
 
 
 def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True) -> Optional[Path]:
-    """Export to CoreML format (iOS native). Requires coremltools."""
+    """Export to CoreML format (iOS native). Requires coremltools. Handles dict outputs."""
     logger.info(f"Exporting to CoreML format: {save_path}")
     
     try:
@@ -112,18 +112,38 @@ def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', in
         elif export_device == 'mps':
             dummy_input = dummy_input.to('mps')
         
-        traced_model = torch.jit.trace(model, dummy_input, strict=False)
+        # Wrap model to handle dict outputs
+        class FlattenedModel(nn.Module):
+            """Wrapper to flatten dict outputs for CoreML compatibility."""
+            def __init__(self, model: nn.Module):
+                super().__init__()
+                self.model = model
+            
+            def forward(self, x: torch.Tensor):
+                outputs = self.model(x)
+                if isinstance(outputs, dict):
+                    # Flatten to tuple of tensors (CoreML can handle tuples)
+                    return tuple(outputs.values())
+                return outputs
+        
+        wrapped_model = FlattenedModel(model)
+        traced_model = torch.jit.trace(wrapped_model, dummy_input, strict=False)
         
         # Validate traced model if requested
+        test_output = None
         if validate:
             test_output = traced_model(dummy_input)  # type: ignore
             logger.debug("Validation: Traced model forward pass successful")
         
-        # Determine output types (try to infer from model if not validating)
-        if validate and isinstance(test_output, dict):
-            output_types = [ct.TensorType(name=key) for key in test_output.keys()]
+        # Determine output types
+        if validate and isinstance(test_output, tuple):
+            # Multiple outputs from flattened dict
+            output_types = [ct.TensorType(name=f"output_{i}") for i in range(len(test_output))]
+        elif validate:
+            # Single tensor output
+            output_types = [ct.TensorType(name="output")]
         else:
-            # Default: single output
+            # Default: single output (will fail if model returns dict, but user should use validate=True)
             output_types = [ct.TensorType(name="output")]
         
         coreml_model = ct.convert(

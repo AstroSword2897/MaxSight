@@ -9,24 +9,12 @@ from ml.data.dataset import MaxSightDataset
 from ml.data.generate_annotations import generate_annotations_from_coco
 
 # Production accessibility dataset (therapy-oriented)
-try:
-    from ml.data.create_accessibility_dataset import (
-        AccessibilityDataset,
-        SyntheticImpairmentEngine,
-        generate_synthetic_dataset,
-        create_label_template,
-        combine_datasets
-    )
-    __all__ = [
-        'MaxSightDataset',
-        'generate_annotations_from_coco',
-        'AccessibilityDataset',
-        'SyntheticImpairmentEngine',
-        'generate_synthetic_dataset',
-        'create_label_template',
-        'combine_datasets'
-    ]
-except ImportError:
-    # Fallback if dependencies not available
-    __all__ = ['MaxSightDataset', 'generate_annotations_from_coco']
+# Note: AccessibilityDataset and related functions are available via direct import:
+# from ml.data.create_accessibility_dataset import AccessibilityDataset
+# They are not re-exported here to avoid unused import warnings
+
+__all__ = [
+    'MaxSightDataset',
+    'generate_annotations_from_coco',
+]
 

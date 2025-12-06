@@ -139,7 +139,8 @@ def test_visual_conditions():
             # Log but don't fail - some conditions might not be fully implemented
             print(f"  Warning: Condition {cond} test failed: {e}")
     
-    return True
+    # Test passed - no return value needed
+    assert True
 
 
 def test_data_sources():

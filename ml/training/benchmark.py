@@ -33,6 +33,8 @@ def benchmark_inference(
     """
     if device is None:
         device = next(model.parameters()).device
+    if isinstance(device, str):
+        device = torch.device(device)
     
     model.eval()
     
@@ -40,6 +42,11 @@ def benchmark_inference(
         batch_sizes = [1, 4, 8]
     
     results = {}
+    
+    # Track GPU memory if CUDA
+    if device.type == 'cuda':
+        torch.cuda.reset_peak_memory_stats()
+        torch.cuda.synchronize()
     
     for batch_size in batch_sizes:
         # Support different input shapes per batch size
@@ -75,17 +82,40 @@ def benchmark_inference(
                 times.append(elapsed)
         
         # Compute statistics
-        results[f'batch_{batch_size}'] = {
+        times_sorted = sorted(times)
+        p95_idx = int(len(times_sorted) * 0.95)
+        p99_idx = int(len(times_sorted) * 0.99)
+        
+        batch_results = {
             'mean_ms': statistics.mean(times),
             'median_ms': statistics.median(times),
             'min_ms': min(times),
             'max_ms': max(times),
             'std_ms': statistics.stdev(times) if len(times) > 1 else 0.0,
+            'p95_ms': times_sorted[p95_idx] if p95_idx < len(times_sorted) else times_sorted[-1],
+            'p99_ms': times_sorted[p99_idx] if p99_idx < len(times_sorted) else times_sorted[-1],
         }
+        
+        # Add GPU memory stats if CUDA
+        if device.type == 'cuda':
+            batch_results['peak_memory_mb'] = torch.cuda.max_memory_allocated() / (1024 * 1024)
+            batch_results['memory_reserved_mb'] = torch.cuda.max_memory_reserved() / (1024 * 1024)
+            # Reset for next batch size
+            torch.cuda.reset_peak_memory_stats()
+        
+        # Calculate throughput (FPS)
+        batch_results['fps'] = 1000.0 / batch_results['mean_ms'] if batch_results['mean_ms'] > 0 else 0.0
+        
+        results[f'batch_{batch_size}'] = batch_results
     
     # Overall stats (batch_size=1)
     if 'batch_1' in results:
         results['overall'] = results['batch_1'].copy()
+    
+    # Final GPU memory stats if CUDA
+    if device.type == 'cuda':
+        results['final_peak_memory_mb'] = torch.cuda.max_memory_allocated() / (1024 * 1024)
+        results['final_memory_reserved_mb'] = torch.cuda.max_memory_reserved() / (1024 * 1024)
     
     # Save results if path provided
     if save_path:
