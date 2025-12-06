@@ -127,8 +127,8 @@ def generate_evaluation_report(metrics: Dict[str, float], save_path: Optional[Pa
 def plot_lighting_metrics(metrics: Dict[str, float], save_path: Optional[Path] = None) -> None:
     """Plot precision/recall comparison across lighting conditions. Requires matplotlib."""
     try:
-        import matplotlib.pyplot as plt
-        import matplotlib
+        import matplotlib.pyplot as plt  # type: ignore
+        import matplotlib  # type: ignore
         matplotlib.use('Agg')
     except ImportError:
         print("matplotlib not installed, skipping plot")

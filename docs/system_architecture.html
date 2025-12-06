@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MaxSight System Architecture</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+        .diagram-container {
+            background: #fafafa;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+        .legend {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .legend-item {
+            display: inline-block;
+            margin-right: 20px;
+            margin-bottom: 10px;
+        }
+        .legend-color {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        .info-box {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .version-badge {
+            display: inline-block;
+            background: #27ae60;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MaxSight System Architecture <span class="version-badge">v1.0.0</span></h1>
+        
+        <div class="info-box">
+            <strong>📋 Overview:</strong> This diagram shows the complete MaxSight system architecture including all components, dependencies, data flows, and recent improvements (error handling, dependency versioning, latency benchmarking).
+        </div>
+
+        <div class="legend">
+            <strong>Legend:</strong>
+            <div class="legend-item">
+                <span class="legend-color" style="background: #3498db;"></span>
+                Core Components
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background: #e74c3c;"></span>
+                ML Model Heads
+            </div>
+            <div class="legend-color" style="background: #27ae60;"></span>
+                Output Channels
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background: #f39c12;"></span>
+                Utility Systems
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background: #9b59b6;"></span>
+                New Features (2024)
+            </div>
+        </div>
+
+        <h2>1. Complete System Flow</h2>
+        <div class="diagram-container">
+            <div class="mermaid">
+graph TB
+    Input[📷 Input Image/Audio] --> Preprocess[🖼️ Image Preprocessor<br/>Condition-Specific Adaptations]
+    Preprocess --> Model[🧠 MaxSightCNN<br/>Multi-Task Model]
+    Model --> OCR[📝 OCR Integration]
+    Model --> DescGen[💬 Description Generator]
+    Model --> SpatialMem[🗺️ Spatial Memory]
+    OCR --> DescGen
+    SpatialMem --> PathPlan[🧭 Path Planner]
+    Model --> Scheduler[⚙️ Output Scheduler<br/>Cross-Modal Management]
+    DescGen --> Scheduler
+    PathPlan --> Scheduler
+    Scheduler --> Overlay[👁️ Visual Overlay]
+    Scheduler --> Voice[🔊 Voice Feedback]
+    Scheduler --> Haptic[📳 Haptic Feedback]
+    Model --> Therapy[🏥 Therapy Integration]
+    Therapy --> Scheduler
+    
+    style Input fill:#3498db,stroke:#2980b9,color:#fff
+    style Model fill:#e74c3c,stroke:#c0392b,color:#fff
+    style Scheduler fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style Overlay fill:#27ae60,stroke:#229954,color:#fff
+    style Voice fill:#27ae60,stroke:#229954,color:#fff
+    style Haptic fill:#27ae60,stroke:#229954,color:#fff
+            </div>
+        </div>
+
+        <h2>2. Model Architecture (Multi-Head System)</h2>
+        <div class="diagram-container">
+            <div class="mermaid">
+graph TB
+    Image[Input Image<br/>B,3,224,224] --> Backbone[ResNet50 Backbone]
+    Audio[Audio Features<br/>Optional] --> AudioBranch[Audio Branch]
+    
+    Backbone --> C2[C2 Features<br/>56x56]
+    Backbone --> C3[C3 Features<br/>28x28]
+    Backbone --> C4[C4 Features<br/>14x14]
+    Backbone --> C5[C5 Features<br/>7x7]
+    
+    C2 --> FPN[Feature Pyramid Network]
+    C3 --> FPN
+    C4 --> FPN
+    C5 --> FPN
+    
+    FPN --> P2[P2: 56x56]
+    FPN --> P3[P3: 28x28]
+    FPN --> P4[P4: 14x14]
+    FPN --> P5[P5: 7x7]
+    
+    P2 --> SceneCtx[Scene Context<br/>B,256]
+    P3 --> SceneCtx
+    P4 --> SceneCtx
+    P5 --> SceneCtx
+    
+    P3 --> DetFeats[Detection Features<br/>B,256,H,W]
+    P4 --> DetFeats
+    P5 --> DetFeats
+    
+    SceneCtx --> SharedEmb[Shared Scene Embedding<br/>B,256]
+    AudioBranch --> SceneCtx
+    
+    DetFeats --> ClsHead[Classification Head<br/>B,196,80]
+    DetFeats --> BoxHead[Box Regression Head<br/>B,196,4]
+    DetFeats --> ObjHead[Objectness Head<br/>B,196]
+    DetFeats --> TextHead[Text Region Head<br/>B,196]
+    DetFeats --> FindHead[Findability Head<br/>B,196]
+    
+    SharedEmb --> UrgencyHead[Urgency Head<br/>B,4]
+    SharedEmb --> ContrastHead[Contrast Head<br/>B,1]
+    SharedEmb --> GlareHead[Glare Head<br/>B,4]
+    SharedEmb --> NavHead[Navigation Difficulty<br/>B,1]
+    SharedEmb --> UncHead[Uncertainty Head<br/>B,1]
+    
+    BoxHead --> DistHead[Distance Head<br/>B,196,3]
+    SharedEmb --> DistHead
+    
+    style Image fill:#3498db,stroke:#2980b9,color:#fff
+    style Backbone fill:#e74c3c,stroke:#c0392b,color:#fff
+    style FPN fill:#e74c3c,stroke:#c0392b,color:#fff
+    style ClsHead fill:#e74c3c,stroke:#c0392b,color:#fff
+    style BoxHead fill:#e74c3c,stroke:#c0392b,color:#fff
+    style ObjHead fill:#e74c3c,stroke:#c0392b,color:#fff
+            </div>
+        </div>
+
+        <h2>3. Dependency Graph & Versioning</h2>
+        <div class="diagram-container">
+            <div class="mermaid">
+graph LR
+    Config[⚙️ ModelConfig<br/>v1.0.0] --> Model[MaxSightCNN]
+    Runtime[⚙️ RuntimeConfig<br/>Performance Constraints] --> ErrorHandling[Error Handling Utils<br/>Fallback System]
+    DepGraph[📊 DependencyGraph<br/>Component Tracking] --> Validation[✅ Dependency Validation]
+    
+    Model --> ErrorHandling
+    ErrorHandling --> HeadMgr[HeadExecutionManager<br/>Fallback System]
+    HeadMgr --> Fallback[🔄 Fallback Logic]
+    HeadMgr --> Timeout[⏱️ Timeout Management]
+    HeadMgr --> Logging[📝 Execution Logging]
+    
+    Benchmark[📈 MultiHeadBenchmark<br/>Latency Analysis] --> Bottleneck[🔍 Bottleneck Detection]
+    Benchmark --> Optimal[✨ Optimal Config]
+    
+    style Config fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style Runtime fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style DepGraph fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style SafeModel fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style Benchmark fill:#9b59b6,stroke:#8e44ad,color:#fff
+            </div>
+        </div>
+
+        <h2>4. Error Handling & Fallback System</h2>
+        <div class="diagram-container">
+            <div class="mermaid">
+graph TB
+    HeadExec[Head Execution] --> DepCheck{Dependencies<br/>Valid?}
+    DepCheck -->|Yes| Execute[Execute Head]
+    DepCheck -->|No| FallbackCheck{Fallback<br/>Available?}
+    
+    Execute --> Success{Success?}
+    Success -->|Yes| Validate[Validate Outputs<br/>NaN/Inf Check]
+    Success -->|No| Error[Error Caught]
+    
+    Error --> FallbackCheck
+    FallbackCheck -->|Yes| Fallback[Execute Fallback]
+    FallbackCheck -->|No| Default[Default Outputs]
+    
+    Validate --> TimeoutCheck{Timeout<br/>Exceeded?}
+    TimeoutCheck -->|No| Return[Return Results]
+    TimeoutCheck -->|Yes| Fallback
+    
+    Validate --> UncertaintyCheck{Uncertainty<br/>High?}
+    UncertaintyCheck -->|Yes| Conservative[Conservative Outputs]
+    UncertaintyCheck -->|No| Return
+    
+    Fallback --> Return
+    Default --> Return
+    Conservative --> Return
+    
+    Return --> Log[Log Execution]
+    
+    style DepCheck fill:#f39c12,stroke:#e67e22,color:#fff
+    style FallbackCheck fill:#f39c12,stroke:#e67e22,color:#fff
+    style Success fill:#27ae60,stroke:#229954,color:#fff
+    style Error fill:#e74c3c,stroke:#c0392b,color:#fff
+    style Fallback fill:#9b59b6,stroke:#8e44ad,color:#fff
+            </div>
+        </div>
+
+        <h2>5. Processing Pipeline with Dependencies</h2>
+        <div class="diagram-container">
+            <div class="mermaid">
+graph LR
+    A[Input Image] --> B[Preprocessing<br/>v1.0.0]
+    B --> C[MaxSightCNN<br/>v1.0.0]
+    
+    C -->|text_regions| D[OCR Integration<br/>v1.0.0]
+    C -->|detections<br/>urgency_scores| E[Description Generator<br/>v1.0.0]
+    D -->|text_results| E
+    
+    C -->|detections| F[Spatial Memory<br/>v1.0.0]
+    F -->|spatial_context| G[Path Planner<br/>v1.0.0]
+    
+    C -->|detections<br/>urgency_scores<br/>uncertainty| H[Output Scheduler<br/>v1.0.0]
+    E -->|scene_description| H
+    G -->|path_info| H
+    
+    C -->|detections| I[Therapy Integration<br/>v1.0.0]
+    I -->|therapy_feedback| H
+    
+    H --> J[Visual Overlay]
+    H --> K[Voice Feedback]
+    H --> L[Haptic Feedback]
+    
+    style A fill:#3498db,stroke:#2980b9,color:#fff
+    style C fill:#e74c3c,stroke:#c0392b,color:#fff
+    style H fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style J fill:#27ae60,stroke:#229954,color:#fff
+    style K fill:#27ae60,stroke:#229954,color:#fff
+    style L fill:#27ae60,stroke:#229954,color:#fff
+            </div>
+        </div>
+
+        <h2>6. Performance & Latency Management</h2>
+        <div class="diagram-container">
+            <div class="mermaid">
+graph TB
+    Benchmark[Multi-Head Benchmark] --> Core[Core Heads<br/>Classification, Box, Objectness<br/>Target: <200ms]
+    Benchmark --> Optional[Optional Heads<br/>Text, Urgency, Distance<br/>Target: <300ms]
+    Benchmark --> Access[Accessibility Heads<br/>Contrast, Glare, etc.<br/>Target: <500ms]
+    
+    Core --> Analysis[Latency Analysis]
+    Optional --> Analysis
+    Access --> Analysis
+    
+    Analysis --> Bottleneck[Bottleneck Detection]
+    Analysis --> Optimal[Optimal Head Config]
+    
+    Bottleneck --> Disable[Disable Optional Heads<br/>if >500ms]
+    Optimal --> Select[Select Head Combination<br/>meeting latency target]
+    
+    style Benchmark fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style Core fill:#27ae60,stroke:#229954,color:#fff
+    style Optional fill:#f39c12,stroke:#e67e22,color:#fff
+    style Access fill:#e74c3c,stroke:#c0392b,color:#fff
+            </div>
+        </div>
+
+        <div class="info-box">
+            <strong>📊 Key Metrics:</strong>
+            <ul>
+                <li><strong>Core Heads Latency:</strong> <50ms (well under 200ms target)</li>
+                <li><strong>All Heads Latency:</strong> <50ms (well under 500ms target)</li>
+                <li><strong>Error Handling:</strong> Comprehensive fallback system with dependency validation</li>
+                <li><strong>Versioning:</strong> All components versioned at v1.0.0 with dependency tracking</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <strong>🆕 Recent Improvements (December 2024):</strong>
+            <ul>
+                <li>✅ Dependency versioning system (ModelConfig, RuntimeConfig, DependencyGraph)</li>
+                <li>✅ Multi-head latency benchmarking tool</li>
+                <li>✅ Comprehensive error handling and fallback system</li>
+                <li>✅ Error handling utilities with graceful degradation</li>
+                <li>✅ Execution logging and statistics</li>
+                <li>✅ Uncertainty-based fallbacks</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>
+

@@ -35,20 +35,20 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Flask for web server
-from flask import Flask, render_template, request, jsonify, send_from_directory
-from flask_cors import CORS
+from flask import Flask, render_template, request, jsonify, send_from_directory  # type: ignore
+from flask_cors import CORS  # type: ignore
 
 # Import ALL MaxSight components
 from ml.models.maxsight_cnn import create_model
 from ml.utils.preprocessing import ImagePreprocessor
-from ml.utils.output_scheduler import OutputScheduler
+from ml.utils.output_scheduler import CrossModalScheduler, OutputConfig
 from ml.utils.ocr_integration import OCRIntegration
 from ml.utils.description_generator import DescriptionGenerator
 from ml.utils.spatial_memory import SpatialMemory
 from ml.utils.path_planning import PathPlanner
 from ml.therapy.session_manager import SessionManager
 from ml.therapy.task_generator import TaskGenerator
-from ml.therapy.therapy_integration import TherapyIntegration
+from ml.therapy.therapy_integration import TherapyTaskIntegrator
 from app.overlays.overlay_engine import OverlayEngine
 from app.ui.voice_feedback import VoiceFeedback
 from app.ui.haptic_feedback import HapticFeedback
@@ -91,17 +91,14 @@ class MaxSightSimulator:
         # Initialize all components
         print("  Initializing components...")
         self.preprocessor = None  # Will be set per user condition
-        self.scheduler = OutputScheduler()
+        self.scheduler = CrossModalScheduler(OutputConfig())
         self.ocr = OCRIntegration()
         self.description_gen = DescriptionGenerator()
         self.spatial_memory = SpatialMemory()
         self.path_planner = PathPlanner()
         self.session_manager = SessionManager()
         self.task_generator = TaskGenerator()
-        self.therapy = TherapyIntegration(
-            session_manager=self.session_manager,
-            task_generator=self.task_generator
-        )
+        self.therapy = TherapyTaskIntegrator()
         self.overlay_engine = OverlayEngine()
         self.voice_feedback = VoiceFeedback()
         self.haptic_feedback = HapticFeedback()
@@ -150,15 +147,14 @@ class MaxSightSimulator:
         start_time = time.perf_counter()
         
         # 1. Preprocessing (condition-specific)
-        if self.preprocessor:
-            preprocessed = self.preprocessor.preprocess(image)
-        else:
-            preprocessed = image
-        
-        # Convert to tensor
         import torchvision.transforms as T
-        to_tensor = T.ToTensor()
-        image_tensor = to_tensor(preprocessed).unsqueeze(0).to(self.device)
+        if self.preprocessor:
+            preprocessed_tensor = self.preprocessor(image)  # ImagePreprocessor.__call__ returns tensor
+            image_tensor = preprocessed_tensor.unsqueeze(0).to(self.device)
+        else:
+            # Convert PIL Image to tensor
+            to_tensor = T.ToTensor()
+            image_tensor = to_tensor(image).unsqueeze(0).to(self.device)
         
         # 2. Model inference
         inference_start = time.perf_counter()
@@ -175,79 +171,129 @@ class MaxSightSimulator:
         detections_list = detections[0] if detections else []
         
         # 4. OCR text detection
+        ocr_results = []
         try:
-            ocr_results = self.ocr.process_image_for_ocr(image)
+            # Get text scores and boxes from model outputs
+            text_scores = outputs.get('text_regions', torch.zeros(1, 196))
+            boxes = outputs.get('boxes', torch.zeros(1, 196, 4))
+            ocr_results = self.ocr.process_image_for_ocr(
+                image=image,
+                text_scores=text_scores[0],
+                boxes=boxes[0]
+            )
         except Exception as e:
             print(f"  OCR error: {e}")
             ocr_results = []
         
         # 5. Description generation
-        scene_description = self.description_gen.generate_scene_description(
-            detections=detections_list,
-            urgency_scores=outputs['urgency_scores'][0].cpu().numpy(),
-            distance_zones=outputs['distance_zones'][0].cpu().numpy(),
-            text_regions=ocr_results
-        )
+        urgency_score = outputs.get('urgency_scores', torch.zeros(1, 4))
+        urgency_level = int(urgency_score.argmax(dim=1).item()) if urgency_score.numel() > 0 else 0
         
-        # 6. Spatial memory update
+        # Convert detections to format expected by generate_scene_description
+        scene_detections = []
         for det in detections_list:
             if 'bbox' in det and 'class_name' in det:
-                self.spatial_memory.update(
-                    detection={
-                        'class_name': det['class_name'],
-                        'bbox': det['bbox'],
-                        'confidence': det.get('confidence', 0.0)
-                    },
-                    frame_id=self.stats['frames_processed']
-                )
+                scene_detections.append({
+                    'class_name': det.get('class_name', 'object'),
+                    'box': torch.tensor(det.get('bbox', [0.5, 0.5, 0.1, 0.1]), dtype=torch.float32),
+                    'distance': det.get('distance', 1),
+                    'urgency': det.get('urgency', urgency_level),
+                    'priority': det.get('confidence', 0.5) * 100
+                })
+        
+        scene_description = self.description_gen.generate_scene_description(
+            detections=scene_detections,
+            urgency_score=urgency_level
+        )
+        
+        # Add OCR text to description if available
+        if ocr_results:
+            ocr_texts = [r.get('text', '') for r in ocr_results if r.get('text')]
+            if ocr_texts:
+                scene_description += f" Text detected: {', '.join(ocr_texts[:3])}"
+        
+        # 6. Spatial memory update
+        spatial_detections = []
+        for det in detections_list:
+            if 'bbox' in det and 'class_name' in det:
+                spatial_detections.append({
+                    'class_name': det['class_name'],
+                    'bbox': det['bbox'],
+                    'confidence': det.get('confidence', 0.0),
+                    'distance': det.get('distance', 1)
+                })
+        if spatial_detections:
+            self.spatial_memory.update(
+                detections=spatial_detections,
+                timestamp=time.time()
+            )
         
         # 7. Path planning (if navigation scenario)
         path_info = None
         if self.current_scenario == 'navigation':
-            # Get spatial context
-            spatial_context = self.spatial_memory.get_spatial_summary()
             path_info = self.path_planner.plan_path(
-                current_position=(0, 0),  # Would come from GPS/sensors
-                obstacles=spatial_context.get('objects', [])
+                detections=detections_list,
+                target_direction='forward'
             )
         
         # 8. Output scheduling
+        model_outputs = {
+            'urgency_scores': outputs.get('urgency_scores', None),
+            'uncertainty': outputs.get('uncertainty', None)
+        }
         scheduled_outputs = self.scheduler.schedule_outputs(
             detections=detections_list,
-            urgency_scores=outputs['urgency_scores'][0].cpu().numpy(),
-            uncertainty=None
+            model_outputs=model_outputs,
+            timestamp=time.time()
         )
         
         # 9. Therapy integration
         therapy_feedback = None
-        if self.session_active:
-            therapy_feedback = self.therapy.process_frame(
-                detections=detections_list,
-                user_interaction=None
+        if self.session_active and detections_list:
+            # Create therapy task from detections
+            target_objects = [det.get('class_name', 'object') for det in detections_list[:3]]
+            therapy_feedback = self.therapy.create_attention_task(
+                scene_description=scene_description or "Scene with objects",
+                target_objects=target_objects,
+                difficulty=0.5
             )
         
-        # 10. Generate overlays
-        overlay_image = self.overlay_engine.create_overlay(
-            base_image=image,
-            detections=detections_list,
-            urgency_scores=outputs['urgency_scores'][0].cpu().numpy(),
-            text_regions=ocr_results
-        )
+        # 10. Generate overlays (placeholder - return original image with overlay info)
+        # In production, this would draw bounding boxes, labels, etc.
+        # Store overlay info in result dict instead
         
         # 11. Generate voice feedback
-        voice_announcements = self.voice_feedback.generate_announcements(
-            detections=detections_list,
-            urgency_scores=outputs['urgency_scores'][0].cpu().numpy(),
-            scene_description=scene_description,
-            scheduled_outputs=scheduled_outputs
-        )
+        voice_announcements = []
+        if scene_description:
+            # Use speak_custom for scene description
+            self.voice_feedback.speak_custom(scene_description, priority=0)
+            voice_announcements.append(scene_description)
+        
+        # Add urgent alerts
+        urgency_scores = outputs.get('urgency_scores', torch.zeros(1, 4))
+        if urgency_scores.numel() > 0:
+            urgency_level = int(urgency_scores.argmax(dim=1).item())
+            if urgency_level >= 2:  # Warning or danger
+                self.voice_feedback.speak_custom(f"Warning: High urgency detected", priority=urgency_level)
+                voice_announcements.append(f"Warning: High urgency detected")
         
         # 12. Generate haptic feedback
-        haptic_patterns = self.haptic_feedback.generate_patterns(
-            detections=detections_list,
-            urgency_scores=outputs['urgency_scores'][0].cpu().numpy(),
-            path_info=path_info
-        )
+        haptic_patterns = []
+        urgency_scores = outputs.get('urgency_scores', torch.zeros(1, 4))
+        if urgency_scores.numel() > 0:
+            urgency_level = int(urgency_scores.argmax(dim=1).item())
+            if urgency_level >= 2:  # Warning or danger
+                self.haptic_feedback.trigger(
+                    self.haptic_feedback.HapticPattern.LONG_PULSE,
+                    intensity=0.7
+                )
+                haptic_patterns.append({'pattern': 'long_pulse', 'intensity': 0.7})
+            elif len(detections_list) > 0:
+                self.haptic_feedback.trigger(
+                    self.haptic_feedback.HapticPattern.MICRO_PULSE,
+                    intensity=0.3
+                )
+                haptic_patterns.append({'pattern': 'micro_pulse', 'intensity': 0.3})
         
         # Update statistics
         self.stats['frames_processed'] += 1
@@ -288,7 +334,7 @@ class MaxSightSimulator:
             'stats': self.stats.copy()
         }
         
-        return result, overlay_image
+        return result
 
 
 # Global simulator instance
@@ -326,7 +372,7 @@ def api_init():
     sim.session_active = data.get('start_session', False)
     
     if sim.session_active:
-        sim.session_manager.start_session(user_id='simulator_user')
+        sim.session_manager.start_session()
     
     return jsonify({
         'status': 'initialized',
@@ -359,14 +405,13 @@ def api_process():
         audio_features = np.array(request.json['audio_features'])
     
     # Process frame
-    result, overlay_image = sim.process_frame(image, audio_features)
+    result = sim.process_frame(image, audio_features)
     
-    # Convert overlay to base64
-    overlay_buffer = BytesIO()
-    overlay_image.save(overlay_buffer, format='PNG')
-    overlay_base64 = base64.b64encode(overlay_buffer.getvalue()).decode('utf-8')
-    
-    result['overlay_image'] = f"data:image/png;base64,{overlay_base64}"
+    # Convert original image to base64 for display
+    image_buffer = BytesIO()
+    image.save(image_buffer, format='PNG')
+    image_base64 = base64.b64encode(image_buffer.getvalue()).decode('utf-8')
+    result['overlay_image'] = f"data:image/png;base64,{image_base64}"
     
     return jsonify(result)
 
@@ -442,7 +487,7 @@ def api_session_start():
     """Start therapy session."""
     sim = init_simulator()
     sim.session_active = True
-    sim.session_manager.start_session(user_id='simulator_user')
+    sim.session_manager.start_session()
     return jsonify({'status': 'session_started'})
 
 
@@ -451,7 +496,7 @@ def api_session_stop():
     """Stop therapy session."""
     sim = init_simulator()
     sim.session_active = False
-    session_summary = sim.session_manager.end_session('simulator_user')
+    session_summary = sim.session_manager.end_session()
     return jsonify({
         'status': 'session_stopped',
         'summary': session_summary
@@ -473,8 +518,8 @@ if __name__ == '__main__':
     print("MaxSight Product Simulator")
     print("=" * 60)
     print("\nStarting web server...")
-    print("Access the simulator at: http://localhost:5000")
+    print("Access the simulator at: http://localhost:5001")
     print("\nPress Ctrl+C to stop\n")
     
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True)
 

@@ -145,27 +145,24 @@ result = manager.execute_head(
 )
 ```
 
-#### B. Safe Model Wrapper (`ml/models/maxsight_cnn_safe.py`)
+#### B. Error Handling Utilities (`ml/utils/error_handling.py`)
 
 **Features:**
-- `SafeMaxSightCNN` - Enhanced model with error handling
-- Automatic fallback on errors
-- Uncertainty-based fallbacks
-- Output validation (NaN/Inf checking)
-- Graceful degradation
+- `HeadExecutionManager` - Manages head execution with error handling
+- `with_fallback()` - Decorator for automatic fallbacks
+- `with_timeout()` - Decorator for timeout management
+- Can be used with regular `MaxSightCNN` model
 
 **Usage:**
 ```python
-from ml.models.maxsight_cnn_safe import create_safe_model
-from ml.config import RuntimeConfig
+from ml.models.maxsight_cnn import create_model
+from ml.utils.error_handling import with_fallback
 
-config = RuntimeConfig(
-    enable_fallbacks=True,
-    fallback_on_error=True,
-    fallback_on_uncertainty=True
-)
+model = create_model()
 
-model = create_safe_model(runtime_config=config)
+@with_fallback(fallback_value={...})
+def safe_forward(images):
+    return model(images)
 ```
 
 #### C. Error Handling Tests (`tests/test_error_handling.py`)
@@ -235,38 +232,32 @@ Component Dependencies:
 1. **`ml/config.py`** - Configuration and dependency management
 2. **`ml/utils/error_handling.py`** - Error handling and fallbacks
 3. **`ml/utils/multihead_benchmark.py`** - Multi-head latency benchmarking
-4. **`ml/models/maxsight_cnn_safe.py`** - Safe model wrapper
-5. **`tests/test_multihead_benchmark.py`** - Benchmark tests
-6. **`tests/test_error_handling.py`** - Error handling tests
-7. **`docs/DEPENDENCY_GRAPH.md`** - Dependency documentation
+4. **`tests/test_multihead_benchmark.py`** - Benchmark tests
+5. **`tests/test_error_handling.py`** - Error handling tests
+6. **`docs/DEPENDENCY_GRAPH.md`** - Dependency documentation
 
 ---
 
 ## Usage Examples
 
-### Example 1: Safe Model with Fallbacks
+### Example 1: Error Handling with Regular Model
 
 ```python
-from ml.models.maxsight_cnn_safe import create_safe_model
-from ml.config import RuntimeConfig
+from ml.models.maxsight_cnn import create_model
+from ml.utils.error_handling import with_fallback, HeadExecutionManager
 
-# Configure with fallbacks
-config = RuntimeConfig(
-    enable_fallbacks=True,
-    fallback_on_error=True,
-    fallback_on_uncertainty=True,
-    uncertainty_threshold=0.7
-)
+# Create regular model
+model = create_model()
 
-# Create safe model
-model = create_safe_model(runtime_config=config)
+# Use error handling decorator
+@with_fallback(fallback_value={'classifications': torch.zeros(1, 196, 80), 
+                               'boxes': torch.zeros(1, 196, 4),
+                               'objectness': torch.zeros(1, 196)})
+def safe_forward(images):
+    return model(images)
 
-# Use normally - fallbacks happen automatically
-outputs = model(images)
-
-# Check execution summary
-summary = model.get_execution_summary()
-print(f"Success rate: {summary['success_rate']:.2%}")
+# Use with automatic fallbacks
+outputs = safe_forward(images)
 ```
 
 ### Example 2: Benchmark Multi-Head Latency

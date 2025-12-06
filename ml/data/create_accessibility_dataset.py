@@ -26,7 +26,7 @@ from typing import Dict, Tuple, Optional, List, Any
 
 import numpy as np
 from PIL import Image
-from scipy import ndimage
+from scipy import ndimage  # type: ignore
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as T

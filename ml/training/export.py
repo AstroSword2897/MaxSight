@@ -95,7 +95,7 @@ def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', in
     logger.info(f"Exporting to CoreML format: {save_path}")
     
     try:
-        import coremltools as ct
+        import coremltools as ct  # type: ignore
         
         model.eval()
         export_device = device if device else 'cpu'
