@@ -526,7 +526,7 @@ class ProductionTrainLoop:
                     device_type = 'cpu'
                 
                 if self.use_mixed_precision:
-                    with autocast(device_type=device_type):
+                    with autocast(device_type=device_type):  # type: ignore
                         outputs = self.model(images)
                         loss, loss_dict = self.compute_multihead_loss(outputs, targets)
                         loss = loss / self.gradient_accumulation_steps

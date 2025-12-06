@@ -288,8 +288,11 @@ class DetectionMetrics:
                                                        for c in range(self.num_classes)])) 
                          for thresh in thresholds}
 
+        # Convert dict values to list for proper type inference
+        threshold_values = list(per_threshold.values()) if per_threshold else []
+        mean_map = float(np.mean(threshold_values)) if threshold_values else 0.0
         result = {
-            'mAP': float(np.mean(list(per_threshold.values()))) if per_threshold else 0.0,
+            'mAP': mean_map,
             'per_threshold': per_threshold,
             'per_class': [self.compute_ap_vectorized(c, float(thresholds[0])) for c in range(self.num_classes)]
         }
