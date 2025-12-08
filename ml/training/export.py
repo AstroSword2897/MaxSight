@@ -383,12 +383,29 @@ Port these functions to Swift for iOS implementation.
 This is the minimal set needed to process model inputs/outputs.
 
 Generated automatically from MaxSight repository.
+
+NOTE: Some functions reference config/enums that need to be parameterized
+when porting to Swift. See function comments for details.
 """
 
 import torch
 import torch.nn.functional as F
 import numpy as np
 from typing import List, Tuple, Optional, Dict
+from torchvision.transforms import functional as TF
+from enum import Enum
+
+# Enums needed for scheduling functions
+class OutputChannel(Enum):
+    AUDIO = "audio"
+    HAPTIC = "haptic"
+    VISUAL = "visual"
+    HYBRID = "hybrid"
+
+class AlertFrequency(Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 '''
     
@@ -461,13 +478,33 @@ from typing import List, Tuple, Optional, Dict
             if func_lines:
                 func_code = '\n'.join(func_lines)
                 
-                # Clean up self references for class methods
+                    # Clean up self references for class methods
                 if is_class_method:
                     # Remove self parameter from function signature
                     func_code = re.sub(r'\(self,?\s*', '(', func_code)
                     func_code = re.sub(r'\(self\)', '()', func_code)
                     # Remove self. references
                     func_code = re.sub(r'\bself\.', '', func_code)
+                    # Replace config references - add TODO comments on separate lines
+                    # This preserves syntax while documenting what needs to be parameterized
+                    lines = func_code.split('\n')
+                    cleaned_lines = []
+                    for line in lines:
+                        # Check if line has config reference
+                        if 'config.' in line:
+                            # Add TODO comment before the line
+                            indent = len(line) - len(line.lstrip())
+                            todo_comment = ' ' * indent + '# TODO: Parameterize config references when porting to Swift'
+                            cleaned_lines.append(todo_comment)
+                            # Replace config. with placeholder that needs to be parameterized
+                            # Handle both .config. and config. (after self. removal)
+                            line = re.sub(r'\.?config\.preferred_channel\b', 'preferred_channel', line)
+                            line = re.sub(r'\.?config\.alert_frequency\b', 'alert_frequency', line)
+                            line = re.sub(r'\.?config\.audio_volume\b', 'audio_volume', line)
+                            line = re.sub(r'\.?config\.haptic_intensity\b', 'haptic_intensity', line)
+                            line = re.sub(r'\.?config\.visual_contrast\b', 'visual_contrast', line)
+                        cleaned_lines.append(line)
+                    func_code = '\n'.join(cleaned_lines)
                 
                 reference_code += f'\n# From {module_path}'
                 if is_class_method:
