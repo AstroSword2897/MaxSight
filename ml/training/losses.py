@@ -234,6 +234,7 @@ class DetectionLoss(nn.Module):
         objectness_weight: float = 1.0,
         urgency_weight: float = 0.5,
         distance_weight: float = 0.5,
+        text_weight: float = 0.3,
         focal_alpha: float = 0.25,
         focal_gamma: float = 2.0,
         iou_loss_type: str = 'iou'
@@ -246,6 +247,7 @@ class DetectionLoss(nn.Module):
         self.objectness_weight = objectness_weight
         self.urgency_weight = urgency_weight
         self.distance_weight = distance_weight
+        self.text_weight = text_weight
         
         self.focal_loss = FocalLoss(alpha=focal_alpha, gamma=focal_gamma)
         self.iou_loss = IoULoss(loss_type=iou_loss_type)
@@ -329,12 +331,21 @@ class DetectionLoss(nn.Module):
             
             distance_loss = distance_loss / batch_size
         
+        # Text detection loss (binary classification: text vs non-text)
+        text_loss = torch.tensor(0.0, device=device)
+        if 'text_regions' in predictions and 'text_mask' in targets:
+            text_preds = predictions['text_regions']  # [B, H*W]
+            text_targets = targets['text_mask']  # [B, H*W] binary mask
+            if text_preds.shape == text_targets.shape:
+                text_loss = self.bce_loss(text_preds, text_targets.float())
+        
         total_loss = (
             self.classification_weight * cls_loss +
             self.localization_weight * box_loss +
             self.objectness_weight * obj_loss +
             self.urgency_weight * urgency_loss +
-            self.distance_weight * distance_loss
+            self.distance_weight * distance_loss +
+            self.text_weight * text_loss
         )
         
         return {
@@ -344,6 +355,7 @@ class DetectionLoss(nn.Module):
             'objectness_loss': obj_loss,
             'urgency_loss': urgency_loss,
             'distance_loss': distance_loss,
+            'text_loss': text_loss,
             'num_positives': torch.tensor(num_positives, device=device, dtype=torch.long)
         }
 

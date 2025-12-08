@@ -5,7 +5,7 @@ Complete web-based simulator that runs the entire MaxSight system on a local por
 ## Features
 
 - **Complete Integration**: Uses every component in the MaxSight system
-- **Web Interface**: Accessible via browser at http://localhost:5000
+- **Web Interface**: Accessible via browser at http://localhost:5001
 - **Multiple Scenarios**: Test different use cases (navigation, text reading, therapy, etc.)
 - **Visual Conditions**: Simulate different vision impairments
 - **Real-time Processing**: Process images through the complete pipeline
@@ -29,7 +29,7 @@ cd tools/simulation
 python web_simulator.py
 ```
 
-Then open your browser to: **http://localhost:5000**
+Then open your browser to: **http://localhost:5001**
 
 ## Usage
 

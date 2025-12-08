@@ -156,14 +156,13 @@ class EMA:
                 self.backup[name] = param.data.clone()
                 param.data = self.shadow[name]
     
-    def restore(self) -> None:
+    def restore(self, model: nn.Module) -> None:
         """Restore original parameters from backup."""
-        for name in list(self.backup.keys()):
-            if name in self.backup:
-                # Find the parameter and restore
-                # Note: This requires model reference, but we store backup
-                # The caller should pass model to restore properly
-                pass  # Implementation handled by ProductionTrainLoop
+        for name, param in model.named_parameters():
+            if param.requires_grad and name in self.backup:
+                param.data.copy_(self.backup[name])
+        # Clear backup after restore
+        self.backup.clear()
 
 
 class ProductionTrainLoop:
@@ -209,7 +208,10 @@ class ProductionTrainLoop:
         num_classes: int = 80,  # For DetectionMetrics
         resume_from: Optional[str] = None,
         seed: int = 42,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
+        early_stopping_patience: int = 10,
+        early_stopping_min_delta: float = 0.0,
+        early_stopping_metric: str = 'val_loss'  # 'val_loss' or 'val_map'
     ):
         """
         Initialize production training loop.
@@ -262,6 +264,11 @@ class ProductionTrainLoop:
         self.warmup_epochs = warmup_epochs
         self.num_classes = num_classes
         self.seed = seed
+        self.early_stopping_patience = early_stopping_patience
+        self.early_stopping_min_delta = early_stopping_min_delta
+        self.early_stopping_metric = early_stopping_metric
+        self.early_stopping_counter = 0
+        self.early_stopping_best_metric = float('inf') if early_stopping_metric == 'val_loss' else 0.0
         
         # Setup logger
         self.logger = logger or logging.getLogger(__name__)
@@ -472,14 +479,19 @@ class ProductionTrainLoop:
     
     def _step_optimizer(self) -> None:
         """Unified optimizer step with safe scaler handling."""
+        # Only clip gradients for trainable parameters (exclude frozen params)
+        trainable_params = [p for p in self.model.parameters() if p.requires_grad]
+        
         if self.scaler is not None:
             # Unscale gradients before clipping
             self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_norm)
+            if trainable_params:
+                torch.nn.utils.clip_grad_norm_(trainable_params, self.gradient_clip_norm)
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_norm)
+            if trainable_params:
+                torch.nn.utils.clip_grad_norm_(trainable_params, self.gradient_clip_norm)
             self.optimizer.step()
         
         self.optimizer.zero_grad()
@@ -675,11 +687,8 @@ class ProductionTrainLoop:
                     continue
         
         # Restore original weights if EMA was used
-        if use_ema and self.ema is not None and hasattr(self.ema, 'backup') and len(self.ema.backup) > 0:
-            # Restore from backup
-            for name, param in self.model.named_parameters():
-                if param.requires_grad and name in self.ema.backup:
-                    param.data = self.ema.backup[name].clone()
+        if use_ema and self.ema is not None:
+            self.ema.restore(self.model)
             self.ema.backup.clear()
         
         avg_loss = total_loss / num_batches if num_batches > 0 else float('inf')
@@ -730,7 +739,25 @@ class ProductionTrainLoop:
                 'num_epochs': self.num_epochs,
                 'scheduler_type': self.scheduler_type,
                 'warmup_epochs': self.warmup_epochs,
-                'num_classes': self.num_classes
+                'num_classes': self.num_classes,
+                'batch_size': self.train_loader.batch_size if hasattr(self.train_loader, 'batch_size') else None,
+                'device': str(self.device),
+                'gradient_clip_norm': self.gradient_clip_norm,
+                'gradient_accumulation_steps': self.gradient_accumulation_steps,
+                'use_mixed_precision': self.use_mixed_precision,
+                'ema_decay': self.ema_decay,
+                'freeze_backbone': self.freeze_backbone,
+                'freeze_backbone_epochs': self.freeze_backbone_epochs,
+                'seed': self.seed,
+                'early_stopping_patience': self.early_stopping_patience,
+                'early_stopping_min_delta': self.early_stopping_min_delta,
+                'early_stopping_metric': self.early_stopping_metric
+            },
+            'metadata': {
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'total_steps': self.global_step,
+                'train_samples': len(self.train_loader.dataset) if hasattr(self.train_loader, 'dataset') and hasattr(self.train_loader.dataset, '__len__') else None,  # type: ignore[arg-type]
+                'val_samples': len(self.val_loader.dataset) if self.val_loader and hasattr(self.val_loader, 'dataset') and hasattr(self.val_loader.dataset, '__len__') else None  # type: ignore[arg-type]
             }
         }
         
@@ -864,6 +891,32 @@ class ProductionTrainLoop:
                         self.best_val_loss = val_loss
                     if val_map > self.best_val_map:
                         self.best_val_map = val_map
+                    
+                    # Early stopping check
+                    if self.early_stopping_patience > 0:
+                        if self.early_stopping_metric == 'val_loss':
+                            current_metric = val_loss
+                            improvement = self.early_stopping_best_metric - current_metric
+                            if improvement > self.early_stopping_min_delta:
+                                self.early_stopping_best_metric = current_metric
+                                self.early_stopping_counter = 0
+                            else:
+                                self.early_stopping_counter += 1
+                        else:  # val_map
+                            current_metric = val_map
+                            improvement = current_metric - self.early_stopping_best_metric
+                            if improvement > self.early_stopping_min_delta:
+                                self.early_stopping_best_metric = current_metric
+                                self.early_stopping_counter = 0
+                            else:
+                                self.early_stopping_counter += 1
+                        
+                        if self.early_stopping_counter >= self.early_stopping_patience:
+                            self.logger.info(
+                                f"Early stopping triggered after {epoch+1} epochs. "
+                                f"No improvement for {self.early_stopping_patience} epochs."
+                            )
+                            break
                     
                     # Save checkpoint
                     self._save_checkpoint(epoch, is_best=is_best)

@@ -186,13 +186,19 @@ def test_benchmark_integration():
     )
     
     # Results are nested by batch size, check 'overall' or first batch
+    overall: Dict[str, float]
     if 'overall' in results:
-        overall = results['overall']
+        overall = results['overall']  # type: ignore[assignment]
     elif 'batch_1' in results:
-        overall = results['batch_1']
+        overall = results['batch_1']  # type: ignore[assignment]
     else:
-        # Get first batch result
-        overall = list(results.values())[0]
+        # Get first batch result (skip non-dict values like final_peak_memory_mb)
+        for value in results.values():
+            if isinstance(value, dict):
+                overall = value  # type: ignore[assignment]
+                break
+        else:
+            raise ValueError("No batch results found in benchmark output")
     
     assert 'mean_ms' in overall, "Benchmark results missing mean latency"
     assert 'median_ms' in overall, "Benchmark results missing median latency"

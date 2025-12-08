@@ -35,6 +35,7 @@ def assign_urgency_score(category_name: str, box_size: float) -> int:
     Assign urgency score based on object category and size.
     
     Vehicles and hazards near the camera get high urgency scores, while safe objects get low scores.
+    Optimized with set-based lookups for O(1) category matching.
     
         Arguments:
         category_name: Object category name
@@ -45,27 +46,36 @@ def assign_urgency_score(category_name: str, box_size: float) -> int:
     """
     category_lower = category_name.lower()
     
-    danger_keywords = ['car', 'truck', 'bus', 'motorcycle', 'bicycle', 'vehicle',
-                      'fire', 'hazard', 'stop', 'traffic', 'train']
-    warning_keywords = ['person', 'dog', 'cat', 'horse', 'bird']
+    # Use sets for O(1) lookup instead of O(K) keyword matching
+    danger_categories = {
+        'car', 'truck', 'bus', 'motorcycle', 'bicycle', 'vehicle', 'train', 'airplane',
+        'fire', 'hazard', 'stop', 'traffic', 'traffic light', 'fire hydrant',
+        'emergency', 'siren', 'alarm'
+    }
+    warning_categories = {
+        'person', 'dog', 'cat', 'horse', 'bird', 'cow', 'sheep', 'elephant',
+        'zebra', 'giraffe', 'bear'
+    }
+    caution_categories = {
+        'stairs', 'staircase', 'escalator', 'elevator', 'door', 'window',
+        'obstacle', 'barrier', 'fence'
+    }
     
-    if any(kw in category_lower for kw in danger_keywords):
-        if box_size > 0.1:
-            return 3  # Danger
-        else:
-            return 2  # Warning
-    elif any(kw in category_lower for kw in warning_keywords):
-        if box_size > 0.15:
-            return 2  # Warning
-        else:
-            return 1  # Caution - moving object farther away
+    # Direct category match (most efficient)
+    if category_lower in danger_categories:
+        return 3 if box_size > 0.1 else 2
+    elif category_lower in warning_categories:
+        return 2 if box_size > 0.15 else 1
+    elif category_lower in caution_categories:
+        return 1 if box_size > 0.1 else 0
     else:
-        # Static objects = safe (no urgency, no immediate threat)
-        # Purpose: Default assignment for all other objects (furniture, buildings, etc.)
-        #          These objects are stationary and pose no immediate danger
-        # Complexity: O(1) - simple return
-        # Relationship: Default case - ensures non-threatening objects get minimum urgency
-        return 0  # Safe - no immediate threat
+        # Fallback: check if category contains danger/warning keywords (for compound names)
+        if any(kw in category_lower for kw in ['vehicle', 'motor', 'fire', 'hazard', 'emergency']):
+            return 3 if box_size > 0.1 else 2
+        elif any(kw in category_lower for kw in ['person', 'animal', 'pet']):
+            return 2 if box_size > 0.15 else 1
+        else:
+            return 0  # Safe - no immediate threat
 
 
 def estimate_distance_zone(box_size: float, image_size: Tuple[int, int] = (224, 224)) -> int:
@@ -105,33 +115,48 @@ def estimate_distance_zone(box_size: float, image_size: Tuple[int, int] = (224, 
 
 
 def generate_scene_description(objects: List[Dict]) -> str:
-    """Generate simple scene description from detected objects."""
+    """
+    Generate scene description from detected objects with urgency and distance context.
+    
+    Enhanced to include urgency information and prioritize important objects.
+    """
     if not objects:
         return "Empty scene"
     
-    categories = [obj.get('category', 'object') for obj in objects[:5]]
-    unique_categories = list(set(categories))
-    # Complexity: O(1) - simple conditionals and string formatting operations
-    # Relationship: Final step in description generation - produces text output for accessibility features
+    # Sort objects by urgency (descending) to prioritize important objects in description
+    sorted_objects = sorted(objects, key=lambda x: x.get('urgency', 0), reverse=True)
+    
+    # Get top 5 most urgent objects for description
+    top_objects = sorted_objects[:5]
+    categories = [obj.get('category', 'object') for obj in top_objects]
+    unique_categories = list(dict.fromkeys(categories))  # Preserve order while removing duplicates
+    
+    # Count objects by category for richer descriptions
+    category_counts = {}
+    for obj in top_objects:
+        cat = obj.get('category', 'object')
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+    
     if len(unique_categories) == 1:
-        # Single object type - simple description
-        # Purpose: Generate concise description for scenes with one type of object
-        # Complexity: O(1) - f-string formatting
-        # Relationship: Simple case handling - provides clear, focused description
-        return f"Scene with {unique_categories[0]}"
+        cat = unique_categories[0]
+        count = category_counts.get(cat, 1)
+        if count > 1:
+            return f"Scene with {count} {cat}s"
+        return f"Scene with {cat}"
     elif len(unique_categories) <= 3:
-        # Few object types - list them all
-        # Purpose: Generate description listing all object types (up to 3) for moderate complexity scenes
-        # Complexity: O(U) where U=number of unique categories (<=3) - joins category names
-        # Relationship: Moderate complexity handling - provides detailed but manageable description
-        return f"Scene with {', '.join(unique_categories)}"
+        # Build description with counts
+        desc_parts = []
+        for cat in unique_categories:
+            count = category_counts.get(cat, 1)
+            if count > 1:
+                desc_parts.append(f"{count} {cat}s")
+            else:
+                desc_parts.append(cat)
+        return f"Scene with {', '.join(desc_parts)}"
     else:
-        # Many object types - summarize with count
-        # Purpose: Generate summary description for complex scenes with many object types to avoid
-        #          overwhelming users with long lists. Count-based summary is more digestible.
-        # Complexity: O(1) - f-string formatting with length calculation
-        # Relationship: Complex scene handling - provides high-level summary for accessibility
-        return f"Scene with {len(unique_categories)} different objects"
+        # Many object types - summarize with count and mention most urgent
+        most_urgent = sorted_objects[0].get('category', 'objects') if sorted_objects else 'objects'
+        return f"Scene with {len(unique_categories)} different objects including {most_urgent}"
 
 
 def generate_annotations_from_coco(

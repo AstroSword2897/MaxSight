@@ -58,6 +58,15 @@ from dataclasses import dataclass
 from enum import Enum
 import torch
 
+try:
+    from ml.utils.sound_processing import SoundProcessor, SoundClass, SoundDirection
+    SOUND_PROCESSING_AVAILABLE = True
+except ImportError:
+    SOUND_PROCESSING_AVAILABLE = False
+    SoundProcessor = None
+    SoundClass = None
+    SoundDirection = None
+
 
 class OutputChannel(Enum):
     """
@@ -134,9 +143,13 @@ class ScheduledOutput:
     - priority: How urgent (affects interruption behavior)
     - intensity: How strong (volume, brightness, vibration strength)
     - spatial_position: Where in space (for directional audio/haptics)
+    - distance: Distance to object for volume adjustment (closer = louder)
+    - audio_pan: Left/right panning for spatial audio (-1.0 to 1.0)
     
     This structure enables the "Clear Multimodal Communication" approach by providing all the
     information needed to present information appropriately across different sensory channels.
+    
+    Sprint 3 Day 22: Enhanced with distance-based volume and 3D positioning.
     """
     channel: OutputChannel
     priority: int  # 0-100
@@ -145,6 +158,9 @@ class ScheduledOutput:
     duration: float  # seconds
     content: str  # Description for audio/narration
     spatial_position: Optional[Tuple[float, float]] = None  # For spatial audio/haptic
+    distance: Optional[float] = None  # Distance in meters for volume adjustment
+    audio_pan: float = 0.0  # Left (-1.0) to right (1.0) panning for spatial audio
+    volume_multiplier: float = 1.0  # Distance-based volume adjustment (closer = higher)
 
 
 class CrossModalScheduler:
@@ -181,6 +197,13 @@ class CrossModalScheduler:
         self.last_output_by_channel: Dict[OutputChannel, float] = {}
         self.min_channel_interval = 0.3  # 300ms between ANY outputs (except emergencies)
         self.output_history: List[ScheduledOutput] = []
+        # Track previous outputs for smooth audio transitions (Sprint 3 Day 22)
+        self.previous_outputs: Dict[str, ScheduledOutput] = {}
+        # Sound processing (Sprint 3 Day 26)
+        if SOUND_PROCESSING_AVAILABLE:
+            self.sound_processor = SoundProcessor()
+        else:
+            self.sound_processor = None
         
     def schedule_outputs(
         self,
@@ -340,19 +363,75 @@ class CrossModalScheduler:
         # Spatial position from bounding box center
         spatial_pos = (box[0], box[1]) if len(box) >= 2 else None
         
+        # Calculate 3D audio positioning (Sprint 3 Day 22: Spatial Audio Refinement)
+        audio_pan = 0.0
+        distance = None
+        volume_multiplier = 1.0
+        
+        if spatial_pos is not None:
+            # Calculate left/right panning from x position (-1.0 = left, 1.0 = right)
+            x_pos = spatial_pos[0]  # Normalized [0, 1]
+            audio_pan = (x_pos - 0.5) * 2.0  # Convert to [-1.0, 1.0]
+            
+            # Get distance from detection if available
+            distance_zone = detection.get('distance_zone', None)
+            if distance_zone is not None:
+                # Convert distance zone to approximate meters
+                if distance_zone == 0:  # Near
+                    distance = 2.0  # ~2 meters
+                    volume_multiplier = 1.2  # 20% louder for close objects
+                elif distance_zone == 1:  # Medium
+                    distance = 6.0  # ~6 meters
+                    volume_multiplier = 1.0  # Normal volume
+                else:  # Far
+                    distance = 10.0  # ~10 meters
+                    volume_multiplier = 0.8  # 20% quieter for far objects
+            
+            # Get precise distance if available
+            precise_distance = detection.get('distance_meters', None)
+            if precise_distance is not None:
+                distance = precise_distance
+                # Distance-based volume: closer = louder (inverse square law approximation)
+                if distance > 0:
+                    # Normalize: 1m = 1.2x, 5m = 1.0x, 10m = 0.8x
+                    volume_multiplier = max(0.5, min(1.5, 1.0 + (5.0 - distance) / 10.0))
+        
+        # Smooth transitions: track previous position for smooth audio movement
+        prev_output = self.previous_outputs.get(class_name)
+        if prev_output and prev_output.spatial_position and spatial_pos:
+            # Smooth panning transition (avoid sudden jumps)
+            prev_pan = (prev_output.spatial_position[0] - 0.5) * 2.0
+            pan_diff = abs(audio_pan - prev_pan)
+            if pan_diff > 0.3:  # Large jump - smooth it
+                audio_pan = prev_pan + (audio_pan - prev_pan) * 0.5  # 50% of the way
+            
+            # Smooth volume transitions
+            if prev_output.volume_multiplier:
+                volume_diff = abs(volume_multiplier - prev_output.volume_multiplier)
+                if volume_diff > 0.2:  # Large change - smooth it
+                    volume_multiplier = prev_output.volume_multiplier + (volume_multiplier - prev_output.volume_multiplier) * 0.6
+        
         # Update rate limiting timestamps
         self.last_output_time[class_name] = timestamp
         self.last_output_by_channel[channel] = timestamp
         
-        return ScheduledOutput(
+        output = ScheduledOutput(
             channel=channel,
             priority=priority,
             intensity=intensity,
             frequency=frequency,
             duration=duration,
             content=content,
-            spatial_position=spatial_pos
+            spatial_position=spatial_pos,
+            distance=distance,
+            audio_pan=audio_pan,
+            volume_multiplier=volume_multiplier
         )
+        
+        # Store for smooth transitions
+        self.previous_outputs[class_name] = output
+        
+        return output
     
     def _should_suppress(self, class_name: str, timestamp: float, priority: int, channel: Optional[OutputChannel] = None) -> bool:
         """Check if output should be suppressed due to rate limiting"""

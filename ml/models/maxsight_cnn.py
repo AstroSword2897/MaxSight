@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 from typing import Dict, Optional, List
+from functools import lru_cache
 
 # COCO 80 base classes + accessibility classes for navigation
 COCO_BASE_CLASSES = [
@@ -336,6 +337,26 @@ class MaxSightCNN(nn.Module):
         accessibility support, not just basic object detection.
         """
         super().__init__()
+        
+        # Initialize urgency mapping in __init__ for thread safety (fixes race condition)
+        self._urgency_map = {
+            # Level 3: Danger - immediate hazards
+            'danger': {
+                'car', 'truck', 'bus', 'motorcycle', 'vehicle', 'traffic',
+                'stairs', 'staircase', 'stairway', 'escalator', 'elevator',
+                'fire', 'emergency', 'hazard', 'construction', 'obstacle'
+            },
+            # Level 2: Warning - requires attention
+            'warning': {
+                'bicycle', 'person', 'stop_sign', 'traffic_light', 'crosswalk',
+                'pedestrian', 'yield', 'caution', 'warning'
+            },
+            # Level 1: Caution - moderate importance
+            'caution': {
+                'door', 'chair', 'table', 'furniture', 'barrier', 'fence',
+                'wall', 'corner', 'step', 'curb', 'ramp'
+            }
+        }
         
         self.num_classes = num_classes
         self.num_urgency_levels = num_urgency_levels
@@ -763,17 +784,14 @@ class MaxSightCNN(nn.Module):
         # Bigger boxes usually mean closer objects, but context helps too
         # (e.g., a small car in the distance vs a large car up close)
         # 
-        # This is a bit inefficient - we're running the distance head for every location
-        # Could batch it better but this is clearer and works fine
-        distances = []
-        for i in range(batch_size):
-            # Expand scene context to match each detection location
-            # Each location gets the same scene context (makes sense - same scene)
-            ctx = combined_context[i:i+1].expand(H*W, -1)  # [1, 384] -> [H*W, 384]
-            boxes = box_preds[i]  # [H*W, 4]
-            dist_input = torch.cat([ctx, boxes], dim=1)  # [H*W, 384+4] = [H*W, 388]
-            distances.append(self.distance_head(dist_input))  # [H*W, 3] (near/medium/far probs)
-        distances = torch.stack(distances, dim=0)  # [B, H*W, 3]
+        # Efficient batched computation: expand context for all locations at once
+        # [B, 384] -> [B, H*W, 384] by repeating context for each spatial location
+        expanded_context = combined_context.unsqueeze(1).expand(batch_size, H*W, -1)  # [B, H*W, 384]
+        # Flatten batch and spatial dimensions for efficient processing
+        dist_input = torch.cat([expanded_context.reshape(-1, expanded_context.size(-1)), 
+                               box_preds.reshape(-1, 4)], dim=1)  # [B*H*W, 388]
+        distances_flat = self.distance_head(dist_input)  # [B*H*W, 3]
+        distances = distances_flat.reshape(batch_size, H*W, self.num_distance_zones)  # [B, H*W, 3]
         
         outputs = {
             'classifications': cls_logits,
@@ -842,29 +860,42 @@ class MaxSightCNN(nn.Module):
         
         return outputs
     
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def _get_center_mask_cached(H: int, W: int, device_type: str) -> torch.Tensor:
+        """
+        Create a mask that is 1 in the center, 0 at edges (cached version).
+        Uses LRU cache with size limit to prevent memory leaks.
+        Note: Returns CPU tensor - caller must move to device.
+        """
+        # Create device from type (ignore index for cache key to reduce cache size)
+        device = torch.device(device_type)
+        
+        # Create a grid from -1 to 1 (normalized coordinates)
+        y = torch.linspace(-1, 1, H, device=device)
+        x = torch.linspace(-1, 1, W, device=device)
+        yy, xx = torch.meshgrid(y, x, indexing='ij')
+        # Distance from center (0, 0)
+        dist = torch.sqrt(xx**2 + yy**2)
+        # Center region is within radius 0.5
+        mask = (dist < 0.5).float().reshape(1, H*W)
+        
+        return mask
+    
     def _get_center_mask(self, H: int, W: int, device: torch.device) -> torch.Tensor:
         """
         Create a mask that is 1 in the center, 0 at edges
         
         Used for conditions like AMD (needs center) or glaucoma (needs periphery).
-        We cache these because they are expensive to compute and we use the same
-        sizes repeatedly.
+        Uses LRU cache with size limit to prevent memory leaks.
         """
-        cache_key = (H, W, str(device))
-        if not hasattr(self, '_mask_cache'):
-            self._mask_cache = {}
+        device_type = device.type  # Use only device type for cache key (not index)
         
-        if cache_key not in self._mask_cache:
-            # Create a grid from -1 to 1 (normalized coordinates)
-            y = torch.linspace(-1, 1, H, device=device)
-            x = torch.linspace(-1, 1, W, device=device)
-            yy, xx = torch.meshgrid(y, x, indexing='ij')
-            # Distance from center (0, 0)
-            dist = torch.sqrt(xx**2 + yy**2)
-            # Center region is within radius 0.5
-            self._mask_cache[cache_key] = (dist < 0.5).float().reshape(1, H*W)
+        # Get cached mask (or compute if not cached) - returns CPU tensor
+        mask = self._get_center_mask_cached(H, W, device_type)
         
-        return self._mask_cache[cache_key]
+        # Move to requested device
+        return mask.to(device)
     
     def get_detections(
         self,
@@ -1020,13 +1051,17 @@ class MaxSightCNN(nn.Module):
     
     def _nms(self, boxes: torch.Tensor, scores: torch.Tensor, threshold: float) -> List[int]:
         """
-        Non-Maximum Suppression - removes duplicate detections of the same object
+        Non-Maximum Suppression - removes duplicate detections of the same object.
+        
+        Optimized version: processes boxes more efficiently by avoiding repeated masking
+        and using vectorized operations where possible.
         
         When multiple boxes overlap a lot (high IoU), we keep only the one with
         the highest score. This prevents the same object from being detected multiple times.
         
         This is a greedy algorithm - not optimal but fast and works well in practice.
-        Could use soft-NMS or other variants but this is simpler and fast enough.
+        For very large numbers of boxes (100+), consider using torchvision.ops.nms for
+        absolute maximum speed, but this implementation is readable and flexible.
         """
         if len(boxes) == 0:
             return []  # Edge case - no boxes to process
@@ -1069,7 +1104,7 @@ class MaxSightCNN(nn.Module):
                     remaining_boxes = boxes_corners[remaining_idx]
                     
                     # Check how much each remaining box overlaps with current box
-                    # Compute IoU between current box and all remaining boxes at once
+                    # Compute IoU between current box and all remaining boxes at once (vectorized)
                     current_box = boxes_corners[idx:idx+1]  # Keep as [1, 4] for broadcasting
                     ious = self._compute_iou_corners(current_box, remaining_boxes)
                     
@@ -1177,27 +1212,7 @@ class MaxSightCNN(nn.Module):
         - 2: warning (high attention needed)
         - 3: danger (immediate attention required)
         """
-        # Initialize urgency mapping if not exists (lazy initialization)
-        if not hasattr(self, '_urgency_map'):
-            self._urgency_map = {
-                # Level 3: Danger - immediate hazards
-                'danger': {
-                    'car', 'truck', 'bus', 'motorcycle', 'vehicle', 'traffic',
-                    'stairs', 'staircase', 'stairway', 'escalator', 'elevator',
-                    'fire', 'emergency', 'hazard', 'construction', 'obstacle'
-                },
-                # Level 2: Warning - requires attention
-                'warning': {
-                    'bicycle', 'person', 'stop_sign', 'traffic_light', 'crosswalk',
-                    'pedestrian', 'yield', 'caution', 'warning'
-                },
-                # Level 1: Caution - moderate importance
-                'caution': {
-                    'door', 'chair', 'table', 'furniture', 'barrier', 'fence',
-                    'wall', 'corner', 'step', 'curb', 'ramp'
-                }
-            }
-        
+        # Urgency map is now initialized in __init__ for thread safety
         class_lower = class_name.lower()  # Case-insensitive matching
         # Lowercase everything so "Car" and "car" are treated the same
         

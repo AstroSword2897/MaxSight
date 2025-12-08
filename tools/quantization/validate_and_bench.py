@@ -42,8 +42,8 @@ class QuantizationValidator:
         int8_out: torch.Tensor
     ) -> Dict[str, float]:
         """Compute various error metrics between FP32 and INT8 outputs."""
-        fp32_out = fp32_out.float().cpu()
-        int8_out = int8_out.float().cpu()
+        fp32_out = fp32_out.detach().float().cpu()
+        int8_out = int8_out.detach().float().cpu()
         
         # Absolute error
         abs_diff = (fp32_out - int8_out).abs()
@@ -57,10 +57,15 @@ class QuantizationValidator:
         # Mean Absolute Error
         mae = abs_diff.mean().item()
         
-        # Signal-to-Noise Ratio
+        # Signal-to-Noise Ratio (with proper edge case handling)
         signal_power = (fp32_out ** 2).mean().item()
         noise_power = ((fp32_out - int8_out) ** 2).mean().item()
-        snr_db = 10 * np.log10(signal_power / (noise_power + 1e-10))
+        if signal_power < 1e-8:
+            snr_db = -float('inf')
+        elif noise_power < 1e-8:
+            snr_db = float('inf')
+        else:
+            snr_db = 10 * np.log10(signal_power / noise_power)
         
         return {
             'mse': mse,
@@ -81,6 +86,10 @@ class QuantizationValidator:
         Validate classification head with accuracy metrics.
         MaxSight format: [B, num_locations, num_classes]
         """
+        # Shape validation
+        if fp32_logits.shape != int8_logits.shape:
+            raise ValueError(f"Shape mismatch: FP32 {fp32_logits.shape} vs INT8 {int8_logits.shape}")
+        
         # Flatten for per-location classification
         B, num_locations, num_classes = fp32_logits.shape
         fp32_flat = fp32_logits.reshape(-1, num_classes)
@@ -117,6 +126,10 @@ class QuantizationValidator:
         Validate bounding box head (regression).
         MaxSight format: [B, num_locations, 4] (cx, cy, w, h normalized)
         """
+        # Shape validation
+        if fp32_bbox.shape != int8_bbox.shape:
+            return {'_bbox_error': f"Shape mismatch: FP32 {fp32_bbox.shape} vs INT8 {int8_bbox.shape}"}
+        
         output_error = self.compute_relative_error(fp32_bbox, int8_bbox)
         
         results: Dict[str, Any] = {
@@ -187,6 +200,10 @@ class QuantizationValidator:
         Validate embedding head with cosine similarity.
         MaxSight format: [B, embedding_dim] (scene_embedding)
         """
+        # Shape validation
+        if fp32_embed.shape != int8_embed.shape:
+            raise ValueError(f"Shape mismatch: FP32 {fp32_embed.shape} vs INT8 {int8_embed.shape}")
+        
         # Normalize embeddings
         fp32_norm = torch.nn.functional.normalize(fp32_embed, p=2, dim=1)
         int8_norm = torch.nn.functional.normalize(int8_embed, p=2, dim=1)
@@ -217,6 +234,10 @@ class QuantizationValidator:
         Validate urgency classification head.
         MaxSight format: [B, num_urgency_levels] (typically 4)
         """
+        # Shape validation
+        if fp32_urgency.shape != int8_urgency.shape:
+            raise ValueError(f"Shape mismatch: FP32 {fp32_urgency.shape} vs INT8 {int8_urgency.shape}")
+        
         output_error = self.compute_relative_error(fp32_urgency, int8_urgency)
         
         results = {
@@ -252,6 +273,10 @@ class QuantizationValidator:
         Validate objectness head.
         MaxSight format: [B, num_locations]
         """
+        # Shape validation
+        if fp32_obj.shape != int8_obj.shape:
+            raise ValueError(f"Shape mismatch: FP32 {fp32_obj.shape} vs INT8 {int8_obj.shape}")
+        
         output_error = self.compute_relative_error(fp32_obj, int8_obj)
         
         return {
@@ -268,113 +293,119 @@ class QuantizationValidator:
         """
         print("Running Full Quantization Validation")
         
-        all_metrics = {
-            'classification': [],
-            'bbox': [],
-            'embedding': [],
-            'urgency': [],
-            'objectness': []
-        }
+        from collections import defaultdict
+        all_metrics: Dict[str, List[Dict[str, float]]] = defaultdict(list)
+        
+        total_batches = len(self.test_loader)
+        print(f"Processing {total_batches} batches for validation...")
         
         num_batches = 0
         
         with torch.no_grad():
             for batch_idx, batch in enumerate(self.test_loader):
-                # Parse batch (MaxSight dataset format)
-                if isinstance(batch, (list, tuple)):
-                    inputs = batch[0]
-                    targets = batch[1] if len(batch) > 1 else {}
-                elif isinstance(batch, dict):
-                    inputs = batch.get('images') or batch.get('image')
-                    targets = {k: v for k, v in batch.items() if k not in ['images', 'image']}
-                else:
-                    continue
-                
-                if inputs is None:
-                    continue
-                
-                if not isinstance(inputs, torch.Tensor):
-                    continue
+                try:
+                    # Parse batch (MaxSight dataset format)
+                    if isinstance(batch, (list, tuple)):
+                        inputs = batch[0]
+                        targets = batch[1] if len(batch) > 1 else {}
+                    elif isinstance(batch, dict):
+                        inputs = batch.get('images') or batch.get('image')
+                        targets = {k: v for k, v in batch.items() if k not in ['images', 'image']}
+                    else:
+                        continue
                     
-                inputs = inputs.to(self.device)
-                
-                # Forward pass
-                fp32_out = self.model_fp32(inputs)
-                int8_out = self.model_int8(inputs)
-                
-                # Validate each head (MaxSight output format)
-                if isinstance(fp32_out, dict):
-                    # Classification head
-                    if 'classifications' in fp32_out:
-                        class_targets = targets.get('labels') if isinstance(targets, dict) else None
-                        if class_targets is not None and torch.is_tensor(class_targets):
-                            class_targets = class_targets.to(self.device)
-                        try:
-                            metrics = self.validate_classification_head(
-                                fp32_out['classifications'],
-                                int8_out['classifications'],
-                                class_targets
-                            )
-                            all_metrics['classification'].append(metrics)
-                        except Exception as e:
-                            print(f"Warning: Classification validation failed: {e}")
+                    if inputs is None:
+                        continue
                     
-                    # Bounding box head
-                    if 'boxes' in fp32_out:
-                        bbox_targets = targets.get('boxes') if isinstance(targets, dict) else None
-                        if bbox_targets is not None and torch.is_tensor(bbox_targets):
-                            bbox_targets = bbox_targets.to(self.device)
-                        try:
-                            metrics = self.validate_bbox_head(
-                                fp32_out['boxes'],
-                                int8_out['boxes'],
-                                bbox_targets
-                            )
-                            all_metrics['bbox'].append(metrics)
-                        except Exception as e:
-                            print(f"Warning: Bbox validation failed: {e}")
+                    if not isinstance(inputs, torch.Tensor):
+                        continue
+                        
+                    inputs = inputs.to(self.device)
                     
-                    # Scene embedding head
-                    if 'scene_embedding' in fp32_out:
-                        try:
-                            metrics = self.validate_embedding_head(
-                                fp32_out['scene_embedding'],
-                                int8_out['scene_embedding']
-                            )
-                            all_metrics['embedding'].append(metrics)
-                        except Exception as e:
-                            print(f"Warning: Embedding validation failed: {e}")
+                    # Forward pass
+                    fp32_out = self.model_fp32(inputs)
+                    int8_out = self.model_int8(inputs)
                     
-                    # Urgency head
-                    if 'urgency_scores' in fp32_out:
-                        urgency_targets = targets.get('urgency') if isinstance(targets, dict) else None
-                        if urgency_targets is not None and torch.is_tensor(urgency_targets):
-                            urgency_targets = urgency_targets.to(self.device)
-                        try:
-                            metrics = self.validate_urgency_head(
-                                fp32_out['urgency_scores'],
-                                int8_out['urgency_scores'],
-                                urgency_targets
-                            )
-                            all_metrics['urgency'].append(metrics)
-                        except Exception as e:
-                            print(f"Warning: Urgency validation failed: {e}")
-                    
-                    # Objectness head
-                    if 'objectness' in fp32_out:
-                        try:
-                            metrics = self.validate_objectness_head(
-                                fp32_out['objectness'],
-                                int8_out['objectness']
-                            )
-                            all_metrics['objectness'].append(metrics)
-                        except Exception as e:
-                            print(f"Warning: Objectness validation failed: {e}")
+                    # Validate each head (MaxSight output format)
+                    if isinstance(fp32_out, dict):
+                        # Classification head
+                        if 'classifications' in fp32_out:
+                            class_targets = targets.get('labels') if isinstance(targets, dict) else None
+                            if class_targets is not None and torch.is_tensor(class_targets):
+                                class_targets = class_targets.to(self.device)
+                            try:
+                                metrics = self.validate_classification_head(
+                                    fp32_out['classifications'],
+                                    int8_out['classifications'],
+                                    class_targets
+                                )
+                                all_metrics['classification'].append(metrics)
+                            except Exception as e:
+                                print(f"Warning: Classification validation failed: {e}")
+                        
+                        # Bounding box head
+                        if 'boxes' in fp32_out:
+                            bbox_targets = targets.get('boxes') if isinstance(targets, dict) else None
+                            if bbox_targets is not None and torch.is_tensor(bbox_targets):
+                                bbox_targets = bbox_targets.to(self.device)
+                            try:
+                                metrics = self.validate_bbox_head(
+                                    fp32_out['boxes'],
+                                    int8_out['boxes'],
+                                    bbox_targets
+                                )
+                                all_metrics['bbox'].append(metrics)
+                            except Exception as e:
+                                print(f"Warning: Bbox validation failed: {e}")
+                        
+                        # Scene embedding head
+                        if 'scene_embedding' in fp32_out:
+                            try:
+                                metrics = self.validate_embedding_head(
+                                    fp32_out['scene_embedding'],
+                                    int8_out['scene_embedding']
+                                )
+                                all_metrics['embedding'].append(metrics)
+                            except Exception as e:
+                                print(f"Warning: Embedding validation failed: {e}")
+                        
+                        # Urgency head
+                        if 'urgency_scores' in fp32_out:
+                            urgency_targets = targets.get('urgency') if isinstance(targets, dict) else None
+                            if urgency_targets is not None and torch.is_tensor(urgency_targets):
+                                urgency_targets = urgency_targets.to(self.device)
+                            try:
+                                metrics = self.validate_urgency_head(
+                                    fp32_out['urgency_scores'],
+                                    int8_out['urgency_scores'],
+                                    urgency_targets
+                                )
+                                all_metrics['urgency'].append(metrics)
+                            except Exception as e:
+                                print(f"Warning: Urgency validation failed: {e}")
+                        
+                        # Objectness head
+                        if 'objectness' in fp32_out:
+                            try:
+                                metrics = self.validate_objectness_head(
+                                    fp32_out['objectness'],
+                                    int8_out['objectness']
+                                )
+                                all_metrics['objectness'].append(metrics)
+                            except Exception as e:
+                                print(f"Warning: Objectness validation failed: {e}")
+                        
+                        num_batches += 1
+                        
+                        # Progress indication
+                        if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == total_batches:
+                            progress = (batch_idx + 1) / total_batches * 100
+                            print(f"  Processed {batch_idx + 1}/{total_batches} batches ({progress:.1f}%)")
                 
-                num_batches += 1
-                
-                if (batch_idx + 1) % 10 == 0:
-                    print(f"  Processed {batch_idx + 1}/{len(self.test_loader)} batches")
+                except Exception as e:
+                    import warnings
+                    warnings.warn(f"Batch {batch_idx} failed: {e}")
+                    continue  # Skip failed batch, don't crash entire validation
         
         # Aggregate metrics
         aggregated = {}
@@ -393,7 +424,11 @@ class QuantizationValidator:
                 # Skip error fields (they're strings, not floats)
                 if key.startswith('_') or key.endswith('_error'):
                     continue
-                values = [m[key] for m in metrics_list if key in m and isinstance(m[key], (int, float)) and not np.isnan(m[key])]
+                values = [
+                    m[key] for m in metrics_list 
+                    if key in m and isinstance(m[key], (int, float)) 
+                    and not (np.isnan(m[key]) or np.isinf(m[key]))
+                ]
                 if values:
                     head_agg[f'{key}_mean'] = float(np.mean(values))
                     head_agg[f'{key}_std'] = float(np.std(values))
@@ -431,27 +466,38 @@ class ModelBenchmark:
             for _ in range(warmup_runs):
                 for x in test_inputs:
                     _ = model(x)
+            # Synchronize GPU operations before benchmarking
+            if device.startswith('cuda') and torch.cuda.is_available():
+                torch.cuda.synchronize()
         
         # Benchmark
         timings = []
         with torch.no_grad():
             for _ in range(num_runs):
+                # Synchronize before timing
+                if device.startswith('cuda') and torch.cuda.is_available():
+                    torch.cuda.synchronize()
                 t0 = time.perf_counter()
                 for x in test_inputs:
                     _ = model(x)
+                # Synchronize after inference to ensure completion
+                if device.startswith('cuda') and torch.cuda.is_available():
+                    torch.cuda.synchronize()
                 t1 = time.perf_counter()
                 timings.append((t1 - t0) / len(test_inputs) * 1000)  # ms per input
         
         timings = np.array(timings)
         
+        mean_ms = float(np.mean(timings))
         return {
-            'mean_ms': float(np.mean(timings)),
+            'mean_ms': mean_ms,
             'std_ms': float(np.std(timings)),
             'median_ms': float(np.median(timings)),
             'p95_ms': float(np.percentile(timings, 95)),
             'p99_ms': float(np.percentile(timings, 99)),
             'min_ms': float(np.min(timings)),
             'max_ms': float(np.max(timings)),
+            'throughput_fps': 1000.0 / mean_ms if mean_ms > 0 else 0.0
         }
     
     @staticmethod

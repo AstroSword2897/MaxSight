@@ -34,7 +34,7 @@ class DummyMaxSightDataset(Dataset):
         image = torch.randn(3, *self.image_size)
         
         # Generate dummy ground truth (normalized format: x, y, w, h)
-        num_objects = torch.randint(1, 5, (1,)).item()
+        num_objects = int(torch.randint(1, 5, (1,)).item())
         
         boxes = torch.rand(num_objects, 4)  # Normalized [0, 1]
         boxes[:, 2:] = boxes[:, 2:] * 0.3 + 0.1  # Width/height between 0.1-0.4

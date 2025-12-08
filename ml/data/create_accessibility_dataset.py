@@ -225,15 +225,16 @@ class SyntheticImpairmentEngine:
         arr = np.array(img).astype(np.float32)
         
         # Apply Gaussian blur (handles both grayscale and RGB)
+        # Pre-allocate output to avoid memory leaks from temporary arrays
         if len(arr.shape) == 3:
-            # Multi-channel: apply filter to each channel
-            blurred = np.stack([
-                ndimage.gaussian_filter(arr[:, :, i], sigma=amount)
-                for i in range(arr.shape[2])
-            ], axis=2)
+            # Multi-channel: apply filter to each channel with pre-allocated output
+            blurred = np.empty_like(arr)
+            for i in range(arr.shape[2]):
+                ndimage.gaussian_filter(arr[:, :, i], sigma=amount, output=blurred[:, :, i])
         else:
             # Grayscale: single channel
-            blurred = ndimage.gaussian_filter(arr, sigma=amount)
+            blurred = np.empty_like(arr)
+            ndimage.gaussian_filter(arr, sigma=amount, output=blurred)
         
         # Create radial mask (center clear, periphery blurred)
         h, w = arr.shape[:2]

@@ -165,12 +165,19 @@ class DescriptionGenerator:
         Get distance description from zone and optional size.
         
         Arguments:
-            distance_zone: 0 (near), 1 (medium), 2 (far)
+            distance_zone: 0 (near), 1 (medium), 2 (far) or string ('near', 'medium', 'far')
             box_size: Optional box area for more precise estimation
         
         Returns:
             Distance description string
         """
+        # Handle string distance zones (convert to int)
+        if isinstance(distance_zone, str):
+            distance_map = {'near': 0, 'medium': 1, 'far': 2}
+            distance_zone = distance_map.get(distance_zone.lower(), 1)
+        
+        # Ensure distance_zone is int and in valid range
+        distance_zone = int(distance_zone)
         if distance_zone < 0 or distance_zone >= len(self.DISTANCE_NAMES):
             distance_zone = 1  # Default to medium
         
@@ -289,6 +296,11 @@ class DescriptionGenerator:
         priority: Optional[int] = None,
         verbosity: Optional[str] = None
     ) -> str:
+        # Handle string distance zones (convert to int)
+        if isinstance(distance_zone, str):
+            distance_map = {'near': 0, 'medium': 1, 'far': 2}
+            distance_zone = distance_map.get(distance_zone.lower(), 1)
+        distance_zone = int(distance_zone)
         """
         Generate natural language description for a single object.
         
@@ -509,10 +521,17 @@ class DescriptionGenerator:
             return "Clear path ahead"
         
         # Filter for obstacles (high urgency, near objects)
-        obstacles = [
-            d for d in detections
-            if d.get('urgency', 0) >= 2 and d.get('distance', 2) <= 1
-        ]
+        # Handle distance as either int (zone) or string (name)
+        obstacles = []
+        for d in detections:
+            urgency = d.get('urgency', 0)
+            distance = d.get('distance', 2)
+            # Convert string distance to zone if needed
+            if isinstance(distance, str):
+                distance_map = {'near': 0, 'medium': 1, 'far': 2}
+                distance = distance_map.get(distance.lower(), 1)
+            if urgency >= 2 and distance <= 1:
+                obstacles.append(d)
         
         if not obstacles:
             return "Clear path ahead"

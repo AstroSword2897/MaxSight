@@ -26,13 +26,13 @@ python tools/simulation/web_simulator.py
 ## 🌐 Access the Simulator
 
 Once running, open your browser to:
-**http://localhost:5000**
+**http://localhost:5001**
 
 ## 📋 What the Simulator Does
 
 The simulator is a **complete product simulation** that:
 
-1. **Runs on a local web server** (port 5000)
+1. **Runs on a local web server** (port 5001)
 2. **Integrates ALL MaxSight components**:
    - Model inference
    - Preprocessing (condition-specific)

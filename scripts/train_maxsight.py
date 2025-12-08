@@ -97,6 +97,14 @@ def main():
     # Hardware
     parser.add_argument("--device", choices=["cuda", "cpu"], default="cuda")
     parser.add_argument("--fp16", action="store_true", help="Use mixed precision")
+    
+    # Early stopping
+    parser.add_argument("--early-stopping-patience", type=int, default=10, 
+                       help="Early stopping patience (0 to disable)")
+    parser.add_argument("--early-stopping-min-delta", type=float, default=0.0,
+                       help="Minimum change to qualify as improvement")
+    parser.add_argument("--early-stopping-metric", choices=["val_loss", "val_map"], 
+                       default="val_loss", help="Metric to monitor for early stopping")
 
     # Model settings
     parser.add_argument("--num_classes", type=int, default=48)
@@ -199,7 +207,10 @@ def main():
         num_epochs=args.epochs,
         checkpoint_dir=str(ckpt_dir),
         seed=args.seed,
-        use_mixed_precision=args.fp16
+        use_mixed_precision=args.fp16,
+        early_stopping_patience=args.early_stopping_patience,
+        early_stopping_min_delta=args.early_stopping_min_delta,
+        early_stopping_metric=args.early_stopping_metric
     )
 
     # Training
