@@ -42,3 +42,7 @@ logs/
 Miniforge*
 
 
+ios_bundle.zip
+*.zip
+ios_bundle/
+maxsight_ios_bundle/
