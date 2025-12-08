@@ -1,0 +1,43 @@
+{
+  "version": "1.0.0",
+  "export_timestamp": "2025-12-07T22:23:56.269603",
+  "input_size": [
+    1,
+    3,
+    224,
+    224
+  ],
+  "num_classes": 80,
+  "num_urgency_levels": 4,
+  "num_distance_zones": 3,
+  "detection_threshold": 0.5,
+  "nms_threshold": 0.5,
+  "model_params": 32978627,
+  "model_size_mb": 126.58,
+  "quantization": "FP32",
+  "output_shapes": {
+    "classifications": [
+      1,
+      80
+    ],
+    "boxes": [
+      1,
+      100,
+      4
+    ],
+    "objectness": [
+      1,
+      100
+    ],
+    "urgency_scores": [
+      1,
+      100,
+      4
+    ],
+    "distance_zones": [
+      1,
+      100,
+      3
+    ]
+  }
+}
