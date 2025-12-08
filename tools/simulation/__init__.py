@@ -7,10 +7,11 @@ End-to-end simulation for testing:
 - User interaction simulation
 - Performance logging
 
-See docs/therapy_system_implementation_plan.md Phase 5 for implementation details.
+Main simulator is in web_simulator.py
 """
 
-from .simulator import TherapySimulator
+# Simulator components are in web_simulator.py
+# Main entry point: tools.simulation.web_simulator
 
-__all__ = ['TherapySimulator']
+__all__ = []
 
