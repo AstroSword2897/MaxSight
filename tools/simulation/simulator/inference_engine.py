@@ -20,7 +20,7 @@ from pathlib import Path
 from ml.models.maxsight_cnn import create_model
 from ml.utils.preprocessing import ImagePreprocessor
 from ml.utils.error_handling import HeadExecutionManager, with_fallback
-from ml.utils.runtime_output_contract import OutputMode, Severity, create_patient_output, create_clinician_output
+from ml.utils.output_scheduler import OutputMode, Severity, create_patient_output, create_clinician_output
 
 logger = logging.getLogger(__name__)
 
