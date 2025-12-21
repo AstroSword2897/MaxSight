@@ -57,7 +57,7 @@ from app.overlays.overlay_engine import OverlayEngine
 from app.ui.voice_feedback import VoiceFeedback
 from app.ui.haptic_feedback import HapticFeedback, HapticPattern
 from ml.utils.logging_config import setup_logging
-from ml.utils.runtime_output_contract import (
+from ml.utils.output_scheduler import (
     OutputMode, Severity, RuntimeOutput, 
     create_patient_output, create_clinician_output, create_dev_output
 )

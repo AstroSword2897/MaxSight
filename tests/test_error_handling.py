@@ -48,8 +48,6 @@ def test_fallback_on_forced_exception():
     assert outputs['classifications'].sum().item() == 0.0
     assert outputs['boxes'].sum().item() == 0.0
     assert outputs['objectness'].sum().item() == 0.0
-    
-    print("✅ Test 1: Forced exception fallback working")
 
 
 def test_fallback_on_successful_execution():
@@ -80,8 +78,6 @@ def test_fallback_on_successful_execution():
     assert torch.allclose(outputs['classifications'], torch.ones(1, 196, 80) * 0.5)
     assert torch.allclose(outputs['boxes'], torch.ones(1, 196, 4) * 10.0)
     assert torch.allclose(outputs['objectness'], torch.ones(1, 196) * 0.8)
-    
-    print("✅ Test 2: Successful execution (no fallback) working")
 
 
 def test_dependency_validation_complete():
@@ -117,8 +113,6 @@ def test_dependency_validation_complete():
     # Count valid components
     valid_count = sum(1 for v in validation.values() if v)
     assert valid_count >= 2, f"Expected at least 2 valid components, got {valid_count}"
-    
-    print("✅ Test 3: Complete dependency validation working")
 
 
 def test_dependency_validation_missing():
@@ -142,8 +136,6 @@ def test_dependency_validation_missing():
     failed_count = sum(1 for comp in missing_components if not validation.get(comp, False))
     
     assert failed_count >= 1, "At least one missing component should be flagged as invalid"
-    
-    print("✅ Test 4: Missing dependency validation working")
 
 
 def test_dependency_validation_partial():
@@ -177,8 +169,6 @@ def test_dependency_validation_partial():
     # Should have at least one invalid component
     assert len(invalid_components) >= 1, \
         f"Expected some invalid components, but all passed: {validation}"
-    
-    print("✅ Test 5: Partial dependency validation working")
 
 
 def test_uncertainty_fallback_high_uncertainty():
