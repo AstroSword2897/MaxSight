@@ -202,7 +202,6 @@ def test_uncertainty_fallback_high_uncertainty():
     assert not torch.isnan(outputs['objectness']).any(), "No NaNs should be present"
     assert not torch.isinf(outputs['objectness']).any(), "No Infs should be present"
     
-    print("✅ Test 6: High uncertainty fallback working")
 
 
 def test_uncertainty_fallback_with_noisy_input():
@@ -240,7 +239,6 @@ def test_uncertainty_fallback_with_noisy_input():
     assert not torch.isnan(outputs['objectness']).any()
     assert not torch.isnan(outputs['classifications']).any()
     
-    print("✅ Test 7: Noisy input uncertainty handling working")
 
 
 def test_uncertainty_fallback_low_uncertainty():
@@ -263,7 +261,6 @@ def test_uncertainty_fallback_low_uncertainty():
     assert torch.allclose(outputs['objectness'], original_objectness), \
         "Objectness should not change under low uncertainty"
     
-    print("✅ Test 8: Low uncertainty (no fallback) working")
 
 
 def test_head_execution_manager_success():
@@ -291,7 +288,6 @@ def test_head_execution_manager_success():
     assert summary['total_executions'] >= 1
     assert summary.get('successful', summary['total_executions'] - summary.get('failed', 0)) >= 1
     
-    print("✅ Test 9: HeadExecutionManager success path working")
 
 
 def test_head_execution_manager_exception_with_fallback():
@@ -325,7 +321,6 @@ def test_head_execution_manager_exception_with_fallback():
     assert summary['fallbacks_used'] >= 1 or summary['failed'] >= 1, \
         "Should record fallback usage or failure"
     
-    print("✅ Test 10: HeadExecutionManager exception with fallback working")
 
 
 def test_head_execution_manager_missing_dependency():
@@ -360,7 +355,6 @@ def test_head_execution_manager_missing_dependency():
     assert summary['total_executions'] >= 1
     assert summary['fallbacks_used'] >= 1 or summary['failed'] >= 1
     
-    print("✅ Test 11: HeadExecutionManager missing dependency working")
 
 
 def test_head_execution_manager_latency():
@@ -448,7 +442,6 @@ def test_head_execution_manager_summary_accounting():
     assert summary['fallbacks_used'] >= 2 or summary['failed'] >= 2, \
         f"Expected at least 2 fallbacks/failures, got {summary.get('fallbacks_used', 0)} fallbacks, {summary.get('failed', 0)} failed"
     
-    print("✅ Test 13: HeadExecutionManager accounting working")
 
 
 if __name__ == "__main__":
