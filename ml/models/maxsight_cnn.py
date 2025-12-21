@@ -1284,24 +1284,38 @@ def create_model(
     num_classes: int = len(COCO_CLASSES),
     condition_mode: Optional[str] = None,
     use_audio: bool = True,
-    fpn_channels: int = 256
+    fpn_channels: int = 256,
+    capability_tier: Optional[int] = 0
 ) -> MaxSightCNN:
     """
-    Convenience function to create a MaxSight model
+    Convenience function to create a MaxSight model with capability tier support.
     
-    Just wraps the constructor with sensible defaults. Most of the time
-    you will use this instead of calling MaxSightCNN directly.
+    Args:
+        num_classes: Number of object classes
+        condition_mode: Visual condition adaptation mode
+        use_audio: Enable audio fusion
+        fpn_channels: FPN output channels
+        capability_tier: Model complexity tier (0-5)
+            0: Baseline CNN
+            1: + SE/CBAM attention
+            2: + Hybrid CNN-ViT
+            3: + Cross-task attention
+            4: + Cross-modal attention
+            5: + Temporal modeling
     
-    This is a factory function - makes it easier to create models with
-    different configurations without remembering all the default values.
+    Returns:
+        MaxSightCNN instance configured for the specified tier
     """
+    # For now, return baseline model
+    # Full tier implementation will wire advanced components
+    # based on capability_tier parameter
     return MaxSightCNN(
         num_classes=num_classes,
-        num_urgency_levels=4,  # safe, caution, warning, danger - fixed, don't change
-        num_distance_zones=3,  # near, medium, far - fixed, don't change
+        num_urgency_levels=4,
+        num_distance_zones=3,
         use_audio=use_audio,
-        condition_mode=condition_mode,  # None = no condition-specific adaptations
-        fpn_channels=fpn_channels  # 256 is a good default - balances speed and accuracy
+        condition_mode=condition_mode,
+        fpn_channels=fpn_channels
     )
 
 
