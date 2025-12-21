@@ -33,6 +33,7 @@ from queue import Queue
 import threading
 from PIL import Image
 import sys
+import logging
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -55,6 +56,11 @@ from ml.therapy.therapy_integration import TherapyTaskIntegrator
 from app.overlays.overlay_engine import OverlayEngine
 from app.ui.voice_feedback import VoiceFeedback
 from app.ui.haptic_feedback import HapticFeedback, HapticPattern
+from ml.utils.logging_config import setup_logging
+
+# Setup logging
+logger = setup_logging(log_level="INFO")
+logger = logging.getLogger(__name__)
 
 
 app = Flask(__name__, 
@@ -81,7 +87,7 @@ class MaxSightSimulator:
     
     def __init__(self, device: Optional[str] = None):
         """Initialize all MaxSight components."""
-        print("Initializing MaxSight Simulator...")
+        logger.info("Initializing MaxSight Simulator...")
         
         # Device setup
         if device is None:
@@ -94,16 +100,16 @@ class MaxSightSimulator:
         else:
             self.device = torch.device(device)
         
-        print(f"  Device: {self.device}")
+        logger.info(f"Device: {self.device}")
         
         # Initialize model
-        print("  Loading model...")
+        logger.info("Loading model...")
         self.model = create_model()
         self.model = self.model.to(self.device)
         self.model.eval()
         
         # Initialize all components
-        print("  Initializing components...")
+        logger.info("Initializing components...")
         self.preprocessor = None  # Will be set per user condition
         self.scheduler = CrossModalScheduler(OutputConfig())
         self.ocr = OCRIntegration()
@@ -139,14 +145,14 @@ class MaxSightSimulator:
         self._voice_worker_running = False
         self._haptic_worker_running = False
         
-        print("Simulator initialized!")
+        logger.info("Simulator initialized")
         self._start_async_workers()
     
     def set_user_condition(self, condition: str):
         """Set user's visual condition."""
         self.current_condition = condition
         self.preprocessor = ImagePreprocessor(condition_mode=condition)
-        print(f"  Condition set to: {condition}")
+        logger.info(f"Condition set to: {condition}")
     
     def _preprocess_image(self, image: Image.Image) -> torch.Tensor:
         """
@@ -224,7 +230,7 @@ class MaxSightSimulator:
                 boxes=boxes[0]
             )
         except Exception as e:
-            print(f"  OCR error: {e}")
+            logger.warning(f"OCR error: {e}")
             ocr_results = []
         return ocr_results
     
@@ -373,7 +379,7 @@ class MaxSightSimulator:
             img_str = base64.b64encode(buffered.getvalue()).decode()
             return f"data:image/png;base64,{img_str}"
         except Exception as e:
-            print(f"  Overlay rendering error: {e}")
+            logger.warning(f"Overlay rendering error: {e}")
             return None
     
     def _start_async_workers(self) -> None:
@@ -591,7 +597,7 @@ class MaxSightSimulator:
                 with open(self.baseline_output_path, 'w') as f:
                     json.dump(baseline, f, indent=2)
             except Exception as e:
-                print(f"  Warning: Could not save baseline output: {e}")
+                logger.warning(f"Could not save baseline output: {e}")
 
 
 # Global simulator instance
@@ -773,12 +779,12 @@ def api_session_status():
 
 
 if __name__ == '__main__':
-    print("\n" + "=" * 60)
-    print("MaxSight Product Simulator")
-    print("=" * 60)
-    print("\nStarting web server...")
-    print("Access the simulator at: http://localhost:5001")
-    print("\nPress Ctrl+C to stop\n")
+    logger.info("=" * 60)
+    logger.info("MaxSight Product Simulator")
+    logger.info("=" * 60)
+    logger.info("Starting web server...")
+    logger.info("Access the simulator at: http://localhost:5001")
+    logger.info("Press Ctrl+C to stop")
     
     app.run(host='0.0.0.0', port=5001, debug=True)
 

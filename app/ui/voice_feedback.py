@@ -9,6 +9,10 @@ See docs/therapy_system_implementation_plan.md for implementation details.
 
 from typing import Optional
 from enum import Enum
+import logging
+
+# Use structured logging instead of print
+logger = logging.getLogger(__name__)
 
 
 class VoicePrompt(Enum):
@@ -49,8 +53,8 @@ class VoiceFeedback:
             return
         
         self.current_prompt = prompt
-        # TODO: Implement actual TTS
-        print(f"[Voice] {prompt.value}")
+        # Use logger instead of print
+        logger.info(f"Voice: {prompt.value}")
     
     def speak_custom(self, text: str, priority: int = 0):
         """
@@ -64,8 +68,8 @@ class VoiceFeedback:
             return
         
         self.current_prompt = text
-        # TODO: Implement actual TTS
-        print(f"[Voice] {text}")
+        # Use logger instead of print
+        logger.info(f"Voice: {text}")
     
     def stop(self):
         """Stop current voice output."""
