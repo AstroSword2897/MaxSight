@@ -57,6 +57,10 @@ from app.overlays.overlay_engine import OverlayEngine
 from app.ui.voice_feedback import VoiceFeedback
 from app.ui.haptic_feedback import HapticFeedback, HapticPattern
 from ml.utils.logging_config import setup_logging
+from ml.utils.runtime_output_contract import (
+    OutputMode, Severity, RuntimeOutput, 
+    create_patient_output, create_clinician_output, create_dev_output
+)
 
 # Setup logging
 logger = setup_logging(log_level="INFO")
@@ -85,9 +89,12 @@ class MaxSightSimulator:
         'baseline_save_frame': 1
     }
     
-    def __init__(self, device: Optional[str] = None):
+    def __init__(self, device: Optional[str] = None, output_mode: OutputMode = OutputMode.PATIENT):
         """Initialize all MaxSight components."""
         logger.info("Initializing MaxSight Simulator...")
+        
+        # Output mode
+        self.output_mode = output_mode
         
         # Device setup
         if device is None:
@@ -488,6 +495,8 @@ class MaxSightSimulator:
         8. Therapy integration
         9. Overlay generation
         10. Voice/haptic feedback
+        
+        Returns response shaped by output_mode (patient/clinician/dev).
         """
         start_time = time.perf_counter()
         
@@ -540,41 +549,155 @@ class MaxSightSimulator:
         
         total_time = time.perf_counter() - start_time
         
-        # Compile complete result
-        result = {
-            'frame_number': self.stats['frames_processed'],
-            'timestamp': time.time(),
-            'processing_time_ms': total_time * 1000,
-            'inference_time_ms': inference_time * 1000,
-            
-            # Model outputs
-            'detections': detections_list,
-            'num_detections': len(detections_list),
-            'urgency_scores': outputs['urgency_scores'][0].cpu().tolist(),
-            'distance_zones': outputs['distance_zones'][0].cpu().tolist(),
-            'scene_embedding': outputs['scene_embedding'][0].cpu().tolist(),
-            
-            # OCR results
-            'text_regions': ocr_results,
-            'num_text_regions': len(ocr_results),
-            
-            # Generated content
-            'scene_description': scene_description,
-            'scheduled_outputs': scheduled_outputs,
-            'voice_announcements': voice_announcements,
-            'haptic_patterns': haptic_patterns,
-            'path_info': path_info,
-            'therapy_feedback': therapy_feedback,
-            'overlay_image': overlay_image_b64,
-            
-            # Statistics
-            'stats': self.stats.copy()
-        }
+        # Shape response based on output mode
+        result = self._shape_response(
+            detections_list=detections_list,
+            outputs=outputs,
+            scene_description=scene_description,
+            ocr_results=ocr_results,
+            voice_announcements=voice_announcements,
+            haptic_patterns=haptic_patterns,
+            path_info=path_info,
+            therapy_feedback=therapy_feedback,
+            overlay_image_b64=overlay_image_b64,
+            inference_time_ms=inference_time * 1000,
+            total_time_ms=total_time * 1000
+        )
         
         # Save baseline output for regression testing (first frame only)
         self._save_baseline_output(result)
         
         return result
+    
+    def _shape_response(
+        self,
+        detections_list: List[Dict[str, Any]],
+        outputs: Dict[str, Any],
+        scene_description: str,
+        ocr_results: List[Dict[str, Any]],
+        voice_announcements: List[str],
+        haptic_patterns: List[Dict[str, Any]],
+        path_info: Optional[Dict[str, Any]],
+        therapy_feedback: Optional[Dict[str, Any]],
+        overlay_image_b64: Optional[str],
+        inference_time_ms: float,
+        total_time_ms: float
+    ) -> Dict[str, Any]:
+        """
+        Shape response based on output mode.
+        
+        Patient mode: minimal, actionable only
+        Clinician mode: adds metrics and component breakdown
+        Dev mode: full debug information
+        """
+        # Extract urgency for patient safety
+        urgency_scores = outputs.get('urgency_scores', torch.zeros(1, 4))
+        urgency_level = int(urgency_scores.argmax(dim=1).item()) if urgency_scores.numel() > 0 else 0
+        
+        # Determine severity
+        if urgency_level >= 3:
+            severity = Severity.CRITICAL
+        elif urgency_level >= 2:
+            severity = Severity.HAZARD
+        elif urgency_level >= 1:
+            severity = Severity.WARNING
+        else:
+            severity = Severity.INFO
+        
+        # Compute confidence
+        objectness = outputs.get('objectness', torch.zeros(1, 196))
+        avg_confidence = objectness.max().item() if objectness.numel() > 0 else 0.0
+        
+        # Patient mode: minimal, calm, actionable
+        if self.output_mode == OutputMode.PATIENT:
+            # Only top hazard + one instruction
+            top_hazards = [d for d in detections_list if d.get('urgency', 0) >= 2]
+            if top_hazards:
+                message = f"{top_hazards[0]['class_name']} detected"
+            elif scene_description:
+                # Truncate to first sentence
+                message = scene_description.split('.')[0] + '.'
+            else:
+                message = "Scene clear"
+            
+            return {
+                'mode': 'patient',
+                'severity': severity.value,
+                'message': message,
+                'confidence': round(avg_confidence, 2),
+                'cooldown_applied': False,
+                'overlay_image': overlay_image_b64
+            }
+        
+        # Clinician mode: adds metrics and breakdown
+        elif self.output_mode == OutputMode.CLINICIAN:
+            return {
+                'mode': 'clinician',
+                'severity': severity.value,
+                'message': scene_description or "No description",
+                'confidence': round(avg_confidence, 2),
+                'cooldown_applied': False,
+                
+                # Clinician-specific fields
+                'latency_ms': round(inference_time_ms, 1),
+                'total_time_ms': round(total_time_ms, 1),
+                'num_detections': len(detections_list),
+                'num_hazards': len([d for d in detections_list if d.get('urgency', 0) >= 2]),
+                'ocr_texts': [r.get('text', '') for r in ocr_results],
+                'component_breakdown': {
+                    'detections': len(detections_list),
+                    'ocr': len(ocr_results),
+                    'voice': len(voice_announcements),
+                    'haptic': len(haptic_patterns)
+                },
+                'overlay_image': overlay_image_b64
+            }
+        
+        # Dev mode: full information
+        else:
+            return {
+                'mode': 'dev',
+                'severity': severity.value,
+                'message': scene_description or "No description",
+                'confidence': round(avg_confidence, 2),
+                'cooldown_applied': False,
+                
+                # Dev-specific fields
+                'frame_number': self.stats['frames_processed'],
+                'timestamp': time.time(),
+                'processing_time_ms': total_time_ms,
+                'inference_time_ms': inference_time_ms,
+                
+                # Full model outputs
+                'detections': detections_list,
+                'num_detections': len(detections_list),
+                'urgency_scores': urgency_scores[0].cpu().tolist(),
+                'distance_zones': outputs['distance_zones'][0].cpu().tolist(),
+                'scene_embedding': outputs['scene_embedding'][0].cpu().tolist(),
+                
+                # OCR results
+                'text_regions': ocr_results,
+                'num_text_regions': len(ocr_results),
+                
+                # Generated content
+                'scene_description': scene_description,
+                'scheduled_outputs': scheduled_outputs,
+                'voice_announcements': voice_announcements,
+                'haptic_patterns': haptic_patterns,
+                'path_info': path_info,
+                'therapy_feedback': therapy_feedback,
+                'overlay_image': overlay_image_b64,
+                
+                # Statistics
+                'stats': self.stats.copy(),
+                
+                # Debug info
+                'debug_info': {
+                    'condition': self.current_condition,
+                    'scenario': self.current_scenario,
+                    'session_active': self.session_active
+                }
+            }
     
     def _save_baseline_output(self, result: Dict[str, Any]) -> None:
         """
@@ -628,8 +751,18 @@ def api_init():
     data = request.json
     condition = data.get('condition', 'normal')
     scenario = data.get('scenario', 'general')
+    output_mode_str = data.get('output_mode', 'patient')
+    
+    # Parse output mode
+    if output_mode_str == 'clinician':
+        output_mode = OutputMode.CLINICIAN
+    elif output_mode_str == 'dev':
+        output_mode = OutputMode.DEV
+    else:
+        output_mode = OutputMode.PATIENT
     
     sim = init_simulator()
+    sim.output_mode = output_mode
     sim.set_user_condition(condition)
     sim.current_scenario = scenario
     sim.session_active = data.get('start_session', False)
@@ -641,6 +774,7 @@ def api_init():
         'status': 'initialized',
         'condition': condition,
         'scenario': scenario,
+        'output_mode': output_mode_str,
         'session_active': sim.session_active
     })
 
@@ -774,7 +908,30 @@ def api_session_status():
     sim = init_simulator()
     return jsonify({
         'active': sim.session_active,
-        'stats': sim.stats
+        'stats': sim.stats,
+        'output_mode': sim.output_mode.value
+    })
+
+
+@app.route('/api/mode', methods=['POST'])
+def api_set_mode():
+    """Set output mode (patient/clinician/dev)."""
+    data = request.json
+    mode_str = data.get('mode', 'patient')
+    
+    if mode_str == 'clinician':
+        mode = OutputMode.CLINICIAN
+    elif mode_str == 'dev':
+        mode = OutputMode.DEV
+    else:
+        mode = OutputMode.PATIENT
+    
+    sim = init_simulator()
+    sim.output_mode = mode
+    
+    return jsonify({
+        'status': 'mode_updated',
+        'output_mode': mode_str
     })
 
 

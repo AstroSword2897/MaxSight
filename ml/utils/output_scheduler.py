@@ -625,3 +625,32 @@ def create_scheduler_from_profile(user_profile: Dict) -> CrossModalScheduler:
     )
     return CrossModalScheduler(config)
 
+
+# Backwards-compatible alias for API consistency
+class OutputScheduler(CrossModalScheduler):
+    """
+    Backwards-compatible alias for CrossModalScheduler.
+    
+    This wrapper maintains API compatibility with code that references
+    OutputScheduler while the implementation is actually CrossModalScheduler.
+    
+    Usage:
+        scheduler = OutputScheduler(config)  # Works identically to CrossModalScheduler
+    """
+    pass
+
+
+# Backwards-compatible alias
+class OutputScheduler(CrossModalScheduler):
+    """
+    Backwards-compatible alias for CrossModalScheduler.
+    
+    This wrapper exists to maintain API compatibility with code that references
+    OutputScheduler while the implementation is actually CrossModalScheduler.
+    
+    Usage:
+        scheduler = OutputScheduler(config)  # Works identically to CrossModalScheduler
+    """
+    pass
+
+
