@@ -49,15 +49,15 @@ class MaxSightDataset(Dataset):
         # Initialize preprocessor with condition-specific transforms
         self.preprocessor = ImagePreprocessor(condition_mode=condition_mode)
         
+        # Class name to index mapping (must be defined before _load_annotations)
+        self.class_to_idx = {cls_name: idx for idx, cls_name in enumerate(COCO_CLASSES)}
+        self.idx_to_class = {idx: cls_name for idx, cls_name in enumerate(COCO_CLASSES)}
+        
         # Load annotations
         self.annotations = self._load_annotations()
         
         # Create image/annotation mapping
         self.image_ids = list(self.annotations.keys()) if self.annotations else []
-        
-        # Class name to index mapping
-        self.class_to_idx = {cls_name: idx for idx, cls_name in enumerate(COCO_CLASSES)}
-        self.idx_to_class = {idx: cls_name for idx, cls_name in enumerate(COCO_CLASSES)}
     
     def _load_annotations(self) -> Dict[str, Any]:
         """Load annotations from JSON (COCO or custom format)."""
