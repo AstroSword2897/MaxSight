@@ -147,8 +147,19 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
     
     # Try to open image
     try:
+        # Ensure we have bytes, not a BytesIO object
+        if isinstance(image_bytes, BytesIO):
+            image_bytes = image_bytes.read()
+        
+        # Create BytesIO buffer and ensure it's at position 0
         image_buffer = BytesIO(image_bytes)
+        image_buffer.seek(0)
+        
+        # Open image
         image = Image.open(image_buffer)
+        
+        # Load image to verify it's valid (forces decoding)
+        image.load()
         
         # Check format
         if image.format not in config.allowed_image_formats:

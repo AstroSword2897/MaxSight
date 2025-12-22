@@ -2119,8 +2119,14 @@ def api_process():
         image = None
         if 'image' in request.files:
             image_file = request.files['image']
+            # Ensure file pointer is at the beginning
             image_file.seek(0)
+            # Read all bytes
             image_bytes = image_file.read()
+            # Ensure we have actual bytes
+            if not image_bytes:
+                return jsonify({'error': 'Empty image file received'}), 400
+            # Validate and load image
             image = validate_image_file(image_bytes)
             # Convert to RGB if necessary
             if image.mode != 'RGB':
