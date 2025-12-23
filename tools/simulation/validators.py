@@ -149,14 +149,47 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
     try:
         # Ensure we have bytes, not a BytesIO object
         if isinstance(image_bytes, BytesIO):
+            image_bytes.seek(0)  # Reset position if it's already a BytesIO
             image_bytes = image_bytes.read()
+        
+        # Ensure we have actual bytes
+        if not isinstance(image_bytes, bytes):
+            raise InvalidImageError(
+                f"Expected bytes, got {type(image_bytes).__name__}. "
+                "Please ensure the image file is properly read."
+            )
         
         # Create BytesIO buffer and ensure it's at position 0
         image_buffer = BytesIO(image_bytes)
         image_buffer.seek(0)
         
         # Open image
-        image = Image.open(image_buffer)
+        try:
+            image = Image.open(image_buffer)
+        except Exception as open_error:
+            # Check if it's a format issue
+            error_msg = str(open_error)
+            if 'cannot identify' in error_msg.lower() or 'cannot open' in error_msg.lower():
+                # Try to detect format from file signature
+                if image_bytes[:4] == b'\x00\x00\x00\x20':  # HEIC signature
+                    raise InvalidImageError(
+                        "HEIC/HEIF format is not supported. Please convert to JPEG or PNG. "
+                        "You can use Preview on Mac: File > Export > Format: JPEG"
+                    ) from open_error
+                elif image_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+                    raise InvalidImageError(
+                        "Image appears to be PNG but cannot be opened. File may be corrupted."
+                    ) from open_error
+                elif image_bytes[:2] == b'\xff\xd8':
+                    raise InvalidImageError(
+                        "Image appears to be JPEG but cannot be opened. File may be corrupted."
+                    ) from open_error
+                else:
+                    raise InvalidImageError(
+                        f"Cannot identify image format. File may be corrupted or in an unsupported format. "
+                        f"Supported formats: {', '.join(config.allowed_image_formats)}"
+                    ) from open_error
+            raise
         
         # Load image to verify it's valid (forces decoding)
         image.load()

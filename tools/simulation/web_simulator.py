@@ -2119,15 +2119,46 @@ def api_process():
         image = None
         if 'image' in request.files:
             image_file = request.files['image']
+            
+            # Check filename for format hints
+            filename = image_file.filename or ''
+            if filename.lower().endswith(('.heic', '.heif')):
+                return jsonify({
+                    'error': 'HEIC/HEIF format is not supported. Please convert to JPEG or PNG. '
+                             'On Mac: Open in Preview > File > Export > Format: JPEG'
+                }), 400
+            
             # Ensure file pointer is at the beginning
             image_file.seek(0)
-            # Read all bytes
-            image_bytes = image_file.read()
+            
+            # Read all bytes - ensure we get actual bytes
+            try:
+                image_bytes = image_file.read()
+            except Exception as e:
+                return jsonify({
+                    'error': f'Failed to read image file: {str(e)}'
+                }), 400
+            
             # Ensure we have actual bytes
             if not image_bytes:
                 return jsonify({'error': 'Empty image file received'}), 400
+            
+            # Ensure it's bytes, not a BytesIO object
+            if hasattr(image_bytes, 'read'):
+                # It's a file-like object, read from it
+                image_bytes.seek(0)
+                image_bytes = image_bytes.read()
+            
+            if not isinstance(image_bytes, bytes):
+                return jsonify({
+                    'error': f'Invalid image data type: {type(image_bytes).__name__}. Expected bytes.'
+                }), 400
+            
             # Validate and load image
-            image = validate_image_file(image_bytes)
+            try:
+                image = validate_image_file(image_bytes)
+            except InvalidImageError as e:
+                return jsonify({'error': str(e)}), 400
             # Convert to RGB if necessary
             if image.mode != 'RGB':
                 rgb_image = Image.new('RGB', image.size, (255, 255, 255))
