@@ -674,15 +674,17 @@ class MaxSightDatasetGenerator:
         np.random.seed(config.seed)
     
     def generate_dataset(self, output_dir: Path, num_train: int = 1000, 
-                        num_val: int = 200, use_existing_images: Optional[Path] = None
+                        num_val: int = 200, num_test: int = 0,
+                        use_existing_images: Optional[Path] = None
                         ) -> Dict[str, Any]:
         """
-        Generate complete train/val dataset.
+        Generate complete train/val/test dataset.
         
         Args:
             output_dir: Output directory for dataset
             num_train: Number of training samples
             num_val: Number of validation samples
+            num_test: Number of test samples (optional held-out set)
             use_existing_images: Path to existing images to use as base
         
         Returns:
@@ -691,14 +693,20 @@ class MaxSightDatasetGenerator:
         output_dir = Path(output_dir)
         train_dir = output_dir / 'train'
         val_dir = output_dir / 'val'
+        test_dir = output_dir / 'test'
         
         # Create directories
-        (train_dir / 'images').mkdir(parents=True, exist_ok=True)
-        (val_dir / 'images').mkdir(parents=True, exist_ok=True)
+        if num_train > 0:
+            (train_dir / 'images').mkdir(parents=True, exist_ok=True)
+        if num_val > 0:
+            (val_dir / 'images').mkdir(parents=True, exist_ok=True)
+        if num_test > 0:
+            (test_dir / 'images').mkdir(parents=True, exist_ok=True)
         
         print(f"Generating MaxSight Dataset")
         print(f"  Train samples: {num_train}")
         print(f"  Val samples: {num_val}")
+        print(f"  Test samples: {num_test}")
         print(f"  Output: {output_dir}")
         
         # Load existing images if provided
@@ -709,22 +717,32 @@ class MaxSightDatasetGenerator:
             print(f"  Using {len(existing_images)} existing images as base")
         
         # Generate training set
-        print("\nGenerating training set...")
-        train_stats = self._generate_split(
-            train_dir, num_train, existing_images, 'train'
-        )
+        train_stats = None
+        if num_train > 0:
+            print("\nGenerating training set...")
+            train_stats = self._generate_split(
+                train_dir, num_train, existing_images, 'train'
+            )
         
         # Generate validation set
-        print("\nGenerating validation set...")
-        val_stats = self._generate_split(
-            val_dir, num_val, existing_images, 'val'
-        )
+        val_stats = None
+        if num_val > 0:
+            print("\nGenerating validation set...")
+            val_stats = self._generate_split(
+                val_dir, num_val, existing_images, 'val'
+            )
+        
+        # Generate test set
+        test_stats = None
+        if num_test > 0:
+            print("\nGenerating test set...")
+            test_stats = self._generate_split(
+                test_dir, num_test, existing_images, 'test'
+            )
         
         # Compile statistics
         stats = {
-            'train': train_stats,
-            'val': val_stats,
-            'total_images': num_train + num_val,
+            'total_images': num_train + num_val + num_test,
             'config': asdict(self.config),
             'generated_at': datetime.now().isoformat(),
             'classes': len(COCO_CLASSES),
@@ -732,6 +750,12 @@ class MaxSightDatasetGenerator:
             'impairments': IMPAIRMENT_TYPES,
             'lighting_conditions': list(LIGHTING_CONDITIONS.keys())
         }
+        if train_stats:
+            stats['train'] = train_stats
+        if val_stats:
+            stats['val'] = val_stats
+        if test_stats:
+            stats['test'] = test_stats
         
         # Save statistics
         stats_file = output_dir / 'generation_stats.json'
@@ -739,8 +763,12 @@ class MaxSightDatasetGenerator:
             json.dump(stats, f, indent=2)
         
         print(f"\n✅ Dataset generation complete!")
-        print(f"   Train: {train_stats['num_images']} images, {train_stats['num_annotations']} annotations")
-        print(f"   Val: {val_stats['num_images']} images, {val_stats['num_annotations']} annotations")
+        if train_stats:
+            print(f"   Train: {train_stats['num_images']} images, {train_stats['num_annotations']} annotations")
+        if val_stats:
+            print(f"   Val: {val_stats['num_images']} images, {val_stats['num_annotations']} annotations")
+        if test_stats:
+            print(f"   Test: {test_stats['num_images']} images, {test_stats['num_annotations']} annotations")
         print(f"   Stats saved to: {stats_file}")
         
         return stats
@@ -942,6 +970,8 @@ Examples:
                        help='Number of training samples')
     parser.add_argument('--val-samples', type=int, default=200,
                        help='Number of validation samples')
+    parser.add_argument('--test-samples', type=int, default=0,
+                       help='Number of test samples (optional held-out set)')
     parser.add_argument('--coco-path', type=Path, default=None,
                        help='Path to COCO dataset (for from-coco mode)')
     parser.add_argument('--use-existing', type=Path, default=None,
@@ -985,6 +1015,7 @@ Examples:
             args.output,
             num_train=args.train_samples,
             num_val=args.val_samples,
+            num_test=args.test_samples,
             use_existing_images=args.use_existing
         )
     

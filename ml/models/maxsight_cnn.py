@@ -727,28 +727,33 @@ class MaxSightCNN(nn.Module):
         # Combine features from multiple scales for better detection
         # Resize P3 and P5 to match P4's size so we can concatenate them
         # P3 catches small objects, P4 medium, P5 large - combining helps with all
-        p3_resized = F.interpolate(p3, size=p4.shape[2:], mode='bilinear', align_corners=False)
-        p5_resized = F.interpolate(p5, size=p4.shape[2:], mode='bilinear', align_corners=False)
+        p3_resized = F.interpolate(p3, size=p4.shape[2:], mode='bilinear', align_corners=False).contiguous()
+        p5_resized = F.interpolate(p5, size=p4.shape[2:], mode='bilinear', align_corners=False).contiguous()
+        p4 = p4.contiguous()
         fused_features = torch.cat([p3_resized, p4, p5_resized], dim=1)  # Stack them
         fused_features = self.detection_fusion(fused_features)  # Blend them together
         
         # Apply condition-specific enhancements to help with different vision problems
         if self.condition_mode in ['cataracts', 'refractive_errors', 'myopia', 'hyperopia', 'astigmatism', 'presbyopia'] and hasattr(self, 'contrast_enhance'):
             # Blurry vision - make edges sharper
-            fused_features = self.contrast_enhance(fused_features)
+            fused_features = self.contrast_enhance(fused_features).contiguous()
         if self.condition_mode == 'diabetic_retinopathy' and hasattr(self, 'edge_enhance'):
             # Spotty vision - emphasize edges to fill gaps
-            fused_features = self.edge_enhance(fused_features)
+            fused_features = self.edge_enhance(fused_features).contiguous()
         if self.condition_mode == 'retinitis_pigmentosa' and hasattr(self, 'brightness_enhance'):
             # Night blindness - brighten everything
-            fused_features = fused_features * self.brightness_enhance
+            fused_features = (fused_features * self.brightness_enhance).contiguous()
         if self.condition_mode in ['cvi', 'amblyopia', 'strabismus'] and hasattr(self, 'attention_weights'):
             # Inconsistent vision - focus on the most reliable scale
             attn = F.softmax(self.attention_weights, dim=0)
-            fused_features = (attn[1] * p3_resized + attn[2] * p4 + attn[3] * p5_resized) * 0.5 + fused_features * 0.5
+            fused_features = ((attn[1] * p3_resized + attn[2] * p4 + attn[3] * p5_resized) * 0.5 + fused_features * 0.5).contiguous()
+        
+        # Ensure contiguous for MPS compatibility before detection head
+        fused_features = fused_features.contiguous()
         
         # Process the features to extract detection information
         det_feats = self.detection_head(fused_features)
+        det_feats = det_feats.contiguous()  # Ensure contiguous before passing to heads
         
         # Make predictions at every spatial location
         # Each location can potentially have an object
@@ -762,11 +767,12 @@ class MaxSightCNN(nn.Module):
         # Much easier to work with in the loss function and post-processing
         H, W = det_feats.shape[2:]  # Get spatial dimensions
         # permute(0, 2, 3, 1) moves channels to last dim: [B, H, W, C]
+        # contiguous() ensures tensor is contiguous for MPS compatibility
         # reshape flattens H and W: [B, H*W, C]
-        cls_logits = cls_logits.permute(0, 2, 3, 1).reshape(batch_size, H*W, self.num_classes)
-        box_preds = box_preds.permute(0, 2, 3, 1).reshape(batch_size, H*W, 4)
-        obj_logits = obj_logits.permute(0, 2, 3, 1).reshape(batch_size, H*W)
-        text_logits = text_logits.permute(0, 2, 3, 1).reshape(batch_size, H*W)
+        cls_logits = cls_logits.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W, self.num_classes)
+        box_preds = box_preds.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W, 4)
+        obj_logits = obj_logits.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W)
+        text_logits = text_logits.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W)
         
         # Apply sigmoid to get probabilities (0 to 1 range)
         # Boxes are normalized to [0, 1] - makes training more stable
@@ -819,7 +825,7 @@ class MaxSightCNN(nn.Module):
             
             # 3. Object Findability (per-location, 0-1 score)
             findability_scores = self.findability_head(det_feats)  # [B, 1, H, W]
-            findability_scores = findability_scores.permute(0, 2, 3, 1).reshape(batch_size, H*W)  # [B, H*W]
+            findability_scores = findability_scores.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W)  # [B, H*W]
             
             # 4. Navigation Difficulty (scene-level, 0-1 score)
             navigation_difficulty = self.navigation_difficulty_head(shared_scene_emb)  # [B, 1]
@@ -842,7 +848,7 @@ class MaxSightCNN(nn.Module):
         # Condition-specific enhancements
         if self.condition_mode == 'color_blindness' and hasattr(self, 'color_head'):
             color_logits = self.color_head(det_feats)
-            color_logits = color_logits.permute(0, 2, 3, 1).reshape(batch_size, H*W, 12)
+            color_logits = color_logits.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W, 12)
             outputs['colors'] = color_logits
         
         # Vision condition-specific spatial priorities

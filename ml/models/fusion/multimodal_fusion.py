@@ -87,7 +87,7 @@ class EnhancedAudioEncoder(nn.Module):
             cnn_out = self.spectrogram_cnn(spec)  # [B, 64, T', embed_dim//4]
             # Flatten: [B, 64, T', embed_dim//4] -> [B, T', embed_dim]
             cnn_out = cnn_out.permute(0, 2, 1, 3).contiguous()
-            cnn_out = cnn_out.view(B, -1, self.embed_dim)
+            cnn_out = cnn_out.reshape(B, -1, self.embed_dim)
             
             # Temporal attention
             attended, _ = self.temporal_attention(cnn_out, cnn_out, cnn_out)
@@ -250,7 +250,7 @@ class SpatialSoundMapping(nn.Module):
             distance = self.distance_estimator(audio_features)
         combined = torch.cat([audio_features, direction, distance], dim=1)
         attention_flat = self.attention_generator(combined)
-        attention_map = attention_flat.view(B, 1, H, W)
+        attention_map = attention_flat.reshape(B, 1, H, W)
         return attention_map, direction, distance
     
     def apply_audio_attention(self, visual_features: torch.Tensor, attention_map: torch.Tensor) -> torch.Tensor:

@@ -71,7 +71,7 @@ class SceneMetrics:
         if len(pred_valid) > 0:
             # Vectorized confusion matrix update
             indices = gt_valid * self.num_urgency_levels + pred_valid
-            self.urgency_confusion.view(-1).index_add_(0, indices, torch.ones_like(indices, dtype=torch.long))
+            self.urgency_confusion.reshape(-1).index_add_(0, indices, torch.ones_like(indices, dtype=torch.long))
             
             # Update per-level totals and corrects
             for g_idx in gt_valid.unique():
@@ -114,7 +114,7 @@ class SceneMetrics:
         if len(pred_valid) > 0:
             # Vectorized confusion matrix update
             indices = gt_valid * self.num_distance_zones + pred_valid
-            self.distance_confusion.view(-1).index_add_(0, indices, torch.ones_like(indices, dtype=torch.long))
+            self.distance_confusion.reshape(-1).index_add_(0, indices, torch.ones_like(indices, dtype=torch.long))
     
     def compute_urgency_accuracy(self) -> float:
         """Overall urgency prediction accuracy."""

@@ -1,132 +1,7 @@
 {
-  "train": {
-    "num_images": 50,
-    "num_annotations": 371,
-    "scenario_distribution": {
-      "outdoor_park": 5,
-      "building_entrance": 7,
-      "indoor_home": 7,
-      "outdoor_street": 6,
-      "indoor_retail": 8,
-      "indoor_office": 6,
-      "emergency_scenario": 4,
-      "transit_station": 4,
-      "transit_vehicle": 2,
-      "indoor_medical": 1
-    },
-    "lighting_distribution": {
-      "mixed": 7,
-      "outdoor_sunny": 5,
-      "normal": 11,
-      "dim": 5,
-      "outdoor_overcast": 10,
-      "glare": 2,
-      "bright": 5,
-      "dark": 5
-    },
-    "impairment_distribution": {
-      "none": 17,
-      "myopia": 3,
-      "night_blindness": 4,
-      "diabetic_retinopathy": 3,
-      "color_blindness_tritanopia": 5,
-      "astigmatism": 7,
-      "low_vision": 3,
-      "cataracts": 2,
-      "glaucoma": 2,
-      "color_blindness_protanopia": 1,
-      "color_blindness_deuteranopia": 2,
-      "retinitis_pigmentosa": 1
-    },
-    "urgency_distribution": {
-      "1": 36,
-      "0": 294,
-      "2": 37,
-      "3": 4
-    },
-    "top_classes": {
-      "escalator": 8,
-      "stairs": 7,
-      "exit_sign": 7,
-      "elevator": 7,
-      "person": 6,
-      "bed": 6,
-      "door": 6,
-      "truck": 6,
-      "curb": 6,
-      "sheep": 5,
-      "bicycle": 5,
-      "couch": 5,
-      "bus": 5,
-      "dining table": 5,
-      "oven": 5,
-      "handrail": 5,
-      "chair": 5,
-      "path": 4,
-      "sports ball": 4,
-      "microwave": 4
-    }
-  },
-  "val": {
-    "num_images": 10,
-    "num_annotations": 79,
-    "scenario_distribution": {
-      "building_entrance": 1,
-      "transit_station": 1,
-      "transit_vehicle": 1,
-      "emergency_scenario": 1,
-      "indoor_home": 2,
-      "outdoor_street": 2,
-      "indoor_office": 1,
-      "outdoor_park": 1
-    },
-    "lighting_distribution": {
-      "outdoor_overcast": 2,
-      "dim": 2,
-      "dark": 2,
-      "normal": 4
-    },
-    "impairment_distribution": {
-      "hyperopia": 1,
-      "diabetic_retinopathy": 2,
-      "low_vision": 1,
-      "retinitis_pigmentosa": 1,
-      "none": 2,
-      "color_blindness_tritanopia": 2,
-      "amd": 1
-    },
-    "urgency_distribution": {
-      "0": 68,
-      "1": 4,
-      "2": 6,
-      "3": 1
-    },
-    "top_classes": {
-      "mouse": 3,
-      "window": 3,
-      "door": 3,
-      "horse": 2,
-      "entrance": 2,
-      "stairs": 2,
-      "tie": 2,
-      "suitcase": 2,
-      "remote": 2,
-      "exit_sign": 2,
-      "fire_alarm": 2,
-      "smoke_detector": 2,
-      "bed": 2,
-      "bench": 2,
-      "parking meter": 2,
-      "clock": 1,
-      "baseball bat": 1,
-      "hair drier": 1,
-      "wheelchair_ramp": 1,
-      "motorcycle": 1
-    }
-  },
-  "total_images": 60,
+  "total_images": 200,
   "config": {
-    "seed": 42,
+    "seed": 999,
     "image_size": [
       224,
       224
@@ -150,7 +25,7 @@
       "emergency_scenario": 0.07
     }
   },
-  "generated_at": "2025-12-21T11:25:01.135001",
+  "generated_at": "2025-12-21T12:46:33.662184",
   "classes": 622,
   "scenarios": [
     "indoor_home",
@@ -189,5 +64,75 @@
     "outdoor_sunny",
     "outdoor_overcast",
     "glare"
-  ]
+  ],
+  "test": {
+    "num_images": 200,
+    "num_annotations": 1537,
+    "scenario_distribution": {
+      "transit_vehicle": 14,
+      "indoor_home": 35,
+      "indoor_office": 12,
+      "indoor_retail": 26,
+      "outdoor_street": 25,
+      "building_entrance": 20,
+      "outdoor_park": 18,
+      "indoor_medical": 15,
+      "transit_station": 22,
+      "emergency_scenario": 13
+    },
+    "lighting_distribution": {
+      "glare": 25,
+      "outdoor_overcast": 23,
+      "outdoor_sunny": 21,
+      "dark": 18,
+      "normal": 55,
+      "dim": 21,
+      "bright": 20,
+      "mixed": 17
+    },
+    "impairment_distribution": {
+      "myopia": 17,
+      "color_blindness_protanopia": 18,
+      "night_blindness": 12,
+      "none": 58,
+      "astigmatism": 10,
+      "retinitis_pigmentosa": 13,
+      "color_blindness_tritanopia": 6,
+      "color_blindness_deuteranopia": 9,
+      "amd": 10,
+      "low_vision": 11,
+      "glaucoma": 12,
+      "cataracts": 8,
+      "diabetic_retinopathy": 7,
+      "hyperopia": 9
+    },
+    "urgency_distribution": {
+      "2": 142,
+      "0": 1242,
+      "3": 32,
+      "1": 121
+    },
+    "top_classes": {
+      "door": 39,
+      "stairs": 31,
+      "handrail": 28,
+      "exit_sign": 28,
+      "elevator": 26,
+      "window": 20,
+      "bed": 20,
+      "train": 20,
+      "dining table": 19,
+      "couch": 19,
+      "bus": 19,
+      "automatic_door": 18,
+      "fire hydrant": 18,
+      "bench": 17,
+      "chair": 17,
+      "first_aid": 17,
+      "refrigerator": 17,
+      "traffic light": 16,
+      "sink": 16,
+      "defibrillator": 16
+    }
+  }
 }

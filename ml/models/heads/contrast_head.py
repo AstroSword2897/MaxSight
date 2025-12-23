@@ -29,12 +29,12 @@ class ContrastMapHead(nn.Module):
             sobel_x_tensor = torch.tensor(
                 [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
                 dtype=torch.float32
-            ).view(1, 1, 3, 3)
+            ).reshape(1, 1, 3, 3)
             
             sobel_y_tensor = torch.tensor(
                 [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
                 dtype=torch.float32
-            ).view(1, 1, 3, 3)
+            ).reshape(1, 1, 3, 3)
             
             self.register_buffer('sobel_x', sobel_x_tensor)
             self.register_buffer('sobel_y', sobel_y_tensor)
@@ -94,8 +94,8 @@ class ContrastMapHead(nn.Module):
         
         # Normalize to [0, 1]
         B = edge_mag.shape[0]
-        edge_flat = edge_mag.view(B, -1)
-        edge_max = edge_flat.max(dim=1, keepdim=True)[0].view(B, 1, 1, 1)
+        edge_flat = edge_mag.reshape(B, -1)
+        edge_max = edge_flat.max(dim=1, keepdim=True)[0].reshape(B, 1, 1, 1)
         edge_mag = edge_mag / (edge_max + 1e-8)
         
         return edge_mag
@@ -239,13 +239,13 @@ class ContrastMapHead(nn.Module):
         
         if edge_map.dim() == 4:
             B, C, H, W = edge_map.shape
-            edge_flat = edge_map.view(B, -1)  # [B, H*W]
+            edge_flat = edge_map.reshape(B, -1)  # [B, H*W]
             edge_min = edge_flat.min(dim=1, keepdim=True)[0]  # [B, 1]
             edge_max = edge_flat.max(dim=1, keepdim=True)[0]  # [B, 1]
             
             # Reshape for broadcasting: [B, 1] -> [B, 1, 1, 1] to match [B, 1, H, W]
-            edge_min = edge_min.view(B, 1, 1, 1)
-            edge_max = edge_max.view(B, 1, 1, 1)
+            edge_min = edge_min.reshape(B, 1, 1, 1)
+            edge_max = edge_max.reshape(B, 1, 1, 1)
             
             # Avoid division by zero with efficient masking
             range_mask = (edge_max > edge_min).float()

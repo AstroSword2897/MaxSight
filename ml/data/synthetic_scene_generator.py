@@ -23,7 +23,7 @@ class SyntheticSceneGenerator(nn.Module):
     
     def forward(self, z: torch.Tensor) -> torch.Tensor:
         """Generate synthetic scene."""
-        return self.generator(z).view(-1, 3, *self.output_size)
+        return self.generator(z).reshape(-1, 3, *self.output_size)
     
     @property
     def output_size(self):

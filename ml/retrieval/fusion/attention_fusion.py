@@ -83,7 +83,7 @@ class AttentionFusion(nn.Module):
                     pass
                 else:
                     # Flatten extra dimensions
-                    proj_emb = proj_emb.view(B, -1, self.fused_dim)
+                    proj_emb = proj_emb.reshape(B, -1, self.fused_dim)
                 
                 projected_embeddings.append(proj_emb)
         

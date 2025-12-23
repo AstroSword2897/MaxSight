@@ -130,7 +130,7 @@ class SoundEventHead(nn.Module):
             cnn_out = self.spectrogram_cnn(spec)  # [B, 64, T', embed_dim//4]
             # Flatten: [B, 64, T', embed_dim//4] -> [B, T', embed_dim]
             cnn_out = cnn_out.permute(0, 2, 1, 3).contiguous()
-            cnn_out = cnn_out.view(B, -1, self.spectrogram_cnn[0].out_channels * (self.spectrogram_cnn[-1].output_size[1] if hasattr(self.spectrogram_cnn[-1], 'output_size') else 64))
+            cnn_out = cnn_out.reshape(B, -1, self.spectrogram_cnn[0].out_channels * (self.spectrogram_cnn[-1].output_size[1] if hasattr(self.spectrogram_cnn[-1], 'output_size') else 64))
             
             # Project to embed_dim if needed
             if cnn_out.shape[2] != embed_dim:

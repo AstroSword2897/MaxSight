@@ -93,7 +93,9 @@ def parse_batch(batch: Any) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         images = batch[0]
         targets = batch[1] if len(batch) > 1 else {}
     elif isinstance(batch, dict):
-        images = batch.get('images') or batch.get('image')
+        images = batch.get('images')
+        if images is None:
+            images = batch.get('image')
         if images is None:
             raise ValueError("Batch must contain 'images' or 'image' key")
         targets = {k: v for k, v in batch.items() if k not in ['images', 'image']}
@@ -673,15 +675,17 @@ class ProductionTrainLoop:
                         if pred_labels.dim() > 1:
                             pred_labels = pred_labels.argmax(dim=-1)
                         
-                        if len(pred_boxes) > 0 and len(gt_boxes) > 0:
-                            self.detection_metrics.update(
-                                pred_boxes=pred_boxes,
-                                pred_labels=pred_labels,
-                                pred_scores=pred_scores,
-                                gt_boxes=gt_boxes,
-                                gt_labels=gt_labels,
-                                iou_threshold=0.5
-                            )
+                        # Safety: only update metrics when shapes align to 1D lists of detections
+                        if pred_boxes.dim() == 2 and pred_labels.dim() == 1 and pred_scores.dim() == 1:
+                            if pred_boxes.shape[0] == pred_labels.shape[0] == pred_scores.shape[0] and len(gt_boxes) > 0:
+                                self.detection_metrics.update(
+                                    pred_boxes=pred_boxes,
+                                    pred_labels=pred_labels,
+                                    pred_scores=pred_scores,
+                                    gt_boxes=gt_boxes,
+                                    gt_labels=gt_labels,
+                                    iou_threshold=0.5
+                                )
                 except Exception as e:
                     self.logger.error(f"Validation failed at batch {batch_idx}: {e}")
                     continue

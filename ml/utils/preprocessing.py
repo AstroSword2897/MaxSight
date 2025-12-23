@@ -92,12 +92,12 @@ def rgb_to_lab_tensor(rgb: torch.Tensor, eps: float = EPS_LAB) -> torch.Tensor:
     if rgb.dim() == 3:  # [C, H, W]
         xyz = torch.einsum('ij,jhw->ihw', transform, rgb_linear)
         # Normalize by D65 white point for 3D tensor (white_point never zero, no eps needed)
-        white_point = white_point.view(3, 1, 1)
+        white_point = white_point.reshape(3, 1, 1)
         xyz = xyz / white_point
     else:  # [B, C, H, W]
         xyz = torch.einsum('ij,bjhw->bihw', transform, rgb_linear)
         # Normalize by D65 white point for 4D tensor (white_point never zero, no eps needed)
-        white_point = white_point.view(1, 3, 1, 1)
+        white_point = white_point.reshape(1, 3, 1, 1)
         xyz = xyz / white_point
     
     # XYZ to LAB (with numerical stability)

@@ -95,7 +95,8 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
 
     # Hardware
-    parser.add_argument("--device", choices=["cuda", "cpu"], default="cuda")
+    parser.add_argument("--device", choices=["cuda", "cpu", "mps", "auto"], default="auto",
+                        help="Device to use: cuda, mps, cpu, or auto (prefers mps>cuda>cpu)")
     parser.add_argument("--fp16", action="store_true", help="Use mixed precision")
     
     # Early stopping
@@ -116,15 +117,28 @@ def main():
     args = parser.parse_args()
 
     # Validate device
+    # Resolve device
     device = args.device
-    if device == "cuda" and not torch.cuda.is_available():
+    if device == "auto":
+        if torch.backends.mps.is_available():
+            device = "mps"
+        elif torch.cuda.is_available():
+            device = "cuda"
+        else:
+            device = "cpu"
+    elif device == "cuda" and not torch.cuda.is_available():
         logger.warning("CUDA not available, falling back to CPU.")
+        device = "cpu"
+    elif device == "mps" and not torch.backends.mps.is_available():
+        logger.warning("MPS not available, falling back to CPU.")
         device = "cpu"
 
     logger.info(f"Using device: {device}")
     if device == "cuda":
         logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
         logger.info(f"Total VRAM: {torch.cuda.get_device_properties(0).total_memory/1e9:.2f} GB")
+    elif device == "mps":
+        logger.info("Using Apple MPS (Metal Performance Shaders) backend")
 
     # Set seed
     set_seed(args.seed)

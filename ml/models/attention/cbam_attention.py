@@ -163,10 +163,10 @@ class SEBlock(nn.Module):
         B, C, H, W = x.shape
         
         # Squeeze: global average pooling
-        y = self.avg_pool(x).view(B, C)  # [B, C]
+        y = self.avg_pool(x).reshape(B, C)  # [B, C]
         
         # Excitation: FC layers
-        y = self.fc(y).view(B, C, 1, 1)  # [B, C, 1, 1]
+        y = self.fc(y).reshape(B, C, 1, 1)  # [B, C, 1, 1]
         
         # Scale: multiply with input
         return x * y

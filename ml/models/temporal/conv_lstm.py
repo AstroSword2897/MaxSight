@@ -156,15 +156,15 @@ class DividedSpaceTimeAttention(nn.Module):
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, N, D = x.shape
-        x_spatial = x.view(B * T, N, D)
+        x_spatial = x.reshape(B * T, N, D)
         x_spatial, _ = self.spatial_attn(x_spatial, x_spatial, x_spatial)
-        x_spatial = self.norm1(x.view(B * T, N, D) + x_spatial)
-        x = x_spatial.view(B, T, N, D)
-        x_temporal = x.permute(0, 2, 1, 3).contiguous().view(B * N, T, D)
+        x_spatial = self.norm1(x.reshape(B * T, N, D) + x_spatial)
+        x = x_spatial.reshape(B, T, N, D)
+        x_temporal = x.permute(0, 2, 1, 3).contiguous().reshape(B * N, T, D)
         x_temporal, _ = self.temporal_attn(x_temporal, x_temporal, x_temporal)
-        x_temporal = self.norm2(x.permute(0, 2, 1, 3).contiguous().view(B * N, T, D) + x_temporal)
-        x = x_temporal.view(B, N, T, D).permute(0, 2, 1, 3).contiguous()
-        x_ffn = self.ffn(x.view(B * T * N, D)).view(B, T, N, D)
+        x_temporal = self.norm2(x.permute(0, 2, 1, 3).contiguous().reshape(B * N, T, D) + x_temporal)
+        x = x_temporal.reshape(B, N, T, D).permute(0, 2, 1, 3).contiguous()
+        x_ffn = self.ffn(x.reshape(B * T * N, D)).reshape(B, T, N, D)
         x = self.norm3(x + x_ffn)
         return x
 

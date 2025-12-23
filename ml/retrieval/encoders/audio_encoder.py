@@ -89,7 +89,7 @@ class AudioEncoder(nn.Module):
             # Apply CNN
             cnn_out = self.spectrogram_cnn(spec)  # [B, 64, T', embed_dim//4]
             cnn_out = cnn_out.permute(0, 2, 1, 3).contiguous()
-            cnn_out = cnn_out.view(B, -1, self.embed_dim)
+            cnn_out = cnn_out.reshape(B, -1, self.embed_dim)
             
             # Apply transformer
             audio_embed = self.transformer(cnn_out)  # [B, T', embed_dim]

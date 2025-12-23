@@ -11,9 +11,7 @@ def generate_evaluation_report(metrics: Dict[str, float], save_path: Optional[Pa
     """Generate text report with overall and lighting-stratified metrics."""
     report = []
     
-    report.append("=" * 70)
     report.append("MaxSight Model Evaluation Report")
-    report.append("=" * 70)
     report.append("")
     
     report.append("Overall Performance Metrics:")
