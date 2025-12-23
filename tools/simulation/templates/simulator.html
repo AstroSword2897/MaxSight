@@ -421,6 +421,9 @@
                         <p style="font-size: 0.9em; color: #666;">or click to select</p>
                         <input type="file" id="fileInput" accept="image/*" style="display: none;">
                     </div>
+                    <button id="loadSampleBtn" style="margin-top: 10px; background: #4caf50; color: white; border: none; padding: 10px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: 600;">
+                        🧪 Load Sample Image (Test Dataset)
+                    </button>
                 </div>
                 
                 <div class="stats">
@@ -479,6 +482,8 @@
         document.getElementById('uploadArea').addEventListener('click', () => document.getElementById('fileInput').click());
         document.getElementById('uploadArea').addEventListener('dragover', handleDragOver);
         document.getElementById('uploadArea').addEventListener('drop', handleDrop);
+        document.getElementById('loadSampleBtn').addEventListener('click', loadSampleImage);
+        document.getElementById('loadSampleBtn').addEventListener('click', loadSampleImage);
         document.getElementById('conditionSelect').addEventListener('change', (e) => {
             currentCondition = e.target.value;
             initializeSimulator();
@@ -703,6 +708,93 @@
         
         function closeErrorDialog() {
             document.getElementById('errorDialog').classList.remove('show');
+        }
+        
+        async function loadSampleImage() {
+            try {
+                // Show loading
+                document.getElementById('loadingIndicator').style.display = 'block';
+                document.getElementById('initialUpload').style.display = 'none';
+                document.getElementById('imageViewer').style.display = 'none';
+                
+                // Ensure session is initialized
+                if (!sessionId) {
+                    await initializeSimulator();
+                }
+                
+                // Get available samples first
+                const samplesResponse = await fetch('/api/sample');
+                if (!samplesResponse.ok) {
+                    throw new Error('Failed to load sample images');
+                }
+                
+                const samplesData = await samplesResponse.json();
+                const available = samplesData.available_samples;
+                
+                // Pick a random image from test dataset (or use first available)
+                let dataset = 'test';
+                let imageName = null;
+                
+                if (available.test && available.test.length > 0) {
+                    // Pick random image from test set
+                    const randomIndex = Math.floor(Math.random() * available.test.length);
+                    imageName = available.test[randomIndex];
+                } else if (available.val && available.val.length > 0) {
+                    dataset = 'val';
+                    const randomIndex = Math.floor(Math.random() * available.val.length);
+                    imageName = available.val[randomIndex];
+                } else if (available.train && available.train.length > 0) {
+                    dataset = 'train';
+                    const randomIndex = Math.floor(Math.random() * available.train.length);
+                    imageName = available.train[randomIndex];
+                } else {
+                    throw new Error('No sample images available in dataset');
+                }
+                
+                // Process the sample image
+                const response = await fetch('/api/sample', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Session-ID': sessionId || ''
+                    },
+                    body: JSON.stringify({
+                        image_name: imageName,
+                        dataset: dataset
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorMsg = 'Unknown error';
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorMsg = errorJson.error || errorText;
+                    } catch {
+                        errorMsg = errorText.substring(0, 200);
+                    }
+                    throw new Error(errorMsg);
+                }
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                // Display results (use overlay_image as original for display)
+                const imageData = result.overlay_image || result.sample_info?.image_path || '';
+                displayResults(result, imageData);
+                
+                // Show success message
+                console.log(`✅ Loaded sample image: ${result.sample_info?.image_name || imageName} from ${dataset} dataset`);
+                
+            } catch (error) {
+                console.error('Error loading sample image:', error);
+                showError('Error loading sample image: ' + error.message);
+            } finally {
+                document.getElementById('loadingIndicator').style.display = 'none';
+            }
         }
         
         function displayResults(result, originalImage) {

@@ -2473,6 +2473,139 @@ def api_health():
         }), 500
 
 
+@app.route('/api/sample', methods=['POST', 'GET'])
+def api_sample():
+    """
+    Process a sample image from the dataset.
+    Useful for testing the pipeline without uploading real-world images.
+    
+    GET: Returns list of available sample images
+    POST: Process a specific sample image
+        - image_name: Name of image file (e.g., 'test_000001.jpg')
+        - dataset: 'test', 'val', or 'train' (default: 'test')
+    """
+    try:
+        # Get dataset directories
+        project_root = Path(__file__).parent.parent.parent
+        dataset_dirs = {
+            'test': project_root / 'datasets' / 'test' / 'images',
+            'val': project_root / 'datasets' / 'val' / 'images',
+            'train': project_root / 'datasets' / 'train' / 'images'
+        }
+        
+        if request.method == 'GET':
+            # Return list of available sample images
+            available_samples = {}
+            for dataset_name, dataset_dir in dataset_dirs.items():
+                if dataset_dir.exists():
+                    images = sorted(list(dataset_dir.glob('*.jpg')))[:20]  # First 20
+                    available_samples[dataset_name] = [img.name for img in images]
+            
+            return jsonify({
+                'available_samples': available_samples,
+                'total_datasets': len([d for d in dataset_dirs.values() if d.exists()])
+            })
+        
+        # POST: Process a sample image
+        # Get session
+        try:
+            session = require_session()
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        
+        # Get parameters
+        if request.is_json:
+            data = request.json
+            image_name = data.get('image_name', 'test_000001.jpg')
+            dataset = data.get('dataset', 'test')
+        else:
+            image_name = request.form.get('image_name', 'test_000001.jpg')
+            dataset = request.form.get('dataset', 'test')
+        
+        # Validate dataset
+        if dataset not in dataset_dirs:
+            return jsonify({'error': f'Invalid dataset: {dataset}. Must be one of: {list(dataset_dirs.keys())}'}), 400
+        
+        # Load image from dataset
+        image_path = dataset_dirs[dataset] / image_name
+        if not image_path.exists():
+            # Try to find any image in the dataset
+            available = list(dataset_dirs[dataset].glob('*.jpg'))
+            if not available:
+                return jsonify({
+                    'error': f'No images found in {dataset} dataset',
+                    'dataset_path': str(dataset_dirs[dataset])
+                }), 404
+            
+            # Use first available image
+            image_path = available[0]
+            image_name = image_path.name
+            api_logger.info(f"Image {image_name} not found, using {image_name} instead")
+        
+        # Read and validate image
+        try:
+            with open(image_path, 'rb') as f:
+                image_bytes = f.read()
+            image = validate_image_file(image_bytes)
+            # Convert to RGB
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+        except Exception as e:
+            return jsonify({
+                'error': f'Failed to load sample image: {str(e)}',
+                'image_path': str(image_path)
+            }), 400
+        
+        # Process frame
+        try:
+            result = session.process_frame(image, audio_features=None, frame_id=None)
+            
+            # Add degraded mode status
+            degraded_status = session.degraded_state.get_status()
+            result['degraded_status'] = degraded_status
+            
+            # Add resource usage info
+            result['resource_usage'] = {
+                'spatial_memory_count': session._spatial_memory_count,
+                'memory_usage_mb': session._memory_usage_mb,
+                'queue_dropped_voice': session.voice_queue.get_dropped_count(),
+                'queue_dropped_haptic': session.haptic_queue.get_dropped_count()
+            }
+            
+            # Add sample image info
+            result['sample_info'] = {
+                'image_name': image_name,
+                'dataset': dataset,
+                'image_path': str(image_path.relative_to(project_root))
+            }
+            
+        except Exception as e:
+            api_logger.error(f"Error processing sample image in session {session.session_id}: {e}", exc_info=True)
+            return jsonify({
+                'error': f'Error processing sample image: {str(e)}',
+                'error_type': type(e).__name__
+            }), 500
+        
+        # Ensure overlay image exists
+        if not result.get('overlay_image'):
+            try:
+                image_buffer = BytesIO()
+                image.save(image_buffer, format='PNG')
+                image_base64 = base64.b64encode(image_buffer.getvalue()).decode('utf-8')
+                result['overlay_image'] = f"data:image/png;base64,{image_base64}"
+            except Exception as e:
+                logger.warning(f"Error creating fallback overlay: {e}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        api_logger.error(f"Sample endpoint error: {e}", exc_info=True)
+        return jsonify({
+            'error': f'Error in sample endpoint: {str(e)}',
+            'error_type': type(e).__name__
+        }), 500
+
+
 @app.route('/api/metrics', methods=['GET'])
 def api_metrics():
     """
