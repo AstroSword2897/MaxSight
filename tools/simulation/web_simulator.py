@@ -302,27 +302,27 @@ class MaxSightSession:
                 try:
                     self.voice_queue.get_nowait()
                 except Exception as e:
-                    session_logger.warning("Error flushing voice queue during abort", 
-                                          session_id=self.session_id, error=str(e))
+                    session_logger.warning(f"Error flushing voice queue during abort: {str(e)}", 
+                                          session_id=self.session_id)
             while not self.haptic_queue.empty():
                 try:
                     self.haptic_queue.get_nowait()
                 except Exception as e:
-                    session_logger.warning("Error flushing haptic queue during abort", 
-                                          session_id=self.session_id, error=str(e))
+                    session_logger.warning(f"Error flushing haptic queue during abort: {str(e)}", 
+                                          session_id=self.session_id)
             # Clear output authority
             self.output_authority.reset()
             # Stop voice/haptic immediately
             try:
                 self.voice_feedback.stop()
             except Exception as e:
-                session_logger.warning("Error stopping voice feedback during abort", 
-                                     session_id=self.session_id, error=str(e))
+                session_logger.warning(f"Error stopping voice feedback during abort: {str(e)}", 
+                                     session_id=self.session_id)
             try:
                 self.haptic_feedback.stop()
             except Exception as e:
-                session_logger.warning("Error stopping haptic feedback during abort", 
-                                     session_id=self.session_id, error=str(e))
+                session_logger.warning(f"Error stopping haptic feedback during abort: {str(e)}", 
+                                     session_id=self.session_id)
     
     def shutdown(self):
         """Clean shutdown of session resources."""
@@ -370,8 +370,8 @@ class MaxSightSession:
                         except (OSError, IOError) as e:
                             # Hardware/system errors
                             consecutive_failures += 1
-                            session_logger.error("Voice hardware error", 
-                                                session_id=self.session_id, error=str(e))
+                            session_logger.error(f"Voice hardware error: {str(e)}", 
+                                                session_id=self.session_id)
                             if consecutive_failures >= max_failures:
                                 self.degraded_state.set_degraded(DegradedMode.AUDIO_UNAVAILABLE, 
                                                                 f"Hardware failure: {str(e)}")
@@ -380,8 +380,8 @@ class MaxSightSession:
                             backoff_seconds = min(backoff_seconds * 2, 5.0)  # Exponential backoff
                         except Exception as e:
                             # Other errors - log but continue
-                            session_logger.error("Voice processing error", 
-                                                session_id=self.session_id, error=str(e))
+                            session_logger.error(f"Voice processing error: {str(e)}", 
+                                                session_id=self.session_id)
                             consecutive_failures += 1
                             if consecutive_failures >= max_failures:
                                 self.degraded_state.set_degraded(DegradedMode.AUDIO_UNAVAILABLE, str(e))
@@ -391,9 +391,11 @@ class MaxSightSession:
                                               session_id=self.session_id)
                 except Exception as e:
                     # Queue errors - log but continue
-                    if not isinstance(e, (TimeoutError, AttributeError)):
-                        session_logger.error("Voice queue error", 
-                                            session_id=self.session_id, error=str(e))
+                    # Empty exception is expected on timeout, don't log as error
+                    from queue import Empty
+                    if not isinstance(e, (Empty, TimeoutError, AttributeError)):
+                        session_logger.error(f"Voice queue error: {str(e)}", 
+                                            session_id=self.session_id)
                     time.sleep(0.1)  # Brief pause on error
         
         def haptic_worker():
@@ -424,8 +426,8 @@ class MaxSightSession:
                         except (OSError, IOError) as e:
                             # Hardware/system errors
                             consecutive_failures += 1
-                            session_logger.error("Haptic hardware error", 
-                                                session_id=self.session_id, error=str(e))
+                            session_logger.error(f"Haptic hardware error: {str(e)}", 
+                                                session_id=self.session_id)
                             if consecutive_failures >= max_failures:
                                 self.degraded_state.set_degraded(DegradedMode.HAPTIC_UNAVAILABLE, 
                                                                 f"Hardware failure: {str(e)}")
@@ -434,8 +436,8 @@ class MaxSightSession:
                             backoff_seconds = min(backoff_seconds * 2, 5.0)  # Exponential backoff
                         except Exception as e:
                             # Other errors - log but continue
-                            session_logger.error("Haptic processing error", 
-                                                session_id=self.session_id, error=str(e))
+                            session_logger.error(f"Haptic processing error: {str(e)}", 
+                                                session_id=self.session_id)
                             consecutive_failures += 1
                             if consecutive_failures >= max_failures:
                                 self.degraded_state.set_degraded(DegradedMode.HAPTIC_UNAVAILABLE, str(e))
@@ -445,9 +447,11 @@ class MaxSightSession:
                                             session_id=self.session_id)
                 except Exception as e:
                     # Queue errors - log but continue
-                    if not isinstance(e, (TimeoutError, AttributeError)):
-                        session_logger.error("Haptic queue error", 
-                                            session_id=self.session_id, error=str(e))
+                    # Empty exception is expected on timeout, don't log as error
+                    from queue import Empty
+                    if not isinstance(e, (Empty, TimeoutError, AttributeError)):
+                        session_logger.error(f"Haptic queue error: {str(e)}", 
+                                            session_id=self.session_id)
                     time.sleep(0.1)  # Brief pause on error
         
         self.voice_thread = threading.Thread(target=voice_worker, daemon=True, name=f"Voice-{self.session_id}")
@@ -495,8 +499,8 @@ class MaxSightSession:
                 boxes=boxes[0]
             )
         except Exception as e:
-            session_logger.error("OCR processing failed", 
-                                session_id=self.session_id, error=str(e))
+            session_logger.error(f"OCR processing failed: {str(e)}", 
+                                session_id=self.session_id)
             self.degraded_state.set_degraded(DegradedMode.TEXT_DETECTION_OFFLINE, str(e))
             ocr_results = []
         return ocr_results
@@ -535,8 +539,8 @@ class MaxSightSession:
                     self.degraded_state.set_degraded(DegradedMode.MEMORY_FULL, 
                                                     f"Memory at capacity, pruned {prune_count} entries")
             except Exception as e:
-                session_logger.error("Error pruning spatial memory", 
-                                    session_id=self.session_id, error=str(e))
+                session_logger.error(f"Error pruning spatial memory: {str(e)}", 
+                                    session_id=self.session_id)
         
         spatial_detections = []
         for det in detections_list:
@@ -556,8 +560,8 @@ class MaxSightSession:
                 # Update resource tracking
                 self._spatial_memory_count = len(self.spatial_memory.memory) if hasattr(self.spatial_memory, 'memory') else self._spatial_memory_count + len(spatial_detections)
             except Exception as e:
-                session_logger.error("Error updating spatial memory", 
-                                    session_id=self.session_id, error=str(e))
+                session_logger.error(f"Error updating spatial memory: {str(e)}", 
+                                    session_id=self.session_id)
                 self.degraded_state.set_degraded(DegradedMode.MEMORY_FULL, str(e))
     
     def _plan_path(self, detections_list: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -747,8 +751,8 @@ class MaxSightSession:
             try:
                 image_tensor = self._preprocess_image(image)
             except Exception as e:
-                session_logger.error("Image preprocessing failed", 
-                                    session_id=self.session_id, error=str(e))
+                session_logger.error(f"Image preprocessing failed: {str(e)}", 
+                                    session_id=self.session_id)
                 self.degraded_state.set_degraded(DegradedMode.VISION_UNSTABLE, str(e))
                 return {'error': 'Image preprocessing failed', 'degraded_mode': 'vision_unstable'}
             
@@ -760,8 +764,8 @@ class MaxSightSession:
             try:
                 outputs, inference_time = self._run_inference(image_tensor, audio_features)
             except Exception as e:
-                session_logger.error("Model inference failed", 
-                                    session_id=self.session_id, error=str(e))
+                session_logger.error(f"Model inference failed: {str(e)}", 
+                                    session_id=self.session_id)
                 self.degraded_state.set_degraded(DegradedMode.VISION_UNSTABLE, str(e))
                 return {'error': 'Model inference failed', 'degraded_mode': 'vision_unstable'}
             
