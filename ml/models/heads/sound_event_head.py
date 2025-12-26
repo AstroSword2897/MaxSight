@@ -2,53 +2,61 @@
 Sound Event Classification Head for MaxSight 3.0
 
 CNN + temporal attention for sound event classification and directional detection.
+Fully learnable direction prediction, priority weighting, and urgency mapping.
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Optional, List
+from typing import Dict
 
 
 class SoundEventHead(nn.Module):
     """
     Sound event classification head.
     
-    Architecture:
-    - CNN on spectrograms
-    - Temporal attention for sound events
-    - Directional audio detection
-    - Priority weighting for urgent events
+    Features:
+    - Spectrogram CNN
+    - Temporal attention
+    - Fully learnable directional detection
+    - Priority weighting
+    - Urgency mapping
     """
     
     def __init__(
         self,
-        input_dim: int = 128,  # Spectrogram or MFCC features
-        num_classes: int = 15,  # Sound classes
+        input_dim: int = 128,  
+        num_classes: int = 15,
         embed_dim: int = 256,
         num_heads: int = 8,
-        num_directions: int = 4  # left, right, front, back
+        num_directions: int = 4
     ):
         super().__init__()
         
         self.num_classes = num_classes
         self.num_directions = num_directions
+        self.embed_dim = embed_dim
+
+        # Input projection for non-spectrogram features
+        self.input_proj = nn.Linear(input_dim, embed_dim)
         
-        # Spectrogram CNN (if input is spectrogram)
+        # Spectrogram CNN
         self.spectrogram_cnn = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=(3, 3), padding=1),
+            nn.Conv2d(1, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=(3, 3), padding=1),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.AdaptiveAvgPool2d((None, embed_dim // 4))
+            nn.AdaptiveAvgPool2d((None, embed_dim // 4))  # [T', embed_dim//4]
         )
+
+        # Project CNN output to embedding dimension
+        self.spectrogram_proj = nn.Linear(64 * (embed_dim // 4), embed_dim)
         
         # Temporal attention
-        self.temporal_attention = nn.MultiheadAttention(
-            embed_dim, num_heads, batch_first=True
-        )
+        self.temporal_attention = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
+        self.attention_norm = nn.LayerNorm(embed_dim)
         
         # Sound classification head
         self.classifier = nn.Sequential(
@@ -58,7 +66,7 @@ class SoundEventHead(nn.Module):
             nn.Linear(256, num_classes)
         )
         
-        # Directional detection head
+        # Fully learnable directional detection
         self.direction_head = nn.Sequential(
             nn.Linear(embed_dim, 128),
             nn.ReLU(),
@@ -71,10 +79,10 @@ class SoundEventHead(nn.Module):
             nn.Linear(embed_dim, 64),
             nn.ReLU(),
             nn.Linear(64, 1),
-            nn.Sigmoid()  # Priority score [0, 1]
+            nn.Sigmoid()
         )
         
-        # Urgency mapping (sound class -> urgency level)
+        # Urgency mapping: class -> urgency level
         self.register_buffer('urgency_map', torch.tensor([
             3,  # EMERGENCY
             3,  # ALARM
@@ -95,15 +103,13 @@ class SoundEventHead(nn.Module):
     
     def forward(
         self,
-        audio_features: torch.Tensor,  # [B, T, input_dim] or [B, input_dim]
-        stereo_channels: Optional[torch.Tensor] = None  # [B, T, 2]
+        audio_features: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass through sound event head.
         
         Args:
             audio_features: Audio features [B, T, input_dim] or [B, input_dim]
-            stereo_channels: Optional stereo channels [B, T, 2]
         
         Returns:
             Dictionary with:
@@ -115,62 +121,38 @@ class SoundEventHead(nn.Module):
         """
         B = audio_features.shape[0]
         
-        # Handle different input formats
         if audio_features.dim() == 2:
-            # [B, input_dim] - single frame
             audio_features = audio_features.unsqueeze(1)  # [B, 1, input_dim]
         
-        # If spectrogram format [B, T, F], convert for CNN
+        # Spectrogram branch
         if audio_features.dim() == 3:
-            T, F = audio_features.shape[1], audio_features.shape[2]
-            # Reshape for CNN: [B, T, F] -> [B, 1, T, F]
-            spec = audio_features.unsqueeze(1)
+            T, freq_bins = audio_features.shape[1], audio_features.shape[2]
+            spec = audio_features.unsqueeze(1)  # [B, 1, T, freq_bins]
             
-            # Apply CNN
             cnn_out = self.spectrogram_cnn(spec)  # [B, 64, T', embed_dim//4]
-            # Flatten: [B, 64, T', embed_dim//4] -> [B, T', embed_dim]
-            cnn_out = cnn_out.permute(0, 2, 1, 3).contiguous()
-            cnn_out = cnn_out.reshape(B, -1, self.spectrogram_cnn[0].out_channels * (self.spectrogram_cnn[-1].output_size[1] if hasattr(self.spectrogram_cnn[-1], 'output_size') else 64))
+            cnn_out = cnn_out.permute(0, 2, 1, 3).contiguous()  # [B, T', 64, embed_dim//4]
+            cnn_out = cnn_out.view(B, cnn_out.shape[1], -1)  # [B, T', 64*(embed_dim//4)]
             
-            # Project to embed_dim if needed
-            if cnn_out.shape[2] != embed_dim:
-                proj = nn.Linear(cnn_out.shape[2], embed_dim).to(cnn_out.device)
-                cnn_out = proj(cnn_out)
-            
-            # Temporal attention
-            attended, _ = self.temporal_attention(cnn_out, cnn_out, cnn_out)
-            audio_embed = (cnn_out + attended).mean(dim=1)  # [B, embed_dim]
+            audio_embed = self.spectrogram_proj(cnn_out)  # [B, T', embed_dim]
+            attended, _ = self.temporal_attention(audio_embed, audio_embed, audio_embed)
+            audio_embed = self.attention_norm(audio_embed + attended)
+            audio_embed = audio_embed.mean(dim=1)  # [B, embed_dim]
         else:
-            # Simple projection
-            audio_embed = nn.Linear(audio_features.shape[-1], embed_dim).to(audio_features.device)(audio_features.mean(dim=1))
+            audio_embed = self.input_proj(audio_features.mean(dim=1))
         
         # Sound classification
-        sound_logits = self.classifier(audio_embed)  # [B, num_classes]
-        sound_probs = F.softmax(sound_logits, dim=1)  # [B, num_classes]
+        sound_logits = self.classifier(audio_embed)
+        sound_probs = F.softmax(sound_logits, dim=1)
         
-        # Directional detection
-        if stereo_channels is not None:
-            # Compute direction from stereo
-            left = stereo_channels[:, :, 0].mean(dim=1)  # [B]
-            right = stereo_channels[:, :, 1].mean(dim=1)  # [B]
-            ild = left - right
-            
-            direction = torch.stack([
-                (ild < -0.1).float(),  # Left
-                (ild > 0.1).float(),   # Right
-                (torch.abs(ild) < 0.1).float(),  # Front
-                torch.zeros(B, device=audio_features.device)  # Back
-            ], dim=1)
-            direction = direction / (direction.sum(dim=1, keepdim=True) + 1e-8)
-        else:
-            direction = self.direction_head(audio_embed)  # [B, num_directions]
+        # Learnable direction prediction
+        direction = self.direction_head(audio_embed)
         
-        # Priority weighting
-        priority = self.priority_head(audio_embed)  # [B, 1]
-        
-        # Urgency level (based on predicted sound class)
-        predicted_class = sound_logits.argmax(dim=1)  # [B]
-        urgency = self.urgency_map[predicted_class].unsqueeze(1).float()  # [B, 1]
+        # Priority and urgency
+        priority = self.priority_head(audio_embed)
+        predicted_class = sound_logits.argmax(dim=1)
+        # urgency_map is a registered buffer (tensor), use getattr for type checker
+        urgency_map = getattr(self, 'urgency_map')
+        urgency = urgency_map[predicted_class].unsqueeze(1).float()
         
         return {
             'sound_logits': sound_logits,
@@ -179,5 +161,3 @@ class SoundEventHead(nn.Module):
             'priority': priority,
             'urgency': urgency
         }
-
-

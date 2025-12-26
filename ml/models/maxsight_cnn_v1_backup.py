@@ -497,98 +497,6 @@ class MaxSightCNN(nn.Module):
             nn.Linear(128, num_distance_zones)
         )
         
-        # Enhanced audio processing (replaces simple audio_branch)
-        from ml.models.fusion.multimodal_fusion import EnhancedAudioEncoder, SpatialSoundMapping
-        from ml.models.heads.sound_event_head import SoundEventHead
-        
-        self.audio_encoder = EnhancedAudioEncoder(
-            input_dim=128,
-            embed_dim=256,
-            num_heads=8
-        )
-        self.sound_event_head = SoundEventHead(
-            input_dim=256,
-            num_classes=15,
-            embed_dim=256,
-            num_heads=8
-        )
-        self.spatial_sound = SpatialSoundMapping(
-            audio_dim=256,
-            attention_size=(14, 14),  # Match FPN output size
-            num_directions=4
-        )
-        
-        # Depth head with uncertainty
-        from ml.models.heads.depth_head import DepthHead
-        self.depth_head_module = DepthHead(
-            in_channels=fpn_channels,  # 256
-            dropout=0.1
-        )
-        
-        # Temporal encoder
-        from ml.models.temporal.temporal_encoder import TemporalEncoder
-        self.temporal_encoder = TemporalEncoder(
-            in_channels=256,
-            num_frames=8,
-            hidden_dim=256,
-            use_conv_lstm=True,
-            use_timesformer=False  # Can enable later
-        )
-        self.temporal_feature_proj = nn.Conv2d(256, 256, 1)  # Project motion features
-        
-        # Scene graph encoder
-        from ml.models.scene_graph.scene_graph_encoder import SceneGraphEncoder
-        self.scene_graph_encoder = SceneGraphEncoder(
-            object_embed_dim=256,
-            relation_embed_dim=128
-        )
-        self.max_scene_graph_objects = 10  # Top-K constraint
-        
-        # Scene description head
-        from ml.models.heads.scene_description_head import SceneDescriptionHead
-        from ml.retrieval.encoders.global_encoder import GlobalEncoder
-        
-        # Try to use CLIP, fallback to DINOv2 if transformers not available
-        try:
-            self.global_encoder = GlobalEncoder(
-                embed_dim=512,
-                use_clip=True
-            )
-        except ImportError:
-            # Fallback: use DINOv2 or simple projection if CLIP unavailable
-            self.global_encoder = GlobalEncoder(
-                embed_dim=512,
-                use_clip=False
-            )
-        self.scene_description_head = SceneDescriptionHead(
-            global_dim=512,
-            region_dim=256,
-            ocr_dim=256,
-            embed_dim=512,
-            vocab_size=30000,
-            max_length=100
-        )
-        self.generate_description = True  # Config flag
-        
-        # Personalization
-        from ml.models.heads.personalization_head import PersonalizationHead
-        self.personalization_head = PersonalizationHead(
-            input_dim=512,
-            num_features=10,
-            num_alert_types=5,
-            embed_dim=256
-        )
-        self.user_embeddings = nn.Embedding(
-            num_embeddings=10000,  # Max users
-            embedding_dim=256
-        )
-        self.object_encoder = nn.Sequential(
-            nn.Linear(256, 256),
-            nn.LayerNorm(256),
-            nn.ReLU(),
-            nn.Linear(256, 256)
-        )
-        
         # Condition-specific adaptations
         if condition_mode == 'color_blindness':
             self.color_head = nn.Sequential(
@@ -742,10 +650,7 @@ class MaxSightCNN(nn.Module):
     def forward(
         self,
         images: torch.Tensor,
-        audio_features: Optional[torch.Tensor] = None,
-        user_id: Optional[torch.Tensor] = None,
-        prev_temporal_state: Optional[Dict] = None,
-        use_temporal: bool = False
+        audio_features: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass through MaxSightCNN.
@@ -772,26 +677,13 @@ class MaxSightCNN(nn.Module):
         environmental understanding, enabling all of MaxSight's accessibility features.
         
         Arguments:
-            images: [B, 3, 224, 224] or [B, T, 3, 224, 224] for video
+            images: [B, 3, 224, 224]
             audio_features: [B, 128] optional
-            user_id: [B] optional user IDs for personalization
-            prev_temporal_state: Optional temporal state for video sequences
-            use_temporal: Whether to use temporal processing
         
         Returns:
             Dictionary with all predictions
         """
-        # Handle temporal input (video sequences)
-        temporal_mode = False
-        B_orig = None
-        if images.dim() == 5:  # [B, T, 3, H, W]
-            temporal_mode = True
-            use_temporal = True
-            B_orig, T, C_img, H_img, W_img = images.shape
-            images = images.view(B_orig * T, C_img, H_img, W_img)  # Flatten for backbone
-            batch_size = B_orig * T
-        else:
-            batch_size = images.size(0)
+        batch_size = images.size(0)
         
         # Run through ResNet backbone to extract features
         # This is the standard ResNet forward pass - nothing fancy here
@@ -822,6 +714,16 @@ class MaxSightCNN(nn.Module):
         ], dim=1)
         scene_context = self.scene_proj(scene_feats)  # Compress to manageable size
         
+        # Add audio context if available (helps with things like alarms, speech)
+        # Audio gives clues that vision might miss, but it's optional
+        if audio_features is not None:
+            audio_emb = self.audio_branch(audio_features)  # Process audio features
+            combined_context = torch.cat([scene_context, audio_emb], dim=1)  # Combine visual + audio
+        else:
+            # If no audio, just use zeros (model should still work)
+            audio_emb = torch.zeros(batch_size, 128, device=scene_context.device)
+            combined_context = torch.cat([scene_context, audio_emb], dim=1)
+        
         # Combine features from multiple scales for better detection
         # Resize P3 and P5 to match P4's size so we can concatenate them
         # P3 catches small objects, P4 medium, P5 large - combining helps with all
@@ -830,45 +732,6 @@ class MaxSightCNN(nn.Module):
         p4 = p4.contiguous()
         fused_features = torch.cat([p3_resized, p4, p5_resized], dim=1)  # Stack them
         fused_features = self.detection_fusion(fused_features)  # Blend them together
-        
-        # Enhanced audio processing with spatial attention (AFTER fused_features is created)
-        sound_outputs = None
-        if audio_features is not None:
-            # Encode audio
-            audio_emb, _ = self.audio_encoder(audio_features)  # [B, 256]
-            
-            # Generate sound classifications (separate from spatial attention)
-            sound_outputs = self.sound_event_head(audio_emb.unsqueeze(1))  # [B, 1, 256] -> outputs
-            
-            # Generate spatial attention map
-            audio_attention_map, direction, distance = self.spatial_sound(audio_emb)
-            
-            # CRITICAL CONSTRAINTS:
-            # 1. Assert spatial dimensions match
-            assert audio_attention_map.shape[-2:] == fused_features.shape[-2:], \
-                f"Audio attention {audio_attention_map.shape} must match features {fused_features.shape}"
-            assert audio_attention_map.ndim == 4, "Audio attention must be [B, 1, H, W]"
-            
-            # 2. Interpolate if needed (preserve channel count)
-            if audio_attention_map.shape[2:] != fused_features.shape[2:]:
-                audio_attention_map = F.interpolate(
-                    audio_attention_map,
-                    size=fused_features.shape[2:],
-                    mode='bilinear',
-                    align_corners=False
-                )
-            
-            # 3. MULTIPLICATIVE (not concatenation) - preserves pretrained weights
-            # Use sigmoid for smoother gradients
-            audio_attention_map = torch.sigmoid(audio_attention_map)  # [0, 1] with smooth gradients
-            fused_features = fused_features * (1.0 + audio_attention_map)  # Multiplicative gating
-            
-            # Combine for scene context
-            combined_context = torch.cat([scene_context, audio_emb], dim=1)  # [B, 256 + 256 = 512]
-        else:
-            # If no audio, just use zeros
-            audio_emb = torch.zeros(batch_size, 256, device=scene_context.device)
-            combined_context = torch.cat([scene_context, audio_emb], dim=1)  # [B, 512]
         
         # Apply condition-specific enhancements to help with different vision problems
         if self.condition_mode in ['cataracts', 'refractive_errors', 'myopia', 'hyperopia', 'astigmatism', 'presbyopia'] and hasattr(self, 'contrast_enhance'):
@@ -884,55 +747,6 @@ class MaxSightCNN(nn.Module):
             # Inconsistent vision - focus on the most reliable scale
             attn = F.softmax(self.attention_weights, dim=0)
             fused_features = ((attn[1] * p3_resized + attn[2] * p4 + attn[3] * p5_resized) * 0.5 + fused_features * 0.5).contiguous()
-        
-        # Ensure contiguous for MPS compatibility before temporal processing
-        fused_features = fused_features.contiguous()
-        
-        # Temporal processing (if video) - AFTER fused_features is created
-        temporal_outputs = None
-        if use_temporal and temporal_mode and B_orig is not None:
-            # Get spatial dimensions from fused_features
-            _, _, H_temp, W_temp = fused_features.shape
-            # Reshape features back to temporal format
-            fused_features_temporal = fused_features.view(B_orig, T, -1, H_temp, W_temp)  # [B, T, C, H, W]
-            
-            # Get temporal context
-            temporal_outputs = self.temporal_encoder(fused_features_temporal)
-            
-            # Get motion features (already at correct spatial resolution)
-            motion_features = temporal_outputs.get('motion_features')  # [B, 256, H, W] or similar
-            
-            if motion_features is not None:
-                # Reshape motion_features to match batch size
-                motion_features = motion_features.view(B_orig * T, -1, H_temp, W_temp)
-                # Assert spatial alignment
-                assert motion_features.shape[2:] == fused_features.shape[2:], \
-                    f"Motion features {motion_features.shape} must match {fused_features.shape}"
-                
-                # Project if channel mismatch
-                if motion_features.shape[1] != fused_features.shape[1]:
-                    motion_features = self.temporal_feature_proj(motion_features)
-                
-                # Resize if needed
-                if motion_features.shape[2:] != fused_features.shape[2:]:
-                    motion_features = F.interpolate(
-                        motion_features,
-                        size=fused_features.shape[2:],
-                        mode='bilinear',
-                        align_corners=False
-                    )
-                
-                # MODULATE spatial features (additive fusion)
-                fused_features = fused_features + motion_features  # Motion → perception
-            
-            # Temporal context for scene-level heads
-            temporal_context = temporal_outputs.get('temporal_context')  # [B, embed_dim]
-            if temporal_context is not None:
-                scene_context = torch.cat([scene_context, temporal_context], dim=1)
-            
-            # Reshape back to flattened for detection heads
-            fused_features = fused_features.view(B_orig * T, -1, H_temp, W_temp)
-            batch_size = B_orig * T
         
         # Ensure contiguous for MPS compatibility before detection head
         fused_features = fused_features.contiguous()
@@ -985,67 +799,6 @@ class MaxSightCNN(nn.Module):
         distances_flat = self.distance_head(dist_input)  # [B*H*W, 3]
         distances = distances_flat.reshape(batch_size, H*W, self.num_distance_zones)  # [B, H*W, 3]
         
-        # Depth estimation with uncertainty (vectorized)
-        depth_outputs = self.depth_head_module(fused_features)
-        depth_map = depth_outputs['depth_map']  # [B, H, W]
-        depth_uncertainty = depth_outputs['uncertainty']  # [B, H, W]
-        
-        # VECTORIZED depth sampling at box centers (NO LOOPS)
-        top_k = min(10, H * W)
-        top_k_scores, top_k_indices = torch.topk(obj_scores, k=top_k, dim=1)  # [B, K]
-        
-        # Extract box centers for top-K
-        box_centers = box_preds[:, :, :2]  # [B, H*W, 2] - x, y centers
-        top_k_centers = torch.gather(
-            box_centers,
-            dim=1,
-            index=top_k_indices.unsqueeze(-1).expand(-1, -1, 2)
-        )  # [B, K, 2]
-        
-        # Normalize to [-1, 1] for grid_sample
-        image_size_tensor = torch.tensor([W, H], device=images.device, dtype=torch.float32)
-        normalized_centers = (top_k_centers / image_size_tensor.unsqueeze(0).unsqueeze(0)) * 2.0 - 1.0  # [B, K, 2]
-        normalized_centers = normalized_centers.flip(-1).unsqueeze(2)  # [B, K, 1, 2] for grid_sample
-        
-        # Sample depth at box centers (BATCHED)
-        depth_at_centers = F.grid_sample(
-            depth_map.unsqueeze(1),  # [B, 1, H, W]
-            normalized_centers,  # [B, K, 1, 2]
-            mode='bilinear',
-            align_corners=False,
-            padding_mode='border'
-        ).squeeze(1).squeeze(-1)  # [B, K]
-        
-        # Sample uncertainty
-        uncertainty_at_centers = F.grid_sample(
-            depth_uncertainty.unsqueeze(1),
-            normalized_centers,
-            mode='bilinear',
-            align_corners=False,
-            padding_mode='border'
-        ).squeeze(1).squeeze(-1)  # [B, K]
-        
-        # Convert normalized depth [0, 1] to meters (calibrated per object class)
-        # Vectorized depth scaling
-        class_depth_scales = torch.tensor([
-            10.0, 5.0, 3.0, 8.0, 12.0,  # Example scales for person, car, door, truck, bus
-            # Add more as needed for your COCO classes
-        ], device=images.device)
-        
-        # Get class indices for top-K
-        top_k_classes = torch.gather(
-            cls_logits.argmax(dim=-1),
-            dim=1,
-            index=top_k_indices
-        )  # [B, K]
-        
-        # Clamp class indices to valid range
-        top_k_classes = torch.clamp(top_k_classes, 0, len(class_depth_scales) - 1)
-        
-        # Vectorized depth scaling
-        depth_scales = class_depth_scales[top_k_classes]  # [B, K]
-        precise_distances = depth_at_centers * depth_scales  # [B, K] in meters
-        
         outputs = {
             'classifications': cls_logits,
             'boxes': box_preds,
@@ -1053,32 +806,9 @@ class MaxSightCNN(nn.Module):
             'text_regions': text_scores,
             'scene_embedding': scene_emb,
             'urgency_scores': urgency,
-            'distance_zones': distances,  # Keep for compatibility
-            'depth_map': depth_map,
-            'depth_uncertainty': depth_uncertainty,
-            'precise_distances': precise_distances,  # [B, K] meters
-            'distance_uncertainties': uncertainty_at_centers,  # [B, K]
-            'top_k_indices': top_k_indices,  # For mapping back to detections
+            'distance_zones': distances,
             'num_locations': H * W
         }
-        
-        # Audio outputs
-        if sound_outputs is not None:
-            outputs['sound_classifications'] = sound_outputs['sound_probs']
-            outputs['sound_direction'] = sound_outputs['direction']
-            outputs['sound_urgency'] = sound_outputs['urgency']
-        else:
-            outputs['sound_classifications'] = None
-            outputs['sound_direction'] = None
-            outputs['sound_urgency'] = None
-        
-        # Temporal outputs
-        if temporal_outputs is not None:
-            outputs['motion'] = temporal_outputs.get('motion')
-            outputs['temporal_consistency'] = temporal_outputs.get('consistency')
-        else:
-            outputs['motion'] = None
-            outputs['temporal_consistency'] = None
         
         # MVP Accessibility Features - Functional Vision & Environmental Context
         if self.enable_accessibility_features:
@@ -1114,148 +844,6 @@ class MaxSightCNN(nn.Module):
                 'uncertainty': uncertainty,
                 'shared_scene_embedding': shared_scene_emb  # Expose for debugging/analysis
             })
-        
-        # Scene graph (top-K objects only)
-        top_k = min(self.max_scene_graph_objects, H * W)
-        top_k_scores, top_k_indices = torch.topk(obj_scores, k=top_k, dim=1)  # [B, K]
-        
-        # Extract object embeddings for top-K only
-        object_embs_list = []
-        for b in range(batch_size):
-            batch_embs = []
-            for k_idx in range(top_k):
-                idx = top_k_indices[b, k_idx].item()
-                y_idx = idx // W
-                x_idx = idx % W
-                obj_feat = det_feats[b, :, y_idx, x_idx].unsqueeze(-1).unsqueeze(-1)
-                obj_feat = F.adaptive_avg_pool2d(obj_feat, 1).squeeze(-1).squeeze(-1)
-                batch_embs.append(obj_feat)
-            object_embs_list.append(torch.stack(batch_embs))  # [K, 256]
-        
-        object_embeddings = torch.stack(object_embs_list)  # [B, K, 256]
-        
-        # Extract boxes and classes for top-K
-        top_k_boxes = torch.gather(
-            box_preds,
-            dim=1,
-            index=top_k_indices.unsqueeze(-1).expand(-1, -1, 4)
-        )  # [B, K, 4]
-        
-        top_k_classes = torch.gather(
-            cls_logits.argmax(dim=-1),
-            dim=1,
-            index=top_k_indices
-        )  # [B, K]
-        
-        # Build scene graphs
-        if self.training:
-            # Process all batches
-            scene_graphs = []
-            for b in range(batch_size):
-                class_names = [COCO_CLASSES[c] if c < len(COCO_CLASSES) else 'object'
-                              for c in top_k_classes[b].tolist()]
-                scene_graph = self.scene_graph_encoder(
-                    boxes=top_k_boxes[b],
-                    object_embeddings=object_embeddings[b],
-                    object_classes=class_names
-                )
-                scene_graphs.append(scene_graph)
-            outputs['scene_graph'] = scene_graphs
-        else:
-            # Inference: just batch 0
-            class_names = [COCO_CLASSES[c] if c < len(COCO_CLASSES) else 'object'
-                          for c in top_k_classes[0].tolist()]
-            scene_graph = self.scene_graph_encoder(
-                boxes=top_k_boxes[0],
-                object_embeddings=object_embeddings[0],
-                object_classes=class_names
-            )
-            outputs['scene_graph'] = scene_graph
-        
-        outputs['spatial_relations'] = scene_graph['spatial_relations'] if not self.training else [sg['spatial_relations'] for sg in scene_graphs]
-        outputs['semantic_relations'] = scene_graph['semantic_relations'] if not self.training else [sg['semantic_relations'] for sg in scene_graphs]
-        
-        # Scene description (gated, expensive operation)
-        if self.training or self.generate_description:
-            # Sample 1 frame for CLIP (if video)
-            if temporal_mode and B_orig is not None:
-                clip_images = images.view(B_orig, T, 3, H_img, W_img)[:, 0]  # Use first frame
-            else:
-                clip_images = images if images.dim() == 4 else images[:, 0]
-            
-            # Get CLIP global embedding
-            global_emb = self.global_encoder(clip_images)  # [B, 512]
-            
-            # Extract region embeddings (PROPERLY POOLED)
-            region_embs_list = []
-            batch_size_for_regions = B_orig if temporal_mode and B_orig is not None else batch_size
-            for b in range(batch_size_for_regions):
-                batch_regions = []
-                for k_idx in range(min(5, top_k)):
-                    idx = top_k_indices[b, k_idx].item()
-                    y_idx = idx // W
-                    x_idx = idx % W
-                    region_feat = det_feats[b, :, y_idx, x_idx]  # [256]
-                    
-                    # POOL to remove spatial noise
-                    region_feat = region_feat.unsqueeze(-1).unsqueeze(-1)  # [256, 1, 1]
-                    region_feat = F.adaptive_avg_pool2d(region_feat, 1).squeeze(-1).squeeze(-1)  # [256]
-                    batch_regions.append(region_feat)
-                
-                if batch_regions:
-                    region_embs_list.append(torch.stack(batch_regions))  # [K, 256]
-                else:
-                    region_embs_list.append(torch.zeros(1, 256, device=images.device))
-            
-            region_embs_tensor = torch.stack(region_embs_list)  # [B, K, 256]
-            
-            # Generate description
-            description_outputs = self.scene_description_head(
-                global_embedding=global_emb,
-                region_embeddings=region_embs_tensor,
-                ocr_embeddings=None,  # Optional
-                condition_mode=self.condition_mode or 'normal'
-            )
-            
-            outputs['scene_description'] = description_outputs['description']
-            outputs['description_logits'] = description_outputs['description_logits']
-        else:
-            outputs['scene_description'] = None
-            outputs['description_logits'] = None
-        
-        # Personalization (if user_id provided)
-        if user_id is not None:
-            # Get per-user embedding
-            user_emb = self.user_embeddings(user_id)  # [B, 256]
-            
-            # Normalize user embedding (critical for cosine similarity)
-            user_emb = F.normalize(user_emb, p=2, dim=1)  # [B, 256]
-            
-            # Encode object features
-            object_features = object_embeddings  # [B, K, 256] from scene graph
-            object_emb = self.object_encoder(object_features)  # [B, K, 256]
-            
-            # Normalize object embeddings
-            object_emb = F.normalize(object_emb, p=2, dim=2)  # [B, K, 256]
-            
-            # Compute cosine similarity (for "my fridge" recognition)
-            similarity = torch.bmm(
-                user_emb.unsqueeze(1),  # [B, 1, 256]
-                object_emb.transpose(1, 2)  # [B, 256, K]
-            ).squeeze(1)  # [B, K]
-            
-            # Get personalization outputs
-            personalization = self.personalization_head(
-                scene_features=scene_emb,
-                user_id=user_id,
-                interaction_features=None
-            )
-            
-            outputs['personalization'] = personalization
-            outputs['user_object_similarity'] = similarity  # For metric learning
-        else:
-            outputs['personalization'] = None
-            outputs['user_object_similarity'] = None
         
         # Condition-specific enhancements
         if self.condition_mode == 'color_blindness' and hasattr(self, 'color_head'):

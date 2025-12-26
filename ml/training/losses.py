@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 
 
 class FocalLoss(nn.Module):
@@ -173,6 +173,51 @@ class IoULoss(nn.Module):
         return ciou
 
 
+class UncertaintyWeightedLoss(nn.Module):
+    """
+    Uncertainty-weighted multi-task loss.
+    
+    Automatically learns task weights based on uncertainty.
+    """
+    def __init__(self, num_tasks: int):
+        super().__init__()
+        # Learnable log variances (inverse precision)
+        self.log_vars = nn.Parameter(torch.zeros(num_tasks))
+        self.num_tasks = num_tasks
+    
+    def forward(self, losses: List[torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, float]]:
+        """
+        Uncertainty weighting with clamping and monitoring.
+        
+        Args:
+            losses: List of loss tensors [loss1, loss2, ...]
+        
+        Returns:
+            total_loss: Weighted sum
+            log_vars_dict: For monitoring
+        """
+        total = torch.tensor(0.0, device=losses[0].device, dtype=losses[0].dtype)
+        log_vars_dict = {}
+        
+        for i, loss in enumerate(losses):
+            # CRITICAL: Clamp loss to prevent zero/NaN
+            loss = torch.clamp(loss, min=1e-6, max=1e6)
+            
+            # Get precision (inverse variance)
+            precision = torch.exp(-self.log_vars[i])  # 1 / sigma^2
+            
+            # Weighted loss: precision * loss + log(sigma)
+            weighted_loss = precision * loss + self.log_vars[i]
+            total = total + weighted_loss
+            
+            # Log for monitoring
+            log_vars_dict[f'task_{i}_log_var'] = self.log_vars[i].item()
+            log_vars_dict[f'task_{i}_precision'] = precision.item()
+            log_vars_dict[f'task_{i}_raw_loss'] = loss.item()
+        
+        return total, log_vars_dict
+
+
 def assign_targets_to_anchors(
     gt_boxes: torch.Tensor,
     gt_labels: torch.Tensor,
@@ -253,6 +298,9 @@ class DetectionLoss(nn.Module):
         self.iou_loss = IoULoss(loss_type=iou_loss_type)
         self.bce_loss = nn.BCELoss(reduction='mean')
         self.ce_loss = nn.CrossEntropyLoss()
+        
+        # Uncertainty weighting for adaptive loss balancing
+        self.uncertainty_weighting = UncertaintyWeightedLoss(num_tasks=6)
     
     def forward(
         self,
@@ -339,14 +387,18 @@ class DetectionLoss(nn.Module):
             if text_preds.shape == text_targets.shape:
                 text_loss = self.bce_loss(text_preds, text_targets.float())
         
-        total_loss = (
-            self.classification_weight * cls_loss +
-            self.localization_weight * box_loss +
-            self.objectness_weight * obj_loss +
-            self.urgency_weight * urgency_loss +
-            self.distance_weight * distance_loss +
-            self.text_weight * text_loss
-        )
+        # Clamp all losses
+        losses_list = [
+            torch.clamp(cls_loss, min=1e-6),
+            torch.clamp(box_loss, min=1e-6),
+            torch.clamp(obj_loss, min=1e-6),
+            torch.clamp(urgency_loss, min=1e-6),
+            torch.clamp(distance_loss, min=1e-6),
+            torch.clamp(text_loss, min=1e-6)
+        ]
+        
+        # Apply uncertainty weighting
+        total_loss, log_vars = self.uncertainty_weighting(losses_list)
         
         return {
             'total_loss': total_loss,
@@ -356,6 +408,7 @@ class DetectionLoss(nn.Module):
             'urgency_loss': urgency_loss,
             'distance_loss': distance_loss,
             'text_loss': text_loss,
+            'uncertainty_log_vars': log_vars,  # NEW
             'num_positives': torch.tensor(num_positives, device=device, dtype=torch.long)
         }
 

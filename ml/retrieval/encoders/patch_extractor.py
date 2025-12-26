@@ -8,7 +8,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import List, Tuple, Optional
-from sklearn.cluster import KMeans
+# Optional sklearn import
+try:
+    from sklearn.cluster import KMeans
+except ImportError:
+    KMeans = None
 import numpy as np
 
 

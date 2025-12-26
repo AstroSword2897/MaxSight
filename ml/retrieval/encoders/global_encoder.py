@@ -7,8 +7,14 @@ CLIP ViT-B/32 or DINOv2 for global scene embeddings.
 import torch
 import torch.nn as nn
 from typing import Optional
-from transformers import CLIPModel, CLIPProcessor
 import torchvision.transforms as T
+
+# Optional transformers import (for CLIP)
+try:
+    from transformers import CLIPModel, CLIPProcessor
+except ImportError:
+    CLIPModel = None
+    CLIPProcessor = None
 
 
 class GlobalEncoder(nn.Module):
@@ -31,6 +37,8 @@ class GlobalEncoder(nn.Module):
         self.use_clip = use_clip
         
         if use_clip:
+            if CLIPModel is None or CLIPProcessor is None:
+                raise ImportError("transformers library not found. Install with: pip install transformers")
             # Load CLIP model
             self.clip_model = CLIPModel.from_pretrained(model_name)
             self.clip_processor = CLIPProcessor.from_pretrained(model_name)

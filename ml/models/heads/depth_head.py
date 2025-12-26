@@ -38,6 +38,15 @@ class DepthHead(nn.Module):
         self.bn2 = nn.BatchNorm2d(64)
         self.depth_conv = nn.Conv2d(64, 1, kernel_size=1)  # Depth map
         
+        # Depth uncertainty head (properly encapsulated)
+        self.uncertainty_conv = nn.Sequential(
+            nn.Conv2d(64, 32, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.Conv2d(32, 1, kernel_size=1),
+            nn.Sigmoid()  # Uncertainty in [0, 1]
+        )
+        
         # Distance zone classification (with dropout for regularization)
         self.zone_head = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
@@ -46,8 +55,8 @@ class DepthHead(nn.Module):
             nn.LayerNorm(32),  # Better than BatchNorm for 1D features
             nn.ReLU(inplace=True),
             nn.Dropout(dropout),
-            nn.Linear(32, 3),  # near, mid, far
-            nn.Softmax(dim=1)
+            nn.Linear(32, 3)  # near, mid, far
+            # Raw logits for CrossEntropyLoss (softmax applied in loss)
         )
         
         self.relu = nn.ReLU(inplace=True)
@@ -62,18 +71,34 @@ class DepthHead(nn.Module):
         
         Returns:
             Dictionary with:
-                - 'depth_map': [B, H, W] - Depth map
-                - 'zones': [B, 3] - [near_prob, mid_prob, far_prob]
+                - 'depth_map': [B, H, W] - Depth map [0, 1]
+                - 'uncertainty': [B, H, W] - Depth uncertainty [0, 1]
+                - 'zones': [B, 3] - Zone logits (not softmaxed)
         """
         # Efficient forward pass with BatchNorm
         x = self.relu(self.bn1(self.conv1(features)))
         x = self.relu(self.bn2(self.conv2(x)))
         
-        depth_map = self.sigmoid(self.depth_conv(x)).squeeze(1)  # [B, H, W]
-        zones = self.zone_head(x)  # [B, 3] (Flatten handles squeeze automatically)
+        # Depth map with safe squeeze
+        depth_map = self.sigmoid(self.depth_conv(x))
+        if depth_map.shape[1] == 1:
+            depth_map = depth_map.view(depth_map.size(0), depth_map.size(2), depth_map.size(3))
+        else:
+            depth_map = depth_map.squeeze(1)  # [B, H, W]
+        
+        # Uncertainty (properly encapsulated)
+        uncertainty = self.uncertainty_conv(x)
+        if uncertainty.shape[1] == 1:
+            uncertainty = uncertainty.view(uncertainty.size(0), uncertainty.size(2), uncertainty.size(3))
+        else:
+            uncertainty = uncertainty.squeeze(1)  # [B, H, W]
+        
+        # Zone classification (raw logits for CrossEntropyLoss)
+        zones = self.zone_head(x)  # [B, 3] - raw logits
         
         return {
             'depth_map': depth_map,
-            'zones': zones
+            'uncertainty': uncertainty,  # NEW
+            'zones': zones  # Raw logits
         }
 
