@@ -83,15 +83,39 @@ class OCREncoder(nn.Module):
             
             # Encode texts
             if self.use_sentence_transformers and self.text_encoder is not None:
-                # Use sentence-transformers
-                embeddings = self.text_encoder.encode(
-                    texts,
-                    convert_to_tensor=True,
-                    device=device
-                )  # [N_texts, embed_dim]
+                # Use sentence-transformers (only if it's a SentenceTransformer)
+                if hasattr(self.text_encoder, 'encode'):
+                    # Type checker doesn't know about SentenceTransformer.encode, but runtime check is safe
+                    embeddings = self.text_encoder.encode(  # type: ignore
+                        texts,
+                        convert_to_tensor=True,
+                        device=device
+                    )  # [N_texts, embed_dim]
+                else:
+                    # Fallback: treat as nn.Sequential (shouldn't happen, but safe)
+                    embeddings = []
+                    for text in texts:
+                        # Convert text to character indices
+                        chars = [ord(c) % 128 for c in text[:100]]  # Limit length
+                        if not chars:
+                            chars = [0]
+                        char_tensor = torch.tensor(chars, device=device).unsqueeze(0)
+                        char_emb = self.char_embedding(char_tensor)  # [1, len, 64]
+                        if isinstance(self.text_encoder, nn.Sequential):
+                            lstm_out, _ = self.text_encoder[0](char_emb)
+                            text_emb = self.text_encoder[1](lstm_out[:, -1, :])  # [1, embed_dim]
+                        else:
+                            # Unexpected type, use simple embedding
+                            text_emb = char_emb.mean(dim=1)  # [1, 64]
+                            text_emb = nn.Linear(64, self.embed_dim).to(device)(text_emb)
+                        embeddings.append(text_emb.squeeze(0))
             else:
                 # Fallback: character-level encoding
                 embeddings = []
+                if self.text_encoder is None or not isinstance(self.text_encoder, nn.Sequential):
+                    # Create fallback encoder if needed
+                    raise RuntimeError("Fallback encoder not properly initialized. text_encoder is None or wrong type.")
+                
                 for text in texts:
                     # Convert text to character indices
                     chars = [ord(c) % 128 for c in text[:100]]  # Limit length

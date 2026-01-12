@@ -12,6 +12,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from typing import List, Tuple, Optional, Dict
+from torchvision.transforms import functional as TF
 
 
 # From ml/utils/preprocessing.py
@@ -354,20 +355,35 @@ def _center_to_corners(boxes: torch.Tensor) -> torch.Tensor:
 
 
 # From ml/utils/output_scheduler.py (class CrossModalScheduler method)
-def _get_priority_threshold() -> int:
+def _get_priority_threshold(config) -> int:
     """Get priority threshold based on alert frequency"""
+    from enum import Enum
+    
+    class AlertFrequency(Enum):
+        LOW = "low"
+        MEDIUM = "medium"
+        HIGH = "high"
+    
     thresholds = {
         AlertFrequency.LOW: 70,      # Only hazards + navigation
         AlertFrequency.MEDIUM: 40,    # + useful objects
         AlertFrequency.HIGH: 0       # All objects
     }
-    return thresholds.get(.config.alert_frequency, 40)
+    return thresholds.get(config.alert_frequency, 40)
 
 
 
 # From ml/utils/output_scheduler.py (class CrossModalScheduler method)
-def _calculate_intensity(priority: int, findability: float, urgency: int) -> float:
+def _calculate_intensity(priority: int, findability: float, urgency: int, config) -> float:
     """Calculate output intensity (0-1)"""
+    from enum import Enum
+    
+    class OutputChannel(Enum):
+        AUDIO = "audio"
+        VISUAL = "visual"
+        HAPTIC = "haptic"
+        HYBRID = "hybrid"
+    
     # Base intensity from priority
     base_intensity = priority / 100.0
     
@@ -405,8 +421,16 @@ def _calculate_frequency(priority: int, urgency: int) -> float:
 
 
 # From ml/utils/output_scheduler.py (class CrossModalScheduler method)
-def _select_channel(priority: int, urgency: int) -> OutputChannel:
+def _select_channel(priority: int, urgency: int, config):  # type: ignore
     """Select output channel based on priority and user preference"""
+    from enum import Enum
+    
+    class OutputChannel(Enum):
+        AUDIO = "audio"
+        VISUAL = "visual"
+        HAPTIC = "haptic"
+        HYBRID = "hybrid"
+    
     # High priority/urgency -> use preferred channel or hybrid
     if priority >= 90 or urgency >= 3:
         if config.preferred_channel == OutputChannel.HYBRID:

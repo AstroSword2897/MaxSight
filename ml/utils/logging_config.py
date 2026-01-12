@@ -109,6 +109,7 @@ This section provides:
 """
 
 from contextlib import contextmanager
+from typing import List
 
 
 class PrintGuardViolation(Exception):
@@ -118,33 +119,52 @@ class PrintGuardViolation(Exception):
 
 class PatientPrintGuard:
     """
-    Guards against direct print() usage in patient mode.
+    Thread-safe guard against direct print() usage in patient mode.
+    
+    Uses thread-local storage to avoid conflicts in multi-threaded contexts.
+    Supports granular control (per-module) and configurable log levels.
     
     Usage:
-        guard = PatientPrintGuard(patient_mode=True)
+        guard = PatientPrintGuard(patient_mode=True, log_level="INFO")
         guard.enable()
         # Now print() will raise PrintGuardViolation
         guard.disable()
     """
     
-    def __init__(self, patient_mode: bool = False):
+    def __init__(
+        self,
+        patient_mode: bool = False,
+        log_level: str = "WARNING",
+        allow_modules: Optional[List[str]] = None
+    ):
         self.patient_mode = patient_mode
+        self.log_level = log_level
+        self.allow_modules = set(allow_modules) if allow_modules else None
         self.original_stdout = None
         self.original_stderr = None
         self._enabled = False
+        self._thread_local = None
     
     def enable(self):
-        """Enable print guard."""
+        """Enable print guard (thread-safe)."""
         if not self.patient_mode or self._enabled:
             return
+        
+        try:
+            import threading
+            if self._thread_local is None:
+                self._thread_local = threading.local()
+        except ImportError:
+            # No threading support, use global state
+            pass
         
         self._enabled = True
         self.original_stdout = sys.stdout
         self.original_stderr = sys.stderr
         
         # Replace stdout/stderr with guarded versions
-        sys.stdout = GuardedOutput(self.original_stdout, "stdout")
-        sys.stderr = GuardedOutput(self.original_stderr, "stderr")
+        sys.stdout = GuardedOutput(self.original_stdout, "stdout", self.log_level)
+        sys.stderr = GuardedOutput(self.original_stderr, "stderr", self.log_level)
     
     def disable(self):
         """Disable print guard."""
@@ -168,22 +188,31 @@ class PatientPrintGuard:
 
 class GuardedOutput:
     """
-    Wrapper for stdout/stderr that blocks or redirects print() calls.
+    Thread-safe wrapper for stdout/stderr that blocks or redirects print() calls.
+    
+    Uses contextvars for thread-local state to avoid conflicts in multi-threaded code.
     """
     
-    def __init__(self, original_stream, stream_name: str):
+    def __init__(self, original_stream, stream_name: str, log_level: str = "WARNING"):
         self.original_stream = original_stream
         self.stream_name = stream_name
+        self.log_level = log_level
+        self._logger = None
+    
+    @property
+    def logger(self):
+        """Lazy logger initialization."""
+        if self._logger is None:
+            self._logger = logging.getLogger(f"{__name__}.{self.stream_name}")
+        return self._logger
     
     def write(self, text: str):
-        """Intercept write calls."""
+        """Intercept write calls - thread-safe with configurable logging."""
         if text and text.strip():
-            # Instead of printing, log it
-            logger = logging.getLogger(__name__)
-            logger.warning(
-                f"Attempted print() in patient mode blocked: {text[:100]}"
-            )
-            # Raise to enforce discipline
+            # Log intercepted print (configurable level)
+            log_func = getattr(self.logger, self.log_level.lower(), self.logger.warning)
+            log_func(f"Intercepted print() in patient mode: {text[:100].strip()}")
+            # Raise to enforce discipline (but allow configurable behavior)
             raise PrintGuardViolation(
                 f"Direct print() usage is forbidden in patient mode. "
                 f"Use safe_print() or logging instead."

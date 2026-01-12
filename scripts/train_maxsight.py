@@ -149,17 +149,31 @@ def main():
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Checkpoint directory: {ckpt_dir}")
 
-    # Load dataset
+    # Load dataset - Use cleaned splits if available
     data_dir = Path(args.data_dir)
-    train_dir = data_dir / "train"
-    val_dir = data_dir / "val"
-
-    if not train_dir.exists() or not val_dir.exists():
-        raise FileNotFoundError("Training and validation directories are required.")
-
-    logger.info("Resolving dataset annotation files...")
-    train_ann = resolve_annotation_file(train_dir, args.annotation_file)
-    val_ann = resolve_annotation_file(val_dir, args.annotation_file)
+    cleaned_splits_dir = data_dir / "cleaned_splits"
+    
+    # Check if cleaned splits exist, otherwise fall back to original splits
+    if cleaned_splits_dir.exists():
+        logger.info("✅ Using cleaned dataset splits (zero overlap, fixed bboxes)")
+        train_ann = cleaned_splits_dir / "train_annotations.json"
+        val_ann = cleaned_splits_dir / "val_annotations.json"
+        # Use parent directory for images (images should be in datasets/train/images, etc.)
+        train_dir = data_dir / "train"  # Images still in original location
+        val_dir = data_dir / "val"
+        
+        if not train_ann.exists() or not val_ann.exists():
+            raise FileNotFoundError(f"Cleaned splits not found in {cleaned_splits_dir}")
+    else:
+        logger.warning("⚠️  Cleaned splits not found, using original splits (may have data leakage!)")
+        train_dir = data_dir / "train"
+        val_dir = data_dir / "val"
+        
+        if not train_dir.exists() or not val_dir.exists():
+            raise FileNotFoundError("Training and validation directories are required.")
+        
+        train_ann = resolve_annotation_file(train_dir, args.annotation_file)
+        val_ann = resolve_annotation_file(val_dir, args.annotation_file)
 
     logger.info(f"Training annotations: {train_ann}")
     logger.info(f"Validation annotations: {val_ann}")
@@ -206,8 +220,23 @@ def main():
 
     logger.info(f"Model created with {sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters")
 
-    # Loss function
-    loss_fn = MaxSightLoss(num_classes=args.num_classes)
+    # Load class weights if available
+    class_weights_file = cleaned_splits_dir / "class_weights.json" if cleaned_splits_dir.exists() else None
+    class_weights = None
+    if class_weights_file and class_weights_file.exists():
+        logger.info(f"Loading class weights from {class_weights_file}")
+        with open(class_weights_file, 'r') as f:
+            weights_data = json.load(f)
+        class_weights = weights_data
+        logger.info("✅ Class weights loaded for weighted loss")
+    else:
+        logger.warning("⚠️  Class weights not found - using unweighted loss (may have class imbalance issues)")
+
+    # Loss function with class weights
+    loss_fn = MaxSightLoss(
+        num_classes=args.num_classes,
+        class_weights=class_weights
+    )
 
     # Trainer
     trainer = ProductionTrainLoop(

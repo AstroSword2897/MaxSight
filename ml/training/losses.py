@@ -282,7 +282,8 @@ class DetectionLoss(nn.Module):
         text_weight: float = 0.3,
         focal_alpha: float = 0.25,
         focal_gamma: float = 2.0,
-        iou_loss_type: str = 'iou'
+        iou_loss_type: str = 'iou',
+        class_weights: Optional[Dict] = None
     ):
         super().__init__()
         
@@ -294,10 +295,48 @@ class DetectionLoss(nn.Module):
         self.distance_weight = distance_weight
         self.text_weight = text_weight
         
+        # Load class weights if provided
+        self.detection_class_weights = None
+        self.urgency_class_weights = None
+        self.distance_class_weights = None
+        
+        if class_weights is not None:
+            # Detection head weights
+            if 'detection_head' in class_weights:
+                # Use inverse_sqrt method by default (more balanced)
+                detection_weights_dict = class_weights['detection_head'].get('inverse_sqrt', {})
+                if detection_weights_dict:
+                    # Convert to tensor - need to map class names to indices
+                    # We'll do this dynamically in forward pass based on actual class names
+                    self.detection_class_weights_dict = detection_weights_dict
+            
+            # Urgency head weights
+            if 'urgency_head' in class_weights and 'weights' in class_weights['urgency_head']:
+                urgency_weights_dict = class_weights['urgency_head']['weights']
+                # Convert to tensor: [level_0, level_1, level_2, level_3]
+                urgency_weights_list = [
+                    urgency_weights_dict.get(str(i), 1.0) 
+                    for i in range(4)
+                ]
+                self.urgency_class_weights = torch.tensor(urgency_weights_list, dtype=torch.float32)
+            
+            # Distance head weights
+            if 'distance_head' in class_weights and 'weights' in class_weights['distance_head']:
+                distance_weights_dict = class_weights['distance_head']['weights']
+                # Convert to tensor: [zone_0, zone_1, zone_2]
+                distance_weights_list = [
+                    distance_weights_dict.get(str(i), 1.0)
+                    for i in range(3)
+                ]
+                self.distance_class_weights = torch.tensor(distance_weights_list, dtype=torch.float32)
+        
         self.focal_loss = FocalLoss(alpha=focal_alpha, gamma=focal_gamma)
         self.iou_loss = IoULoss(loss_type=iou_loss_type)
         self.bce_loss = nn.BCELoss(reduction='mean')
-        self.ce_loss = nn.CrossEntropyLoss()
+        # Will be created with weights in forward if needed
+        self.ce_loss = None
+        self.ce_loss_urgency = None
+        self.ce_loss_distance = None
         
         # Uncertainty weighting for adaptive loss balancing
         self.uncertainty_weighting = UncertaintyWeightedLoss(num_tasks=6)
@@ -341,7 +380,16 @@ class DetectionLoss(nn.Module):
             pos_mask = assigned_mask > 0
             if pos_mask.any():
                 pos_labels = (assigned_labels[pos_mask] - 1).clamp(0, self.num_classes - 1)
-                cls_loss += self.focal_loss(cls_logits[pos_mask], pos_labels)
+                
+                # Apply class weights to focal loss if available
+                if hasattr(self, 'detection_class_weights_dict') and self.detection_class_weights_dict:
+                    # Get weights for the classes in this batch
+                    # Note: FocalLoss doesn't directly support class weights, so we'll weight the loss manually
+                    # For now, we use focal loss as-is (it already handles class imbalance via alpha/gamma)
+                    # Class weights could be applied by modifying FocalLoss, but that's more complex
+                    cls_loss += self.focal_loss(cls_logits[pos_mask], pos_labels)
+                else:
+                    cls_loss += self.focal_loss(cls_logits[pos_mask], pos_labels)
                 
                 box_loss += self.iou_loss(box_preds[pos_mask], assigned_boxes[pos_mask])
                 
@@ -355,10 +403,23 @@ class DetectionLoss(nn.Module):
         
         urgency_loss = torch.tensor(0.0, device=device)
         if 'urgency' in targets and 'urgency_scores' in predictions:
-            urgency_loss = self.ce_loss(
-                predictions['urgency_scores'],
-                targets['urgency']
-            )
+            # Create weighted loss if weights are available
+            if self.urgency_class_weights is not None:
+                if self.ce_loss_urgency is None:
+                    self.ce_loss_urgency = nn.CrossEntropyLoss(
+                        weight=self.urgency_class_weights.to(device)
+                    )
+                urgency_loss = self.ce_loss_urgency(
+                    predictions['urgency_scores'],
+                    targets['urgency']
+                )
+            else:
+                if self.ce_loss is None:
+                    self.ce_loss = nn.CrossEntropyLoss()
+                urgency_loss = self.ce_loss(
+                    predictions['urgency_scores'],
+                    targets['urgency']
+                )
         
         distance_loss = torch.tensor(0.0, device=device)
         if 'distance' in targets and 'distance_zones' in predictions and num_positives > 0:
@@ -372,10 +433,23 @@ class DetectionLoss(nn.Module):
                     K = min(len(gt_distances), num_locations)
                     top_k_indices = torch.topk(predictions['objectness'][b], K).indices
                     
-                    distance_loss += self.ce_loss(
-                        dist_preds[top_k_indices],
-                        gt_distances[:K]
-                    )
+                    # Create weighted loss if weights are available
+                    if self.distance_class_weights is not None:
+                        if self.ce_loss_distance is None:
+                            self.ce_loss_distance = nn.CrossEntropyLoss(
+                                weight=self.distance_class_weights.to(device)
+                            )
+                        distance_loss += self.ce_loss_distance(
+                            dist_preds[top_k_indices],
+                            gt_distances[:K]
+                        )
+                    else:
+                        if self.ce_loss is None:
+                            self.ce_loss = nn.CrossEntropyLoss()
+                        distance_loss += self.ce_loss(
+                            dist_preds[top_k_indices],
+                            gt_distances[:K]
+                        )
             
             distance_loss = distance_loss / batch_size
         

@@ -16,28 +16,27 @@ class ContrastMapHead(nn.Module):
         # - 3x3 kernels: Capture local contrast relationships
         # - 1x1 final layer: Efficiently maps to single contrast value per pixel
         
+        # Edge detection channel (computed from features, used as modulation signal)
+        if use_edge_aware:
+            # Single 4D edge channel that modulates features during forward pass
+            # This is more efficient than computing edges separately - network learns edge relevance
+            # Using GroupNorm instead of BatchNorm for robustness to small batches
+            self.edge_conv = nn.Sequential(
+                nn.Conv2d(in_channels, 32, kernel_size=3, padding=1, bias=False),
+                nn.GroupNorm(8, 32),  # More robust than BatchNorm for small batches
+                nn.ReLU(inplace=True),
+                nn.Conv2d(32, 1, kernel_size=1),  # Single edge channel [B, 1, H, W]
+                # No sigmoid - clamp after scaling to avoid saturation
+                # Edge map will be clamped to [0, 1] during forward pass
+            )
+        
+        # Contrast estimation network (now modulated by edges)
         self.conv1 = nn.Conv2d(in_channels, 128, kernel_size=3, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(128)
         self.conv2 = nn.Conv2d(128, 64, kernel_size=3, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(64)
         self.conv3 = nn.Conv2d(64, 1, kernel_size=1)  # Single channel contrast map
         self.relu = nn.ReLU(inplace=True)
-        
-        # Edge detection for edge-aware contrast
-        if use_edge_aware:
-            # Sobel-like edge detection kernels
-            sobel_x_tensor = torch.tensor(
-                [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
-                dtype=torch.float32
-            ).reshape(1, 1, 3, 3)
-            
-            sobel_y_tensor = torch.tensor(
-                [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
-                dtype=torch.float32
-            ).reshape(1, 1, 3, 3)
-            
-            self.register_buffer('sobel_x', sobel_x_tensor)
-            self.register_buffer('sobel_y', sobel_y_tensor)
         
         # Initialize weights properly
         self._initialize_weights()
@@ -59,14 +58,12 @@ class ContrastMapHead(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
     
-    def compute_edge_map(self, features: torch.Tensor) -> torch.Tensor:
+    def get_edge_map(self, features: torch.Tensor) -> torch.Tensor:
         """
-        Compute edge map for edge-aware contrast computation.
+        Get edge map computed during forward pass (for visualization/debugging).
         
-        WHY EDGE-AWARE CONTRAST:
-        Contrast at object boundaries (edges) is more perceptually relevant than contrast in
-        uniform regions. Edge-aware contrast maps better reflect what users actually perceive
-        and are more useful for therapy exercises and navigation assistance.
+        NOTE: Edges are now computed as part of forward pass via edge_conv.
+        This method is for accessing the edge map separately if needed.
         
         Arguments:
             features: Input features [B, C, H, W]
@@ -77,31 +74,23 @@ class ContrastMapHead(nn.Module):
         if not self.use_edge_aware:
             return torch.zeros_like(features[:, :1])
         
-        # Average across channels for edge detection
-        gray = features.mean(dim=1, keepdim=True)  # [B, 1, H, W]
-        
-        # Apply Sobel filters
-        # Registered buffers are tensors, but type checker needs explicit cast
-        if not hasattr(self, 'sobel_x') or not hasattr(self, 'sobel_y'):
-            return torch.zeros_like(features[:, :1])
-        sobel_x: torch.Tensor = self.sobel_x.to(dtype=gray.dtype)  # type: ignore
-        sobel_y: torch.Tensor = self.sobel_y.to(dtype=gray.dtype)  # type: ignore
-        edge_x = F.conv2d(gray, sobel_x, padding=1)
-        edge_y = F.conv2d(gray, sobel_y, padding=1)
-        
-        # Compute edge magnitude
-        edge_mag = torch.sqrt(edge_x ** 2 + edge_y ** 2 + 1e-8)
-        
-        # Normalize to [0, 1]
-        B = edge_mag.shape[0]
-        edge_flat = edge_mag.reshape(B, -1)
-        edge_max = edge_flat.max(dim=1, keepdim=True)[0].reshape(B, 1, 1, 1)
-        edge_mag = edge_mag / (edge_max + 1e-8)
-        
-        return edge_mag
+        return self.edge_conv(features)  # [B, 1, H, W]
     
-    def forward(self, features: torch.Tensor) -> torch.Tensor:
-
+    def forward(self, features: torch.Tensor) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """
+        Forward pass with edge-aware modulation.
+        
+        WHY EDGE MODULATION DURING FORWARD:
+        Instead of computing edges only in loss, we inject edges as a modulation signal
+        during forward pass. This allows the network to learn edge relevance directly,
+        making training more efficient and predictions more accurate.
+        
+        Arguments:
+            features: Input features [B, C, H, W]
+        
+        Returns:
+            Contrast map [B, H, W]
+        """
         # Validate input
         if features.dim() != 4:
             raise ValueError(f"Expected 4D tensor [B, C, H, W], got {features.shape}")
@@ -113,13 +102,25 @@ class ContrastMapHead(nn.Module):
                 f"Ensure input features match head configuration."
             )
         
-        # Feature extraction
-        x = self.relu(self.bn1(self.conv1(features)))
+        # Compute edge map as modulation signal (if enabled)
+        if self.use_edge_aware:
+            edge_logits = self.edge_conv(features)  # [B, 1, H, W] - raw logits
+            # Clamp to [0, 1] to avoid saturation (better than sigmoid for gradients)
+            edge_map = torch.clamp(edge_logits, 0, 1)
+            # Modulate features with edge information: emphasize edge-relevant features
+            # Edge map acts as attention/importance weighting
+            modulated_features = features * (1.0 + edge_map)  # Boost edge regions
+        else:
+            edge_map = None
+            modulated_features = features
+        
+        # Feature extraction (now on edge-modulated features)
+        x = self.relu(self.bn1(self.conv1(modulated_features)))
         x = self.relu(self.bn2(self.conv2(x)))
         
         # Generate contrast map
         contrast_map = torch.sigmoid(self.conv3(x))
-        contrast_map = contrast_map.squeeze(1)
+        contrast_map = contrast_map.squeeze(1)  # [B, H, W]
         
         # Validate output
         if torch.isnan(contrast_map).any() or torch.isinf(contrast_map).any():
@@ -127,35 +128,33 @@ class ContrastMapHead(nn.Module):
                 "NaN/Inf detected in contrast map. Check input features and model initialization."
             )
         
-        return contrast_map
+        # Return contrast map (and edge map if available, for loss computation)
+        if self.use_edge_aware and edge_map is not None:
+            return contrast_map, edge_map.squeeze(1)  # Return both for loss
+        return contrast_map, None
     
     def compute_loss(
         self,
         pred_contrast: torch.Tensor,
         target_contrast: torch.Tensor,
-        use_edge_aware: Optional[bool] = None
+        edge_map: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
         """
-        Compute contrast loss with optional edge-aware weighting.
+        Compute contrast loss using learned edge map.
         
-        WHY EDGE-AWARE LOSS:
-        Standard L1 loss treats all pixels equally, but contrast at edges is more perceptually
-        important. Edge-aware loss emphasizes contrast errors at object boundaries, leading to
-        better perceptual quality and more useful therapy feedback.
+        NOTE: Now uses the SAME learned edge map from forward pass, not Sobel.
+        This ensures consistency between training and inference.
         
         Arguments:
-            pred_contrast: Predicted contrast map [B, H, W] or [B, C, H, W]
-            target_contrast: Ground truth contrast map [B, H, W] or [B, C, H, W]
-            use_edge_aware: Override instance setting for edge-aware loss
+            pred_contrast: Predicted contrast map [B, H, W]
+            target_contrast: Ground truth contrast map [B, H, W]
+            edge_map: Learned edge map from forward pass [B, H, W] (optional)
         
         Returns:
             Dictionary with:
-                - 'l1_loss': Standard L1 contrast loss
-                - 'edge_aware_loss': Edge-weighted L1 loss (if enabled)
-                - 'total_loss': Combined loss for training
+                - 'loss': Total contrast loss
+                - 'l1_loss': Standard L1 loss (for monitoring)
         """
-        use_edge = use_edge_aware if use_edge_aware is not None else self.use_edge_aware
-        
         # Validate inputs
         if pred_contrast.shape != target_contrast.shape:
             raise ValueError(
@@ -165,102 +164,31 @@ class ContrastMapHead(nn.Module):
         # Standard L1 loss
         l1_loss = F.l1_loss(pred_contrast, target_contrast)
         
-        losses = {'l1_loss': l1_loss}
-        
-        # Edge-aware loss (weighted by edge strength)
-        if use_edge and self.use_edge_aware:
-            if target_contrast.dim() == 3:
-                target_4d = target_contrast.unsqueeze(1)
-            else:
-                target_4d = target_contrast
-    
-            if pred_contrast.dim() == 3:
-                pred_4d = pred_contrast.unsqueeze(1)
-            else:
-                pred_4d = pred_contrast
-
-            # Compute edge map from target using filter methods 
-            edge_map = self._compute_edge_map(target_4d)
+        # If edge map provided, use it for weighting (same edges as forward pass)
+        if edge_map is not None and self.use_edge_aware:
+            # Ensure edge_map is normalized [0, 1] and matches shape
+            if edge_map.shape != pred_contrast.shape:
+                # Resize if needed
+                edge_map = F.interpolate(
+                    edge_map.unsqueeze(1), 
+                    size=pred_contrast.shape[1:], 
+                    mode='bilinear', 
+                    align_corners=False
+                ).squeeze(1)
             
-            # Weight the pixel-wise loss by edge strength
-            pixel_wise_loss = torch.abs(pred_4d - target_4d)
-            edge_weighted_loss = pixel_wise_loss * (1.0 + edge_map)
-            edge_aware_loss = edge_weighted_loss.mean()
+            # Clamp edge map to [0, 1] for safe weighting
+            edge_map = edge_map.clamp(0, 1)
             
-            losses['edge_aware_loss'] = edge_aware_loss
-            losses['total_loss'] = 0.5 * l1_loss + 0.5 * edge_aware_loss
+            # Weight loss by edge strength (detach to prevent double-counting gradients)
+            pixel_loss = torch.abs(pred_contrast - target_contrast)
+            weighted_loss = pixel_loss * (1.0 + edge_map.detach())
+            loss = weighted_loss.mean()
         else:
-            losses['total_loss'] = l1_loss
+            # Simple L1 loss if no edge map
+            loss = l1_loss
         
-        return losses
-    
-    def _compute_edge_map(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Compute edge map using Sobel filters.
-        
-        WHY THIS METHOD:
-        Edge maps are computed directly from the input tensor using Sobel filters, which detect
-        gradients (edges) in the image. This is more flexible than using pre-computed edge maps
-        and works with any input tensor shape.
-        
-        Arguments:
-            x: Input tensor of shape [B, C, H, W] or [B, H, W]
-        
-        Returns:
-            Edge magnitude map of shape [B, 1, H, W]
-        """
-        # Ensure 4D tensor
-        original_dim = x.dim()
-        if x.dim() == 2:
-            x = x.unsqueeze(0).unsqueeze(0)
-        elif x.dim() == 3:
-            x = x.unsqueeze(1)
-
-        # Safety check BEFORE processing
-        if not self.use_edge_aware or not hasattr(self, 'sobel_x'):
-            if x.dim() == 4:
-                return torch.zeros(x.shape[0], 1, x.shape[2], x.shape[3], device=x.device, dtype=x.dtype)
-            else:
-                return torch.zeros_like(x)
-
-        # Convert to grayscale if multichannel
-        if x.shape[1] > 1:
-            gray = 0.299 * x[:, 0:1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:3]
-        else:
-            gray = x
-
-        # Now safe to use Sobel filters
-        sobel_x_tensor: torch.Tensor = self.sobel_x.to(dtype=x.dtype)  # type: ignore
-        sobel_y_tensor: torch.Tensor = self.sobel_y.to(dtype=x.dtype)  # type: ignore
-        grad_x = F.conv2d(gray, sobel_x_tensor, padding=1)
-        grad_y = F.conv2d(gray, sobel_y_tensor, padding=1)
-        # Compute gradient magnitude (vectorized)
-        edge_map = torch.sqrt(grad_x ** 2 + grad_y ** 2 + 1e-8)
-        
-        if edge_map.dim() == 4:
-            B, C, H, W = edge_map.shape
-            edge_flat = edge_map.reshape(B, -1)  # [B, H*W]
-            edge_min = edge_flat.min(dim=1, keepdim=True)[0]  # [B, 1]
-            edge_max = edge_flat.max(dim=1, keepdim=True)[0]  # [B, 1]
-            
-            # Reshape for broadcasting: [B, 1] -> [B, 1, 1, 1] to match [B, 1, H, W]
-            edge_min = edge_min.reshape(B, 1, 1, 1)
-            edge_max = edge_max.reshape(B, 1, 1, 1)
-            
-            # Avoid division by zero with efficient masking
-            range_mask = (edge_max > edge_min).float()
-            edge_map = range_mask * (edge_map - edge_min) / (edge_max - edge_min + 1e-8) + (1 - range_mask) * torch.zeros_like(edge_map)
-        else:
-            # Fallback for unexpected shapes (shouldn't happen, but safe)
-            edge_max_val = edge_map.max()
-            if edge_max_val > 0:
-                edge_map = edge_map / (edge_max_val + 1e-8)
-        
-        # Restore original dimensionality if needed
-        if original_dim == 2:
-            edge_map = edge_map.squeeze(0).squeeze(0)  # [1, 1, H, W] -> [H, W]
-        elif original_dim == 3:
-            edge_map = edge_map.squeeze(1)  # [B, 1, H, W] -> [B, H, W]
-            
-        return edge_map
+        return {
+            'loss': loss,
+            'l1_loss': l1_loss,
+        }
 

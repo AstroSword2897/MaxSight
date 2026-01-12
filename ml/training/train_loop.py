@@ -995,3 +995,43 @@ def train_model(
         **kwargs
     )
     return trainer.train()
+
+
+# ============================================================================
+# Stress Testing Infrastructure
+# ============================================================================
+
+from dataclasses import dataclass, field
+
+
+@dataclass
+class StressTestResult:
+    """Result of a single stress test."""
+    test_name: str
+    passed: bool
+    metrics: Dict[str, float] = field(default_factory=dict)
+    notes: str = ""
+    red_flags: List[str] = field(default_factory=list)
+
+
+@dataclass
+class StressTestConfig:
+    """Configuration for stress tests."""
+    head_isolation_variants: List[List[str]] = field(default_factory=lambda: [
+        ['detection'], ['detection', 'depth'], ['detection', 'accessibility'],
+        ['detection', 'navigation'], ['all']
+    ])
+    loss_scaling_factors: List[float] = field(default_factory=lambda: [0.1, 0.5, 1.0, 2.0, 5.0])
+    corruption_types: List[str] = field(default_factory=lambda: [
+        'gaussian_blur', 'motion_blur', 'random_occlusion', 'contrast_reduction', 'jpeg_compression'
+    ])
+    temporal_test_frames: int = 100
+    quantization_bits: List[int] = field(default_factory=lambda: [8, 16])
+    dropout_heads: List[str] = field(default_factory=lambda: ['depth', 'ocr', 'motion'])
+
+
+class StressTestSuite:
+    """Complete stress test suite - see stress_tests.py for full implementation."""
+    # Note: Full stress test classes are in ml/training/stress_tests.py
+    # This is a placeholder to avoid breaking imports
+    pass
