@@ -30,6 +30,14 @@ Thumbs.db
 *.h5
 *.hdf5
 
+# Dataset annotation files (large JSON files)
+datasets/cleaned_splits/train_annotations.json
+datasets/cleaned_splits/val_annotations.json
+datasets/cleaned_splits/test_annotations.json
+# Keep smaller metadata files
+# datasets/cleaned_splits/class_weights.json
+# datasets/cleaned_splits/class_distribution_report.json
+
 # Logs
 *.log
 logs/
