@@ -448,3 +448,129 @@ class AdvancedAugmentation:
             image_reshaped = block_means.expand_as(image_reshaped)
             image[..., :new_h, :new_w] = image_reshaped.reshape(
                 *image.shape[:-2], new_h, new_w)
+            
+        return image, targets
+
+
+class StressTestAugmentation(AdvancedAugmentation):
+    """
+    Stress-test augmentation for edge case robustness testing.
+    Applies more aggressive transforms to find model weaknesses.
+    """
+    
+    def __init__(self):
+        config = AugmentationConfig(
+            rotation_range=(-45, 45),
+            scale_range=(0.5, 1.5),
+            brightness_range=(0.3, 2.0),
+            contrast_range=(0.3, 2.0),
+            gaussian_noise_std=0.15,
+            motion_blur_prob=0.5,
+            random_erasing_prob=0.5,
+            random_erasing_scale=(0.1, 0.4),
+            fog_prob=0.3,
+            rain_prob=0.2,
+            extreme_lighting_prob=0.4,
+            partial_occlusion_prob=0.4,
+            jpeg_compression_prob=0.4,
+            jpeg_quality_range=(20, 70)
+        )
+        super().__init__(config)
+
+
+class MixUp:
+    """MixUp augmentation for regularization."""
+    
+    def __init__(self, alpha: float = 1.0):
+        self.alpha = alpha
+        
+    def __call__(self, images: torch.Tensor, 
+                 labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
+        """
+        Apply MixUp.
+        
+        Returns:
+            Mixed images, labels_a, labels_b, lambda
+        """
+        if self.alpha > 0:
+            lam = np.random.beta(self.alpha, self.alpha)
+        else:
+            lam = 1
+            
+        batch_size = images.size(0)
+        index = torch.randperm(batch_size, device=images.device)
+        
+        mixed_images = lam * images + (1 - lam) * images[index]
+        labels_a = labels
+        labels_b = labels[index]
+        
+        return mixed_images, labels_a, labels_b, lam
+
+
+class CutMix:
+    """CutMix augmentation for regularization."""
+    
+    def __init__(self, alpha: float = 1.0):
+        self.alpha = alpha
+        
+    def __call__(self, images: torch.Tensor,
+                 labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
+        """Apply CutMix."""
+        if self.alpha > 0:
+            lam = np.random.beta(self.alpha, self.alpha)
+        else:
+            lam = 1
+            
+        batch_size = images.size(0)
+        index = torch.randperm(batch_size, device=images.device)
+        
+        h, w = images.shape[-2:]
+        
+        # Get cut region
+        cut_rat = np.sqrt(1 - lam)
+        cut_w = int(w * cut_rat)
+        cut_h = int(h * cut_rat)
+        
+        cx = np.random.randint(w)
+        cy = np.random.randint(h)
+        
+        x1 = np.clip(cx - cut_w // 2, 0, w)
+        x2 = np.clip(cx + cut_w // 2, 0, w)
+        y1 = np.clip(cy - cut_h // 2, 0, h)
+        y2 = np.clip(cy + cut_h // 2, 0, h)
+        
+        mixed_images = images.clone()
+        mixed_images[..., y1:y2, x1:x2] = images[index, ..., y1:y2, x1:x2]
+        
+        # Adjust lambda to actual proportion
+        lam = 1 - ((x2 - x1) * (y2 - y1) / (h * w))
+        
+        return mixed_images, labels, labels[index], lam
+
+
+def create_augmentation_pipeline(mode: str = 'train') -> AdvancedAugmentation:
+    """
+    Create augmentation pipeline based on mode.
+    
+    Args:
+        mode: 'train', 'val', 'test', or 'stress_test'
+    """
+    if mode == 'train':
+        return AdvancedAugmentation()
+    elif mode == 'stress_test':
+        return StressTestAugmentation()
+    else:
+        # Minimal augmentation for val/test
+        return AdvancedAugmentation(AugmentationConfig(
+            rotation_range=(0, 0),
+            scale_range=(1, 1),
+            flip_horizontal_prob=0,
+            flip_vertical_prob=0,
+            motion_blur_prob=0,
+            random_erasing_prob=0,
+            fog_prob=0,
+            rain_prob=0,
+            extreme_lighting_prob=0,
+            partial_occlusion_prob=0
+        ))
+
