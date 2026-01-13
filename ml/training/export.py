@@ -448,3 +448,424 @@ class AlertFrequency(Enum):
                             func_lines.append(line)
                             continue
                 
+                if in_target_function:
+                    # Check if we've hit the end of the function
+                    stripped = line.lstrip()
+                    if stripped:
+                        current_indent = len(line) - len(line.lstrip())
+                        
+                        # End conditions:
+                        # 1. Next def/class at same or less indent (for class methods)
+                        # 2. Next def/class at start of line (for standalone)
+                        if is_class_method:
+                            if (stripped.startswith('def ') or stripped.startswith('class ')) and current_indent <= base_indent:
+                                break
+                        else:
+                            if (stripped.startswith('def ') or stripped.startswith('class ')) and current_indent == 0:
+                                break
+                    
+                    # Add line to function (remove class method indent)
+                    if is_class_method and base_indent > 0:
+                        if line.startswith(' ' * base_indent):
+                            func_lines.append(line[base_indent:])
+                        elif line.startswith('\t'):
+                            func_lines.append(line[1:])
+                        else:
+                            func_lines.append(line)
+                    else:
+                        func_lines.append(line)
+            
+            if func_lines:
+                func_code = '\n'.join(func_lines)
+                
+                    # Clean up self references for class methods
+                if is_class_method:
+                    # Remove self parameter from function signature
+                    func_code = re.sub(r'\(self,?\s*', '(', func_code)
+                    func_code = re.sub(r'\(self\)', '()', func_code)
+                    # Remove self. references
+                    func_code = re.sub(r'\bself\.', '', func_code)
+                    # Replace config references - add TODO comments on separate lines
+                    # This preserves syntax while documenting what needs to be parameterized
+                    lines = func_code.split('\n')
+                    cleaned_lines = []
+                    for line in lines:
+                        # Check if line has config reference
+                        if 'config.' in line:
+                            # Add TODO comment before the line
+                            indent = len(line) - len(line.lstrip())
+                            todo_comment = ' ' * indent + '# TODO: Parameterize config references when porting to Swift'
+                            cleaned_lines.append(todo_comment)
+                            # Replace config. with placeholder that needs to be parameterized
+                            # Handle both .config. and config. (after self. removal)
+                            line = re.sub(r'\.?config\.preferred_channel\b', 'preferred_channel', line)
+                            line = re.sub(r'\.?config\.alert_frequency\b', 'alert_frequency', line)
+                            line = re.sub(r'\.?config\.audio_volume\b', 'audio_volume', line)
+                            line = re.sub(r'\.?config\.haptic_intensity\b', 'haptic_intensity', line)
+                            line = re.sub(r'\.?config\.visual_contrast\b', 'visual_contrast', line)
+                        cleaned_lines.append(line)
+                    func_code = '\n'.join(cleaned_lines)
+                
+                reference_code += f'\n# From {module_path}'
+                if is_class_method:
+                    reference_code += f' (class {class_name} method)'
+                reference_code += '\n'
+                reference_code += func_code
+                reference_code += '\n\n'
+        
+        except Exception as e:
+            logger.warning(f"Failed to extract {func_name} from {module_path}: {e}")
+            continue
+    
+    return reference_code
+
+
+def export_ios_bundle(
+    model: nn.Module,
+    output_dir: str = 'maxsight_ios_bundle',
+    input_size: tuple = (1, 3, 224, 224)
+) -> Path:
+    """
+    Export minimal iOS bundle: PTE + configs + single reference file.
+    
+    Creates exactly 4 files:
+    - maxsight.pte (model)
+    - model_config.json (model settings)
+    - runtime_config.json (runtime toggles)
+    - processing_reference.py (all reference logic in one file)
+    - README_XCODE.md (iOS integration guide)
+    
+    Arguments:
+        model: Model to export
+        output_dir: Output directory
+        input_size: Model input size (B, C, H, W)
+    
+    Returns:
+        Path to bundle directory
+    """
+    from pathlib import Path
+    import json
+    from datetime import datetime
+    
+    bundle_path = Path(output_dir)
+    bundle_path.mkdir(exist_ok=True, parents=True)
+    
+    # 1. Export PTE
+    logger.info(f"Exporting PTE model...")
+    pte_path = export_to_executorch(
+        model,
+        str(bundle_path / 'maxsight.pte'),
+        input_size,
+        validate=True
+    )
+    
+    if not pte_path:
+        logger.warning("PTE export failed (ExecuTorch may not be installed). Bundle created without PTE file.")
+        logger.warning("Install ExecuTorch: pip install executorch")
+        pte_size_mb = 0.0
+    else:
+        pte_size_mb = pte_path.stat().st_size / (1024 * 1024)
+    
+    # 2. Export model config (minimal)
+    model_params = sum(p.numel() for p in model.parameters())
+    model_config = {
+        'version': '1.0.0',
+        'export_timestamp': datetime.now().isoformat(),
+        'input_size': list(input_size),
+        'num_classes': 80,
+        'num_urgency_levels': 4,
+        'num_distance_zones': 3,
+        'detection_threshold': 0.5,
+        'nms_threshold': 0.5,
+        'model_params': model_params,
+        'model_size_mb': round(pte_size_mb, 2),
+        'quantization': 'INT8' if hasattr(model, '_quantized') else 'FP32',
+        'output_shapes': {
+            'classifications': [input_size[0], 80],  # [B, num_classes]
+            'boxes': [input_size[0], 100, 4],  # [B, max_detections, 4]
+            'objectness': [input_size[0], 100],  # [B, max_detections]
+            'urgency_scores': [input_size[0], 100, 4],  # [B, max_detections, urgency_levels]
+            'distance_zones': [input_size[0], 100, 3],  # [B, max_detections, zones]
+        }
+    }
+    with open(bundle_path / 'model_config.json', 'w') as f:
+        json.dump(model_config, f, indent=2)
+    
+    # 3. Export runtime config (minimal)
+    runtime_config = {
+        'version': '1.0.0',
+        'max_latency_ms': 500.0,
+        'max_memory_mb': 50.0,
+        'enabled_heads': ['classification', 'box_regression', 'objectness', 'urgency', 'distance'],
+        'enable_fallbacks': True,
+        'uncertainty_threshold': 0.7,
+        'alert_frequency': 'medium',  # 'low', 'medium', 'high'
+        'preferred_channel': 'audio',  # 'audio', 'visual', 'haptic', 'hybrid'
+        'condition_modes': [
+            'glaucoma', 'amd', 'cataracts', 'color_blindness', 
+            'retinitis_pigmentosa', 'diabetic_retinopathy', 'cvi'
+        ]
+    }
+    with open(bundle_path / 'runtime_config.json', 'w') as f:
+        json.dump(runtime_config, f, indent=2)
+    
+    # 4. Create processing_reference.py (extract actual functions)
+    logger.info("Extracting processing reference...")
+    processing_ref = _extract_processing_reference()
+    
+    with open(bundle_path / 'processing_reference.py', 'w') as f:
+        f.write(processing_ref)
+    
+    # 5. Create minimal README
+    readme = f'''# MaxSight iOS Bundle
+
+**Export Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
+**Version:** 1.0.0
+
+## Files
+
+- `maxsight.pte` - ExecuTorch model (add to Xcode project)
+- `model_config.json` - Model parameters and thresholds
+- `runtime_config.json` - Runtime settings and toggles
+- `processing_reference.py` - Reference implementation (port to Swift)
+
+## Xcode Integration
+
+### 1. Add Model to Project
+
+1. Drag `maxsight.pte` into your Xcode project
+2. Ensure it's added to your app target
+3. Add to "Copy Bundle Resources" in Build Phases
+
+### 2. Install ExecuTorch Framework
+
+Add ExecuTorch to your project:
+
+```swift
+// Package.swift or Xcode Package Manager
+dependencies: [
+    .package(url: "https://github.com/pytorch/executorch", from: "0.4.0")
+]
+```
+
+### 3. Load Model
+
+```swift
+import Executorch
+
+class MaxSightModel {{
+    private var program: Program?
+    private var method: Method?
+    
+    func load() throws {{
+        guard let modelPath = Bundle.main.path(forResource: "maxsight", ofType: "pte") else {{
+            throw MaxSightError.modelNotFound
+        }}
+        
+        program = try Program.load(fromPath: modelPath)
+        method = program?.loadMethod("forward")
+    }}
+    
+    func predict(image: Tensor) throws -> [String: Tensor] {{
+        guard let method = method else {{
+            throw MaxSightError.modelNotLoaded
+        }}
+        
+        let outputs = try method.execute(inputs: [image])
+        return processOutputs(outputs)
+    }}
+}}
+```
+
+### 4. Preprocess Input
+
+Reference `processing_reference.py` for preprocessing logic. Port to Swift:
+
+```swift
+func preprocessImage(_ image: UIImage, condition: VisionCondition) -> Tensor {{
+    // 1. Resize to model input size ({input_size[2]}x{input_size[3]})
+    let resized = image.resized(to: CGSize(width: {input_size[3]}, height: {input_size[2]}))
+    
+    // 2. Apply condition-specific transform
+    let transformed = applyConditionTransform(resized, condition: condition)
+    
+    // 3. Normalize to [0, 1] and convert to tensor
+    let normalized = transformed.normalized()
+    let tensor = Tensor.fromImage(normalized)
+    
+    // 4. Add batch dimension
+    return tensor.unsqueeze(0)  // [1, 3, H, W]
+}}
+
+func applyConditionTransform(_ image: UIImage, condition: VisionCondition) -> UIImage {{
+    switch condition {{
+    case .glaucoma:
+        return applyGlaucomaVignette(image)  // See processing_reference.py
+    case .amd:
+        return applyAMDCentralDarkening(image)
+    case .cataracts:
+        return applyCataractContrast(image)
+    default:
+        return image
+    }}
+}}
+```
+
+### 5. Run Inference
+
+```swift
+let model = MaxSightModel()
+try model.load()
+
+let inputTensor = preprocessImage(cameraFrame, condition: .glaucoma)
+let outputs = try model.predict(image: inputTensor)
+
+// Outputs contain:
+// - classifications: [B, 80] - class logits
+// - boxes: [B, 100, 4] - bounding boxes (center format: x, y, w, h)
+// - objectness: [B, 100] - object confidence scores
+// - urgency_scores: [B, 100, 4] - urgency level scores
+// - distance_zones: [B, 100, 3] - distance zone probabilities
+```
+
+### 6. Postprocess Outputs
+
+Reference `processing_reference.py` for postprocessing:
+
+```swift
+func postprocessDetections(
+    boxes: Tensor,
+    scores: Tensor,
+    classifications: Tensor,
+    config: ModelConfig
+) -> [Detection] {{
+    // 1. Filter by detection threshold
+    let validIndices = scores > config.detectionThreshold
+    
+    // 2. Apply NMS (Non-Maximum Suppression)
+    // See processing_reference.py _nms() function
+    let nmsIndices = applyNMS(
+        boxes: boxes[validIndices],
+        scores: scores[validIndices],
+        threshold: config.nmsThreshold
+    )
+    
+    // 3. Convert to detections
+    var detections: [Detection] = []
+    for idx in nmsIndices {{
+        let box = boxes[idx]
+        let score = scores[idx]
+        let classId = classifications[idx].argmax()
+        
+        detections.append(Detection(
+            box: box,
+            score: score,
+            classId: classId
+        ))
+    }}
+    
+    return detections
+}}
+```
+
+### 7. Load Configs
+
+```swift
+struct ModelConfig: Codable {{
+    let inputSize: [Int]
+    let numClasses: Int
+    let detectionThreshold: Double
+    let nmsThreshold: Double
+}}
+
+func loadModelConfig() throws -> ModelConfig {{
+    guard let url = Bundle.main.url(forResource: "model_config", withExtension: "json"),
+          let data = try? Data(contentsOf: url) else {{
+        throw MaxSightError.configNotFound
+    }}
+    
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    return try decoder.decode(ModelConfig.self, from: data)
+}}
+```
+
+## Model Information
+
+- **Input Size:** {input_size}
+- **Parameters:** {model_params:,}
+- **Model Size:** {pte_size_mb:.1f} MB
+- **Classes:** {model_config['num_classes']}
+- **Urgency Levels:** {model_config['num_urgency_levels']}
+- **Distance Zones:** {model_config['num_distance_zones']}
+- **Quantization:** {model_config['quantization']}
+
+## Output Tensor Shapes
+
+See `model_config.json` for exact shapes. Typical outputs:
+
+- `classifications`: [{input_size[0]}, 80] - Class logits
+- `boxes`: [{input_size[0]}, 100, 4] - Bounding boxes (center format)
+- `objectness`: [{input_size[0]}, 100] - Object confidence
+- `urgency_scores`: [{input_size[0]}, 100, 4] - Urgency level scores
+- `distance_zones`: [{input_size[0]}, 100, 3] - Distance zone probabilities
+
+## Reference Implementation
+
+See `processing_reference.py` for complete reference:
+
+- **Preprocessing**: Condition-specific transforms (glaucoma, AMD, cataracts, etc.)
+- **Postprocessing**: NMS, IoU calculation, detection filtering
+- **Scheduling**: Priority calculation, intensity, frequency, channel selection
+- **OCR**: Text region clustering and grouping
+
+## Performance Targets
+
+- **Latency**: <500ms per frame (target: <400ms)
+- **Memory**: <50MB model size
+- **Battery**: <12% per hour normal use
+
+## Troubleshooting
+
+### Model won't load
+- Verify `maxsight.pte` is in bundle resources
+- Check ExecuTorch framework is properly linked
+- Ensure iOS deployment target is 15.0+
+
+### Inference fails
+- Verify input tensor shape matches `input_size` in config
+- Check tensor dtype is Float32
+- Ensure tensor is on CPU (ExecuTorch requirement)
+
+### Outputs are wrong
+- Verify preprocessing matches Python reference
+- Check postprocessing (NMS, filtering) is correct
+- Compare with `processing_reference.py` implementation
+'''
+    
+    with open(bundle_path / 'README_XCODE.md', 'w') as f:
+        f.write(readme)
+    
+    logger.info(f"iOS bundle exported to: {bundle_path}")
+    logger.info(f"  - maxsight.pte ({pte_size_mb:.1f} MB)")
+    logger.info(f"  - model_config.json")
+    logger.info(f"  - runtime_config.json")
+    logger.info(f"  - processing_reference.py")
+    logger.info(f"  - README_XCODE.md")
+    
+    return bundle_path
+
+
+if __name__ == "__main__":
+    from ml.models.maxsight_cnn import create_model
+    
+    model = create_model()
+    model.eval()
+    
+    print("Testing export functionality...")
+    export_to_jit(model, 'test_maxsight_traced.pt')
+    export_to_executorch(model, 'test_maxsight.pte')
+    export_to_coreml(model, 'test_maxsight.mlpackage')
+    export_to_onnx(model, 'test_maxsight.onnx')
+    print("Export system ready!")
+
