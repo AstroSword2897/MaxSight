@@ -898,3 +898,100 @@ class ProductionTrainLoop:
                     
                     # Early stopping check
                     if self.early_stopping_patience > 0:
+                        if self.early_stopping_metric == 'val_loss':
+                            current_metric = val_loss
+                            improvement = self.early_stopping_best_metric - current_metric
+                            if improvement > self.early_stopping_min_delta:
+                                self.early_stopping_best_metric = current_metric
+                                self.early_stopping_counter = 0
+                            else:
+                                self.early_stopping_counter += 1
+                        else:  # val_map
+                            current_metric = val_map
+                            improvement = current_metric - self.early_stopping_best_metric
+                            if improvement > self.early_stopping_min_delta:
+                                self.early_stopping_best_metric = current_metric
+                                self.early_stopping_counter = 0
+                            else:
+                                self.early_stopping_counter += 1
+                        
+                        if self.early_stopping_counter >= self.early_stopping_patience:
+                            self.logger.info(
+                                f"Early stopping triggered after {epoch+1} epochs. "
+                                f"No improvement for {self.early_stopping_patience} epochs."
+                            )
+                            break
+                    
+                    # Save checkpoint
+                    self._save_checkpoint(epoch, is_best=is_best)
+                    
+                    self.logger.info(
+                        f"Train Loss: {train_metrics['loss']:.4f}, "
+                        f"Val Loss: {val_loss:.4f}, Val mAP: {val_map:.4f}, "
+                        f"Val mAP@0.5: {val_map_50:.4f}, Val mAP@0.75: {val_map_75:.4f}, "
+                        f"Precision: {val_precision:.4f}, Recall: {val_recall:.4f}, F1: {val_f1:.4f}"
+                    )
+                else:
+                    # No validation, just save checkpoint
+                    self._save_checkpoint(epoch, is_best=False)
+                    self.logger.info(f"Train Loss: {train_metrics['loss']:.4f}")
+        except KeyboardInterrupt:
+            self.logger.warning("Training interrupted by user")
+            self._save_checkpoint(self.current_epoch, is_best=False)
+            raise
+        except Exception as e:
+            self.logger.error(f"Training failed: {e}", exc_info=True)
+            self._save_checkpoint(self.current_epoch, is_best=False)
+            raise
+        
+        elapsed_time = time.time() - start_time
+        
+        # Save training history
+        history_path = self.checkpoint_dir / 'training_history.json'
+        try:
+            with open(history_path, 'w') as f:
+                json.dump(self.history, f, indent=2)
+        except Exception as e:
+            self.logger.error(f"Failed to save training history: {e}")
+        
+        # Also save as CSV for easy plotting with pandas
+        try:
+            import pandas as pd
+            df = pd.DataFrame(self.history)
+            csv_path = self.checkpoint_dir / 'training_history.csv'
+            df.to_csv(csv_path, index=False)
+        except ImportError:
+            pass  # pandas not available, skip CSV export
+        
+        self.logger.info("\nTraining Complete!")
+        self.logger.info(f"Best validation mAP: {self.best_val_map:.4f}")
+        self.logger.info(f"Best validation loss: {self.best_val_loss:.4f}")
+        self.logger.info(f"Total time: {elapsed_time/3600:.2f} hours")
+        self.logger.info(f"Checkpoints saved to: {self.checkpoint_dir}")
+        
+        return {
+            'best_val_loss': self.best_val_loss,
+            'best_val_map': self.best_val_map,
+            'best_model_path': str(self.checkpoint_dir / 'best_model.pt'),
+            'history': self.history,
+            'checkpoint_dir': str(self.checkpoint_dir)
+        }
+
+
+# Convenience function
+def train_model(
+    model: nn.Module,
+    train_loader: DataLoader,
+    val_loader: Optional[DataLoader] = None,
+    loss_fn: Optional[nn.Module] = None,
+    **kwargs
+) -> Dict[str, Any]:
+    """Convenience function to train a model."""
+    trainer = ProductionTrainLoop(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        loss_fn=loss_fn,
+        **kwargs
+    )
+    return trainer.train()
