@@ -39,6 +39,8 @@ from ml.models.maxsight_cnn import create_model
 from ml.training.losses import MaxSightLoss
 from ml.training.train_loop import ProductionTrainLoop
 from ml.data.dataset import MaxSightDataset
+import shutil
+import subprocess
 
 
 # Logging setup
@@ -76,6 +78,55 @@ def resolve_annotation_file(directory: Path, provided_file: str | None):
     raise FileNotFoundError(
         f"No annotation file provided and none found in {directory}."
     )
+
+
+def backup_training_artifacts(checkpoint_path: Path, checkpoint_dir: Path, data_dir: str):
+    """
+    Backup training artifacts (model, code, data metadata) after training.
+    Weekly automated backup for rollback capability.
+    """
+    backup_dir = Path("backups") / datetime.now().strftime("%Y%m%d")
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Backup model
+    models_backup = backup_dir / "models"
+    models_backup.mkdir(exist_ok=True)
+    if checkpoint_path.exists():
+        shutil.copy2(checkpoint_path, models_backup / checkpoint_path.name)
+        logger.info(f"✅ Backed up model to {models_backup}")
+    
+    # Backup git bundle (code)
+    repo_path = Path(__file__).parent.parent
+    code_backup = backup_dir / "code"
+    code_backup.mkdir(exist_ok=True)
+    bundle_path = code_backup / "maxsight.bundle"
+    
+    result = subprocess.run(
+        ["git", "bundle", "create", str(bundle_path), "--all"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True
+    )
+    
+    if result.returncode == 0:
+        logger.info(f"✅ Backed up code to {bundle_path}")
+    else:
+        logger.warning(f"⚠️  Git bundle failed: {result.stderr}")
+    
+    # Backup data metadata (not full data)
+    data_backup = backup_dir / "data"
+    data_backup.mkdir(exist_ok=True)
+    metadata = {
+        'timestamp': datetime.now().isoformat(),
+        'data_dir': str(data_dir),
+        'checkpoint': str(checkpoint_path)
+    }
+    
+    metadata_file = data_backup / "metadata.json"
+    with open(metadata_file, 'w') as f:
+        json.dump(metadata, f, indent=2)
+    
+    logger.info(f"✅ Backup complete: {backup_dir}")
 
 
 # Main
@@ -264,6 +315,12 @@ def main():
     logger.info("Training completed successfully")
     logger.info(f"Best model saved to: {results['best_model_path']}")
     logger.info(f"Best validation loss: {results['best_val_loss']:.4f}")
+    
+    # Backup model and code after training
+    if args.backup:
+        logger.info("Creating backup...")
+        checkpoint_path = Path(results['best_model_path'])
+        backup_training_artifacts(checkpoint_path, ckpt_dir, str(data_dir))
 
 
 if __name__ == "__main__":

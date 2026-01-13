@@ -4,10 +4,16 @@ import torch.nn.functional as F
 from typing import Tuple, Optional, Dict
 
 class ContrastMapHead(nn.Module):
-    def __init__(self, in_channels: int = 256, use_edge_aware: bool = True):
+    def __init__(self, in_channels: int = 256, motion_dim: int = 256, use_edge_aware: bool = True):
         super().__init__()
         self.in_channels = in_channels
+        self.motion_dim = motion_dim
         self.use_edge_aware = use_edge_aware
+        
+        # FIXED: Motion-conditioned contrast estimation
+        # Motion stability indicates reliable contrast regions
+        if motion_dim > 0:
+            self.motion_proj = nn.Conv2d(motion_dim, in_channels, kernel_size=1, bias=False)
         
         # Contrast estimation network
         # WHY THIS ARCHITECTURE:
@@ -76,7 +82,11 @@ class ContrastMapHead(nn.Module):
         
         return self.edge_conv(features)  # [B, 1, H, W]
     
-    def forward(self, features: torch.Tensor) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+    def forward(
+        self, 
+        features: torch.Tensor,
+        motion_features: Optional[torch.Tensor] = None  # FIXED: Motion as temporal anchor
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Forward pass with edge-aware modulation.
         
@@ -101,6 +111,14 @@ class ContrastMapHead(nn.Module):
                 f"Expected {self.in_channels} channels, got {C}. "
                 f"Ensure input features match head configuration."
             )
+        
+        # FIXED: Motion-conditioned feature extraction
+        # Motion stability indicates reliable contrast regions
+        if motion_features is not None and hasattr(self, 'motion_proj'):
+            motion_proj = self.motion_proj(motion_features)
+            if motion_proj.shape[2:] != features.shape[2:]:
+                motion_proj = F.interpolate(motion_proj, size=features.shape[2:], mode='bilinear', align_corners=False)
+            features = features + motion_proj
         
         # Compute edge map as modulation signal (if enabled)
         if self.use_edge_aware:

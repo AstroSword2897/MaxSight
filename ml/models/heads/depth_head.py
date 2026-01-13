@@ -47,15 +47,22 @@ class DepthHead(nn.Module):
     
     def __init__(
         self, 
-        in_channels: int = 256 + 128,  # FPN + temporal
+        in_channels: int = 256,
+        motion_dim: int = 256,  # FIXED: Motion as temporal anchor
         dropout: float = 0.1,
         use_multi_scale: bool = True,
         depth_activation: str = 'sigmoid'  # 'sigmoid', 'softplus', or 'none'
     ):
         super().__init__()
         self.in_channels = in_channels
+        self.motion_dim = motion_dim
         self.use_multi_scale = use_multi_scale
         self.depth_activation = depth_activation
+        
+        # FIXED: Motion-conditioned depth estimation
+        # Motion provides temporal stability signal for depth
+        if motion_dim > 0:
+            self.motion_proj = nn.Conv2d(motion_dim, in_channels, kernel_size=1, bias=False)
         
         # Separate branches for depth and uncertainty (they need different signals)
         # Depth branch: confident structure, clear gradients
@@ -128,14 +135,16 @@ class DepthHead(nn.Module):
     def forward(
         self, 
         features: torch.Tensor,
-        fpn_features: Optional[Dict[str, torch.Tensor]] = None
+        fpn_features: Optional[Dict[str, torch.Tensor]] = None,
+        motion_features: Optional[torch.Tensor] = None  # FIXED: Motion as temporal anchor
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass.
         
         Arguments:
-            features: Fused FPN + temporal features [B, C, H, W]
+            features: Fused FPN features [B, C, H, W]
             fpn_features: Optional dict with 'p3', 'p4' for multi-scale skip connections
+            motion_features: Optional motion features [B, motion_dim, H, W] - FIXED: Motion as temporal anchor
         
         Returns:
             Dictionary with:
@@ -144,6 +153,14 @@ class DepthHead(nn.Module):
                 - 'zones': [B, 3] - Zone logits (not softmaxed)
         """
         B, C, H, W = features.shape
+        
+        # FIXED: Motion-conditioned feature extraction
+        # Motion provides temporal stability signal for depth estimation
+        if motion_features is not None and hasattr(self, 'motion_proj'):
+            motion_proj = self.motion_proj(motion_features)
+            if motion_proj.shape[2:] != features.shape[2:]:
+                motion_proj = F.interpolate(motion_proj, size=features.shape[2:], mode='bilinear', align_corners=False)
+            features = features + motion_proj
         
         # Separate branches for depth and uncertainty
         depth_feat = self.depth_branch(features)  # [B, 64, H, W]

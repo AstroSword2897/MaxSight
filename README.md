@@ -84,7 +84,9 @@ A multi-task architecture shares feature extraction across all tasks, making it 
 
 ## 🏗️ System Architecture
 
-### High-Level Architecture
+### Safety-First, Tiered Architecture
+
+MaxSight uses a **tiered head architecture** where heads are organized by criticality, not treated as equals. This ensures safety-critical predictions are never blocked by enhancement features.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -96,31 +98,40 @@ A multi-task architecture shares feature extraction across all tasks, making it 
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│              Processing Layer                                │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ 🧠 MaxSightCNN (Multi-task Detection)                │  │
-│  │    ├── ResNet50 Backbone                             │  │
-│  │    ├── FPN (Feature Pyramid Network)                 │  │
-│  │    └── 20 Specialized Heads                          │  │
-│  └──────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ 📝 OCR Integration (Vision Framework)                │  │
-│  └──────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ 💬 Description Generator                             │  │
-│  └──────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ 🗺️ Spatial Memory                                    │  │
-│  └──────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ 🧭 Path Planner                                      │  │
-│  └──────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ 🏥 Therapy Integration                               │  │
-│  └──────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ 🔍 Retrieval System (Multi-Vector)                   │  │
-│  └──────────────────────────────────────────────────────┘  │
+│         Condition Adapter (Learnable Embedding + FiLM)      │
+│         Adapts to user's vision condition                   │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│         Shared Backbone (Mobile-Optimized CNN/ViT)          │
+│         └── Feature Pyramid Network (FPN)                   │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+        ┌───────────────────┴───────────────────┐
+        ↓                                       ↓
+┌───────────────────────┐         ┌───────────────────────┐
+│  Stage A: Safety Pass  │         │ Stage B: Context Pass │
+│  (<150ms, Every Frame) │         │ (Opportunistic)       │
+│                        │         │                       │
+│  Tier 1 Heads:        │         │ Tier 2 Heads:        │
+│  ├── Objectness        │         │ ├── Motion           │
+│  ├── Classification    │         │ ├── ROI Priority     │
+│  ├── Box Regression    │         │ ├── Scene Complexity │
+│  ├── Distance (zones)  │         │ └── Spatial Memory  │
+│  ├── Urgency           │         │                       │
+│  └── Uncertainty       │         │ Tier 3 Heads:        │
+│                        │         │ ├── Scene Desc       │
+│  Safety Decision Core  │         │ ├── Retrieval (adv)  │
+│  "Is user safe now?"   │         │ ├── Therapy          │
+│                        │         │ └── Fatigue          │
+└───────────────────────┘         └───────────────────────┘
+        ↓                                       ↓
+┌─────────────────────────────────────────────────────────────┐
+│         Output Scheduler + Cognitive Load Model            │
+│         ├── Information Budget (per-second)                │
+│         ├── Cool-down per object                           │
+│         ├── Novelty Detection                               │
+│         └── Operating Modes (Safe/Assist/Therapy)          │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -136,14 +147,82 @@ A multi-task architecture shares feature extraction across all tasks, making it 
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Tiered Head Architecture (Criticality Layers)
+
+Heads are organized into **3 tiers** based on safety criticality:
+
+#### **Tier 1: Safety-Critical (Never Disabled)**
+- **Objectness**: Is there an object here?
+- **Classification**: What object is this?
+- **Box Regression**: Where is it?
+- **Distance (coarse zones)**: Near/medium/far only
+- **Urgency**: How dangerous?
+- **Uncertainty**: How confident?
+
+**Properties:**
+- Highest loss priority in training
+- Redundant validation
+- Separate inference budget
+- Runs every frame (<150ms target)
+- Never blocked by other heads
+
+#### **Tier 2: Navigation & Context (Can Degrade)**
+- **Motion**: Object movement tracking
+- **ROI Priority**: Region-of-interest prioritization
+- **Scene Complexity**: Navigation difficulty
+- **Spatial Memory**: Object tracking over time
+- **Path Planning**: Navigation assistance
+
+**Properties:**
+- Can be throttled (every N frames)
+- Can be delayed if Tier 1 needs resources
+- Graceful degradation if disabled
+
+#### **Tier 3: Enhancement & Therapy (Optional)**
+- **Scene Description**: Natural language descriptions
+- **Retrieval Augmentation**: Knowledge-enhanced context
+- **Therapy**: Vision therapy exercises
+- **Fatigue**: User fatigue detection
+
+**Properties:**
+- Optional (can be disabled)
+- Asynchronous (background thread)
+- Never blocks Tier 1 or Tier 2
+- Advisory only (never drives safety decisions)
+
+### Two-Stage Inference Pipeline
+
+**Stage A: Fast Safety Pass** (<150ms, every frame)
+- Minimal backbone + Tier 1 heads only
+- Answers: "Is the user safe right now?"
+- Early-exit after FPN for speed
+- Feature caching for Stage B
+
+**Stage B: Context Pass** (opportunistic)
+- Runs only if Stage A is stable
+- Uses cached features from Stage A
+- Tier 2 & Tier 3 heads
+- Can be skipped if latency is high
+
+**Why This Matters:**
+- Decouples safety from enhancement
+- Reduces latency variance
+- Makes debugging easier
+- Enables graceful degradation
+
 ### Key Design Principles
 
-1. **Multi-Task Learning**: Single model performs multiple related tasks efficiently
-2. **Condition-Specific**: Adapts to 10+ vision conditions (glaucoma, AMD, cataracts, etc.)
-3. **Multimodal**: Integrates vision, audio, and haptic feedback
-4. **Real-Time**: Optimized for <500ms inference latency
-5. **Production-Grade**: Error handling, fallbacks, monitoring, thread safety
-6. **Safety-First**: Uncertainty suppression, ethical safeguards, graceful degradation
+1. **Safety-First**: Tier 1 heads never disabled, highest priority
+2. **Tiered Criticality**: Not all heads are equal—safety > navigation > enhancement
+3. **Two-Stage Inference**: Fast safety pass, opportunistic context pass
+4. **Cognitive Load Management**: Information budgeting prevents overload
+5. **Fail-Silent Modes**: Operating modes (Safe/Assist/Therapy) for predictable behavior
+6. **Advisory Retrieval**: Retrieval enhances, never drives safety decisions
+7. **Learnable Condition Adaptation**: FiLM layers adapt to user's vision condition
+8. **Hybrid Distance**: Coarse zones (near/medium/far) only, not dense depth maps
+9. **Motion as Temporal Anchor**: Motion features condition other heads (depth, contrast, OCR, fatigue)
+10. **Simplified Fusion**: 2-tier hierarchy (cross-layer residual primary, weighted fusion secondary)
+11. **Production-Ready Backbone**: Constrained cross-layer alpha, safe feature caching, GPU-parallel dynamic conv
 
 ---
 
@@ -154,14 +233,21 @@ A multi-task architecture shares feature extraction across all tasks, making it 
 **Purpose**: Core multi-task vision model that powers all environmental understanding.
 
 **Architecture**:
-- **Backbone**: ResNet50 (ImageNet pretrained) - extracts visual features
+- **Backbone**: Hybrid CNN-ViT (ResNet50 + Vision Transformer) - combines CNN efficiency with ViT attention
 - **Neck**: Simplified FPN (Feature Pyramid Network) - multi-scale feature extraction
-- **Heads**: 20 specialized task-specific heads - each predicts different information
+- **Heads**: 20 specialized task-specific heads - organized by criticality tiers
 
-**Why ResNet50 + FPN?**
-- ResNet50 provides strong feature extraction with proven performance
-- FPN enables detection of objects at multiple scales (small and large objects)
-- This combination balances accuracy and efficiency for mobile deployment
+**Why Hybrid CNN-ViT?**
+- **CNN**: Provides local inductive bias and spatial precision
+- **ViT**: Provides global context and long-range reasoning
+- **Cross-Layer Interaction**: Learnable residual connections (CNN ↔ ViT) with sigmoid-constrained alpha
+- **Simplified Fusion**: 2-tier hierarchy (cross-layer residual primary, weighted fusion secondary)
+
+**Production-Ready Features**:
+- **GPU-Parallel Dynamic Conv**: Grouped convolution trick (not per-sample loop)
+- **Safe Feature Caching**: Frame ID-based keys (not mean hash)
+- **Constrained Cross-Layer Alpha**: Sigmoid bounds prevent runaway amplification
+- **Motion as Temporal Anchor**: Motion features condition depth, contrast, OCR, fatigue
 
 **Input**: `[B, 3, 224, 224]` RGB images + optional audio features  
 **Output**: Dictionary with 20+ task outputs (detections, urgency, distance, etc.)
@@ -170,85 +256,117 @@ A multi-task architecture shares feature extraction across all tasks, making it 
 - Anchor-free detection (FCOS-style) - simpler and more efficient than anchor-based
 - Multi-scale feature extraction - detects objects of all sizes
 - Audio-visual fusion - combines vision and sound for better understanding
-- Condition-specific preprocessing - adapts to user's vision condition
-- Uncertainty estimation - knows when it's uncertain
+- Condition-specific preprocessing - learnable FiLM adapters (not hard-coded)
+- Global Confidence Aggregator - system-level uncertainty (not isolated head)
 
 ---
 
-### 2. Specialized Heads (20+ Heads)
+### 2. Tiered Head Architecture
 
-Each head is a specialized neural network that predicts specific information. All heads share the same backbone features but predict different outputs.
+Heads are organized into **3 tiers** based on safety criticality. This ensures safety-critical predictions are never blocked by enhancement features.
 
-#### Core Detection Heads
+#### Tier 1: Safety-Critical Heads (Never Disabled)
 
-| Head | Purpose | Output Shape | Why It Exists |
-|------|---------|--------------|---------------|
-| **Classification** | What object is this? | `[B, 196, 48]` | Identifies 48 environmental classes (doors, stairs, vehicles, etc.) |
-| **Box Regression** | Where is the object? | `[B, 196, 4]` | Provides bounding box coordinates for spatial awareness |
-| **Objectness** | Is there an object here? | `[B, 196]` | Confidence score to filter out background noise |
-| **Text Region** | Where is text? | `[B, 196]` | Identifies text regions for OCR processing |
+| Head | Purpose | Output Shape | Why It Exists | Execution |
+|------|---------|--------------|---------------|-----------|
+| **Objectness** | Is there an object here? | `[B, 196]` | Filters background noise | Every frame |
+| **Classification** | What object is this? | `[B, 196, 48]` | Identifies 48 environmental classes | Every frame |
+| **Box Regression** | Where is the object? | `[B, 196, 4]` | Bounding box coordinates | Every frame |
+| **Distance (zones)** | How far? (coarse only) | `[B, 3]` | Near/medium/far zones only | Every frame |
+| **Urgency** | How dangerous? | `[B, 4]` | 4-level urgency (safe/caution/warning/danger) | Every frame |
+| **Uncertainty** | Model confidence | `[B, 1]` | Critical for safety—suppresses unsafe outputs | Every frame |
 
-#### Accessibility Heads
+**Properties:**
+- Highest loss priority in training
+- Redundant validation
+- Separate inference budget
+- Target: <150ms per frame
+- Never blocked by Tier 2 or Tier 3
 
-| Head | Purpose | Output Shape | Why It Exists |
-|------|---------|--------------|---------------|
-| **Urgency** | How urgent/dangerous? | `[B, 4]` | 4-level urgency (safe/caution/warning/danger) for safety |
-| **Distance** | How far away? | `[B, H, W]` + `[B, 3]` | Depth map + distance zones (near/medium/far) for navigation |
-| **Contrast** | Contrast sensitivity map | `[B, H, W]` | Identifies low-contrast regions that are hard to see |
-| **Glare** | Glare risk assessment | `[B, 4]` | Predicts glare risk to warn users |
-| **Findability** | How easy to find? | `[B, 196]` | Scores how easy objects are to locate (for low vision) |
-| **Navigation Difficulty** | Scene navigation difficulty | `[B, 1]` | Overall scene complexity score |
-| **Uncertainty** | Model confidence | `[B, 1]` | Estimates when model is uncertain (critical for safety) |
+#### Tier 2: Navigation & Context Heads (Can Degrade)
 
-#### Advanced Heads
+| Head | Purpose | Output Shape | Why It Exists | Execution |
+|------|---------|--------------|---------------|-----------|
+| **Motion** | Object movement | `[B, 2, H, W]` | Tracks motion for predictive alerts | Every N frames |
+| **ROI Priority** | Region prioritization | `[B, N]` | Identifies important regions | Every N frames |
+| **Scene Complexity** | Navigation difficulty | `[B, 1]` | Overall scene complexity | Every N frames |
+| **Spatial Memory** | Object tracking | Persistent | Maintains object map over time | Background |
+| **Path Planning** | Navigation assistance | Path graph | Plans safe navigation paths | Background |
 
-| Head | Purpose | Output Shape | Why It Exists |
-|------|---------|--------------|---------------|
-| **Scene Description** | Scene embedding for TTS | `[B, 512]` | Encodes scene context for natural language descriptions |
-| **Sound Event** | Environmental sound classification | `[B, 15]` | Classifies sounds (alarms, sirens, vehicles, speech) |
-| **Motion** | Optical flow estimation | `[B, 2, H, W]` | Tracks object motion for predictive alerts |
-| **ROI Priority** | Region-of-interest prioritization | `[B, N]` | Identifies most important regions to focus on |
-| **Predictive Alert** | Predictive hazard alerts | `[B, 1]` | Predicts potential hazards before they occur |
-| **Personalization** | User-specific adaptations | `[B, 256]` | Learns user preferences and adapts outputs |
-| **Fatigue** | User fatigue detection | `[B, 1]` | Detects when user is fatigued (for therapy) |
+**Properties:**
+- Can be throttled (every N frames)
+- Can be delayed if Tier 1 needs resources
+- Graceful degradation if disabled
 
-**Why So Many Heads?**
+#### Tier 3: Enhancement & Therapy Heads (Optional)
 
-Each head addresses a specific accessibility need:
-- **Detection heads** provide basic object recognition
-- **Accessibility heads** address specific vision condition needs
-- **Advanced heads** enable sophisticated features (navigation, personalization, therapy)
+| Head | Purpose | Output Shape | Why It Exists | Execution |
+|------|---------|--------------|---------------|-----------|
+| **Scene Description** | Natural language | `[B, 512]` | Encodes scene for TTS | Background |
+| **Retrieval Augmentation** | Knowledge enhancement | Advisory | Enhances descriptions, never drives safety | Background |
+| **Therapy** | Vision therapy | Task config | Adaptive therapy exercises | Background |
+| **Fatigue** | User fatigue | `[B, 1]` | Detects user fatigue (experimental) | Background |
 
-All heads share the same backbone features, making this efficient. The alternative (separate models) would be much slower and use more memory.
+**Properties:**
+- Optional (can be disabled)
+- Asynchronous (background thread)
+- Never blocks Tier 1 or Tier 2
+- **Advisory only** (never drives safety decisions)
+
+**Why Tiered Architecture?**
+
+Not all predictions are equal. Safety-critical predictions (Tier 1) must never be blocked by enhancement features (Tier 3). This architecture ensures:
+- **Safety first**: Tier 1 always runs, never disabled
+- **Graceful degradation**: If Tier 2/3 fail, Tier 1 continues
+- **Resource management**: Tier 1 gets priority, Tier 2/3 are opportunistic
+- **Predictable behavior**: Users know safety features always work
 
 ---
 
-### 3. Preprocessing (`ml/utils/preprocessing.py`)
+### 3. Learnable Condition Adapter (`ml/utils/preprocessing.py`)
 
-**Purpose**: Condition-specific image adaptations that modify input images based on user's vision condition.
+**Purpose**: Adapts processing to user's vision condition using learnable embeddings, not hard-coded rules.
 
-**Why Condition-Specific Preprocessing?**
+**Why Learnable Instead of Hard-Coded?**
 
-Different vision conditions require different processing:
-- **Glaucoma** (peripheral vision loss): Emphasizes peripheral regions
-- **AMD** (central vision damage): Emphasizes central regions
-- **Cataracts** (blur): Contrast enhancement
-- **Color Blindness**: Color detection and explicit color announcements
-- **Retinitis Pigmentosa** (night blindness): Brightness enhancement
-- **Diabetic Retinopathy**: Edge enhancement
-- **CVI** (cortical visual impairment): Simplified processing
+Hard-coded preprocessing rules:
+- Don't scale to new conditions
+- Can backfire if assumptions are wrong
+- Require manual tuning for each condition
+
+Learnable condition adapters:
+- Learn what actually helps users
+- Adapt over time based on feedback
+- Reduce manual heuristics
 
 **How It Works**:
-1. User selects their vision condition
-2. Preprocessor applies condition-specific transformations
-3. Model processes adapted image
-4. Outputs are tailored to condition
+1. **Condition Embedding Vector**: Learned representation of each vision condition
+2. **FiLM Layers** (Feature-wise Linear Modulation): Inject condition embedding into backbone
+3. **Attention Modulation**: Condition-specific attention weights
+4. **Fallback Heuristics**: Safety fallback if learning fails
 
-This ensures the model provides useful information regardless of the user's specific vision condition.
+**Architecture**:
+```
+Condition Embedding [C_dim] 
+    ↓
+FiLM Layers (modulate backbone features)
+    ↓
+Condition-Adapted Features
+    ↓
+Model Processing
+```
+
+**Benefits**:
+- Learns optimal adaptations per condition
+- Adapts to user feedback
+- Reduces manual tuning
+- Maintains safety fallbacks
+
+This is more robust than hard-coded rules while maintaining safety.
 
 ---
 
-### 4. OCR Integration (`ml/utils/ocr_integration.py`)
+### 5. OCR Integration (`ml/utils/ocr_integration.py`)
 
 **Purpose**: Text detection and reading for accessibility.
 
@@ -267,7 +385,7 @@ The model detects *where* text is, but iOS Vision Framework is better at *readin
 
 ---
 
-### 5. Description Generator (`ml/utils/description_generator.py`)
+### 6. Description Generator (`ml/utils/description_generator.py`)
 
 **Purpose**: Generates natural language scene descriptions for text-to-speech.
 
@@ -286,7 +404,7 @@ This directly supports "Clear Multimodal Communication" by providing structured,
 
 ---
 
-### 6. Spatial Memory (`ml/utils/spatial_memory.py`)
+### 7. Spatial Memory (`ml/utils/spatial_memory.py`)
 
 **Purpose**: Maintains a memory of objects and their positions over time.
 
@@ -302,7 +420,7 @@ Spatial memory enables these capabilities by maintaining a persistent object map
 
 ---
 
-### 7. Path Planner (`ml/utils/path_planner.py`)
+### 8. Path Planner (`ml/utils/path_planner.py`)
 
 **Purpose**: Plans navigation paths based on detected objects and spatial memory.
 
@@ -318,7 +436,7 @@ Path planner combines detection, spatial memory, and navigation logic to provide
 
 ---
 
-### 8. Therapy Integration (`ml/therapy/`)
+### 9. Therapy Integration (`ml/therapy/`)
 
 **Purpose**: Adaptive therapy exercises and skill development.
 
@@ -343,53 +461,82 @@ This directly supports "Skill Development Across Senses" by providing exercises 
 
 ---
 
-### 9. Retrieval System (`ml/retrieval/`)
+### 10. Retrieval System (`ml/retrieval/`) - **Advisory Only**
 
-**Purpose**: Multi-vector retrieval for knowledge-augmented scene understanding.
+**Purpose**: Multi-vector retrieval for knowledge-augmented scene understanding. **Advisory, not authoritative.**
 
-**Why Retrieval System?**
+**Why Advisory Retrieval?**
 
-The retrieval system enables:
-- **Similar scene matching**: Find similar scenes from training data
-- **Knowledge augmentation**: Enhance understanding with retrieved context
-- **Concept retrieval**: Retrieve relevant concepts and relationships
-- **Cross-view learning**: Learn from multiple viewpoints
+Retrieval is powerful but risky if it drives safety decisions. Retrieval can:
+- Fail (network issues, index corruption)
+- Be slow (latency spikes)
+- Be wrong (similar scenes aren't identical)
+
+**Architectural Rule:**
+> **Retrieval outputs may only influence Tier 3 heads. No retrieval signal should affect urgency, distance, or path planning.**
+
+**What Retrieval Does:**
+- **Enhances descriptions**: Adds context from similar scenes
+- **Suggests context**: Provides background information
+- **Never drives safety**: Tier 1 heads are retrieval-independent
+
+**What Retrieval Doesn't Do:**
+- ❌ Affect urgency predictions
+- ❌ Affect distance estimation
+- ❌ Affect path planning
+- ❌ Block safety decisions
+
+**If Retrieval Fails:**
+System behaves identically to "no internet"—Tier 1 and Tier 2 continue normally, only Tier 3 descriptions are affected.
 
 **Components**:
 - **Encoders**: Extract embeddings from images, audio, text, depth, scene graphs
 - **Indexing**: FAISS-based indexing for fast similarity search
 - **Two-Stage Retrieval**: Fast ANN search + multi-vector reranking
-- **Knowledge Augmentation**: GNN-based knowledge graph integration
+- **Knowledge Augmentation**: GNN-based knowledge graph integration (Tier 3 only)
 
-**How It Works**:
-1. Extract multiple embeddings (global, region, patch, depth, OCR, audio, scene graph)
-2. Build FAISS index for fast similarity search
-3. Stage 1: Fast ANN search for candidate retrieval (<20ms)
-4. Stage 2: Multi-vector reranking for final results
-5. Knowledge augmentation: Enhance with scene graph knowledge
+**Why This Matters:**
 
-This enables more sophisticated scene understanding by leveraging similar scenes and knowledge graphs.
+Retrieval is enhancement, not core functionality. By making it advisory, we ensure:
+- Safety decisions are never dependent on retrieval
+- System degrades gracefully if retrieval fails
+- Latency spikes in retrieval don't affect safety
+- Users can trust that safety features always work
 
 ---
 
-### 10. Output Scheduler (`ml/utils/output_scheduler.py`)
+### 11. Output Scheduler with Cognitive Load Model (`ml/utils/output_scheduler.py`)
 
-**Purpose**: Cross-modal output management (audio/visual/haptic).
+**Purpose**: Cross-modal output management with cognitive load budgeting.
 
-**Why Output Scheduler?**
+**Why Cognitive Load Model?**
 
-Users receive information through multiple channels:
-- **Visual**: Overlays, highlighting, bounding boxes
-- **Audio**: Text-to-speech, sound alerts
-- **Haptic**: Directional vibration patterns
+Users have limited cognitive bandwidth. Information overload causes:
+- Missed critical alerts
+- Confusion and frustration
+- Reduced trust in the system
 
-The scheduler:
-- **Prioritizes**: Urgent information first
-- **Rate limits**: Prevents information overload
-- **Coordinates**: Ensures channels don't conflict
-- **Spatializes**: Provides directional cues (left/right/front/back)
+The scheduler manages **information budget**, not just priority:
+- **Per-second information budget**: Maximum announcements per second
+- **Cool-down per object**: Never announce same object twice in 5 seconds
+- **Novelty detection**: Suppress redundant information
+- **Motion-aware throttling**: Reduce non-urgent info when user is moving fast
 
-This ensures users receive information in a clear, non-overwhelming way.
+**Operating Modes:**
+
+1. **Safe Mode**: Only Tier 1 heads, minimal output, maximum safety
+2. **Assist Mode**: Full navigation + context, balanced information
+3. **Therapy Mode**: Rich feedback, slow pace, detailed descriptions
+
+Mode switches triggered by:
+- Uncertainty spikes (>0.7)
+- Latency spikes (>500ms)
+- User motion speed
+- Battery state
+
+**Why This Matters:**
+
+Priority management is reactive. Cognitive load management is **proactive**—it prevents overload before it happens. This turns the scheduler from reactive → intelligent.
 
 ---
 
@@ -861,20 +1008,24 @@ export_to_executorch(model, "model.pte", input_size=(1, 3, 224, 224))
 
 ---
 
-### Why Condition-Specific Preprocessing?
+### Why Learnable Condition Adapters?
 
-**Problem**: Different vision conditions require different processing
+**Problem**: Hard-coded preprocessing rules don't scale and can backfire.
 
-**Solution**: Preprocessing adapts images based on user's condition
+**Solution**: Learnable condition adapters using FiLM layers instead of hard-coded rules.
 
 **Benefits**:
-- Tailored to each user's needs
-- Improves model performance for specific conditions
-- Enables condition-specific features
+- Learns what actually helps users (data-driven)
+- Adapts over time based on feedback
+- Reduces manual heuristics
+- Maintains safety fallbacks
 
 **Trade-offs**:
-- More preprocessing overhead
-- Requires user to specify condition
+- Requires training data per condition
+- More complex than hard-coded rules
+- Fallback heuristics still needed for safety
+
+**Why This Matters**: Hard-coded rules assume we know what helps. Learning from data is more robust and adapts to real user needs.
 
 ---
 
@@ -895,22 +1046,47 @@ export_to_executorch(model, "model.pte", input_size=(1, 3, 224, 224))
 
 ---
 
-### Why Retrieval System?
+### Why Advisory Retrieval?
 
-**Problem**: Single forward pass may miss context from similar scenes
+**Problem**: Retrieval is powerful but risky if it drives safety decisions.
 
-**Solution**: Multi-vector retrieval with knowledge augmentation
+**Solution**: Make retrieval advisory only—enhances Tier 3 heads, never affects Tier 1 or Tier 2.
 
 **Benefits**:
-- Leverages similar scenes from training data
+- Leverages similar scenes for context
 - Knowledge graph integration
-- More sophisticated scene understanding
+- More sophisticated descriptions
+- **Never blocks safety**: Tier 1/2 independent of retrieval
 
 **Trade-offs**:
-- Additional inference overhead
+- Retrieval can't improve safety decisions (by design)
+- Additional inference overhead (but optional)
 - Requires indexing infrastructure
 
+**Why This Matters**: Retrieval is enhancement, not core. By making it advisory, we ensure safety decisions are never dependent on retrieval.
+
 ---
+
+### Why Fail-Silent Modes?
+
+**Problem**: Sometimes the safest action is silence, not more information.
+
+**Solution**: Operating modes (Safe/Assist/Therapy) with different behavior profiles.
+
+**Benefits**:
+- **Predictable Behavior**: Users know what to expect in each mode
+- **Safety-First**: Safe mode prioritizes safety over features
+- **Context-Aware**: Mode switches based on uncertainty, latency, motion
+- **Trust**: Users trust the system because it's predictable
+
+**Trade-offs**:
+- More complex state management
+- Requires careful mode design
+
+**Modes**:
+- **Safe Mode**: Only Tier 1 heads, minimal output, maximum safety
+- **Assist Mode**: Full navigation + context, balanced information
+- **Therapy Mode**: Rich feedback, slow pace, detailed descriptions
 
 ### Why Kill Switches?
 
@@ -922,10 +1098,11 @@ export_to_executorch(model, "model.pte", input_size=(1, 3, 224, 224))
 - Performance optimization
 - Debugging capabilities
 - Graceful degradation
+- **Tier-based**: Can disable Tier 2/3 without affecting Tier 1
 
 **Trade-offs**:
 - Reduced functionality when heads disabled
-- Requires careful head categorization
+- Requires careful tier assignment
 
 ---
 
@@ -944,16 +1121,32 @@ export_to_executorch(model, "model.pte", input_size=(1, 3, 224, 224))
 
 ---
 
-## 📊 Performance Targets
+## 📊 Performance Targets & Safety Metrics
 
-- **Inference Latency**: <500ms (target: <400ms)
+### Standard Performance Metrics
+
+- **Inference Latency**: 
+  - Stage A (Safety Pass): <150ms (target: <100ms)
+  - Stage B (Context Pass): <500ms (opportunistic)
 - **Model Size**: <50MB (quantized)
 - **Battery Drain**: <12% per hour normal use
 - **Detection Accuracy**: >85% in varied environments
 - **OCR Accuracy**: >90% text recognition
 - **Sound Classification**: >80% accuracy
-- **Gradient Stability**: No gradient warfare (monitored via GradNorm)
-- **System Reliability**: Graceful degradation when heads fail
+
+### Safety-Focused Metrics (More Important Than Accuracy)
+
+- **False Reassurance Rate**: <1% (danger predicted as safe)
+- **Alert Latency**: <200ms (time to first warning)
+- **Information Overload Events**: <2 per minute (cognitive budget violations)
+- **Silence Correctness**: >95% (when staying quiet was right)
+- **Head Collapse Detection Time**: <10 seconds (detect failing heads)
+- **Tier 1 Availability**: >99.9% (safety heads never disabled)
+- **Uncertainty Calibration**: Well-calibrated (uncertainty correlates with actual error)
+
+**Why Safety Metrics Matter:**
+
+mAP and accuracy don't capture safety. A 95% accurate system that gives false reassurance is worse than an 85% accurate system that's safe. These metrics ensure the system is trustworthy, not just accurate.
 
 ---
 
@@ -1110,6 +1303,29 @@ See [LICENSE](LICENSE) file.
 - [System Limitations](docs/SYSTEM_LIMITATIONS.md) - Known limitations and failure modes
 - [Application Analysis](docs/APPLICATION_ANALYSIS.md) - Comprehensive codebase analysis
 - [Stress Testing Guide](docs/STRESS_TESTING_GUIDE.md) - How to run stress tests
+- **[Maintenance Survival Map](docs/MAINTENANCE_SURVIVAL_MAP.md)** - One-page guide for long-term system health ⭐
+
+### Maintenance & Health Checks
+
+**Health Checks** (`ml/utils/monitoring.py`):
+- `HealthChecker` class for daily Tier 1 head validation
+- Run via `scripts/run_stress_tests.py` (includes health check)
+- Checks: objectness, classification, box regression, distance, urgency, uncertainty
+- Latency monitoring and model integrity checks
+
+**Backup** (`scripts/train_maxsight.py`):
+- Use `--backup` flag after training to backup models, code (git bundle), and data metadata
+- Weekly automated backups recommended
+- Backup location: `backups/YYYYMMDD/`
+
+**Usage**:
+```bash
+# Health check (runs automatically with stress tests)
+python scripts/run_stress_tests.py --checkpoint checkpoints/model.pt
+
+# Backup after training
+python scripts/train_maxsight.py --data-dir datasets --backup
+```
 
 ---
 

@@ -82,15 +82,26 @@ class TransformerOCRHead(nn.Module):
         self,
         features: torch.Tensor,               # [B, N_regions, input_dim]
         context_embeddings: Optional[torch.Tensor] = None,  # [B, N_objects, embed_dim]
-        target_text: Optional[torch.Tensor] = None          # [B, N_regions, seq_len]
+        target_text: Optional[torch.Tensor] = None,  # [B, N_regions, seq_len]
+        text_likelihood: Optional[torch.Tensor] = None,  # [B, N_regions] - FIXED: Gating signal
+        motion_stability: Optional[torch.Tensor] = None,  # [B, 1] - FIXED: Motion stability gate
+        cognitive_budget: Optional[float] = None  # FIXED: Cognitive budget gate
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass through OCR head.
+        
+        FIXED: OCR now has gating layers to prevent unsafe execution:
+        - Text-likelihood gate from backbone
+        - Motion stability gate (don't OCR while moving fast)
+        - Cognitive budget gate
 
         Args:
             features: Text region features [B, N_regions, input_dim]
             context_embeddings: Optional object context [B, N_objects, embed_dim]
             target_text: Optional target text for teacher forcing [B, N_regions, seq_len]
+            text_likelihood: Optional text likelihood scores [B, N_regions] - gates execution
+            motion_stability: Optional motion stability [B, 1] - gates execution if < threshold
+            cognitive_budget: Optional cognitive budget remaining - gates execution if < threshold
 
         Returns:
             Dictionary with:
@@ -98,11 +109,45 @@ class TransformerOCRHead(nn.Module):
                 - 'text_boxes': [B, N_regions, 4]
                 - 'text_scores': [B, N_regions]
                 - 'encoded_features': [B, N_regions, embed_dim]
+                - 'gated': [B, N_regions] - whether each region was processed
         """
         B, N_regions, _ = features.shape
+        
+        # FIXED: OCR Gating - don't run unconditionally
+        gated_mask = torch.ones(B, N_regions, device=features.device, dtype=torch.bool)
+        
+        # Gate 1: Text-likelihood from backbone
+        if text_likelihood is not None:
+            text_threshold = 0.3  # Minimum text likelihood to process
+            gated_mask = gated_mask & (text_likelihood > text_threshold)
+        
+        # Gate 2: Motion stability (don't OCR while moving fast)
+        if motion_stability is not None:
+            motion_threshold = 0.5  # Minimum motion stability
+            motion_gate = (motion_stability > motion_threshold).float()
+            gated_mask = gated_mask & (motion_gate.unsqueeze(1).expand(-1, N_regions) > 0.5)
+        
+        # Gate 3: Cognitive budget (don't OCR if budget exhausted)
+        if cognitive_budget is not None:
+            budget_threshold = 0.2  # Minimum cognitive budget remaining
+            if cognitive_budget < budget_threshold:
+                gated_mask = torch.zeros_like(gated_mask)
+        
+        # If no regions pass gates, return empty outputs
+        if not gated_mask.any():
+            return {
+                'text_logits': torch.zeros(B, N_regions, self.max_text_length, self.vocab_size, device=features.device),
+                'text_boxes': torch.zeros(B, N_regions, 4, device=features.device),
+                'text_scores': torch.zeros(B, N_regions, device=features.device),
+                'encoded_features': torch.zeros(B, N_regions, self.embed_dim, device=features.device),
+                'gated': gated_mask
+            }
+        
+        # Apply gating mask to features (zero out gated regions)
+        features_gated = features * gated_mask.unsqueeze(-1).float()
 
-        # Project input features
-        x = self.input_proj(features)  # [B, N_regions, embed_dim]
+        # Project input features (use gated features)
+        x = self.input_proj(features_gated)  # [B, N_regions, embed_dim]
 
         # Add positional encoding
         x = x + self.pos_encoding[:, :N_regions, :]
@@ -151,5 +196,6 @@ class TransformerOCRHead(nn.Module):
             'text_logits': text_logits,
             'text_boxes': text_boxes,
             'text_scores': text_scores,
-            'encoded_features': encoded
+            'encoded_features': encoded,
+            'gated': gated_mask  # FIXED: Return gating information
         }

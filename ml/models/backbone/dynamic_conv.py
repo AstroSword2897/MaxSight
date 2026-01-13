@@ -81,23 +81,40 @@ class DynamicConv2d(nn.Module):
         condition_vec = torch.cat([lighting, occlusion, motion_cond], dim=1)  # [B, 4]
         kernel_weights = self.condition_mlp(condition_vec)  # [B, num_kernels]
 
-        # Combine base kernels per sample
-        # Result: dynamic_kernels [B, out_channels, in_channels/groups, K, K]
-        dynamic_kernels = torch.stack(self.base_kernels, dim=0)  # [num_kernels, out_ch, in_ch, K, K]
-        dynamic_kernels = torch.einsum('bk,kocwh->bocwh', kernel_weights, dynamic_kernels)
-
-        outputs = []
-        for i in range(B):
-            out = F.conv2d(
-                x[i:i+1],
-                dynamic_kernels[i],
-                bias=self.bias,
-                stride=self.stride,
-                padding=self.padding,
-                groups=self.groups
-            )
-            outputs.append(out)
-        return torch.cat(outputs, dim=0)
+        # FIXED: Use grouped convolution trick instead of per-sample loop
+        # This preserves GPU parallelism and works with torch.compile
+        # Stack kernels: [B*out_ch, in_ch/groups, K, K]
+        base_kernels = torch.stack(list(self.base_kernels), dim=0)  # [num_kernels, out_ch, in_ch/groups, K, K]
+        
+        # Combine kernels per sample: [B, out_ch, in_ch/groups, K, K]
+        dynamic_kernels = torch.einsum('bk,kocwh->bocwh', kernel_weights, base_kernels)
+        
+        # Reshape for grouped convolution: [B*out_ch, in_ch/groups, K, K]
+        B, out_ch, in_ch_div_g, K, _ = dynamic_kernels.shape
+        kernels_flat = dynamic_kernels.reshape(B * out_ch, in_ch_div_g, K, K)
+        
+        # Reshape input: [1, B*in_ch, H, W] for grouped conv
+        _, C, H, W = x.shape
+        x_flat = x.reshape(1, B * C, H, W)
+        
+        # Grouped convolution: groups=B ensures each sample uses its own kernel
+        out = F.conv2d(
+            x_flat,
+            kernels_flat,
+            bias=None,  # Handle bias separately
+            stride=self.stride,
+            padding=self.padding,
+            groups=B  # Critical: one group per sample
+        )
+        
+        # Reshape back: [B, out_ch, H', W']
+        out = out.reshape(B, out_ch, out.shape[2], out.shape[3])
+        
+        # Add bias if present
+        if self.bias is not None:
+            out = out + self.bias.view(1, -1, 1, 1)
+        
+        return out
 
     @property
     def output_size(self):

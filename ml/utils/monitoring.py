@@ -198,8 +198,8 @@ class PredictionMonitor:
                     )
                     
     def _add_alert(self, severity: AlertSeverity, category: str, 
-                   message: str, metric_name: str = None,
-                   metric_value: float = None, threshold: float = None):
+                   message: str, metric_name: Optional[str] = None,
+                   metric_value: Optional[float] = None, threshold: Optional[float] = None):
         """Add alert with deduplication."""
         # Check for recent duplicate
         cutoff = datetime.now() - timedelta(minutes=5)
@@ -632,4 +632,237 @@ def create_monitoring_pipeline(model: torch.nn.Module) -> Dict:
         'monitor': PredictionMonitor(),
         'dashboard': ReadinessDashboard()
     }
+
+
+# ==================== Health Check System ====================
+
+class HealthChecker:
+    """
+    Health check system for MaxSight Tier 1 heads and system reliability.
+    Run daily to catch issues before they impact users.
+    """
+    
+    # Critical thresholds for Tier 1 heads
+    TIER1_DETECTION_RATE_THRESHOLD = 0.85
+    TIER1_MAP_THRESHOLD = 0.80
+    TIER1_IOU_THRESHOLD = 0.70
+    TIER1_FALSE_REASSURANCE_THRESHOLD = 0.01
+    STAGE_A_LATENCY_THRESHOLD_MS = 150.0
+    STAGE_B_LATENCY_THRESHOLD_MS = 500.0
+    
+    def __init__(self, model: torch.nn.Module, device: str = "cpu"):
+        """Initialize health checker."""
+        self.device = device
+        self.model = model
+        self.model.eval()
+    
+    def check_tier1_heads(self) -> Dict[str, Any]:
+        """Check Tier 1 (safety-critical) heads."""
+        results = {
+            'status': 'PASS',
+            'checks': {},
+            'failures': []
+        }
+        
+        # Create dummy input
+        dummy_input = torch.randn(1, 3, 224, 224).to(self.device)
+        
+        with torch.no_grad():
+            outputs = self.model(dummy_input)
+        
+        # Check 1: Objectness head
+        if 'objectness' in outputs:
+            obj_scores = outputs['objectness']
+            detection_rate = (obj_scores > 0.5).float().mean().item()
+            results['checks']['objectness'] = {
+                'detection_rate': detection_rate,
+                'threshold': self.TIER1_DETECTION_RATE_THRESHOLD,
+                'status': 'PASS' if detection_rate >= self.TIER1_DETECTION_RATE_THRESHOLD else 'FAIL'
+            }
+            if detection_rate < self.TIER1_DETECTION_RATE_THRESHOLD:
+                results['status'] = 'FAIL'
+                results['failures'].append(f"Objectness detection rate {detection_rate:.2%} < {self.TIER1_DETECTION_RATE_THRESHOLD:.2%}")
+        else:
+            results['status'] = 'FAIL'
+            results['failures'].append("Objectness head output missing")
+        
+        # Check 2: Classification head
+        if 'classifications' in outputs:
+            cls_logits = outputs['classifications']
+            cls_probs = torch.softmax(cls_logits, dim=-1)
+            max_probs = cls_probs.max(dim=-1)[0]
+            avg_confidence = max_probs.mean().item()
+            results['checks']['classification'] = {
+                'avg_confidence': avg_confidence,
+                'threshold': self.TIER1_MAP_THRESHOLD,
+                'status': 'PASS' if avg_confidence >= self.TIER1_MAP_THRESHOLD else 'FAIL'
+            }
+            if avg_confidence < self.TIER1_MAP_THRESHOLD:
+                results['status'] = 'FAIL'
+                results['failures'].append(f"Classification confidence {avg_confidence:.2%} < {self.TIER1_MAP_THRESHOLD:.2%}")
+        else:
+            results['status'] = 'FAIL'
+            results['failures'].append("Classification head output missing")
+        
+        # Check 3: Box regression
+        if 'boxes' in outputs:
+            boxes = outputs['boxes']
+            valid_boxes = ((boxes >= 0) & (boxes <= 1)).all(dim=-1).float().mean().item()
+            results['checks']['box_regression'] = {
+                'valid_box_rate': valid_boxes,
+                'threshold': self.TIER1_IOU_THRESHOLD,
+                'status': 'PASS' if valid_boxes >= self.TIER1_IOU_THRESHOLD else 'FAIL'
+            }
+            if valid_boxes < self.TIER1_IOU_THRESHOLD:
+                results['status'] = 'FAIL'
+                results['failures'].append(f"Valid box rate {valid_boxes:.2%} < {self.TIER1_IOU_THRESHOLD:.2%}")
+        else:
+            results['status'] = 'FAIL'
+            results['failures'].append("Box regression head output missing")
+        
+        # Check 4: Distance zones
+        if 'distance_zones' in outputs:
+            distances = outputs['distance_zones']
+            dist_probs = torch.softmax(distances, dim=-1)
+            max_dist_probs = dist_probs.max(dim=-1)[0]
+            avg_dist_confidence = max_dist_probs.mean().item()
+            results['checks']['distance'] = {
+                'avg_confidence': avg_dist_confidence,
+                'status': 'PASS' if avg_dist_confidence > 0.5 else 'WARN'
+            }
+        else:
+            results['status'] = 'FAIL'
+            results['failures'].append("Distance zones output missing")
+        
+        # Check 5: Urgency head
+        if 'urgency_scores' in outputs:
+            urgency = outputs['urgency_scores']
+            urgency_probs = torch.softmax(urgency, dim=-1)
+            safe_prob = urgency_probs[:, 0].mean().item()  # Assuming 0 = safe
+            results['checks']['urgency'] = {
+                'safe_prob': safe_prob,
+                'status': 'PASS' if safe_prob < 0.99 else 'WARN'  # Too confident = risky
+            }
+        else:
+            results['status'] = 'FAIL'
+            results['failures'].append("Urgency head output missing")
+        
+        # Check 6: Uncertainty head
+        if 'uncertainty' in outputs:
+            uncertainty = outputs['uncertainty']
+            avg_uncertainty = uncertainty.mean().item()
+            results['checks']['uncertainty'] = {
+                'avg_uncertainty': avg_uncertainty,
+                'status': 'PASS' if 0.1 < avg_uncertainty < 0.7 else 'WARN'
+            }
+        else:
+            results['status'] = 'WARN'
+            results['failures'].append("Uncertainty head output missing (non-critical)")
+        
+        return results
+    
+    def check_latency(self, num_runs: int = 10) -> Dict[str, Any]:
+        """Check inference latency."""
+        results: Dict[str, Any] = {
+            'status': 'PASS',
+            'latencies': [],
+            'stage_a_ms': 0.0,
+            'avg_ms': 0.0
+        }
+        
+        dummy_input = torch.randn(1, 3, 224, 224).to(self.device)
+        
+        # Warmup
+        with torch.no_grad():
+            _ = self.model(dummy_input)
+        
+        # Measure latency
+        import time
+        latencies = []
+        
+        for _ in range(num_runs):
+            start = time.time()
+            with torch.no_grad():
+                outputs = self.model(dummy_input)
+            latencies.append((time.time() - start) * 1000)  # Convert to ms
+        
+        avg_latency = float(np.mean(latencies))
+        min_latency = float(np.min(latencies))
+        max_latency = float(np.max(latencies))
+        
+        results['latencies'] = latencies
+        results['stage_a_ms'] = avg_latency
+        results['avg_ms'] = avg_latency
+        results['min_ms'] = min_latency
+        results['max_ms'] = max_latency
+        
+        # Check thresholds
+        if avg_latency > self.STAGE_A_LATENCY_THRESHOLD_MS:
+            results['status'] = 'FAIL'
+            results['failures'] = [f"Average latency {avg_latency:.1f}ms > {self.STAGE_A_LATENCY_THRESHOLD_MS}ms"]
+        elif avg_latency > self.STAGE_A_LATENCY_THRESHOLD_MS * 0.8:
+            results['status'] = 'WARN'
+            results['warnings'] = [f"Average latency {avg_latency:.1f}ms approaching threshold"]
+        
+        return results
+    
+    def check_model_integrity(self) -> Dict[str, Any]:
+        """Check model integrity (no NaN, Inf, or corrupted weights)."""
+        results: Dict[str, Any] = {
+            'status': 'PASS',
+            'checks': {},
+            'failures': []
+        }
+        
+        for name, param in self.model.named_parameters():
+            # Check for NaN
+            if torch.isnan(param).any().item():
+                results['status'] = 'FAIL'
+                results['failures'].append(f"NaN detected in {name}")
+            
+            # Check for Inf
+            if torch.isinf(param).any().item():
+                results['status'] = 'FAIL'
+                results['failures'].append(f"Inf detected in {name}")
+            
+            # Check for extreme values
+            if param.abs().max() > 1e6:
+                results['status'] = 'WARN'
+                if 'warnings' not in results:
+                    results['warnings'] = []
+                results['warnings'].append(f"Extreme values in {name}: max={param.abs().max().item():.2e}")
+        
+        return results
+    
+    def run_full_check(self) -> Dict[str, Any]:
+        """Run all health checks."""
+        report: Dict[str, Any] = {
+            'timestamp': datetime.now().isoformat(),
+            'device': self.device,
+            'overall_status': 'PASS',
+            'checks': {}
+        }
+        
+        # Tier 1 checks
+        logger.info("Checking Tier 1 heads...")
+        tier1_results = self.check_tier1_heads()
+        report['checks']['tier1'] = tier1_results
+        if tier1_results['status'] == 'FAIL':
+            report['overall_status'] = 'FAIL'
+        
+        # Latency checks
+        logger.info("Checking latency...")
+        latency_results = self.check_latency()
+        report['checks']['latency'] = latency_results
+        if latency_results['status'] == 'FAIL':
+            report['overall_status'] = 'FAIL'
+        
+        # Model integrity
+        logger.info("Checking model integrity...")
+        integrity_results = self.check_model_integrity()
+        report['checks']['integrity'] = integrity_results
+        if integrity_results['status'] == 'FAIL':
+            report['overall_status'] = 'FAIL'
+        
+        return report
 

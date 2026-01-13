@@ -144,7 +144,7 @@ class HybridCNNViTBackbone(nn.Module):
         vit_depth: int = 12,
         vit_num_heads: int = 12,
         fused_dim: int = 512,
-        fusion_method: str = 'cross_attention',
+        fusion_method: str = 'weighted',  # FIXED: Default to weighted (stable), cross_attention for research
         use_cross_layer_connections: bool = True,
         dropout: float = 0.1,
         pretrained_cnn: bool = True,
@@ -167,7 +167,14 @@ class HybridCNNViTBackbone(nn.Module):
         self.fusion_method = fusion_method
         self.use_cross_layer_connections = use_cross_layer_connections
         self.use_gradient_checkpointing = use_gradient_checkpointing
-        self.cross_layer_alpha = cross_layer_alpha
+        
+        # FIXED: Constrain cross-layer alpha with sigmoid to prevent runaway amplification
+        if isinstance(cross_layer_alpha, float):
+            # Fixed value: convert to parameter and constrain
+            self.cross_layer_alpha_raw = nn.Parameter(torch.tensor(cross_layer_alpha))
+        else:
+            # Learnable: already a parameter
+            self.cross_layer_alpha_raw = cross_layer_alpha if cross_layer_alpha is not None else nn.Parameter(torch.tensor(0.1))
         
         # === CNN Backbone: ResNet50 + FPN ===
         weights = ResNet50_Weights.IMAGENET1K_V2 if pretrained_cnn else None
@@ -343,7 +350,12 @@ class HybridCNNViTBackbone(nn.Module):
             
             # Add to ViT patches as residual
             cnn_context = cnn_to_vit_resized.flatten(2).transpose(1, 2)  # [B, N, D]
-            vit_patches = vit_patches + self.cross_layer_alpha * cnn_context
+            # FIXED: Constrain alpha with sigmoid for safety
+            if hasattr(self, 'cross_layer_alpha_raw'):
+                alpha = torch.sigmoid(self.cross_layer_alpha_raw)
+            else:
+                alpha = 0.1  # Default fallback
+            vit_patches = vit_patches + alpha * cnn_context
             
             # === ViT → CNN: Add global ViT context to CNN features ===
             # Project ViT spatial features to CNN dimension (FIXED)
@@ -358,7 +370,9 @@ class HybridCNNViTBackbone(nn.Module):
             )
             
             # Add as residual
-            enhanced_cnn.append(cnn_feat + self.cross_layer_alpha * vit_to_cnn_resized)
+            # FIXED: Constrain alpha with sigmoid for safety
+            alpha = torch.sigmoid(self.cross_layer_alpha_raw)
+            enhanced_cnn.append(cnn_feat + alpha * vit_to_cnn_resized)
         
         return enhanced_cnn, vit_patches
 

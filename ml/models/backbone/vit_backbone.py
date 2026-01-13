@@ -187,12 +187,19 @@ class EfficientCrossModalAttention(nn.Module):
 
 
 class FeatureCache:
-    """Simple feature cache for repeated forward passes."""
+    """
+    Feature cache for repeated forward passes.
     
-    def __init__(self, max_size: int = 8):
+    FIXED: Uses frame ID/timestamp hash instead of mean-based hash to prevent collisions.
+    Caching is experimental and disabled by default in safety-critical paths.
+    """
+    
+    def __init__(self, max_size: int = 8, use_frame_id: bool = True):
         self.cache = {}
         self.max_size = max_size
         self.keys = []
+        self.use_frame_id = use_frame_id
+        self.frame_counter = 0
         
     def get(self, key: str):
         return self.cache.get(key, None)
@@ -207,6 +214,30 @@ class FeatureCache:
     def clear(self):
         self.cache.clear()
         self.keys.clear()
+        self.frame_counter = 0
+    
+    def _make_cache_key(self, x: torch.Tensor, frame_id: Optional[int] = None) -> str:
+        """
+        FIXED: Use frame ID/timestamp instead of mean hash to prevent collisions.
+        
+        Args:
+            x: Input tensor
+            frame_id: Optional frame identifier (timestamp or sequence number)
+        
+        Returns:
+            Cache key string
+        """
+        if self.use_frame_id and frame_id is not None:
+            # Use frame ID for deterministic, collision-free caching
+            return f"frame_{frame_id}"
+        elif self.use_frame_id:
+            # Fallback: use counter (not perfect but better than mean)
+            key = f"frame_{self.frame_counter}"
+            self.frame_counter += 1
+            return key
+        else:
+            # Legacy: mean-based (unsafe, but kept for compatibility)
+            return f"cnn_{x.shape}_{x.mean().item():.6f}"
 
 
 class HybridCNNViTBackbone(nn.Module):
@@ -230,7 +261,7 @@ class HybridCNNViTBackbone(nn.Module):
         vit_depth: int = 12,
         vit_num_heads: int = 12,
         fused_dim: int = 512,
-        fusion_method: str = 'cross_attention',
+        fusion_method: str = 'weighted',  # FIXED: Default to weighted (stable), cross_attention for research
         use_cross_layer_connections: bool = True,
         use_bidirectional_attention: bool = True,
         dropout: float = 0.1,
@@ -261,11 +292,16 @@ class HybridCNNViTBackbone(nn.Module):
         self.fpn_levels = fpn_levels
         self.enable_feature_cache = enable_feature_cache
         
-        # Learnable residual scaling
+        # FIXED: Constrain cross-layer alpha with sigmoid to prevent runaway amplification
         if cross_layer_alpha is None:
-            self.cross_layer_alpha = nn.Parameter(torch.tensor(0.1))
+            # Learnable parameter, will be constrained with sigmoid
+            self.cross_layer_alpha_raw = nn.Parameter(torch.tensor(0.1))
+        elif isinstance(cross_layer_alpha, float):
+            # Fixed value: convert to parameter and constrain
+            self.cross_layer_alpha_raw = nn.Parameter(torch.tensor(cross_layer_alpha))
         else:
-            self.register_buffer('cross_layer_alpha', torch.tensor(cross_layer_alpha))
+            # Already a parameter
+            self.cross_layer_alpha_raw = cross_layer_alpha
         
         # Feature cache
         if enable_feature_cache:
@@ -415,11 +451,17 @@ class HybridCNNViTBackbone(nn.Module):
             nn.init.zeros_(m.bias)
 
     @torch.cuda.amp.autocast()
-    def extract_cnn_features(self, x: torch.Tensor) -> List[torch.Tensor]:
-        """Extract CNN features with optional caching."""
+    def extract_cnn_features(self, x: torch.Tensor, frame_id: Optional[int] = None) -> List[torch.Tensor]:
+        """
+        Extract CNN features with optional caching.
+        
+        FIXED: Uses frame_id for cache key instead of mean hash.
+        Caching is experimental and disabled by default in safety-critical paths.
+        """
         
         if self.enable_feature_cache and not self.training:
-            cache_key = f"cnn_{x.shape}_{x.mean().item():.6f}"
+            # FIXED: Use frame_id-based cache key instead of mean hash
+            cache_key = self.cache._make_cache_key(x, frame_id)
             cached = self.cache.get(cache_key)
             if cached is not None:
                 return cached
@@ -447,7 +489,10 @@ class HybridCNNViTBackbone(nn.Module):
         fpn_features = [fpn_output[f'feat{i}'] for i in range(len(features))]
         
         if self.enable_feature_cache and not self.training:
-            self.cache.set(cache_key, fpn_features)
+            # FIXED: Use frame_id-based cache key
+            cache_key = self.cache._make_cache_key(x, frame_id)
+            # Cache as tuple to avoid type issues
+            self.cache.set(cache_key, tuple(fpn_features))
         
         return fpn_features
 
@@ -464,7 +509,11 @@ class HybridCNNViTBackbone(nn.Module):
         vit_projected = self.vit_to_cnn_proj(vit_spatial)
         
         enhanced_cnn = []
-        alpha = self.cross_layer_alpha if isinstance(self.cross_layer_alpha, float) else self.cross_layer_alpha.item()
+        # FIXED: Constrain cross-layer alpha with sigmoid to prevent runaway amplification
+        if hasattr(self, 'cross_layer_alpha_raw'):
+            alpha = torch.sigmoid(self.cross_layer_alpha_raw)
+        else:
+            alpha = 0.1  # Default fallback
         
         for cnn_feat, proj_layer in zip(cnn_features, self.cnn_to_vit_proj):
             # CNN → ViT

@@ -79,13 +79,40 @@ class SceneDescriptionHead(nn.Module):
         self.eos_token_id = 2
         self.pad_token_id = 0
     
+    def _generate_autoregressive(
+        self, 
+        memory: torch.Tensor, 
+        device: torch.device
+    ) -> torch.Tensor:
+        """Generate description autoregressively."""
+        B = memory.shape[0]
+        decoded_tokens = []
+        current_token = torch.full((B, 1), self.sos_token_id, dtype=torch.long, device=device)
+        
+        for step in range(self.max_length):
+            seq_len = current_token.shape[1]
+            tgt = self.word_embedding(current_token) + self.pos_encoding[:, :seq_len, :]
+            out = self.decoder(tgt, memory)
+            
+            next_logits = self.output_proj(out[:, -1, :])
+            next_token = next_logits.argmax(dim=1, keepdim=True)
+            
+            if (next_token == self.eos_token_id).all():
+                break
+            
+            decoded_tokens.append(out[:, -1:, :])
+            current_token = torch.cat([current_token, next_token], dim=1)
+        
+        return torch.cat(decoded_tokens, dim=1) if decoded_tokens else out
+    
     def forward(
         self,
         global_embedding: torch.Tensor,  # [B, global_dim]
         region_embeddings: torch.Tensor,  # [B, N_regions, region_dim]
         ocr_embeddings: Optional[torch.Tensor] = None,  # [B, N_text, ocr_dim]
         condition_mode: str = 'normal',
-        target_text: Optional[torch.Tensor] = None  # [B, seq_len] for training
+        target_text: Optional[torch.Tensor] = None,  # [B, seq_len] for training
+        roi_priorities: Optional[torch.Tensor] = None  # [B, N_regions] - FIXED: ROI priority weights
     ) -> Dict[str, torch.Tensor]:
         """
         Generate scene description.
@@ -108,6 +135,13 @@ class SceneDescriptionHead(nn.Module):
         global_proj = self.global_proj(global_embedding).unsqueeze(1)  # [B, 1, embed_dim]
         region_proj = self.region_proj(region_embeddings)  # [B, N_regions, embed_dim]
         
+        # ROI priority-weighted aggregation (emphasizes important regions)
+        if roi_priorities is not None:
+            weights = roi_priorities.unsqueeze(-1)
+            region_weighted = (region_proj * weights).sum(dim=1, keepdim=True)
+        else:
+            region_weighted = region_proj.mean(dim=1, keepdim=True)
+        
         if ocr_embeddings is not None:
             ocr_proj = self.ocr_proj(ocr_embeddings)  # [B, N_text, embed_dim]
             ocr_global = ocr_proj.mean(dim=1, keepdim=True)  # [B, 1, embed_dim]
@@ -115,7 +149,7 @@ class SceneDescriptionHead(nn.Module):
             ocr_global = torch.zeros(B, 1, self.embed_dim, device=global_embedding.device)
         
         # Combine inputs
-        combined = torch.cat([global_proj, region_proj.mean(dim=1, keepdim=True), ocr_global], dim=2)
+        combined = torch.cat([global_proj, region_weighted, ocr_global], dim=2)
         memory = self.input_fusion(combined)  # [B, 1, embed_dim]
         
         # Condition-aware verbosity adjustment
@@ -125,34 +159,12 @@ class SceneDescriptionHead(nn.Module):
         # Decode description
         if target_text is not None:
             # Training: teacher forcing
-            tgt = self.word_embedding(target_text)  # [B, seq_len, embed_dim]
-            tgt = tgt + self.pos_encoding[:, :target_text.shape[1], :]
-            decoded = self.decoder(tgt, memory)  # [B, seq_len, embed_dim]
+            seq_len = target_text.shape[1]
+            tgt = self.word_embedding(target_text) + self.pos_encoding[:, :seq_len, :]
+            decoded = self.decoder(tgt, memory)
         else:
             # Inference: autoregressive generation
-            decoded_tokens = []
-            current_token = torch.full((B, 1), self.sos_token_id, dtype=torch.long, device=global_embedding.device)
-            
-            for _ in range(self.max_length):
-                tgt = self.word_embedding(current_token)  # [B, current_len, embed_dim]
-                tgt = tgt + self.pos_encoding[:, :tgt.shape[1], :]
-                out = self.decoder(tgt, memory)  # [B, current_len, embed_dim]
-                
-                # Get next token
-                next_logits = self.output_proj(out[:, -1, :])  # [B, vocab_size]
-                next_token = next_logits.argmax(dim=1, keepdim=True)  # [B, 1]
-                
-                # Stop if EOS token
-                if (next_token == self.eos_token_id).all():
-                    break
-                
-                decoded_tokens.append(out[:, -1:, :])
-                current_token = torch.cat([current_token, next_token], dim=1)
-            
-            if decoded_tokens:
-                decoded = torch.cat(decoded_tokens, dim=1)  # [B, generated_len, embed_dim]
-            else:
-                decoded = out  # Fallback
+            decoded = self._generate_autoregressive(memory, global_embedding.device)
         
         # Output logits
         description_logits = self.output_proj(decoded)  # [B, seq_len, vocab_size]

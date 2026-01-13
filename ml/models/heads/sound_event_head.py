@@ -149,10 +149,10 @@ class SoundEventHead(nn.Module):
         
         # Priority and urgency
         priority = self.priority_head(audio_embed)
-        predicted_class = sound_logits.argmax(dim=1)
-        # urgency_map is a registered buffer (tensor), use getattr for type checker
+        
+        # Expected urgency: weighted sum over all classes (handles uncertainty)
         urgency_map = getattr(self, 'urgency_map')
-        urgency = urgency_map[predicted_class].unsqueeze(1).float()
+        urgency = (sound_probs * urgency_map.unsqueeze(0)).sum(dim=1, keepdim=True)
         
         return {
             'sound_logits': sound_logits,

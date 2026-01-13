@@ -17,6 +17,7 @@ sys.path.insert(0, str(project_root))
 import torch
 from ml.training.stress_tests import StressTestSuite, StressTestConfig
 from ml.utils.error_handling import HeadKillSwitchManager, EthicalGuard
+from ml.utils.monitoring import HealthChecker
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,6 +72,23 @@ def main():
     # Create dummy data loaders (replace with actual loaders)
     train_loader = None
     val_loader = None
+    
+    # Run health check first (Tier 1 heads)
+    logger.info("Running health check (Tier 1 heads)...")
+    health_checker = HealthChecker(model, device=args.device)
+    health_report = health_checker.run_full_check()
+    
+    if health_report['overall_status'] == 'FAIL':
+        logger.error("❌ Health check FAILED - Tier 1 heads not safe")
+        logger.error("Failures:")
+        for check_name, check_results in health_report['checks'].items():
+            if 'failures' in check_results:
+                for failure in check_results['failures']:
+                    logger.error(f"  - {check_name}: {failure}")
+        logger.error("⚠️  Do not proceed with stress tests until Tier 1 is fixed")
+        sys.exit(1)
+    else:
+        logger.info("✅ Health check passed - Tier 1 heads safe")
     
     # Run stress tests
     logger.info("Running stress test suite...")

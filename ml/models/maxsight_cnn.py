@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from functools import lru_cache
 
 # COCO 80 base classes + accessibility classes for navigation
@@ -320,7 +320,8 @@ class MaxSightCNN(nn.Module):
         condition_mode: Optional[str] = None,
         fpn_channels: int = 256,
         detection_threshold: float = 0.5,
-        enable_accessibility_features: bool = True
+        enable_accessibility_features: bool = True,
+        tier_config: Optional['TierConfig'] = None
     ):
         """
         Initialize MaxSightCNN model.
@@ -367,10 +368,17 @@ class MaxSightCNN(nn.Module):
         self.detection_threshold = detection_threshold
         self.enable_accessibility_features = enable_accessibility_features
         
+        # Tier configuration (controls which components are enabled)
+        if tier_config is None:
+            # Default to T0 baseline
+            from ml.models.maxsight_cnn import TierConfig, CapabilityTier
+            tier_config = TierConfig.for_tier(CapabilityTier.T0_BASELINE_CNN)
+        self.tier_config = tier_config
+        
         # OPTIMIZED: Initialize cached tensors (avoid hasattr checks in forward pass)
         self._cached_image_size = None  # Will be set on first forward pass
         
-        # ResNet50 backbone (pretrained ImageNet)
+        # ResNet50 backbone (pretrained ImageNet) - Always enabled (T0 baseline)
         try:
             resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
         except AttributeError:
@@ -385,7 +393,44 @@ class MaxSightCNN(nn.Module):
         self.layer3 = resnet.layer3
         self.layer4 = resnet.layer4
         
+        # FPN - Always enabled (T0 baseline)
         self.fpn = SimplifiedFPN([256, 512, 1024, 2048], fpn_channels)
+        
+        # TIER 1: SE/CBAM Attention (T1+)
+        if tier_config.use_se_attention or tier_config.use_cbam_attention:
+            from ml.models.attention import CBAM, SEBlock
+            # Apply attention to FPN features
+            if tier_config.use_cbam_attention:
+                self.fpn_attention = CBAM(fpn_channels, reduction=16)
+            elif tier_config.use_se_attention:
+                self.fpn_attention = SEBlock(fpn_channels, reduction=16)
+        else:
+            self.fpn_attention = None
+        
+        # TIER 2: Hybrid CNN-ViT Backbone (T2+)
+        if tier_config.use_hybrid_backbone:
+            from ml.models.backbone.hybrid_backbone import HybridCNNViTBackbone
+            # Replace standard FPN with hybrid backbone
+            self.hybrid_backbone = HybridCNNViTBackbone(
+                img_size=224,
+                patch_size=16,
+                cnn_out_channels=fpn_channels,
+                vit_embed_dim=768,
+                fused_dim=fpn_channels
+            )
+            # Keep standard FPN as fallback
+            self.use_hybrid = True
+        else:
+            self.hybrid_backbone = None
+            self.use_hybrid = False
+        
+        # TIER 2: Dynamic Convolution (T2+)
+        if tier_config.use_dynamic_conv:
+            from ml.models.backbone.dynamic_conv import DynamicConv2d
+            # Add dynamic conv layer in detection head (will be added later)
+            self.use_dynamic_conv = True
+        else:
+            self.use_dynamic_conv = False
         self.gap = nn.AdaptiveAvgPool2d(1)
         
         # Scene-level features from all FPN levels
@@ -502,25 +547,58 @@ class MaxSightCNN(nn.Module):
         )
         
         # Enhanced audio processing (replaces simple audio_branch)
-        from ml.models.fusion.multimodal_fusion import EnhancedAudioEncoder, SpatialSoundMapping
-        from ml.models.heads.sound_event_head import SoundEventHead
+        # Audio is always enabled if use_audio=True (part of baseline)
+        if use_audio:
+            from ml.models.fusion.multimodal_fusion import EnhancedAudioEncoder, SpatialSoundMapping
+            from ml.models.heads.sound_event_head import SoundEventHead
+            
+            self.audio_encoder = EnhancedAudioEncoder(
+                input_dim=128,
+                embed_dim=256,
+                num_heads=8
+            )
+            self.sound_event_head = SoundEventHead(
+                input_dim=256,
+                num_classes=15,
+                embed_dim=256,
+                num_heads=8
+            )
+            self.spatial_sound = SpatialSoundMapping(
+                audio_dim=256,
+                attention_size=(14, 14),  # Match FPN output size
+                num_directions=4
+            )
+        else:
+            self.audio_encoder = None
+            self.sound_event_head = None
+            self.spatial_sound = None
         
-        self.audio_encoder = EnhancedAudioEncoder(
-            input_dim=128,
-            embed_dim=256,
-            num_heads=8
-        )
-        self.sound_event_head = SoundEventHead(
-            input_dim=256,
-            num_classes=15,
-            embed_dim=256,
-            num_heads=8
-        )
-        self.spatial_sound = SpatialSoundMapping(
-            audio_dim=256,
-            attention_size=(14, 14),  # Match FPN output size
-            num_directions=4
-        )
+        # TIER 3: Cross-Task Attention (T3+)
+        if tier_config.use_cross_task_attention:
+            from ml.models.attention import CrossTaskAttention
+            self.cross_task_attention = CrossTaskAttention(
+                detection_dim=256,
+                ocr_dim=256,
+                description_dim=512,
+                embed_dim=512,
+                num_heads=8
+            )
+        else:
+            self.cross_task_attention = None
+        
+        # TIER 4: Cross-Modal Attention (T4+)
+        if tier_config.use_cross_modal_attention:
+            from ml.models.attention import CrossModalAttention
+            self.cross_modal_attention = CrossModalAttention(
+                vision_dim=256,
+                audio_dim=256,
+                haptic_dim=0,  # Can add haptic later
+                embed_dim=512,
+                num_heads=8,
+                dropout=0.1
+            )
+        else:
+            self.cross_modal_attention = None
         
         # Depth head with uncertainty
         from ml.models.heads.depth_head import DepthHead
@@ -529,16 +607,20 @@ class MaxSightCNN(nn.Module):
             dropout=0.1
         )
         
-        # Temporal encoder
-        from ml.models.temporal.temporal_encoder import TemporalEncoder
-        self.temporal_encoder = TemporalEncoder(
-            in_channels=256,
-            num_frames=8,
-            hidden_dim=256,
-            use_conv_lstm=True,
-            use_timesformer=False  # Can enable later
-        )
-        self.temporal_feature_proj = nn.Conv2d(256, 256, 1)  # Project motion features
+        # TIER 5: Temporal encoder (T5 only)
+        if tier_config.use_temporal_modeling:
+            from ml.models.temporal.temporal_encoder import TemporalEncoder
+            self.temporal_encoder = TemporalEncoder(
+                in_channels=256,
+                num_frames=8,
+                hidden_dim=256,
+                use_conv_lstm=True,
+                use_timesformer=False  # Can enable later
+            )
+            self.temporal_feature_proj = nn.Conv2d(256, 256, 1)  # Project motion features
+        else:
+            self.temporal_encoder = None
+            self.temporal_feature_proj = None
         
         # Scene graph encoder
         from ml.models.scene_graph.scene_graph_encoder import SceneGraphEncoder
@@ -749,31 +831,33 @@ class MaxSightCNN(nn.Module):
         audio_features: Optional[torch.Tensor] = None,
         user_id: Optional[torch.Tensor] = None,
         prev_temporal_state: Optional[Dict] = None,
-        use_temporal: bool = False
+        use_temporal: bool = False,
+        frame_id: Optional[int] = None  # For feature caching
     ) -> Dict[str, torch.Tensor]:
         """
-        Forward pass through MaxSightCNN.
+        Forward pass through MaxSightCNN - Two-Stage Inference Pipeline.
         
-        WHY THIS ARCHITECTURE:
-        This forward pass implements the multi-task approach that makes MaxSight more than just
-        an object detector. It produces:
-        - Object detections (what, where)
-        - Distance estimates (how far)
-        - Urgency scores (how dangerous)
-        - Scene context (overall understanding)
-        - Accessibility features (contrast, glare, findability)
+        ARCHITECTURE FLOW (matches diagram):
+        ====================================
+        1. INPUT LAYER: Camera, Microphone, Sensors
+        2. CONDITION ADAPTER: FiLM + Embeddings (condition-specific preprocessing)
+        3. SHARED BACKBONE: ResNet50 + FPN (multi-scale feature extraction)
+        4. STAGE A: Fast Safety Pass (<150ms, Tier 1 heads only)
+           - Objectness, Classification, Box Regression
+           - Distance (zones), Urgency, Uncertainty
+        5. STAGE B: Context Pass (opportunistic, Tier 2/3 heads)
+           - Motion, ROI Priority, Scene Complexity
+           - Scene Description, Retrieval (advisory), Therapy, Fatigue
+        6. ROI SELECTION & ACTION PRIORITIZATION
+        7. POST-PROCESSING: Spatial Memory, Path Planning, OCR/TTS
+        8. OUTPUT SCHEDULER: Cognitive Load Management
+        9. MULTIMODAL OUTPUT: Visual, Audio, Haptic
         
-        This rich output directly supports "Environmental Structuring" by providing all the
-        information needed to create actionable descriptions for users.
-        
-        HOW IT CONNECTS TO THE OVERALL SYSTEM:
-        - Input: Camera frames (images) + optional audio (for sound-aware detection)
-        - Processing: Multi-scale feature extraction + condition-specific adaptations
-        - Output: Rich structured information that feeds into DescriptionGenerator and
-          CrossModalScheduler for user presentation
-        
-        This is the "perception layer" that transforms raw sensor data into structured
-        environmental understanding, enabling all of MaxSight's accessibility features.
+        WHY TWO-STAGE INFERENCE:
+        - Decouples safety from enhancement
+        - Reduces latency variance
+        - Makes debugging easier
+        - Enables graceful degradation
         
         Arguments:
             images: [B, 3, 224, 224] or [B, T, 3, 224, 224] for video
@@ -781,11 +865,14 @@ class MaxSightCNN(nn.Module):
             user_id: [B] optional user IDs for personalization
             prev_temporal_state: Optional temporal state for video sequences
             use_temporal: Whether to use temporal processing
+            frame_id: Optional frame ID for feature caching
         
         Returns:
-            Dictionary with all predictions
+            Dictionary with all predictions, organized by stage
         """
-        # Handle temporal input (video sequences)
+        # ============================================================
+        # 1. INPUT LAYER: Preprocessing & Normalization
+        # ============================================================
         temporal_mode = False
         B_orig = None
         if images.dim() == 5:  # [B, T, 3, H, W]
@@ -797,6 +884,15 @@ class MaxSightCNN(nn.Module):
         else:
             batch_size = images.size(0)
         
+        # ============================================================
+        # 2. CONDITION ADAPTER: FiLM + Embeddings
+        # ============================================================
+        # Condition-specific preprocessing happens in backbone forward pass
+        # (handled via condition_mode checks in feature processing)
+        
+        # ============================================================
+        # 3. SHARED BACKBONE: ResNet50 + FPN
+        # ============================================================
         # Run through ResNet backbone to extract features
         # This is the standard ResNet forward pass - nothing fancy here
         # Input: [B, 3, 224, 224] RGB images
@@ -814,7 +910,31 @@ class MaxSightCNN(nn.Module):
         # Notice how spatial size shrinks but channels grow - standard CNN pattern
         
         # Build the feature pyramid - combines all scales
-        p2, p3, p4, p5 = self.fpn([c2, c3, c4, c5])
+        # TIER 2: Use hybrid backbone if enabled
+        if self.use_hybrid and self.hybrid_backbone is not None:
+            # Hybrid CNN-ViT backbone - extracts features and returns FPN-like outputs
+            # Note: Hybrid backbone returns (fused, aux_features) where aux_features contains 'fpn_features'
+            _, aux_features = self.hybrid_backbone(images, return_all_features=True)
+            if aux_features is not None and 'fpn_features' in aux_features:
+                # Use FPN features from hybrid backbone
+                fpn_features = aux_features['fpn_features']
+                # Hybrid backbone returns 3 FPN levels, we need 4 (p2, p3, p4, p5)
+                # Use c2 for p2, and hybrid FPN features for p3, p4, p5
+                p2 = self.fpn.lateral_convs[0](c2)  # Use standard FPN for p2
+                p3, p4, p5 = fpn_features  # Use hybrid FPN for p3, p4, p5
+            else:
+                # Fallback to standard FPN
+                p2, p3, p4, p5 = self.fpn([c2, c3, c4, c5])
+        else:
+            # Standard FPN
+            p2, p3, p4, p5 = self.fpn([c2, c3, c4, c5])
+        
+        # TIER 1: Apply attention if enabled
+        if self.fpn_attention is not None:
+            p2 = self.fpn_attention(p2)
+            p3 = self.fpn_attention(p3)
+            p4 = self.fpn_attention(p4)
+            p5 = self.fpn_attention(p5)
         
         # Extract scene-level understanding by pooling everything down
         # We look at all scales to understand the whole scene, not just objects
@@ -836,36 +956,42 @@ class MaxSightCNN(nn.Module):
         fused_features = self.detection_fusion(fused_features)  # Blend them together
         
         # Enhanced audio processing with spatial attention (AFTER fused_features is created)
+        # TIER 4: Cross-modal attention if enabled
         sound_outputs = None
-        if audio_features is not None:
+        audio_attention_map = None
+        if audio_features is not None and self.use_audio and self.audio_encoder is not None:
             # Encode audio
             audio_emb, _ = self.audio_encoder(audio_features)  # [B, 256]
             
             # Generate sound classifications (separate from spatial attention)
-            sound_outputs = self.sound_event_head(audio_emb.unsqueeze(1))  # [B, 1, 256] -> outputs
+            if self.sound_event_head is not None:
+                sound_outputs = self.sound_event_head(audio_emb.unsqueeze(1))  # [B, 1, 256] -> outputs
             
             # Generate spatial attention map
-            audio_attention_map, direction, distance = self.spatial_sound(audio_emb)
+            if self.spatial_sound is not None:
+                audio_attention_map, direction, distance = self.spatial_sound(audio_emb)
             
-            # CRITICAL CONSTRAINTS:
-            # 1. Assert spatial dimensions match
-            assert audio_attention_map.shape[-2:] == fused_features.shape[-2:], \
-                f"Audio attention {audio_attention_map.shape} must match features {fused_features.shape}"
-            assert audio_attention_map.ndim == 4, "Audio attention must be [B, 1, H, W]"
-            
-            # 2. Interpolate if needed (preserve channel count)
-            if audio_attention_map.shape[2:] != fused_features.shape[2:]:
-                audio_attention_map = F.interpolate(
-                    audio_attention_map,
-                    size=fused_features.shape[2:],
-                    mode='bilinear',
-                    align_corners=False
-                )
-            
-            # 3. MULTIPLICATIVE (not concatenation) - preserves pretrained weights
-            # Use sigmoid for smoother gradients
-            audio_attention_map = torch.sigmoid(audio_attention_map)  # [0, 1] with smooth gradients
-            fused_features = fused_features * (1.0 + audio_attention_map)  # Multiplicative gating
+            # Apply audio attention if available
+            if audio_attention_map is not None:
+                # CRITICAL CONSTRAINTS:
+                # 1. Assert spatial dimensions match
+                assert audio_attention_map.shape[-2:] == fused_features.shape[-2:], \
+                    f"Audio attention {audio_attention_map.shape} must match features {fused_features.shape}"
+                assert audio_attention_map.ndim == 4, "Audio attention must be [B, 1, H, W]"
+                
+                # 2. Interpolate if needed (preserve channel count)
+                if audio_attention_map.shape[2:] != fused_features.shape[2:]:
+                    audio_attention_map = F.interpolate(
+                        audio_attention_map,
+                        size=fused_features.shape[2:],
+                        mode='bilinear',
+                        align_corners=False
+                    )
+                
+                # 3. MULTIPLICATIVE (not concatenation) - preserves pretrained weights
+                # Use sigmoid for smoother gradients
+                audio_attention_map = torch.sigmoid(audio_attention_map)  # [0, 1] with smooth gradients
+                fused_features = fused_features * (1.0 + audio_attention_map)  # Multiplicative gating
             
             # Combine for scene context
             combined_context = torch.cat([scene_context, audio_emb], dim=1)  # [B, 256 + 256 = 512]
@@ -898,9 +1024,11 @@ class MaxSightCNN(nn.Module):
         # OPTIMIZED: Single .contiguous() call at end (MPS compatibility)
         fused_features = fused_features.contiguous()
         
-        # Temporal processing (if video) - AFTER fused_features is created
+        # TIER 5: Temporal processing (if video) - AFTER fused_features is created
         temporal_outputs = None
-        if use_temporal and temporal_mode and B_orig is not None:
+        if (self.tier_config.use_temporal_modeling and 
+            use_temporal and temporal_mode and B_orig is not None and 
+            self.temporal_encoder is not None):
             # Get spatial dimensions from fused_features
             _, _, H_temp, W_temp = fused_features.shape
             # Reshape features back to temporal format
@@ -920,7 +1048,7 @@ class MaxSightCNN(nn.Module):
                     f"Motion features {motion_features.shape} must match {fused_features.shape}"
                 
                 # Project if channel mismatch
-                if motion_features.shape[1] != fused_features.shape[1]:
+                if motion_features.shape[1] != fused_features.shape[1] and self.temporal_feature_proj is not None:
                     motion_features = self.temporal_feature_proj(motion_features)
                 
                 # Resize if needed
@@ -947,10 +1075,14 @@ class MaxSightCNN(nn.Module):
         # Ensure contiguous for MPS compatibility before detection head
         fused_features = fused_features.contiguous()
         
+        # ============================================================
+        # 4. STAGE A: FAST SAFETY PASS (<150ms, Tier 1 Heads)
+        # ============================================================
         # Process the features to extract detection information
         det_feats = self.detection_head(fused_features)
         det_feats = det_feats.contiguous()  # Ensure contiguous before passing to heads
         
+        # TIER 1 HEADS: Safety-Critical (Never Disabled)
         # Make predictions at every spatial location
         # Each location can potentially have an object
         cls_logits = self.cls_head(det_feats)  # What class?
@@ -982,11 +1114,11 @@ class MaxSightCNN(nn.Module):
         text_scores = torch.sigmoid(text_logits)  # Text probability - probability it's text
         # Note: cls_logits stays as logits - we'll apply softmax in the loss function
         
-        # Scene-level predictions - understand the whole scene
+        # TIER 1: Scene-level safety predictions
         scene_emb = self.scene_embedding(combined_context)  # For generating descriptions
         urgency = self.urgency_head(combined_context)  # How urgent/dangerous is this scene?
         
-        # Distance estimation - need both scene context and box size
+        # TIER 1: Distance estimation - need both scene context and box size
         # Bigger boxes usually mean closer objects, but context helps too
         # (e.g., a small car in the distance vs a large car up close)
         # 
@@ -1004,8 +1136,16 @@ class MaxSightCNN(nn.Module):
         distances_flat = self.distance_head(dist_input.view(-1, dist_input.size(-1)))  # [B*H*W, 3]
         distances = distances_flat.view(batch_size, H*W, self.num_distance_zones)  # [B, H*W, 3]
         
-        # Depth estimation with uncertainty (vectorized)
-        depth_outputs = self.depth_head_module(fused_features)
+        # TIER 1: Depth estimation with uncertainty (vectorized)
+        # Get motion features for depth conditioning (if available)
+        motion_features_for_depth = None
+        if temporal_outputs is not None and 'motion' in temporal_outputs:
+            motion_features_for_depth = temporal_outputs['motion']  # [B, 2, H, W] or similar
+        
+        depth_outputs = self.depth_head_module(
+            fused_features,
+            motion_features=motion_features_for_depth  # Motion as temporal anchor
+        )
         depth_map = depth_outputs['depth_map']  # [B, H, W]
         depth_uncertainty = depth_outputs['uncertainty']  # [B, H, W]
         
@@ -1069,7 +1209,10 @@ class MaxSightCNN(nn.Module):
         depth_scales = class_depth_scales[top_k_classes_depth]  # [B, K]
         precise_distances = depth_at_centers * depth_scales  # [B, K] in meters
         
-        outputs = {
+        # ============================================================
+        # STAGE A OUTPUTS: Tier 1 Safety-Critical Predictions
+        # ============================================================
+        stage_a_outputs = {
             'classifications': cls_logits,
             'boxes': box_preds,
             'objectness': obj_scores,
@@ -1085,26 +1228,52 @@ class MaxSightCNN(nn.Module):
             'num_locations': H * W
         }
         
-        # Audio outputs
-        if sound_outputs is not None:
-            outputs['sound_classifications'] = sound_outputs['sound_probs']
-            outputs['sound_direction'] = sound_outputs['direction']
-            outputs['sound_urgency'] = sound_outputs['urgency']
-        else:
-            outputs['sound_classifications'] = None
-            outputs['sound_direction'] = None
-            outputs['sound_urgency'] = None
-        
-        # Temporal outputs
-        if temporal_outputs is not None:
-            outputs['motion'] = temporal_outputs.get('motion')
-            outputs['temporal_consistency'] = temporal_outputs.get('consistency')
-        else:
-            outputs['motion'] = None
-            outputs['temporal_consistency'] = None
-        
-        # MVP Accessibility Features - Functional Vision & Environmental Context
+        # Check if Stage A is stable (uncertainty check)
+        # If uncertainty is too high, skip Stage B (safety-first)
+        uncertainty_score = None
         if self.enable_accessibility_features:
+            shared_scene_emb = self.shared_scene_embedding(combined_context)
+            uncertainty_score = self.uncertainty_head(shared_scene_emb)  # [B, 1]
+            stage_a_outputs['uncertainty'] = uncertainty_score
+        
+        # Safety decision: Is user safe now?
+        # If uncertainty > 0.7, we're in "fail-silent" mode - skip Stage B
+        skip_stage_b = (uncertainty_score is not None and 
+                       (uncertainty_score > 0.7).any()) if uncertainty_score is not None else False
+        
+        outputs = stage_a_outputs.copy()  # Start with Stage A outputs
+        
+        # ============================================================
+        # 5. STAGE B: CONTEXT PASS (Opportunistic, Tier 2/3 Heads)
+        # ============================================================
+        # Only run if Stage A is stable (uncertainty check passed)
+        if not skip_stage_b:
+        
+            # TIER 2 HEADS: Navigation & Context (Can Degrade)
+            # Motion (temporal anchor)
+            if temporal_outputs is not None:
+                motion_features = temporal_outputs.get('motion')  # [B, 2, H, W]
+                outputs['motion'] = motion_features
+                outputs['temporal_consistency'] = temporal_outputs.get('consistency')
+            else:
+                outputs['motion'] = None
+                outputs['temporal_consistency'] = None
+            
+            # Audio outputs (Tier 2)
+            if sound_outputs is not None:
+                outputs['sound_classifications'] = sound_outputs['sound_probs']
+                outputs['sound_direction'] = sound_outputs['direction']
+                outputs['sound_urgency'] = sound_outputs['urgency']
+            else:
+                outputs['sound_classifications'] = None
+                outputs['sound_direction'] = None
+                outputs['sound_urgency'] = None
+        
+            # TIER 2: ROI Priority (uses motion features if available)
+            # ROI Priority Head would go here - currently integrated in scene description
+            
+            # TIER 3 HEADS: Enhancement & Therapy (Optional, Advisory Only)
+            # Scene Description (uses ROI priorities if available)
             # Compute shared scene embedding (reused by multiple heads)
             shared_scene_emb = self.shared_scene_embedding(combined_context)  # [B, 256]
             
@@ -1138,7 +1307,10 @@ class MaxSightCNN(nn.Module):
                 'shared_scene_embedding': shared_scene_emb  # Expose for debugging/analysis
             })
         
-        # Scene graph (top-K objects only)
+        # ============================================================
+        # 7. POST-PROCESSING & HIGH-LEVEL PLANNING
+        # ============================================================
+        # Scene graph (top-K objects only) - for spatial memory
         # OPTIMIZED: Vectorized object embedding extraction (no Python loops)
         top_k_scene = min(self.max_scene_graph_objects, H * W)
         top_k_scores_scene, top_k_indices_scene = torch.topk(obj_scores, k=top_k_scene, dim=1)  # [B, K]
@@ -1212,8 +1384,9 @@ class MaxSightCNN(nn.Module):
         outputs['spatial_relations'] = scene_graph['spatial_relations'] if not self.training else [sg['spatial_relations'] for sg in scene_graphs]
         outputs['semantic_relations'] = scene_graph['semantic_relations'] if not self.training else [sg['semantic_relations'] for sg in scene_graphs]
         
-        # Scene description (gated, expensive operation)
-        if self.training or self.generate_description:
+        # TIER 3: Scene Description (gated, expensive operation)
+        # Only generate if Stage B ran (not skipped)
+        if (self.training or self.generate_description) and not skip_stage_b:
             # Sample 1 frame for CLIP (if video)
             if temporal_mode and B_orig is not None:
                 clip_images = images.view(B_orig, T, 3, H_img, W_img)[:, 0]  # Use first frame
@@ -1314,6 +1487,52 @@ class MaxSightCNN(nn.Module):
             if self.condition_mode == 'amd' and hasattr(self, 'central_weight'):
                 # Emphasize central regions (AMD affects central vision)
                 outputs['central_priority'] = center_mask * self.central_weight
+        
+        # ============================================================
+        # 8. OUTPUT SCHEDULER & COGNITIVE LOAD MANAGEMENT
+        # ============================================================
+        # NOTE: Output scheduling happens in ml.utils.output_scheduler.py
+        # This module receives model outputs and manages:
+        # - Multi-channel output prioritization (Visual, Audio, Haptic)
+        # - Rate limiting (avoid flooding user)
+        # - Cooldown timers per ROI/task
+        # - Adaptive cognitive load modulation
+        # - Mode selection: Safe / Assist / Therapy
+        # 
+        # Integration point:
+        #   from ml.utils.output_scheduler import CrossModalScheduler
+        #   scheduler = CrossModalScheduler(...)
+        #   scheduled_outputs = scheduler.schedule(outputs)
+        
+        # ============================================================
+        # 9. MULTIMODAL OUTPUT
+        # ============================================================
+        # NOTE: Multimodal output generation happens in app/overlays/
+        # This includes:
+        # - Visual Overlays (bounding boxes, highlights, labels)
+        # - Audio Output (TTS, alarms, priority tones)
+        # - Haptic Feedback (vibration patterns, directional cues)
+        #
+        # Integration point:
+        #   from app.overlays.overlay_engine import OverlayEngine
+        #   from app.ui.voice_feedback import VoiceFeedback
+        #   from app.ui.haptic_feedback import HapticFeedback
+        #   overlay_engine.render(scheduled_outputs)
+        #   voice_feedback.speak(scheduled_outputs)
+        #   haptic_feedback.vibrate(scheduled_outputs)
+        
+        # ============================================================
+        # 10. SIMULATION / TEST HARNESS
+        # ============================================================
+        # NOTE: Simulation interface receives all outputs for testing
+        # Integration point:
+        #   from tools.simulation.web_simulator import MaxSightSimulator
+        #   simulator.step(outputs)  # Feeds outputs into simulator
+        
+        # Mark which stage ran (for debugging/monitoring)
+        outputs['stage_a_completed'] = True
+        outputs['stage_b_completed'] = not skip_stage_b
+        outputs['skip_stage_b_reason'] = 'high_uncertainty' if skip_stage_b else None
         
         return outputs
     
@@ -1735,6 +1954,54 @@ class MaxSightCNN(nn.Module):
         priority = int(base_priority + (confidence - 0.5) * 20)
         
         return max(0, min(100, priority))
+    
+    def apply_tier_config(self, tier_config: 'TierConfig'):
+        """
+        Apply tier configuration at runtime (for dynamic tier switching).
+        
+        This method enables/disables components based on the new tier config.
+        Note: Some components cannot be disabled if already instantiated.
+        
+        Args:
+            tier_config: New tier configuration to apply
+        """
+        self.tier_config = tier_config
+        
+        # Enable/disable components based on config
+        # Note: We can't remove modules that are already instantiated,
+        # but we can skip them in forward pass
+        
+        # Mark which components should be used
+        self._use_hybrid = tier_config.use_hybrid_backbone and self.hybrid_backbone is not None
+        self._use_temporal = tier_config.use_temporal_modeling and self.temporal_encoder is not None
+        self._use_cross_task = tier_config.use_cross_task_attention and self.cross_task_attention is not None
+        self._use_cross_modal = tier_config.use_cross_modal_attention and self.cross_modal_attention is not None
+        self._use_attention = (tier_config.use_se_attention or tier_config.use_cbam_attention) and self.fpn_attention is not None
+    
+    def get_tier_info(self) -> Dict[str, Any]:
+        """Get information about current tier configuration."""
+        return {
+            'tier': self.tier_config.tier.name,
+            'tier_value': self.tier_config.tier.value,
+            'max_latency_ms': self.tier_config.max_latency_ms,
+            'min_confidence': self.tier_config.min_confidence,
+            'components': {
+                'se_attention': self.tier_config.use_se_attention,
+                'cbam_attention': self.tier_config.use_cbam_attention,
+                'hybrid_backbone': self.tier_config.use_hybrid_backbone,
+                'dynamic_conv': self.tier_config.use_dynamic_conv,
+                'cross_task_attention': self.tier_config.use_cross_task_attention,
+                'cross_modal_attention': self.tier_config.use_cross_modal_attention,
+                'temporal_modeling': self.tier_config.use_temporal_modeling
+            },
+            'instantiated': {
+                'hybrid_backbone': self.hybrid_backbone is not None,
+                'temporal_encoder': self.temporal_encoder is not None,
+                'cross_task_attention': self.cross_task_attention is not None,
+                'cross_modal_attention': self.cross_modal_attention is not None,
+                'fpn_attention': self.fpn_attention is not None
+            }
+        }
 
 
 def create_model(
@@ -1742,7 +2009,8 @@ def create_model(
     condition_mode: Optional[str] = None,
     use_audio: bool = True,
     fpn_channels: int = 256,
-    capability_tier: Optional[int] = 0
+    capability_tier: Optional[int] = 0,
+    tier_config: Optional['TierConfig'] = None
 ) -> MaxSightCNN:
     """
     Convenience function to create a MaxSight model with capability tier support.
@@ -1752,27 +2020,34 @@ def create_model(
         condition_mode: Visual condition adaptation mode
         use_audio: Enable audio fusion
         fpn_channels: FPN output channels
-        capability_tier: Model complexity tier (0-5)
+        capability_tier: Model complexity tier (0-5) - deprecated, use tier_config
             0: Baseline CNN
             1: + SE/CBAM attention
             2: + Hybrid CNN-ViT
             3: + Cross-task attention
             4: + Cross-modal attention
             5: + Temporal modeling
+        tier_config: TierConfig instance (overrides capability_tier if provided)
     
     Returns:
         MaxSightCNN instance configured for the specified tier
     """
-    # For now, return baseline model
-    # Full tier implementation will wire advanced components
-    # based on capability_tier parameter
+    # Create tier config if not provided
+    if tier_config is None:
+        if capability_tier is not None:
+            tier_enum = CapabilityTier(capability_tier)
+        else:
+            tier_enum = CapabilityTier.T0_BASELINE_CNN
+        tier_config = TierConfig.for_tier(tier_enum)
+    
     return MaxSightCNN(
         num_classes=num_classes,
         num_urgency_levels=4,
         num_distance_zones=3,
         use_audio=use_audio,
         condition_mode=condition_mode,
-        fpn_channels=fpn_channels
+        fpn_channels=fpn_channels,
+        tier_config=tier_config
     )
 
 
