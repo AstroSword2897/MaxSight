@@ -38,6 +38,13 @@ datasets/cleaned_splits/test_annotations.json
 # datasets/cleaned_splits/class_weights.json
 # datasets/cleaned_splits/class_distribution_report.json
 
+# Documentation files (keep README.md and docs/CRITICAL_LIMITATIONS.md)
+*.md
+!README.md
+!docs/CRITICAL_LIMITATIONS.md
+docs/**/*.md
+!docs/CRITICAL_LIMITATIONS.md
+
 # Logs
 *.log
 logs/
