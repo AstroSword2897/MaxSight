@@ -30,21 +30,6 @@ Thumbs.db
 *.h5
 *.hdf5
 
-# Dataset annotation files (large JSON files)
-datasets/cleaned_splits/train_annotations.json
-datasets/cleaned_splits/val_annotations.json
-datasets/cleaned_splits/test_annotations.json
-# Keep smaller metadata files
-# datasets/cleaned_splits/class_weights.json
-# datasets/cleaned_splits/class_distribution_report.json
-
-# Documentation files (keep README.md and docs/CRITICAL_LIMITATIONS.md)
-*.md
-!README.md
-!docs/CRITICAL_LIMITATIONS.md
-docs/**/*.md
-!docs/CRITICAL_LIMITATIONS.md
-
 # Logs
 *.log
 logs/
@@ -61,3 +46,6 @@ ios_bundle.zip
 *.zip
 ios_bundle/
 maxsight_ios_bundle/
+
+# Copied from 2026-prototype (do not track)
+ml/models/attention/cbam_attention.py
