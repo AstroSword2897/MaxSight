@@ -127,9 +127,11 @@ class ConvLSTM(nn.Module):
         
         outputs = []
         for t in range(T):
-            # Process through each layer
+            # Process through each layer - CRITICAL: feed each layer's output to the next
+            cur_input = x[:, t]  # [B, C, H, W]
             for layer_idx, cell in enumerate(self.cells):
-                h, c = cell(x[:, t], (h, c))
+                h, c = cell(cur_input, (h, c))
+                cur_input = h  # Feed this layer's output to the next layer
             outputs.append(h)
         
         # Stack outputs: [B, T, hidden_dim, H, W]
@@ -182,11 +184,13 @@ class TimeSformer(nn.Module):
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, N, D = x.shape
-        x = x + self.temporal_embed.unsqueeze(0).unsqueeze(2)
+        # Add temporal embedding: [1, T, 1, D] -> [B, T, N, D]
+        temporal_embed = self.temporal_embed.unsqueeze(0).unsqueeze(2)  # [1, T, 1, D]
+        x = x + temporal_embed  # Broadcast to [B, T, N, D]
         for block in self.blocks:
             x = block(x)
         x = self.norm(x)
-        x = x.mean(dim=(1, 2))
+        x = x.mean(dim=(1, 2))  # [B, D]
         return x
 
 

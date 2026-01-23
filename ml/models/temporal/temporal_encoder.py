@@ -82,8 +82,10 @@ class TemporalEncoder(nn.Module):
             )
         
         # Temporal consistency head
+        # CRITICAL FIX: Add Flatten before Linear
         self.consistency_head = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(1),  # [B, C, 1, 1] -> [B, C]
             nn.Linear(hidden_dim if use_conv_lstm else in_channels, 1),
             nn.Sigmoid()
         )
@@ -91,47 +93,53 @@ class TemporalEncoder(nn.Module):
         # Flicker detection head
         self.flicker_head = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(1),  # [B, C, 1, 1] -> [B, C]
             nn.Linear(hidden_dim if use_conv_lstm else in_channels, 1),
             nn.Sigmoid()
         )
     
     def forward(
         self,
-        frames: torch.Tensor,
+        feature_frames: torch.Tensor,  # RENAMED: frames -> feature_frames for clarity
         vit_patch_tokens: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass through enhanced temporal encoder.
         
+        CRITICAL: This expects FEATURE MAPS, not raw RGB frames.
+        Input should be [B, T, C, H, W] where C is feature channels (e.g., 256).
+        
         Arguments:
-            frames: Video frames [B, C, T, H, W] or [B, T, C, H, W]
+            feature_frames: Feature maps [B, C, T, H, W] or [B, T, C, H, W]
             vit_patch_tokens: Optional ViT patch tokens [B, T, N_patches, embed_dim]
         
         Returns:
             Dictionary with:
-                - 'motion': [B, 2, H, W] - Motion flow (u, v)
+                - 'motion': [B, 2, H, W] or [B, 2, H//2, W//2] - Motion flow (u, v)
+                - 'motion_features': [B, hidden_dim, H, W] - Full motion features
                 - 'consistency': [B, 1] - Temporal consistency score
                 - 'flicker': [B, 1] - Flicker detection score
                 - 'temporal_context': [B, embed_dim] - Long-range temporal context (if TimeSformer used)
         """
-        B = frames.shape[0]
+        B = feature_frames.shape[0]
         
         # Handle different input formats
-        if frames.dim() == 5:
-            if frames.shape[1] == self.in_channels:
+        if feature_frames.dim() == 5:
+            if feature_frames.shape[1] == self.in_channels:
                 # [B, C, T, H, W]
-                frames_seq = frames.permute(0, 2, 1, 3, 4)  # [B, T, C, H, W]
+                frames_seq = feature_frames.permute(0, 2, 1, 3, 4)  # [B, T, C, H, W]
             else:
                 # [B, T, C, H, W]
-                frames_seq = frames
+                frames_seq = feature_frames
         else:
-            raise ValueError(f"Expected 5D input, got {frames.dim()}D")
+            raise ValueError(f"Expected 5D input (feature maps), got {feature_frames.dim()}D")
         
         H, W = frames_seq.shape[-2], frames_seq.shape[-1]
         
         outputs = {}
         
         # ConvLSTM for motion tracking
+        motion_features = None  # Initialize for flicker detection
         if self.use_conv_lstm:
             # Extract features from each frame (simplified - in practice would use CNN features)
             # For now, assume frames_seq is already feature maps
@@ -140,23 +148,35 @@ class TemporalEncoder(nn.Module):
             # Use last frame's motion features
             motion_last = motion_features[:, -1]  # [B, hidden_dim, H, W]
             
-            # Motion flow prediction
+            # Motion flow prediction - downsample for efficiency
             motion = self.motion_head(motion_last)  # [B, 2, H, W]
+            # Downsample motion for efficiency (optional but recommended)
+            if motion.shape[-1] > 56:  # Only downsample if resolution is high
+                motion = F.interpolate(motion, scale_factor=0.5, mode='bilinear', align_corners=False)
             outputs['motion'] = motion
+            outputs['motion_features'] = motion_last  # Also return full features for Stage B
             
             # Temporal consistency from motion features
             consistency_feat = motion_last
         else:
             # Fallback: use last frame
             consistency_feat = frames_seq[:, -1]  # [B, C, H, W]
-            outputs['motion'] = torch.zeros(B, 2, H, W, device=frames.device)
+            outputs['motion'] = torch.zeros(B, 2, H, W, device=feature_frames.device)
         
         # Temporal consistency score
         consistency = self.consistency_head(consistency_feat).squeeze(-1).squeeze(-1)  # [B, 1]
         outputs['consistency'] = consistency.unsqueeze(1) if consistency.dim() == 1 else consistency
         
-        # Flicker detection
-        flicker = self.flicker_head(consistency_feat).squeeze(-1).squeeze(-1)  # [B, 1]
+        # Flicker detection - CRITICAL FIX: Actually use temporal information
+        # Compare last two frames instead of just using last frame
+        if self.use_conv_lstm and motion_features is not None and motion_features.shape[1] >= 2:
+            # Use frame difference for flicker detection
+            flicker_feat = torch.abs(motion_features[:, -1] - motion_features[:, -2])  # [B, hidden_dim, H, W]
+        else:
+            # Fallback to consistency feature
+            flicker_feat = consistency_feat
+        
+        flicker = self.flicker_head(flicker_feat).squeeze(-1).squeeze(-1)  # [B, 1]
         outputs['flicker'] = flicker.unsqueeze(1) if flicker.dim() == 1 else flicker
         
         # TimeSformer for long-range temporal context

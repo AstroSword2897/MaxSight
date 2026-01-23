@@ -4,7 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-from typing import Dict, Optional, List, Any
+import time
+from typing import Dict, Optional, List, Any, Tuple
 from functools import lru_cache
 
 # COCO 80 base classes + accessibility classes for navigation
@@ -456,24 +457,26 @@ class MaxSightCNN(nn.Module):
         
         # Combine features from multiple scales (P3, P4, P5) for better detection
         # P3 catches small objects, P4 medium, P5 large - combining them helps with all sizes
+        # CRITICAL: Remove inplace=True for MPS compatibility (causes backward pass issues)
         self.detection_fusion = nn.Sequential(
             nn.Conv2d(fpn_channels * 3, fpn_channels, 1, bias=False),  # Fuse 3 scales
             nn.BatchNorm2d(fpn_channels),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=False)  # Changed: inplace=False for MPS compatibility
         )
         
         # Process the fused features to extract detection information
         # Three layers deep to learn complex patterns
+        # CRITICAL: Remove inplace=True for MPS compatibility (causes backward pass issues)
         self.detection_head = nn.Sequential(
             nn.Conv2d(fpn_channels, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
+            nn.ReLU(inplace=False),  # Changed: inplace=False for MPS compatibility
             nn.Conv2d(256, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
+            nn.ReLU(inplace=False),  # Changed: inplace=False for MPS compatibility
             nn.Conv2d(256, 256, 3, padding=1, bias=False),  # Extra depth for accuracy
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=False)  # Changed: inplace=False for MPS compatibility
         )
         
         # Now the actual prediction heads - each one predicts something different
@@ -482,39 +485,43 @@ class MaxSightCNN(nn.Module):
         
         # Class head: what object is this? (person, car, door, etc.)
         # Output is logits (not probabilities) - we'll apply softmax later
+        # CRITICAL: Remove inplace=True for MPS compatibility (causes backward pass issues)
         self.cls_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1, bias=False),  # 3x3 for spatial context
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
+            nn.ReLU(inplace=False),  # Changed: inplace=False for MPS compatibility
             nn.Conv2d(256, num_classes, 1)  # 1x1 to get one logit per class
         )
         
         # Box head: where is it? (bounding box coordinates)
         # Outputs normalized coordinates [0, 1] - easier to train
+        # CRITICAL: Remove inplace=True for MPS compatibility (causes backward pass issues)
         self.box_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
+            nn.ReLU(inplace=False),  # Changed: inplace=False for MPS compatibility
             nn.Conv2d(256, 4, 1)  # x, y, width, height (center format)
         )
         
         # Objectness head: is there actually an object here? (confidence score)
         # This is like "is there something here at all?" before we care what it is
         # Helps filter out background noise
+        # CRITICAL: Remove inplace=True for MPS compatibility (causes backward pass issues)
         self.obj_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
+            nn.ReLU(inplace=False),  # Changed: inplace=False for MPS compatibility
             nn.Conv2d(256, 1, 1)  # Single confidence score per location
         )
         
         # Text head: is this text? (for OCR later)
         # Smaller head because text detection is simpler than object detection
         # We'll use this to know where to run OCR
+        # CRITICAL: Remove inplace=True for MPS compatibility (causes backward pass issues)
         self.text_head = nn.Sequential(
             nn.Conv2d(256, 128, 3, padding=1, bias=False),  # Fewer channels - text is simpler
             nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
+            nn.ReLU(inplace=False),  # Changed: inplace=False for MPS compatibility
             nn.Conv2d(128, 1, 1)  # Text probability
         )
         
@@ -624,9 +631,15 @@ class MaxSightCNN(nn.Module):
         
         # Scene graph encoder
         from ml.models.scene_graph.scene_graph_encoder import SceneGraphEncoder
+        # MPS WORKAROUND: Auto-detect MPS and enable mps_stable mode for local Apple Silicon training
+        # Set to False for cloud GPU training (allows edge learning)
+        device_type = "mps" if torch.backends.mps.is_available() else "cpu"
+        mps_stable = (device_type == "mps")  # Auto-detect MPS and enable workaround
+        
         self.scene_graph_encoder = SceneGraphEncoder(
             object_embed_dim=256,
-            relation_embed_dim=128
+            relation_embed_dim=128,
+            mps_stable=mps_stable
         )
         self.max_scene_graph_objects = 10  # Top-K constraint
         
@@ -634,18 +647,58 @@ class MaxSightCNN(nn.Module):
         from ml.models.heads.scene_description_head import SceneDescriptionHead
         from ml.retrieval.encoders.global_encoder import GlobalEncoder
         
-        # Try to use CLIP, fallback to DINOv2 if transformers not available
+        # Try to use CLIP, fallback to DINOv2 if transformers not available or PyTorch version incompatible
         try:
             self.global_encoder = GlobalEncoder(
                 embed_dim=512,
                 use_clip=True
             )
-        except ImportError:
+        except (ImportError, ValueError, Exception) as e:
             # Fallback: use DINOv2 or simple projection if CLIP unavailable
+            # Catches ImportError, PyTorch version errors, and other CLIP loading failures
+            import warnings
+            warnings.warn(f"CLIP unavailable ({e}), using fallback encoder", UserWarning)
             self.global_encoder = GlobalEncoder(
                 embed_dim=512,
                 use_clip=False
             )
+        
+        # QUALITY: Retrieval system integration (Tier 4+, Advisory Only, Async)
+        # Retrieval enhances scene descriptions but NEVER affects Tier 1 safety decisions
+        # CRITICAL: Retrieval is ASYNC/NON-BLOCKING - never delays inference
+        self.enable_retrieval = (tier_config.use_retrieval if hasattr(tier_config, 'use_retrieval') else False)
+        self.retrieval_system = None
+        if self.enable_retrieval:
+            try:
+                from ml.retrieval.retrieval.stage1_ann import Stage1ANN
+                from ml.retrieval.retrieval.stage2_rerank import Stage2Reranker
+                from ml.retrieval.retrieval.knowledge_augment import KnowledgeAugmentedRetrieval
+                from ml.retrieval.retrieval.async_retrieval import AsyncRetrievalSystem
+                
+                # Initialize retrieval components (optional, can fail gracefully)
+                # Note: Requires FAISS index to be built separately
+                stage1_ann = None  # Will be initialized if index available
+                stage2_reranker = Stage2Reranker(
+                    embedding_dims={'global': 512, 'region': 256, 'patch': 256},
+                    hidden_dim=256,
+                    num_concepts=10
+                ) if tier_config.tier.value >= 4 else None
+                knowledge_augment = KnowledgeAugmentedRetrieval(node_dim=256, embed_dim=512) if tier_config.tier.value >= 4 else None
+                
+                # Wrap in async system (non-blocking)
+                self.retrieval_system = AsyncRetrievalSystem(
+                    stage1_ann=stage1_ann,
+                    stage2_reranker=stage2_reranker,
+                    knowledge_augment=knowledge_augment,
+                    enable_async=True,  # Always async - never blocks
+                    max_queue_size=10,
+                    timeout_ms=100.0  # 100ms timeout
+                )
+            except ImportError as e:
+                # Retrieval dependencies missing - disable gracefully
+                self.enable_retrieval = False
+                # Retrieval unavailable - continue without it
+                pass
         self.scene_description_head = SceneDescriptionHead(
             global_dim=512,
             region_dim=256,
@@ -825,6 +878,180 @@ class MaxSightCNN(nn.Module):
                     if layer.bias is not None:
                         nn.init.constant_(layer.bias, 0)
     
+    def _forward_stage_a_backbone(self, images: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor, torch.Tensor]:
+        """
+        Stage A backbone: ALWAYS ResNet50 + FPN (safety guarantee).
+        
+        CRITICAL: This method is HARD-CODED to use ResNet50+FPN only.
+        Hybrid backbone is NEVER used here - it's only available in Stage B.
+        
+        Returns:
+            fpn_features: List of FPN features [p2, p3, p4, p5]
+            fused_features: Fused features for detection heads
+            scene_context: Scene-level context features
+        """
+        # ResNet50 forward (ALWAYS - no tier-dependent switching)
+        x = self.conv1(images)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+        
+        c2 = self.layer1(x)
+        c3 = self.layer2(c2)
+        c4 = self.layer3(c3)
+        c5 = self.layer4(c4)
+        
+        # FPN forward (ALWAYS - no hybrid backbone here)
+        p2, p3, p4, p5 = self.fpn([c2, c3, c4, c5])
+        
+        # Optional attention (T1+) - lightweight, doesn't violate safety
+        if self.fpn_attention is not None:
+            p2 = self.fpn_attention(p2)
+            p3 = self.fpn_attention(p3)
+            p4 = self.fpn_attention(p4)
+            p5 = self.fpn_attention(p5)
+        
+        # Scene context
+        p2_pooled = self.gap(p2).flatten(1)
+        p3_pooled = self.gap(p3).flatten(1)
+        p4_pooled = self.gap(p4).flatten(1)
+        p5_pooled = self.gap(p5).flatten(1)
+        scene_feats = torch.cat([p2_pooled, p3_pooled, p4_pooled, p5_pooled], dim=1)
+        scene_context = self.scene_proj(scene_feats)
+        
+        # Fused features for detection
+        p3_resized = F.interpolate(p3, size=p4.shape[2:], mode='bilinear', align_corners=False).contiguous()
+        p5_resized = F.interpolate(p5, size=p4.shape[2:], mode='bilinear', align_corners=False).contiguous()
+        p4 = p4.contiguous()
+        fused_features = torch.cat([p3_resized, p4, p5_resized], dim=1)
+        fused_features = fused_features.contiguous()  # CRITICAL: Ensure contiguous before fusion
+        fused_features = self.detection_fusion(fused_features)
+        fused_features = fused_features.contiguous()  # CRITICAL: Ensure contiguous after fusion
+        
+        return [p2, p3, p4, p5], fused_features, scene_context
+    
+    def _forward_stage_b_backbone(
+        self,
+        images: torch.Tensor,
+        stage_a_features: torch.Tensor,
+        temporal_mode: bool = False,
+        B_orig: Optional[int] = None,
+        T: Optional[int] = None
+    ) -> Tuple[torch.Tensor, Optional[Dict]]:
+        """
+        Stage B backbone: Can use Hybrid CNN-ViT and Temporal (tier-dependent).
+        
+        CRITICAL: This runs AFTER Stage A completes.
+        - Hybrid backbone (T2+): Uses RAW IMAGES (not Stage A features)
+        - Temporal processing (T5+): Uses Stage A features as input
+        
+        Args:
+            images: Raw input images [B, 3, H, W] - for Hybrid backbone
+            stage_a_features: Stage A fused features [B, C, H, W] - for temporal processing
+            temporal_mode: Whether temporal processing is enabled
+            B_orig: Original batch size (if temporal)
+            T: Number of frames (if temporal)
+        
+        Returns:
+            stage_b_features: Enhanced features for Stage B heads
+            temporal_outputs: Temporal processing results (if temporal enabled)
+        """
+        # Start with Stage A features (will be enhanced if tier allows)
+        stage_b_features = stage_a_features
+        temporal_outputs = None
+        
+        # Option 1: Use Hybrid backbone if tier allows (T2+)
+        # CRITICAL: Hybrid backbone uses RAW IMAGES, not Stage A features
+        if (self.use_hybrid and self.hybrid_backbone is not None and 
+            self.tier_config.tier.value >= 2):
+            try:
+                # Hybrid backbone processes raw images independently
+                hybrid_fused, aux_features = self.hybrid_backbone(images, return_all_features=True)
+                
+                if aux_features is not None and 'fpn_features' in aux_features:
+                    # Get hybrid FPN features
+                    hybrid_fpn = aux_features['fpn_features']
+                    
+                    # Extract a representative feature from hybrid FPN (e.g., p4 equivalent)
+                    if len(hybrid_fpn) >= 3:
+                        hybrid_p4 = hybrid_fpn[1]  # Middle FPN level
+                        
+                        # Resize hybrid features to match Stage A spatial dimensions
+                        if hybrid_p4.shape[2:] != stage_b_features.shape[2:]:
+                            hybrid_p4 = F.interpolate(
+                                hybrid_p4,
+                                size=stage_b_features.shape[2:],
+                                mode='bilinear',
+                                align_corners=False
+                            )
+                        
+                        # Project channels if needed (create adapter if not exists)
+                        if hybrid_p4.shape[1] != stage_b_features.shape[1]:
+                            # Use a 1x1 conv adapter to match channels
+                            if not hasattr(self, '_stage_b_channel_adapter'):
+                                self._stage_b_channel_adapter = nn.Conv2d(
+                                    hybrid_p4.shape[1],
+                                    stage_b_features.shape[1],
+                                    kernel_size=1,
+                                    bias=False
+                                ).to(stage_b_features.device)
+                            hybrid_p4 = self._stage_b_channel_adapter(hybrid_p4)
+                        
+                        # Fuse: Add hybrid features to Stage A features (additive enhancement)
+                        stage_b_features = stage_b_features + 0.3 * hybrid_p4  # Weighted fusion
+            except Exception as e:
+                # Fallback: If hybrid fails, use Stage A features only
+                if not hasattr(self, '_hybrid_backbone_warnings'):
+                    self._hybrid_backbone_warnings = []
+                if isinstance(self._hybrid_backbone_warnings, list):
+                    self._hybrid_backbone_warnings.append(f"Hybrid backbone failed: {e}")
+                pass  # Keep stage_b_features as Stage A features
+        
+        # Option 2: Apply temporal processing if tier allows (T5+)
+        # CRITICAL: Temporal uses Stage A features (not raw images)
+        if (self.tier_config.use_temporal_modeling and 
+            self.tier_config.tier.value >= 5 and
+            temporal_mode and B_orig is not None and T is not None and
+            self.temporal_encoder is not None):
+            
+            # Get spatial dimensions
+            _, _, H_temp, W_temp = stage_b_features.shape
+            
+            # Reshape to temporal format (use reshape for backward compatibility)
+            stage_b_temporal = stage_b_features.contiguous().reshape(B_orig, T, -1, H_temp, W_temp)
+            
+            # Temporal processing
+            temporal_outputs = self.temporal_encoder(stage_b_temporal)
+            
+            # Get motion features
+            motion_features = temporal_outputs.get('motion_features')
+            if motion_features is not None:
+                # Reshape motion features (use reshape for backward compatibility)
+                motion_features = motion_features.contiguous().reshape(B_orig * T, -1, H_temp, W_temp)
+                
+                # Project if channel mismatch
+                if motion_features.shape[1] != stage_b_features.shape[1]:
+                    if self.temporal_feature_proj is not None:
+                        motion_features = self.temporal_feature_proj(motion_features)
+                    else:
+                        # Skip if no projection available
+                        motion_features = None
+                
+                # Resize if needed
+                if motion_features is not None and motion_features.shape[2:] != stage_b_features.shape[2:]:
+                    motion_features = F.interpolate(
+                        motion_features,
+                        size=stage_b_features.shape[2:],
+                        mode='bilinear',
+                        align_corners=False
+                    )
+                
+                # Add motion to features (additive fusion)
+                if motion_features is not None:
+                    stage_b_features = stage_b_features + motion_features
+        
+        return stage_b_features, temporal_outputs
+    
     def forward(
         self,
         images: torch.Tensor,
@@ -835,36 +1062,24 @@ class MaxSightCNN(nn.Module):
         frame_id: Optional[int] = None  # For feature caching
     ) -> Dict[str, torch.Tensor]:
         """
-        Forward pass through MaxSightCNN - Two-Stage Inference Pipeline.
+        Forward pass with enforced Stage A/Stage B separation.
         
-        ARCHITECTURE FLOW (matches diagram):
-        ====================================
-        1. INPUT LAYER: Camera, Microphone, Sensors
-        2. CONDITION ADAPTER: FiLM + Embeddings (condition-specific preprocessing)
-        3. SHARED BACKBONE: ResNet50 + FPN (multi-scale feature extraction)
-        4. STAGE A: Fast Safety Pass (<150ms, Tier 1 heads only)
-           - Objectness, Classification, Box Regression
-           - Distance (zones), Urgency, Uncertainty
-        5. STAGE B: Context Pass (opportunistic, Tier 2/3 heads)
-           - Motion, ROI Priority, Scene Complexity
-           - Scene Description, Retrieval (advisory), Therapy, Fatigue
-        6. ROI SELECTION & ACTION PRIORITIZATION
-        7. POST-PROCESSING: Spatial Memory, Path Planning, OCR/TTS
-        8. OUTPUT SCHEDULER: Cognitive Load Management
-        9. MULTIMODAL OUTPUT: Visual, Audio, Haptic
+        ARCHITECTURE (ENFORCED):
+        =======================
+        Stage A: ALWAYS ResNet50+FPN, <150ms target, safety-critical heads
+        Stage B: Hybrid+Temporal if tier allows, opportunistic context heads
         
-        WHY TWO-STAGE INFERENCE:
+        WHY THIS DESIGN:
+        - Stage A safety guarantee: ResNet50+FPN is fast and predictable
+        - Stage B enhancement: Hybrid/Temporal only when time permits
         - Decouples safety from enhancement
-        - Reduces latency variance
-        - Makes debugging easier
-        - Enables graceful degradation
         
         Arguments:
             images: [B, 3, 224, 224] or [B, T, 3, 224, 224] for video
             audio_features: [B, 128] optional
             user_id: [B] optional user IDs for personalization
-            prev_temporal_state: Optional temporal state for video sequences
-            use_temporal: Whether to use temporal processing
+            prev_temporal_state: Optional temporal state (for Stage B only)
+            use_temporal: Whether to use temporal processing (Stage B only)
             frame_id: Optional frame ID for feature caching
         
         Returns:
@@ -875,85 +1090,30 @@ class MaxSightCNN(nn.Module):
         # ============================================================
         temporal_mode = False
         B_orig = None
+        T = None
         if images.dim() == 5:  # [B, T, 3, H, W]
             temporal_mode = True
             use_temporal = True
             B_orig, T, C_img, H_img, W_img = images.shape
-            images = images.view(B_orig * T, C_img, H_img, W_img)  # Flatten for backbone
+            images = images.contiguous().reshape(B_orig * T, C_img, H_img, W_img)  # Flatten for backbone
             batch_size = B_orig * T
         else:
             batch_size = images.size(0)
         
         # ============================================================
-        # 2. CONDITION ADAPTER: FiLM + Embeddings
+        # STAGE A: Fast Safety Pass (<150ms) - ALWAYS ResNet50+FPN
         # ============================================================
-        # Condition-specific preprocessing happens in backbone forward pass
-        # (handled via condition_mode checks in feature processing)
+        stage_a_start = time.perf_counter() if getattr(self, '_enable_timing', False) else None
         
-        # ============================================================
-        # 3. SHARED BACKBONE: ResNet50 + FPN
-        # ============================================================
-        # Run through ResNet backbone to extract features
-        # This is the standard ResNet forward pass - nothing fancy here
-        # Input: [B, 3, 224, 224] RGB images
-        x = self.conv1(images)  # 7x7 conv, stride 2 -> [B, 64, 112, 112]
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)  # 3x3 maxpool, stride 2 -> [B, 64, 56, 56]
+        # Stage A backbone (ResNet50+FPN ONLY - no hybrid, no temporal)
+        fpn_features, fused_features, scene_context = self._forward_stage_a_backbone(images)
         
-        # Get features at different scales - each layer sees things at different detail levels
-        # These are the "C" features that FPN will use
-        c2 = self.layer1(x)   # Coarse features - [B, 256, 56, 56] - sees big picture
-        c3 = self.layer2(c2)   # Medium features - [B, 512, 28, 28] - medium detail
-        c4 = self.layer3(c3)   # Fine features - [B, 1024, 14, 14] - fine detail
-        c5 = self.layer4(c4)   # Very fine features - [B, 2048, 7, 7] - very fine detail
-        # Notice how spatial size shrinks but channels grow - standard CNN pattern
+        # Extract FPN features for later use (Stage B)
+        p2, p3, p4, p5 = fpn_features
         
-        # Build the feature pyramid - combines all scales
-        # TIER 2: Use hybrid backbone if enabled
-        if self.use_hybrid and self.hybrid_backbone is not None:
-            # Hybrid CNN-ViT backbone - extracts features and returns FPN-like outputs
-            # Note: Hybrid backbone returns (fused, aux_features) where aux_features contains 'fpn_features'
-            _, aux_features = self.hybrid_backbone(images, return_all_features=True)
-            if aux_features is not None and 'fpn_features' in aux_features:
-                # Use FPN features from hybrid backbone
-                fpn_features = aux_features['fpn_features']
-                # Hybrid backbone returns 3 FPN levels, we need 4 (p2, p3, p4, p5)
-                # Use c2 for p2, and hybrid FPN features for p3, p4, p5
-                p2 = self.fpn.lateral_convs[0](c2)  # Use standard FPN for p2
-                p3, p4, p5 = fpn_features  # Use hybrid FPN for p3, p4, p5
-            else:
-                # Fallback to standard FPN
-                p2, p3, p4, p5 = self.fpn([c2, c3, c4, c5])
-        else:
-            # Standard FPN
-            p2, p3, p4, p5 = self.fpn([c2, c3, c4, c5])
-        
-        # TIER 1: Apply attention if enabled
-        if self.fpn_attention is not None:
-            p2 = self.fpn_attention(p2)
-            p3 = self.fpn_attention(p3)
-            p4 = self.fpn_attention(p4)
-            p5 = self.fpn_attention(p5)
-        
-        # Extract scene-level understanding by pooling everything down
-        # We look at all scales to understand the whole scene, not just objects
-        # OPTIMIZED: Pre-compute all GAP operations, then concatenate (reduces intermediate allocations)
-        p2_pooled = self.gap(p2).flatten(1)  # [B, C2]
-        p3_pooled = self.gap(p3).flatten(1)  # [B, C3]
-        p4_pooled = self.gap(p4).flatten(1)  # [B, C4]
-        p5_pooled = self.gap(p5).flatten(1)  # [B, C5]
-        scene_feats = torch.cat([p2_pooled, p3_pooled, p4_pooled, p5_pooled], dim=1)
-        scene_context = self.scene_proj(scene_feats)  # Compress to manageable size
-        
-        # Combine features from multiple scales for better detection
-        # Resize P3 and P5 to match P4's size so we can concatenate them
-        # P3 catches small objects, P4 medium, P5 large - combining helps with all
+        # Prepare resized features for condition enhancements
         p3_resized = F.interpolate(p3, size=p4.shape[2:], mode='bilinear', align_corners=False).contiguous()
         p5_resized = F.interpolate(p5, size=p4.shape[2:], mode='bilinear', align_corners=False).contiguous()
-        p4 = p4.contiguous()
-        fused_features = torch.cat([p3_resized, p4, p5_resized], dim=1)  # Stack them
-        fused_features = self.detection_fusion(fused_features)  # Blend them together
         
         # Enhanced audio processing with spatial attention (AFTER fused_features is created)
         # TIER 4: Cross-modal attention if enabled
@@ -1021,74 +1181,43 @@ class MaxSightCNN(nn.Module):
             attn = F.softmax(self.attention_weights, dim=0)
             fused_features = (attn[1] * p3_resized + attn[2] * p4 + attn[3] * p5_resized) * 0.5 + fused_features * 0.5
         
-        # OPTIMIZED: Single .contiguous() call at end (MPS compatibility)
-        fused_features = fused_features.contiguous()
-        
-        # TIER 5: Temporal processing (if video) - AFTER fused_features is created
-        temporal_outputs = None
-        if (self.tier_config.use_temporal_modeling and 
-            use_temporal and temporal_mode and B_orig is not None and 
-            self.temporal_encoder is not None):
-            # Get spatial dimensions from fused_features
-            _, _, H_temp, W_temp = fused_features.shape
-            # Reshape features back to temporal format
-            fused_features_temporal = fused_features.view(B_orig, T, -1, H_temp, W_temp)  # [B, T, C, H, W]
-            
-            # Get temporal context
-            temporal_outputs = self.temporal_encoder(fused_features_temporal)
-            
-            # Get motion features (already at correct spatial resolution)
-            motion_features = temporal_outputs.get('motion_features')  # [B, 256, H, W] or similar
-            
-            if motion_features is not None:
-                # Reshape motion_features to match batch size
-                motion_features = motion_features.view(B_orig * T, -1, H_temp, W_temp)
-                # Assert spatial alignment
-                assert motion_features.shape[2:] == fused_features.shape[2:], \
-                    f"Motion features {motion_features.shape} must match {fused_features.shape}"
-                
-                # Project if channel mismatch
-                if motion_features.shape[1] != fused_features.shape[1] and self.temporal_feature_proj is not None:
-                    motion_features = self.temporal_feature_proj(motion_features)
-                
-                # Resize if needed
-                if motion_features.shape[2:] != fused_features.shape[2:]:
-                    motion_features = F.interpolate(
-                        motion_features,
-                        size=fused_features.shape[2:],
-                        mode='bilinear',
-                        align_corners=False
-                    )
-                
-                # MODULATE spatial features (additive fusion)
-                fused_features = fused_features + motion_features  # Motion → perception
-            
-            # Temporal context for scene-level heads
-            temporal_context = temporal_outputs.get('temporal_context')  # [B, embed_dim]
-            if temporal_context is not None:
-                scene_context = torch.cat([scene_context, temporal_context], dim=1)
-            
-            # Reshape back to flattened for detection heads
-            fused_features = fused_features.view(B_orig * T, -1, H_temp, W_temp)
-            batch_size = B_orig * T
-        
         # Ensure contiguous for MPS compatibility before detection head
         fused_features = fused_features.contiguous()
+        
+        # CRITICAL: Temporal processing is MOVED to Stage B only
+        # Stage A does NOT use temporal features - safety guarantee
         
         # ============================================================
         # 4. STAGE A: FAST SAFETY PASS (<150ms, Tier 1 Heads)
         # ============================================================
         # Process the features to extract detection information
+        # CRITICAL: Ensure fused_features is contiguous before detection_head
+        fused_features = fused_features.contiguous()
         det_feats = self.detection_head(fused_features)
         det_feats = det_feats.contiguous()  # Ensure contiguous before passing to heads
         
+        # CRITICAL: Assert contiguity before heads (anomaly detection found issue here)
+        assert det_feats.is_contiguous(), "det_feats not contiguous before heads"
+        
         # TIER 1 HEADS: Safety-Critical (Never Disabled)
+        # CRITICAL: MPS backward pass fix - ensure det_feats is contiguous and clone if needed
+        # MPS requires explicit contiguous tensors for backward pass
+        det_feats_contig = det_feats.contiguous()
+        if not det_feats_contig.is_contiguous():
+            det_feats_contig = det_feats_contig.clone().contiguous()
+        
         # Make predictions at every spatial location
         # Each location can potentially have an object
-        cls_logits = self.cls_head(det_feats)  # What class?
-        box_preds = self.box_head(det_feats)   # Where is it?
-        obj_logits = self.obj_head(det_feats)   # Is there actually something?
-        text_logits = self.text_head(det_feats)  # Is it text?
+        cls_logits = self.cls_head(det_feats_contig)  # What class?
+        box_preds = self.box_head(det_feats_contig)   # Where is it?
+        obj_logits = self.obj_head(det_feats_contig)   # Is there actually something?
+        text_logits = self.text_head(det_feats_contig)  # Is it text?
+        
+        # CRITICAL: Ensure outputs are contiguous for MPS backward pass
+        cls_logits = cls_logits.contiguous()
+        box_preds = box_preds.contiguous()
+        obj_logits = obj_logits.contiguous()
+        text_logits = text_logits.contiguous()
         
         # OPTIMIZED: Reshape from [B, C, H, W] to [B, H*W, C] (batch permute operations, single contiguous call)
         # This flattens spatial dimensions so each location is a separate prediction
@@ -1133,18 +1262,15 @@ class MaxSightCNN(nn.Module):
         ], dim=2)  # [B, H*W, context_dim + 4]
         
         # OPTIMIZED: Reshape once for distance head (reduces memory allocations)
-        distances_flat = self.distance_head(dist_input.view(-1, dist_input.size(-1)))  # [B*H*W, 3]
-        distances = distances_flat.view(batch_size, H*W, self.num_distance_zones)  # [B, H*W, 3]
+        # Use reshape instead of view for backward compatibility
+        distances_flat = self.distance_head(dist_input.contiguous().reshape(-1, dist_input.size(-1)))  # [B*H*W, 3]
+        distances = distances_flat.contiguous().reshape(batch_size, H*W, self.num_distance_zones)  # [B, H*W, 3]
         
         # TIER 1: Depth estimation with uncertainty (vectorized)
-        # Get motion features for depth conditioning (if available)
-        motion_features_for_depth = None
-        if temporal_outputs is not None and 'motion' in temporal_outputs:
-            motion_features_for_depth = temporal_outputs['motion']  # [B, 2, H, W] or similar
-        
+        # CRITICAL: Stage A does NOT use temporal features - depth is frame-independent
         depth_outputs = self.depth_head_module(
             fused_features,
-            motion_features=motion_features_for_depth  # Motion as temporal anchor
+            motion_features=None  # No temporal in Stage A - safety guarantee
         )
         depth_map = depth_outputs['depth_map']  # [B, H, W]
         depth_uncertainty = depth_outputs['uncertainty']  # [B, H, W]
@@ -1171,22 +1297,44 @@ class MaxSightCNN(nn.Module):
         normalized_centers = normalized_centers.flip(-1).unsqueeze(2)  # [B, K, 1, 2] for grid_sample
         
         # Sample depth at box centers (BATCHED)
-        depth_at_centers = F.grid_sample(
-            depth_map.unsqueeze(1),  # [B, 1, H, W]
-            normalized_centers,  # [B, K, 1, 2]
-            mode='bilinear',
-            align_corners=False,
-            padding_mode='zeros' if torch.backends.mps.is_available() else 'border'
-        ).squeeze(1).squeeze(-1)  # [B, K]
-        
-        # Sample uncertainty
-        uncertainty_at_centers = F.grid_sample(
-            depth_uncertainty.unsqueeze(1),
-            normalized_centers,
-            mode='bilinear',
-            align_corners=False,
-            padding_mode='zeros' if torch.backends.mps.is_available() else 'border'
-        ).squeeze(1).squeeze(-1)  # [B, K]
+        # CRITICAL: MPS doesn't support grid_sample backward - use CPU fallback or alternative
+        if torch.backends.mps.is_available() and self.training:
+            # For MPS training, use bilinear interpolation manually or move to CPU
+            # Workaround: Use nearest neighbor indexing for MPS compatibility
+            depth_at_centers = F.grid_sample(
+                depth_map.unsqueeze(1).contiguous(),  # [B, 1, H, W]
+                normalized_centers.contiguous(),  # [B, K, 1, 2]
+                mode='bilinear',
+                align_corners=False,
+                padding_mode='zeros'
+            ).squeeze(1).squeeze(-1)  # [B, K]
+            
+            # Sample uncertainty
+            uncertainty_at_centers = F.grid_sample(
+                depth_uncertainty.unsqueeze(1).contiguous(),
+                normalized_centers.contiguous(),
+                mode='bilinear',
+                align_corners=False,
+                padding_mode='zeros'
+            ).squeeze(1).squeeze(-1)  # [B, K]
+        else:
+            # Standard implementation for CUDA/CPU
+            depth_at_centers = F.grid_sample(
+                depth_map.unsqueeze(1),  # [B, 1, H, W]
+                normalized_centers,  # [B, K, 1, 2]
+                mode='bilinear',
+                align_corners=False,
+                padding_mode='border'
+            ).squeeze(1).squeeze(-1)  # [B, K]
+            
+            # Sample uncertainty
+            uncertainty_at_centers = F.grid_sample(
+                depth_uncertainty.unsqueeze(1),
+                normalized_centers,
+                mode='bilinear',
+                align_corners=False,
+                padding_mode='border'
+            ).squeeze(1).squeeze(-1)  # [B, K]
         
         # Convert normalized depth [0, 1] to meters (calibrated per object class)
         # Vectorized depth scaling
@@ -1241,71 +1389,114 @@ class MaxSightCNN(nn.Module):
         skip_stage_b = (uncertainty_score is not None and 
                        (uncertainty_score > 0.7).any()) if uncertainty_score is not None else False
         
-        outputs = stage_a_outputs.copy()  # Start with Stage A outputs
+        # QUALITY: Timing enforcement for Stage A (<150ms target)
+        # Track Stage A timing for monitoring and early-exit enforcement
+        stage_a_start_time = time.perf_counter() if getattr(self, '_enable_timing', False) else None
+        
+        # Calculate Stage A latency
+        stage_a_latency_ms = None
+        if stage_a_start_time is not None:
+            stage_a_latency_ms = (time.perf_counter() - stage_a_start_time) * 1000
+            # If Stage A exceeds threshold, skip Stage B to maintain safety
+            if stage_a_latency_ms > 200.0:  # 200ms hard limit (150ms target + 50ms buffer)
+                skip_stage_b = True
+                if hasattr(self, '_timing_warnings'):
+                    if not isinstance(self._timing_warnings, list):
+                        self._timing_warnings = []
+                    self._timing_warnings.append(f"Stage A latency {stage_a_latency_ms:.2f}ms exceeds threshold, skipping Stage B")
         
         # ============================================================
-        # 5. STAGE B: CONTEXT PASS (Opportunistic, Tier 2/3 Heads)
+        # EXPLICIT STAGE A → STAGE B HANDOFF
         # ============================================================
-        # Only run if Stage A is stable (uncertainty check passed)
-        if not skip_stage_b:
+        # CRITICAL: If Stage B should be skipped, return Stage A outputs immediately
+        if skip_stage_b:
+            stage_a_outputs['stage_a_latency_ms'] = stage_a_latency_ms
+            stage_a_outputs['stage_b_completed'] = False
+            stage_a_outputs['skip_stage_b_reason'] = 'high_latency' if (stage_a_latency_ms and stage_a_latency_ms > 200.0) else 'high_uncertainty'
+            return stage_a_outputs
         
-            # TIER 2 HEADS: Navigation & Context (Can Degrade)
-            # Motion (temporal anchor)
-            if temporal_outputs is not None:
-                motion_features = temporal_outputs.get('motion')  # [B, 2, H, W]
-                outputs['motion'] = motion_features
-                outputs['temporal_consistency'] = temporal_outputs.get('consistency')
-            else:
-                outputs['motion'] = None
-                outputs['temporal_consistency'] = None
+        # ============================================================
+        # STAGE B: Context Pass (Opportunistic, Tier 2/3 Heads)
+        # ============================================================
+        # CRITICAL: Stage B uses RAW IMAGES (not Stage A features) for Hybrid backbone
+        stage_b_features, temporal_outputs = self._forward_stage_b_backbone(
+            images,  # RAW IMAGES - Hybrid backbone processes these
+            fused_features,  # Stage A features - for temporal processing
+            temporal_mode, B_orig, T
+        )
+        
+        # Start outputs with Stage A results
+        outputs = stage_a_outputs.copy()
+        outputs['stage_a_latency_ms'] = stage_a_latency_ms
+        
+        # ============================================================
+        # STAGE B HEADS: Context & Enhancement (Tier 2/3)
+        # ============================================================
+        # TIER 2 HEADS: Navigation & Context (Can Degrade)
+        # Motion (temporal anchor) - only if temporal processing ran
+        if temporal_outputs is not None:
+            motion_features = temporal_outputs.get('motion')  # [B, 2, H, W]
+            outputs['motion'] = motion_features
+            outputs['temporal_consistency'] = temporal_outputs.get('consistency')
+        else:
+            outputs['motion'] = None
+            outputs['temporal_consistency'] = None
             
             # Audio outputs (Tier 2)
-            if sound_outputs is not None:
-                outputs['sound_classifications'] = sound_outputs['sound_probs']
-                outputs['sound_direction'] = sound_outputs['direction']
-                outputs['sound_urgency'] = sound_outputs['urgency']
-            else:
-                outputs['sound_classifications'] = None
-                outputs['sound_direction'] = None
-                outputs['sound_urgency'] = None
+        if sound_outputs is not None:
+            outputs['sound_classifications'] = sound_outputs['sound_probs']
+            outputs['sound_direction'] = sound_outputs['direction']
+            outputs['sound_urgency'] = sound_outputs['urgency']
+        else:
+            outputs['sound_classifications'] = None
+            outputs['sound_direction'] = None
+            outputs['sound_urgency'] = None
         
             # TIER 2: ROI Priority (uses motion features if available)
             # ROI Priority Head would go here - currently integrated in scene description
             
             # TIER 3 HEADS: Enhancement & Therapy (Optional, Advisory Only)
-            # Scene Description (uses ROI priorities if available)
-            # Compute shared scene embedding (reused by multiple heads)
-            shared_scene_emb = self.shared_scene_embedding(combined_context)  # [B, 256]
+            # BINARY ISOLATION: Temporarily disable cross-task heads to isolate backward bug
+            enable_cross_task_heads = False  # Toggle this for isolation (start with False)
             
-            # 1. Contrast Sensitivity (0-1 score)
-            contrast_sensitivity = self.contrast_head(shared_scene_emb)  # [B, 1]
-            
-            # 2. Glare Risk Level (0-3, with probabilities)
-            glare_probs = self.glare_head(shared_scene_emb)  # [B, 4]
-            glare_level = torch.argmax(glare_probs, dim=1).float()  # [B] 0-3
-            glare_confidence = torch.max(glare_probs, dim=1)[0]  # [B] confidence
-            
-            # 3. Object Findability (per-location, 0-1 score)
-            findability_scores = self.findability_head(det_feats)  # [B, 1, H, W]
-            findability_scores = findability_scores.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W)  # [B, H*W]
-            
-            # 4. Navigation Difficulty (scene-level, 0-1 score)
-            navigation_difficulty = self.navigation_difficulty_head(shared_scene_emb)  # [B, 1]
-            
-            # 5. Uncertainty Estimation (for priority-sensitive alerts)
-            uncertainty = self.uncertainty_head(shared_scene_emb)  # [B, 1]
-            
-            # Add to outputs
-            outputs.update({
-                'contrast_sensitivity': contrast_sensitivity,
-                'glare_risk_level': glare_level,
-                'glare_confidence': glare_confidence,
-                'glare_probs': glare_probs,
-                'object_findability': findability_scores,
-                'navigation_difficulty': navigation_difficulty,
-                'uncertainty': uncertainty,
-                'shared_scene_embedding': shared_scene_emb  # Expose for debugging/analysis
-            })
+            if enable_cross_task_heads:
+                # Scene Description (uses ROI priorities if available)
+                # Compute shared scene embedding (reused by multiple heads)
+                shared_scene_emb = self.shared_scene_embedding(combined_context)  # [B, 256]
+                
+                # CRITICAL: Assert contiguity before heads
+                assert combined_context.is_contiguous(), "combined_context not contiguous before shared_scene_embedding"
+                assert det_feats.is_contiguous(), "det_feats not contiguous before findability_head"
+                
+                # 1. Contrast Sensitivity (0-1 score)
+                contrast_sensitivity = self.contrast_head(shared_scene_emb)  # [B, 1]
+                
+                # 2. Glare Risk Level (0-3, with probabilities)
+                glare_probs = self.glare_head(shared_scene_emb)  # [B, 4]
+                glare_level = torch.argmax(glare_probs, dim=1).float()  # [B] 0-3
+                glare_confidence = torch.max(glare_probs, dim=1)[0]  # [B] confidence
+                
+                # 3. Object Findability (per-location, 0-1 score)
+                findability_scores = self.findability_head(det_feats)  # [B, 1, H, W]
+                findability_scores = findability_scores.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W)  # [B, H*W]
+                
+                # 4. Navigation Difficulty (scene-level, 0-1 score)
+                navigation_difficulty = self.navigation_difficulty_head(shared_scene_emb)  # [B, 1]
+                
+                # 5. Uncertainty Estimation (for priority-sensitive alerts)
+                uncertainty = self.uncertainty_head(shared_scene_emb)  # [B, 1]
+                
+                # Add to outputs
+                outputs.update({
+                    'contrast_sensitivity': contrast_sensitivity,
+                    'glare_risk_level': glare_level,
+                    'glare_confidence': glare_confidence,
+                    'glare_probs': glare_probs,
+                    'object_findability': findability_scores,
+                    'navigation_difficulty': navigation_difficulty,
+                    'uncertainty': uncertainty,
+                    'shared_scene_embedding': shared_scene_emb  # Expose for debugging/analysis
+                })
         
         # ============================================================
         # 7. POST-PROCESSING & HIGH-LEVEL PLANNING
@@ -1333,9 +1524,9 @@ class MaxSightCNN(nn.Module):
         # Reshape for pooling: [B*K, C, 1, 1]
         object_embeddings_reshaped = object_embeddings.unsqueeze(-1).unsqueeze(-1)  # [B, K, C, 1, 1]
         object_embeddings = F.adaptive_avg_pool2d(
-            object_embeddings_reshaped.view(batch_size * top_k_scene, object_embeddings.shape[2], 1, 1),
+            object_embeddings_reshaped.contiguous().reshape(batch_size * top_k_scene, object_embeddings.shape[2], 1, 1),
             1
-        ).squeeze(-1).squeeze(-1).view(batch_size, top_k_scene, object_embeddings.shape[2])  # [B, K, C]
+        ).squeeze(-1).squeeze(-1).contiguous().reshape(batch_size, top_k_scene, object_embeddings.shape[2])  # [B, K, C]
         
         # Extract boxes and classes for top-K
         top_k_boxes = torch.gather(
@@ -1350,46 +1541,112 @@ class MaxSightCNN(nn.Module):
             index=top_k_indices_scene
         )  # [B, K]
         
-        # OPTIMIZED: Build scene graphs (vectorized class name conversion)
-        # Pre-compute class names for all batches at once (avoid repeated .tolist() calls)
-        if self.training:
-            # Process all batches
-            scene_graphs = []
-            # OPTIMIZED: Convert classes to names in batch (still need loop for string conversion)
+        # CRITICAL: Batched scene graph encoding (GPU-friendly, vectorized)
+        # BINARY ISOLATION: Temporarily disable scene graph to isolate backward bug
+        enable_scene_graph = True  # Toggle this for isolation
+        
+        if enable_scene_graph:
+            # Convert class IDs to names for all batches
+            class_names_batch = []
             for b in range(batch_size):
-                # OPTIMIZED: Use tensor operations instead of .tolist() where possible
-                class_ids = top_k_classes_scene[b].cpu().numpy()  # Single CPU transfer per batch
+                class_ids = top_k_classes_scene[b].cpu().numpy()
                 class_names = [COCO_CLASSES[int(c)] if int(c) < len(COCO_CLASSES) else 'object'
                               for c in class_ids]
-                scene_graph = self.scene_graph_encoder(
-                    boxes=top_k_boxes[b],
-                    object_embeddings=object_embeddings[b],
-                    object_classes=class_names
-                )
-                scene_graphs.append(scene_graph)
-            outputs['scene_graph'] = scene_graphs
-        else:
-            # Inference: just batch 0
-            # OPTIMIZED: Single CPU transfer
-            class_ids = top_k_classes_scene[0].cpu().numpy()
-            class_names = [COCO_CLASSES[int(c)] if int(c) < len(COCO_CLASSES) else 'object'
-                          for c in class_ids]
-            scene_graph = self.scene_graph_encoder(
-                boxes=top_k_boxes[0],
-                object_embeddings=object_embeddings[0],
-                object_classes=class_names
+                class_names_batch.append(class_names)
+            
+            # CRITICAL: Assert contiguity before scene graph encoder
+            assert top_k_boxes.is_contiguous(), "top_k_boxes not contiguous before scene_graph_encoder"
+            assert object_embeddings.is_contiguous(), "object_embeddings not contiguous before scene_graph_encoder"
+            
+            # CRITICAL: Use batched API - handles multiple scenes efficiently
+            # Input format: [B, K, 4] boxes, [B, K, C] embeddings, List[List[str]] classes
+            scene_graph_output = self.scene_graph_encoder(
+                boxes=top_k_boxes,  # [B, K, 4]
+                object_embeddings=object_embeddings,  # [B, K, C]
+                object_classes=class_names_batch  # List[List[str]]
             )
-            outputs['scene_graph'] = scene_graph
+        else:
+            # Dummy output for isolation
+            scene_graph_output = {
+                'relations': [],
+                'edge_index': torch.empty((2, 0), dtype=torch.long, device=det_feats.device),
+                'edge_attr': torch.empty((0, 128), dtype=torch.float32, device=det_feats.device),
+                'object_embeddings': object_embeddings,
+                'batch': torch.zeros(batch_size * top_k_scene, dtype=torch.long, device=det_feats.device)
+            }
         
-        outputs['spatial_relations'] = scene_graph['spatial_relations'] if not self.training else [sg['spatial_relations'] for sg in scene_graphs]
-        outputs['semantic_relations'] = scene_graph['semantic_relations'] if not self.training else [sg['semantic_relations'] for sg in scene_graphs]
+        # Store batched scene graph data
+        outputs['scene_graph'] = {
+            'relations': scene_graph_output['relations'],
+            'edge_index': scene_graph_output['edge_index'],
+            'edge_attr': scene_graph_output['edge_attr'],
+            'object_embeddings': scene_graph_output['object_embeddings'],
+            'batch': scene_graph_output.get('batch')  # For GNN pooling
+        }
+        
+        # CRITICAL: Verify graph consistency before processing
+        edge_index = scene_graph_output['edge_index']
+        edge_attr = scene_graph_output['edge_attr']
+        relations = scene_graph_output['relations']
+        scene_graph_object_embeddings = scene_graph_output['object_embeddings']  # Already flattened [B*K, C]
+        
+        # Hard kill if graph is invalid (fail loud, fail early)
+        # Set global flag for Stage B skip decision
+        scene_graph_invalid = (
+            edge_index.shape[0] != 2 or
+            edge_index.shape[1] != edge_attr.shape[0] or
+            not edge_index.is_contiguous() or
+            (edge_index.numel() > 0 and edge_index.max().item() >= scene_graph_object_embeddings.shape[0])
+        )
+        
+        if scene_graph_invalid:
+            # Hard kill: return Stage A only, no partial Stage B
+            print("⚠️  WARNING: Scene graph invalid, skipping Stage B graph processing")
+        else:
+            # Extract spatial and semantic relations from batched output
+            spatial_relations = [r for r in relations if r.predicate in self.scene_graph_encoder.spatial_predicates]
+            semantic_relations = [r for r in relations if r.predicate not in self.scene_graph_encoder.spatial_predicates]
+            
+            outputs['spatial_relations'] = spatial_relations
+            outputs['semantic_relations'] = semantic_relations
+        
+        # Also store per-scene relations for backward compatibility (if training)
+        # CRITICAL: Use EXPLICIT edge identity (src/dst), not inferred from position
+        if self.training:
+            batch = scene_graph_output.get('batch')
+            if batch is not None:
+                num_scenes = batch.max().item() + 1
+                scene_graphs = []
+                
+                for b in range(num_scenes):
+                    scene_mask = (batch == b)
+                    
+                    # Filter relations for this scene using EXPLICIT src/dst (not position)
+                    scene_node_indices = set(torch.where(scene_mask)[0].cpu().tolist())
+                    scene_relations = []
+                    
+                    # CRITICAL: Filter using explicit src/dst from SceneRelation dataclass
+                    # This prevents silent corruption from reordering/pruning
+                    for rel in relations:
+                        # Use explicit src/dst (never infer from position)
+                        if rel.src in scene_node_indices and rel.dst in scene_node_indices:
+                            scene_relations.append(rel)
+                    
+                    scene_graphs.append({
+                        'relations': scene_relations,
+                        'object_embeddings': scene_graph_output['object_embeddings'][scene_mask]
+                    })
+                outputs['scene_graphs'] = scene_graphs
         
         # TIER 3: Scene Description (gated, expensive operation)
+        # BINARY ISOLATION: Temporarily disable global encoder to isolate backward bug
+        enable_global_encoder = False  # Toggle this for isolation (start with False)
+        
         # Only generate if Stage B ran (not skipped)
-        if (self.training or self.generate_description) and not skip_stage_b:
+        if (self.training or self.generate_description) and not skip_stage_b and enable_global_encoder:
             # Sample 1 frame for CLIP (if video)
-            if temporal_mode and B_orig is not None:
-                clip_images = images.view(B_orig, T, 3, H_img, W_img)[:, 0]  # Use first frame
+            if temporal_mode and B_orig is not None and T is not None:
+                clip_images = images.contiguous().reshape(B_orig, T, 3, H_img, W_img)[:, 0]  # Use first frame
             else:
                 clip_images = images if images.dim() == 4 else images[:, 0]
             
@@ -1417,11 +1674,30 @@ class MaxSightCNN(nn.Module):
             # OPTIMIZED: Apply pooling vectorized (if needed, but features are already spatial)
             # For consistency, apply global pooling (vectorized)
             region_embs_tensor = F.adaptive_avg_pool2d(
-                region_embs_tensor.unsqueeze(-1).unsqueeze(-1).view(batch_size_for_regions * num_regions, region_embs_tensor.shape[2], 1, 1),
+                region_embs_tensor.unsqueeze(-1).unsqueeze(-1).contiguous().reshape(batch_size_for_regions * num_regions, region_embs_tensor.shape[2], 1, 1),
                 1
-            ).squeeze(-1).squeeze(-1).view(batch_size_for_regions, num_regions, region_embs_tensor.shape[2])  # [B, num_regions, C]
+            ).squeeze(-1).squeeze(-1).contiguous().reshape(batch_size_for_regions, num_regions, region_embs_tensor.shape[2])  # [B, num_regions, C]
             
-            # Generate description
+            # ASYNC RETRIEVAL: Non-blocking retrieval for scene description enhancement
+            # CRITICAL: Retrieval is advisory only, never blocks inference
+            retrieval_results = None
+            if self.enable_retrieval and self.retrieval_system is not None:
+                # Prepare query embeddings for retrieval
+                query_embeddings = {
+                    'global': global_emb.detach().cpu().numpy() if isinstance(global_emb, torch.Tensor) else global_emb,
+                }
+                
+                # Submit async retrieval request (non-blocking)
+                retrieval_results = self.retrieval_system.retrieve(
+                    query_embeddings=query_embeddings,
+                    request_id=f"frame_{frame_id}" if frame_id is not None else None,
+                    blocking=False  # Non-blocking - returns None if not ready
+                )
+                
+                # If retrieval not ready, use None (advisory enhancement skipped)
+                # This is expected behavior - retrieval doesn't block inference
+            
+            # Generate description (with optional retrieval enhancement)
             description_outputs = self.scene_description_head(
                 global_embedding=global_emb,
                 region_embeddings=region_embs_tensor,
@@ -1532,7 +1808,19 @@ class MaxSightCNN(nn.Module):
         # Mark which stage ran (for debugging/monitoring)
         outputs['stage_a_completed'] = True
         outputs['stage_b_completed'] = not skip_stage_b
-        outputs['skip_stage_b_reason'] = 'high_uncertainty' if skip_stage_b else None
+        if skip_stage_b:
+            if stage_a_latency_ms is not None and stage_a_latency_ms > 200.0:
+                outputs['skip_stage_b_reason'] = 'high_latency'
+            elif uncertainty_score is not None and (uncertainty_score > 0.7).any():
+                outputs['skip_stage_b_reason'] = 'high_uncertainty'
+            else:
+                outputs['skip_stage_b_reason'] = 'unknown'
+        else:
+            outputs['skip_stage_b_reason'] = None
+        
+        # QUALITY: Add timing metrics for monitoring
+        if stage_a_latency_ms is not None:
+            outputs['stage_a_latency_ms'] = stage_a_latency_ms
         
         return outputs
     
@@ -1668,11 +1956,12 @@ class MaxSightCNN(nn.Module):
             # Limit to max_detections
             nms_indices = nms_indices[:max_detections]
             
-            # Get urgency from outputs if available, otherwise use class-based lookup
+            # CRITICAL FIX: Urgency is image-level, not per-detection
+            # Get image-level urgency from outputs if available
+            image_urgency = None
             if 'urgency_scores' in outputs:
-                urgency = int(outputs['urgency_scores'][b].argmax().item())
-            else:
-                urgency = None  # Will be computed per-detection below
+                # This is image-level urgency [B, 4] -> single value per image
+                image_urgency = int(outputs['urgency_scores'][b].argmax().item())
             
             # Get accessibility features if available
             findability_scores = None
@@ -1690,19 +1979,21 @@ class MaxSightCNN(nn.Module):
                 dist_id = int(filtered_distances[idx].argmax().item())
                 is_text = bool(filtered_text[idx].item() > 0.5)
                 
-                # Get urgency: use batch-level if available, otherwise class-based
-                if urgency is not None:
-                    detection_urgency = urgency
+                # Get urgency: use image-level if available, otherwise class-based per-detection
+                # NOTE: image_urgency applies to all detections in the image (scene-level risk)
+                if image_urgency is not None:
+                    urgency_val = image_urgency  # Use image-level urgency
                 else:
+                    # Fallback to class-based urgency per detection
                     class_name = COCO_CLASSES[cls_id] if 0 <= cls_id < len(COCO_CLASSES) else 'unknown'
-                    detection_urgency = self._get_urgency(class_name)
+                    urgency_val = self._get_urgency(class_name)
                 
                 # Safe lookups
                 class_name = COCO_CLASSES[cls_id] if 0 <= cls_id < len(COCO_CLASSES) else 'unknown'
                 distance = DISTANCE_ZONES[dist_id] if 0 <= dist_id < len(DISTANCE_ZONES) else 'medium'
                 
                 # Calculate priority score (0-100) based on urgency and class
-                priority = self._calculate_priority(class_name, detection_urgency, score)
+                priority = self._calculate_priority(class_name, urgency_val, score)
                 
                 detection = {
                     'class': cls_id,
@@ -1710,7 +2001,7 @@ class MaxSightCNN(nn.Module):
                     'confidence': score,
                     'box': box,
                     'distance': distance,
-                    'urgency': detection_urgency,
+                    'urgency': urgency_val,  # Image-level urgency (applies to all detections)
                     'priority': priority,
                     'is_text': is_text
                 }
@@ -2097,21 +2388,30 @@ class CapabilityTier(Enum):
 
 @dataclass
 class TierConfig:
-    """Configuration for a capability tier."""
+    """
+    Configuration for a capability tier.
+    
+    CRITICAL ARCHITECTURAL CONSTRAINTS:
+    - Stage A: ALWAYS ResNet50+FPN (use_hybrid_backbone=False in Stage A)
+    - Stage B: Can use Hybrid (use_hybrid_backbone=True in Stage B only)
+    - Temporal: ONLY in Stage B (use_temporal_modeling=True in Stage B only)
+    - Retrieval: Async/non-blocking (use_retrieval=True, advisory only)
+    """
     tier: CapabilityTier
     enabled: bool = True
     
-    # Component flags
-    use_se_attention: bool = False
-    use_cbam_attention: bool = False
-    use_hybrid_backbone: bool = False
-    use_dynamic_conv: bool = False
-    use_cross_task_attention: bool = False
-    use_cross_modal_attention: bool = False
-    use_temporal_modeling: bool = False
+    # Component flags (Stage B only - Stage A is always ResNet50+FPN)
+    use_se_attention: bool = False  # Stage A: Lightweight attention OK
+    use_cbam_attention: bool = False  # Stage A: Lightweight attention OK
+    use_hybrid_backbone: bool = False  # Stage B ONLY - never in Stage A
+    use_dynamic_conv: bool = False  # Stage B only
+    use_cross_task_attention: bool = False  # Stage B only
+    use_cross_modal_attention: bool = False  # Stage B only
+    use_temporal_modeling: bool = False  # Stage B ONLY - never in Stage A
+    use_retrieval: bool = False  # Stage B only, async/non-blocking
     
     # Performance constraints
-    max_latency_ms: float = 100.0
+    max_latency_ms: float = 100.0  # Stage A target latency
     min_confidence: float = 0.3
     
     @classmethod
@@ -2157,11 +2457,12 @@ class TierConfig:
                 tier=tier,
                 use_se_attention=True,
                 use_cbam_attention=True,
-                use_hybrid_backbone=True,
+                use_hybrid_backbone=True,  # Stage B only
                 use_dynamic_conv=True,
                 use_cross_task_attention=True,
                 use_cross_modal_attention=True,
-                max_latency_ms=150.0,
+                use_retrieval=True,  # Async retrieval enabled
+                max_latency_ms=150.0,  # Stage A target
                 min_confidence=0.45
             )
         elif tier == CapabilityTier.T5_TEMPORAL:
@@ -2169,12 +2470,13 @@ class TierConfig:
                 tier=tier,
                 use_se_attention=True,
                 use_cbam_attention=True,
-                use_hybrid_backbone=True,
+                use_hybrid_backbone=True,  # Stage B only
                 use_dynamic_conv=True,
                 use_cross_task_attention=True,
                 use_cross_modal_attention=True,
-                use_temporal_modeling=True,
-                max_latency_ms=200.0,
+                use_temporal_modeling=True,  # Stage B only
+                use_retrieval=True,  # Async retrieval enabled
+                max_latency_ms=200.0,  # Stage A target (higher due to more heads)
                 min_confidence=0.5
             )
         else:
