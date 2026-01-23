@@ -92,8 +92,22 @@ LINTER_*.md
 
 # iOS
 ios_bundle.zip
+ios_bundle/
+maxsight_ios_bundle/
 test_ios_bundle/
+*.zip
 
 # Throughput results
 throughput_results.txt
 forward_pass_paths.md
+
+# Copied from 2026-prototype (do not track)
+ml/models/attention/cbam_attention.py
+ml/models/attention/cross_modal_attention.py
+ml/models/attention/cross_task_attention.py
+ml/utils/preprocessing.py
+ml/utils/output_scheduler.py
+ml/training/train_loop.py
+ml/training/export.py
+ml/data/create_accessibility_dataset.py
+ml/data/advanced_augmentation.py
