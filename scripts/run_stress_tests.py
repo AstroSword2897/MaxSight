@@ -45,7 +45,8 @@ def main():
     # Load model
     if args.checkpoint:
         logger.info(f"Loading model from {args.checkpoint}")
-        # TODO: Load actual model
+        # FUTURE ENHANCEMENT: Load actual trained model for stress testing.
+        # Currently uses synthetic model. Replace with: model = torch.load('checkpoints/model.pt')
         model = None  # Placeholder
     else:
         logger.warning("No checkpoint provided, using dummy model")

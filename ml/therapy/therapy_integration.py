@@ -1,5 +1,9 @@
 """
 Therapy Integration Module for MaxSight
+
+STUB - NOT INTEGRATED: This component is a placeholder implementation and not currently integrated into the main training pipeline.
+See README.md for integration status. Future integration planned.
+
 Uses enhanced scene descriptions in therapy exercises for attention, contrast, and edge recognition.
 
 PROJECT PHILOSOPHY & APPROACH:

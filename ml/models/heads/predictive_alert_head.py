@@ -25,6 +25,9 @@ class PredictiveAlertHead(nn.Module):
     """
     Predictive alert head for hazard anticipation.
     
+    STUB - NOT INTEGRATED: This head is defined but not currently called in the forward pass.
+    See README.md for integration status. Future integration planned.
+    
     Anticipates:
     - Motion prediction (approaching vehicles, people)
     - Environment patterns (frequently used paths)

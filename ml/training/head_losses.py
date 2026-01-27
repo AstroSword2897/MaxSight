@@ -156,7 +156,8 @@ class MotionLoss(HeadLoss):
         """
         Compute motion loss with edge-weighted smoothness.
         
-        TODO: Add proper edge detection from image gradients if image provided.
+        # FUTURE ENHANCEMENT: Add proper edge detection from image gradients if image provided.
+        # This would improve contrast loss accuracy by using actual image edges rather than learned edge maps.
         For now, uses uniform smoothness weighting.
         """
         pred_flow = predictions.get('flow')

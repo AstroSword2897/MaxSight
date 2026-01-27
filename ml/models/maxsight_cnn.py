@@ -209,7 +209,8 @@ COCO_CLASSES = _get_unique_classes(COCO_BASE_CLASSES, ACCESSIBILITY_CLASSES)
 # Urgency is super important - we don't want to miss dangerous stuff
 URGENCY_LEVELS = ['safe', 'caution', 'warning', 'danger']  # How urgent is this object?
 DISTANCE_ZONES = ['near', 'medium', 'far']  # How far away is it?
-# TODO: Maybe add 'very_near' and 'very_far'? Current setup seems to work though
+# FUTURE ENHANCEMENT: Consider adding 'very_near' and 'very_far' distance zones for finer-grained navigation.
+# Current 3-zone setup (near/medium/far) works well, but 5 zones could provide more precision.
  
 
 class SimplifiedFPN(nn.Module):

@@ -109,7 +109,8 @@ class HeadIsolationStressTest:
             
             # Disable heads not in variant
             if 'all' not in variant_heads:
-                # TODO: Implement head disabling logic
+                # FUTURE ENHANCEMENT: Implement head disabling logic for mobile optimization.
+                # Use MobileOptimizer.disable_heads() to selectively disable non-critical heads.
                 pass
             
             # Train variant
@@ -146,7 +147,8 @@ class HeadIsolationStressTest:
                 outputs = model(images)
                 
                 # Track gradient norms per head
-                # TODO: Extract per-head losses and gradient norms
+                # FUTURE ENHANCEMENT: Extract per-head losses and gradient norms for detailed analysis.
+                # This would enable per-head gradient monitoring and debugging.
                 
                 num_batches += 1
             
