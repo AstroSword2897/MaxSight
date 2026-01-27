@@ -120,6 +120,12 @@ from .validators import (
     validate_init_request
 )
 from .structured_logging import setup_structured_logging, get_component_logger
+
+# Import security modules
+from ml.middleware.security_headers import add_security_headers
+from ml.middleware.error_sanitizer import sanitize_error, log_error
+from ml.security.validation import decode_and_validate_image
+from ml.auth.token import make_token, verify_token
 from .metrics import metrics, get_health_status
 from .priority_queue import PriorityQueue, MessagePriority
 from .degraded_modes import DegradedState, DegradedMode
@@ -140,6 +146,13 @@ app = Flask(__name__,
 # In production, set MAXSIGHT_CORS_ORIGINS environment variable
 cors_origins = os.getenv('MAXSIGHT_CORS_ORIGINS', 'http://localhost:8002,http://127.0.0.1:8002').split(',')
 CORS(app, origins=cors_origins, supports_credentials=True)
+
+# Add security headers to all responses
+@app.after_request
+def add_security_headers_after_request(response):
+    """Add security headers to all Flask responses."""
+    add_security_headers(response)
+    return response
 
 # Rate limiters
 session_rate_limiter = RateLimiter(config.rate_limit_per_session)
@@ -2672,12 +2685,12 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     """Handle 500 Internal Server errors."""
-    api_logger.error(f"Internal server error: {error}", exc_info=True)
-    return jsonify({
-        'error': 'Internal Server Error',
-        'message': 'An unexpected error occurred',
-        'status_code': 500
-    }), 500
+    # Log detailed error server-side
+    log_error(error, {'endpoint': request.path, 'method': request.method})
+    # Return sanitized error to client
+    error_response = sanitize_error(error, debug=config.debug)
+    error_response['status_code'] = 500
+    return jsonify(error_response), 500
 
 
 @app.errorhandler(RateLimitExceededError)
