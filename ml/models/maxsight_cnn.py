@@ -1632,9 +1632,11 @@ class MaxSightCNN(nn.Module):
                         if rel.src in scene_node_indices and rel.dst in scene_node_indices:
                             scene_relations.append(rel)
                     
+                    # Handle batched object_embeddings: [B, K, C] -> [K, C] for this scene
+                    scene_object_embeddings = scene_graph_output['object_embeddings'][b]  # [K, C]
                     scene_graphs.append({
                         'relations': scene_relations,
-                        'object_embeddings': scene_graph_output['object_embeddings'][scene_mask]
+                        'object_embeddings': scene_object_embeddings
                     })
                 outputs['scene_graphs'] = scene_graphs
         

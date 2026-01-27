@@ -156,7 +156,7 @@ class MultimodalFusion(nn.Module):
         self.vision_token = nn.Parameter(torch.randn(1, 1, embed_dim) * 0.02)
         self.audio_token = nn.Parameter(torch.randn(1, 1, embed_dim) * 0.02)
         self.depth_token = nn.Parameter(torch.randn(1, 1, embed_dim) * 0.02) if depth_dim > 0 else None
-        self.haptic_token = nn.Parameter(torch.Parameter(torch.randn(1, 1, embed_dim) * 0.02)) if haptic_dim > 0 else None
+        self.haptic_token = nn.Parameter(torch.randn(1, 1, embed_dim) * 0.02) if haptic_dim > 0 else None
         
         # Output projection
         self.output_proj = nn.Linear(embed_dim, embed_dim)

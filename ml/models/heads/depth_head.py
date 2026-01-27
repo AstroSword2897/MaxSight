@@ -120,9 +120,8 @@ class DepthHead(nn.Module):
         ZONE_DEPTH_STATS_DIM = 3  # Percentiles (p25, p50, p75)
         ZONE_INPUT_DIM = ZONE_DEPTH_FEAT_DIM + ZONE_DEPTH_STATS_DIM  # 67
         
+        # Zone head: zone_input is already [B, 67] (flattened), no need for pooling
         self.zone_head = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten(),
             nn.Linear(ZONE_INPUT_DIM, 32),  # 64 + 3 = 67
             nn.LayerNorm(32),  # Better than BatchNorm for 1D features
             nn.ReLU(inplace=True),
@@ -189,20 +188,20 @@ class DepthHead(nn.Module):
         # Depth map (normalized [0, 1] - NOT metric)
         depth_map = self.depth_conv(depth_feat)
         if depth_map.shape[1] == 1:
-            depth_map = depth_map.view(B, H, W)
+            depth_map = depth_map.contiguous().reshape(B, H, W)
         else:
             depth_map = depth_map.squeeze(1)  # [B, H, W]
         
         # Uncertainty
         uncertainty = self.uncertainty_conv(uncertainty_feat)
         if uncertainty.shape[1] == 1:
-            uncertainty = uncertainty.view(B, H, W)
+            uncertainty = uncertainty.contiguous().reshape(B, H, W)
         else:
             uncertainty = uncertainty.squeeze(1)  # [B, H, W]
         
         # Zone classification: grounded in depth with distributional statistics
         # Zones are distributional, not scalar - use percentiles, not just mean
-        depth_flat = depth_map.view(B, -1)  # [B, H*W]
+        depth_flat = depth_map.contiguous().reshape(B, -1)  # [B, H*W]
         
         # Compute depth percentiles (p25, p50, p75) for distributional awareness
         p25 = torch.quantile(depth_flat, 0.25, dim=1)  # [B]
@@ -211,7 +210,7 @@ class DepthHead(nn.Module):
         depth_stats = torch.stack([p25, p50, p75], dim=1)  # [B, 3]
         
         # Pool depth features and concatenate with depth statistics
-        depth_pooled = F.adaptive_avg_pool2d(depth_feat, 1).view(B, -1)  # [B, 64]
+        depth_pooled = F.adaptive_avg_pool2d(depth_feat, 1).contiguous().reshape(B, -1)  # [B, 64]
         zone_input = torch.cat([depth_pooled, depth_stats], dim=1)  # [B, 67] (64 + 3)
         
         zones = self.zone_head(zone_input)  # [B, 3] - raw logits

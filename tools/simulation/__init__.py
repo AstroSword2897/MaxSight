@@ -1,17 +1,5 @@
-"""
-Simulation Harness Module
+"""Simulation tools for MaxSight 3.0."""
 
-End-to-end simulation for testing:
-- Model inference simulation
-- Overlay rendering
-- User interaction simulation
-- Performance logging
+from .retrieval_integration import RetrievalIntegration
 
-Main simulator is in web_simulator.py
-"""
-
-# Simulator components are in web_simulator.py
-# Main entry point: tools.simulation.web_simulator
-
-__all__ = []
-
+__all__ = ['RetrievalIntegration']

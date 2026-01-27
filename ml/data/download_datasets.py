@@ -1,4 +1,4 @@
-"""Dataset download helpers for COCO, Open Images V6, BDD100K, ADE20K, Objects365, Visual Genome, LVIS, AudioSet."""
+"""Dataset download helpers for COCO, Open Images, Objects365, Visual Genome, LVIS, AudioSet."""
 
 import os
 import requests

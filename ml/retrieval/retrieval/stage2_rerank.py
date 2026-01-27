@@ -45,7 +45,26 @@ class Stage2Reranker(nn.Module):
                 weighted_sim = torch.sum(concept_weights.unsqueeze(1) * self.concept_weights * torch.stack(similarities), dim=0).sum()
             else:
                 weighted_sim = torch.stack(similarities).mean()
-            combined = torch.cat([query_embeddings[name].flatten() if name in query_embeddings else torch.zeros(self.embedding_dims[name], device=device) for name in self.embedding_dims.keys()])
+            # Aggregate query embeddings properly (handle multi-dimensional tensors)
+            query_vecs = []
+            for name in self.embedding_dims.keys():
+                if name in query_embeddings:
+                    q_emb = query_embeddings[name]
+                    # If multi-dimensional, take mean or flatten appropriately
+                    if q_emb.dim() > 1:
+                        # For region/patch embeddings, take mean across spatial dimensions
+                        q_emb = q_emb.mean(dim=0) if q_emb.dim() > 1 else q_emb
+                    # Ensure it matches expected dimension
+                    if q_emb.numel() != self.embedding_dims[name]:
+                        # Reshape or project to expected dimension
+                        if q_emb.numel() > self.embedding_dims[name]:
+                            q_emb = q_emb.flatten()[:self.embedding_dims[name]]
+                        else:
+                            q_emb = torch.cat([q_emb.flatten(), torch.zeros(self.embedding_dims[name] - q_emb.numel(), device=device)])
+                    query_vecs.append(q_emb.flatten()[:self.embedding_dims[name]])
+                else:
+                    query_vecs.append(torch.zeros(self.embedding_dims[name], device=device))
+            combined = torch.cat(query_vecs)
             mlp_score = self.rerank_mlp(combined).squeeze()
             final_score = weighted_sim + 0.1 * mlp_score
             scores.append(final_score)

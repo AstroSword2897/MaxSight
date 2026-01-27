@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 from typing import Dict, Optional, List
-from ml.models.scene_graph.gnn_encoder import GNNEncoder
+from ml.models.scene_graph.scene_graph_encoder import GNNEncoder
 
 
 class KnowledgeAugmentedRetrieval(nn.Module):

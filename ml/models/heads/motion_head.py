@@ -49,21 +49,22 @@ class MotionHead(nn.Module):
         self.use_multi_scale = use_multi_scale
         self.use_attention = use_attention
 
-        # SCALED: Deep coarse network (4 layers instead of 2)
-        # Layer 1: Large kernel for receptive field
+        # CRITICAL: Unified coarse network that always accepts hidden_channels input
+        # This eliminates layer skipping and manual channel projections
+        # If temporal stacking is used, project input to hidden_channels via temporal_proj
+        # Otherwise, project in_channels to hidden_channels via input_proj
+        
+        # coarse_net always takes hidden_channels as input
         self.coarse_net = nn.Sequential(
-            nn.Conv2d(in_channels, hidden_channels, kernel_size=7, padding=3, bias=False),  # 7x7 kernel
+            nn.Conv2d(hidden_channels, hidden_channels, kernel_size=7, padding=3, bias=False),
             nn.BatchNorm2d(hidden_channels),
             nn.ReLU(inplace=True),
-            # Layer 2
-            nn.Conv2d(hidden_channels, hidden_channels, kernel_size=5, padding=2, bias=False),  # 5x5 kernel
+            nn.Conv2d(hidden_channels, hidden_channels, kernel_size=5, padding=2, bias=False),
             nn.BatchNorm2d(hidden_channels),
             nn.ReLU(inplace=True),
-            # Layer 3
             nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(hidden_channels),
             nn.ReLU(inplace=True),
-            # Layer 4
             nn.Conv2d(hidden_channels, hidden_channels // 2, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(hidden_channels // 2),
             nn.ReLU(inplace=True)
@@ -71,7 +72,7 @@ class MotionHead(nn.Module):
 
         # NEW: Temporal stacking with 3D convolutions
         if use_temporal_stacking:
-            # 3D conv for temporal features [B, T*C, H, W] or [B, T, C, H, W]
+            # 3D conv for temporal features [B, T, C, H, W]
             self.temporal_conv = nn.Sequential(
                 nn.Conv3d(
                     in_channels=in_channels,
@@ -92,8 +93,11 @@ class MotionHead(nn.Module):
                 nn.BatchNorm3d(hidden_channels),
                 nn.ReLU(inplace=True)
             )
-            # Project 3D output back to 2D
+            # Project temporal output to hidden_channels (for unified coarse_net)
             self.temporal_proj = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=1)
+        
+        # Always create input_proj for standard 4D input path
+        self.input_proj = nn.Conv2d(in_channels, hidden_channels, kernel_size=1)
 
         # NEW: Multi-scale processing (coarse H/2 → fine H)
         if use_multi_scale:
@@ -163,52 +167,35 @@ class MotionHead(nn.Module):
         Returns:
             Motion flow [B, 2, H, W], optionally a dict with multi-scale outputs
         """
-        # Input validation and handling
+        # CRITICAL: Unified processing - no layer skipping, no hacks
+        # Process input to always produce [B, hidden_channels, H, W] for coarse_net
+        
         if temporal_features.dim() == 5 and self.use_temporal_stacking:
             # [B, T, C, H, W] -> process with 3D convs
             B, T, C, H, W = temporal_features.shape
             if C != self.in_channels:
                 raise ValueError(f"Expected {self.in_channels} channels, got {C}")
             # Reshape for 3D conv: [B, C, T, H, W]
-            temporal_3d = temporal_features.permute(0, 2, 1, 3, 4)
+            temporal_3d = temporal_features.permute(0, 2, 1, 3, 4)  # [B, C, T, H, W]
             # Apply 3D temporal convolution
             temporal_out = self.temporal_conv(temporal_3d)  # [B, hidden_channels, T', H, W]
             # Average over temporal dimension
             temporal_out = temporal_out.mean(dim=2)  # [B, hidden_channels, H, W]
-            # Project to match coarse_net input (or skip if already correct)
-            # Coarse net expects in_channels, but we have hidden_channels from temporal_conv
-            # So we need to either: 1) project back, or 2) make coarse_net accept hidden_channels
-            # Option: Use temporal output directly and adjust coarse_net input
+            # Project to hidden_channels (for unified coarse_net)
             features_input = self.temporal_proj(temporal_out)  # [B, hidden_channels, H, W]
-            # Create a bypass: if temporal stacking, coarse_net should accept hidden_channels
-            # For now, project to in_channels to match coarse_net
-            if features_input.shape[1] != self.in_channels:
-                # Create a projection if needed (shouldn't happen with current setup)
-                features_input = F.adaptive_avg_pool2d(features_input, (H, W))
         elif temporal_features.dim() == 4:
             # [B, C, H, W] - standard case
             B, C, H, W = temporal_features.shape
             if C != self.in_channels:
                 raise ValueError(f"Expected {self.in_channels} channels, got {C}")
-            features_input = temporal_features
+            # Project to hidden_channels for unified coarse_net
+            features_input = self.input_proj(temporal_features)  # [B, hidden_channels, H, W]
         else:
             raise ValueError(f"Expected 4D or 5D tensor, got {temporal_features.shape}")
 
-        # SCALED: Deep coarse feature extraction (4 layers, 256 channels)
-        # If temporal stacking was used, features_input is [B, hidden_channels, H, W]
-        # But coarse_net expects [B, in_channels, H, W]
-        # Solution: When temporal stacking is used, we need a different path
-        if temporal_features.dim() == 5 and self.use_temporal_stacking:
-            # Temporal path: features_input is already [B, hidden_channels, H, W]
-            # Skip first layer of coarse_net or use a different path
-            # For simplicity, use temporal features directly and apply remaining coarse layers
-            features = features_input  # [B, hidden_channels, H, W]
-            # Apply remaining coarse layers (skip first conv since we already have hidden_channels)
-            for i, layer in enumerate(self.coarse_net[1:], 1):  # Skip first layer
-                features = layer(features)
-        else:
-            # Standard path: full coarse network
-            features = self.coarse_net(features_input)  # [B, hidden_channels//2, H, W]
+        # CRITICAL: Forward through unified coarse_net (no skipping, no hacks)
+        # coarse_net always accepts hidden_channels input and outputs hidden_channels//2
+        features = self.coarse_net(features_input)  # [B, hidden_channels//2, H, W]
 
         # NEW: Multi-scale processing (coarse H/2 → fine H)
         multi_scale_flows = {}

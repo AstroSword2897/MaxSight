@@ -24,12 +24,22 @@ class NeuralIndexBuilder:
     def __init__(
         self,
         embed_dim: int = 512,
+        dimension: Optional[int] = None,  # Alias for embed_dim
         index_type: str = "HNSW",  # "HNSW", "IVF-PQ", "Flat"
+        metric: str = "L2",  # "L2" or "cosine"
         use_gpu: bool = True
     ):
-        self.embed_dim = embed_dim
+        # Support both embed_dim and dimension for compatibility
+        self.embed_dim = dimension if dimension is not None else embed_dim
         self.index_type = index_type
-        self.use_gpu = use_gpu and faiss.get_num_gpus() > 0
+        self.metric = metric
+        
+        # Check GPU availability (handle CPU-only FAISS)
+        try:
+            self.use_gpu = use_gpu and faiss.get_num_gpus() > 0
+        except AttributeError:
+            # CPU-only FAISS doesn't have get_num_gpus
+            self.use_gpu = False
         
         self.index = None
     
@@ -54,31 +64,44 @@ class NeuralIndexBuilder:
         # Convert to float32
         embeddings = embeddings.astype('float32')
         
-        # Create index based on type
-        if self.index_type == "HNSW":
+        # Create index based on type (case-insensitive)
+        index_type_upper = self.index_type.upper()
+        
+        if index_type_upper == "HNSW":
             # HNSW: Hierarchical Navigable Small World
             M = 32  # Number of connections
-            self.index = faiss.IndexHNSWFlat(D, M)
+            if self.metric.lower() == "cosine":
+                # For cosine similarity, normalize embeddings
+                faiss.normalize_L2(embeddings)
+                self.index = faiss.IndexHNSWFlat(D, M, faiss.METRIC_INNER_PRODUCT)
+            else:
+                self.index = faiss.IndexHNSWFlat(D, M)
             self.index.hnsw.efConstruction = 200
         
-        elif self.index_type == "IVF-PQ":
+        elif index_type_upper == "IVF-PQ" or index_type_upper == "IVFPQ":
             # IVF-PQ: Inverted File with Product Quantization
-            nlist = 16384  # Number of clusters
+            nlist = min(16384, N // 10)  # Number of clusters (adjust for small datasets)
             m = 64  # Number of subquantizers
             quantizer = faiss.IndexFlatL2(D)
             self.index = faiss.IndexIVFPQ(quantizer, D, nlist, m, 8)
             
             # Train on subset
             n_train = min(100000, N)
+            if n_train < nlist:
+                n_train = nlist  # Need at least nlist samples
             train_embeddings = embeddings[:n_train]
             self.index.train(train_embeddings)
         
-        elif self.index_type == "Flat":
+        elif index_type_upper == "FLAT":
             # Flat: Exact search
-            self.index = faiss.IndexFlatL2(D)
+            if self.metric.lower() == "cosine":
+                faiss.normalize_L2(embeddings)
+                self.index = faiss.IndexFlatIP(D)  # Inner product for cosine
+            else:
+                self.index = faiss.IndexFlatL2(D)
         
         else:
-            raise ValueError(f"Unknown index type: {self.index_type}")
+            raise ValueError(f"Unknown index type: {self.index_type}. Supported: HNSW, IVF-PQ, Flat")
         
         # Move to GPU if available
         if self.use_gpu:

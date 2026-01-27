@@ -112,7 +112,7 @@ class TransformerOCRHead(nn.Module):
                 - 'gated': [B, N_regions] - whether each region was processed
         """
         B, N_regions, _ = features.shape
-        
+
         # FIXED: OCR Gating - don't run unconditionally
         gated_mask = torch.ones(B, N_regions, device=features.device, dtype=torch.bool)
         

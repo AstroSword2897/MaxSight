@@ -112,7 +112,7 @@ class DynamicConv2d(nn.Module):
         
         # Add bias if present
         if self.bias is not None:
-            out = out + self.bias.view(1, -1, 1, 1)
+            out = out + self.bias.contiguous().reshape(1, -1, 1, 1)
         
         return out
 

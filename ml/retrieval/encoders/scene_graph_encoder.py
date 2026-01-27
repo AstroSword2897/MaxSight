@@ -7,7 +7,7 @@ Encodes scene graphs for retrieval using GNN.
 import torch
 import torch.nn as nn
 from typing import Optional, List
-from ml.models.scene_graph.gnn_encoder import GNNEncoder
+from ml.models.scene_graph.scene_graph_encoder import GNNEncoder
 
 
 class SceneGraphRetrievalEncoder(nn.Module):

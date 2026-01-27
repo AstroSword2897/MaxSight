@@ -131,7 +131,7 @@ class SoundEventHead(nn.Module):
             
             cnn_out = self.spectrogram_cnn(spec)  # [B, 64, T', embed_dim//4]
             cnn_out = cnn_out.permute(0, 2, 1, 3).contiguous()  # [B, T', 64, embed_dim//4]
-            cnn_out = cnn_out.view(B, cnn_out.shape[1], -1)  # [B, T', 64*(embed_dim//4)]
+            cnn_out = cnn_out.contiguous().reshape(B, cnn_out.shape[1], -1)  # [B, T', 64*(embed_dim//4)]
             
             audio_embed = self.spectrogram_proj(cnn_out)  # [B, T', embed_dim]
             attended, _ = self.temporal_attention(audio_embed, audio_embed, audio_embed)
