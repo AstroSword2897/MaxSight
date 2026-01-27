@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from typing import Dict, Optional
 
 
-class MAE(nn.Module):
+class ReconstructionLoss(nn.Module):
     """Masked Autoencoder for vision pretraining."""
     
     def __init__(self, encoder: nn.Module, decoder: nn.Module, mask_ratio: float = 0.75):
@@ -20,7 +20,7 @@ class MAE(nn.Module):
     
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         """Forward pass with masking."""
-        B, C, H, W = x.shape
+        B, _, H, W = x.shape  # C unused, use _ instead
         num_patches = (H // 16) * (W // 16)
         num_masked = int(num_patches * self.mask_ratio)
         mask = torch.rand(B, num_patches, device=x.device).topk(num_masked, dim=1).indices
@@ -29,7 +29,7 @@ class MAE(nn.Module):
         return {'reconstruction': decoded, 'mask': mask}
 
 
-class SimCLR(nn.Module):
+class MaskingSIM(nn.Module):
     """SimCLR contrastive learning."""
     
     def __init__(self, encoder: nn.Module, projection_dim: int = 128, temperature: float = 0.07):
@@ -52,7 +52,7 @@ class SimCLR(nn.Module):
         return {'similarity': similarity}
 
 
-class KnowledgeDistillation(nn.Module):
+class KnowledgeDistillationLoss(nn.Module):
     """Teacher-student knowledge distillation."""
     
     def __init__(self, teacher: nn.Module, student: nn.Module, temperature: float = 3.0, alpha: float = 0.7):

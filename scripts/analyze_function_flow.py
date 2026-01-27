@@ -14,7 +14,7 @@ from typing import Dict, List, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ml.models.maxsight_cnn import create_model, CapabilityTier
+from ml.models.maxsight_cnn import create_model, CapabilityTier, TierConfig
 
 
 class FunctionFlowTracer:
@@ -199,8 +199,7 @@ def main():
     print("Creating model...")
     model = create_model(
         num_classes=91,
-        capability_tier=CapabilityTier.T2_HYBRID_VIT.value,
-        tier_config=None
+        tier_config=TierConfig.for_tier(CapabilityTier.T2_HYBRID_VIT)
     )
     model.eval()
     

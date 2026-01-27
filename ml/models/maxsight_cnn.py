@@ -2302,7 +2302,6 @@ def create_model(
     condition_mode: Optional[str] = None,
     use_audio: bool = True,
     fpn_channels: int = 256,
-    capability_tier: Optional[int] = 0,
     tier_config: Optional['TierConfig'] = None
 ) -> MaxSightCNN:
     """
@@ -2313,25 +2312,14 @@ def create_model(
         condition_mode: Visual condition adaptation mode
         use_audio: Enable audio fusion
         fpn_channels: FPN output channels
-        capability_tier: Model complexity tier (0-5) - deprecated, use tier_config
-            0: Baseline CNN
-            1: + SE/CBAM attention
-            2: + Hybrid CNN-ViT
-            3: + Cross-task attention
-            4: + Cross-modal attention
-            5: + Temporal modeling
-        tier_config: TierConfig instance (overrides capability_tier if provided)
+        tier_config: TierConfig instance (defaults to T0_BASELINE_CNN if not provided)
     
     Returns:
         MaxSightCNN instance configured for the specified tier
     """
     # Create tier config if not provided
     if tier_config is None:
-        if capability_tier is not None:
-            tier_enum = CapabilityTier(capability_tier)
-        else:
-            tier_enum = CapabilityTier.T0_BASELINE_CNN
-        tier_config = TierConfig.for_tier(tier_enum)
+        tier_config = TierConfig.for_tier(CapabilityTier.T0_BASELINE_CNN)
     
     return MaxSightCNN(
         num_classes=num_classes,

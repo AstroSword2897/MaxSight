@@ -23,7 +23,7 @@ import traceback
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ml.models.maxsight_cnn import create_model, CapabilityTier
+from ml.models.maxsight_cnn import create_model, CapabilityTier, TierConfig
 from ml.utils.preprocessing import ImagePreprocessor
 
 
@@ -97,8 +97,7 @@ def test_tier_forward_pass(
         model = create_model(
             num_classes=91,  # COCO classes
             use_audio=(tier.value >= 4),  # T4+ use audio
-            capability_tier=tier.value,  # Pass tier value
-            tier_config=None  # Will be created from capability_tier
+            tier_config=TierConfig.for_tier(tier)
         )
         # CRITICAL: Set to eval mode (no dropout, batchnorm uses running stats)
         model.eval()

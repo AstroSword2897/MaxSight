@@ -28,7 +28,7 @@ torch.autograd.set_detect_anomaly(True)
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ml.models.maxsight_cnn import create_model, CapabilityTier
+from ml.models.maxsight_cnn import create_model, CapabilityTier, TierConfig
 from ml.training.losses import (
     ObjectnessLoss, ClassificationLoss, BoxRegressionLoss,
     DistanceZoneLoss, UrgencyLoss, UncertaintyLoss, DepthLoss
@@ -239,8 +239,7 @@ def smoke_train(
     model = create_model(
         num_classes=91,
         use_audio=(tier.value >= 4),
-        capability_tier=tier.value,
-        tier_config=None  # Will be created from capability_tier
+        tier_config=TierConfig.for_tier(tier)
     )
     model.eval()  # Set to eval for parameter counting
     
