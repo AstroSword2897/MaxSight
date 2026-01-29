@@ -13,9 +13,103 @@ from typing import Dict, List
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model, COCO_CLASSES
-from ml.training.losses import DetectionLoss, FocalLoss, IoULoss
+from ml.training.losses import (
+    ObjectnessLoss, 
+    ClassificationLoss, 
+    BoxRegressionLoss,
+    MultiHeadLoss
+)
 from ml.training.matching import match_predictions_to_gt
 from torch.utils.data import Dataset, DataLoader
+import torch.nn as nn
+
+
+class DetectionLoss(nn.Module):
+    """Combined detection loss wrapper for testing."""
+    
+    def __init__(self, num_classes: int):
+        super().__init__()
+        self.objectness_loss = ObjectnessLoss()
+        self.classification_loss = ClassificationLoss(num_classes)
+        self.box_loss = BoxRegressionLoss()
+        self.num_classes = num_classes
+    
+    def forward(self, predictions: dict, targets: dict) -> dict:
+        """Compute combined detection losses."""
+        losses = {}
+        
+        B = predictions['classifications'].shape[0]
+        N = predictions['classifications'].shape[1]
+        
+        # Convert list targets to batched tensors
+        # Labels: list of [num_objects] -> [B, N] (pad with -1 for no object)
+        if 'labels' in targets:
+            labels_list = targets['labels'] if isinstance(targets['labels'], list) else [targets['labels']]
+            labels_batched = torch.full((B, N), -1, dtype=torch.long, device=predictions['classifications'].device)
+            for b, labels in enumerate(labels_list):
+                if len(labels) > 0:
+                    num_objs = min(len(labels), N)
+                    labels_batched[b, :num_objs] = labels[:num_objs]
+        else:
+            labels_batched = None
+        
+        # Boxes: list of [num_objects, 4] -> [B, N, 4] (pad with 0)
+        if 'boxes' in targets:
+            boxes_list = targets['boxes'] if isinstance(targets['boxes'], list) else [targets['boxes']]
+            boxes_batched = torch.zeros((B, N, 4), device=predictions['boxes'].device)
+            for b, boxes in enumerate(boxes_list):
+                if len(boxes) > 0:
+                    num_objs = min(len(boxes), N)
+                    boxes_batched[b, :num_objs] = boxes[:num_objs]
+        else:
+            boxes_batched = None
+        
+        # Objectness: create from labels (1 where object exists, 0 elsewhere)
+        if labels_batched is not None:
+            objectness_targets = (labels_batched >= 0).float()
+        else:
+            objectness_targets = None
+        
+        # Objectness loss
+        if 'objectness' in predictions and objectness_targets is not None:
+            losses['objectness'] = self.objectness_loss(
+                predictions['objectness'], 
+                objectness_targets
+            )
+        
+        # Classification loss (only on valid locations)
+        if 'classifications' in predictions and labels_batched is not None:
+            # Mask out invalid locations
+            valid_mask = labels_batched >= 0
+            if valid_mask.any():
+                valid_preds = predictions['classifications'][valid_mask]  # [num_valid, num_classes]
+                valid_labels = labels_batched[valid_mask]  # [num_valid]
+                losses['classification'] = self.classification_loss(
+                    valid_preds.unsqueeze(0),  # Add batch dim
+                    valid_labels.unsqueeze(0)
+                )
+            else:
+                losses['classification'] = torch.tensor(0.0, device=predictions['classifications'].device)
+        
+        # Box regression loss (only on valid locations)
+        if 'boxes' in predictions and boxes_batched is not None:
+            # Mask out invalid locations
+            valid_mask = (labels_batched >= 0) if labels_batched is not None else torch.ones(B, N, dtype=torch.bool, device=predictions['boxes'].device)
+            if valid_mask.any():
+                valid_preds = predictions['boxes'][valid_mask]  # [num_valid, 4]
+                valid_targets = boxes_batched[valid_mask]  # [num_valid, 4]
+                losses['box'] = self.box_loss(
+                    valid_preds.unsqueeze(0),  # Add batch dim
+                    valid_targets.unsqueeze(0)
+                )
+            else:
+                losses['box'] = torch.tensor(0.0, device=predictions['boxes'].device)
+        
+        # Total loss
+        total_loss = sum(losses.values())
+        losses['total_loss'] = total_loss
+        
+        return losses
 
 
 class DummyMaxSightDataset(Dataset):

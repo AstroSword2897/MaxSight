@@ -27,9 +27,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.modules['flask'] = unittest.mock.MagicMock()
 sys.modules['flask_cors'] = unittest.mock.MagicMock()
 
-# Import directly to avoid __init__.py issues
-sys.path.insert(0, str(Path(__file__).parent.parent / 'tools' / 'simulation'))
-from web_simulator import MaxSightSimulator
+# Import web simulator properly
+from tools.simulation.web_simulator import MaxSightSimulator
 from ml.utils.ocr_integration import OCRIntegration
 
 
