@@ -106,12 +106,12 @@ class SoundEventHead(nn.Module):
                 - 'priority': [B, 1] - Priority score [0, 1]
                 - 'urgency': [B, 1] - Expected urgency (uncertainty-aware)
         """
-        B, T, F = spectrogram.shape
+        B, T, freq_bins = spectrogram.shape
         
         # -------------------------------------------------
         # CNN
         # -------------------------------------------------
-        x = spectrogram.unsqueeze(1)  # [B, 1, T, F]
+        x = spectrogram.unsqueeze(1)  # [B, 1, T, freq_bins]
         x = self.cnn(x)               # [B, 64, T, 16]
         x = x.permute(0, 2, 1, 3).contiguous().reshape(B, T, -1)
         x = self.cnn_proj(x)          # [B, T, embed_dim]
