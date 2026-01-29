@@ -84,78 +84,74 @@ class PersonalizationHead(nn.Module):
         self.verbosity_head = nn.Linear(512, 4)  # logits (0-3)
         self.alert_head = nn.Linear(512, num_alert_types)
         
-        # Online learning: adaptation network
-        self.adaptation_network = nn.Sequential(
-            nn.Linear(embed_dim + 64, embed_dim),  # user_embed + interaction_features
-            nn.ReLU(),
-            nn.Linear(embed_dim, embed_dim)
-        )
-    
     def forward(
         self,
-        scene_features: torch.Tensor,  # [B, input_dim]
-        user_id: Optional[int] = None,
-        interaction_features: Optional[torch.Tensor] = None  # [B, 64] user interaction history
+        scene_features: torch.Tensor,        # [B, input_dim]
+        user_id: torch.LongTensor,            # [B]
+        interaction_features: Optional[torch.Tensor] = None  # [B, interaction_dim]
     ) -> Dict[str, torch.Tensor]:
         """
-        Forward pass through personalization head.
+        Forward pass for personalization (v2).
         
         Args:
-            scene_features: Scene features [B, input_dim]
-            user_id: Optional user ID for user-specific embedding
-            interaction_features: Optional interaction history [B, 64]
+            scene_features: [B, input_dim] scene features
+            user_id: [B] user IDs (required)
+            interaction_features: [B, interaction_dim] optional interaction features for contextual adaptation
         
         Returns:
-            Dictionary with personalized preferences
+            Dictionary with personalized outputs (logits + normalized)
         """
-        B = scene_features.shape[0]
+        B = scene_features.size(0)
         
-        # Get user embedding (for now, use shared embedding)
-        # In practice, would use user_id to index into user embedding table
-        user_emb = self.user_embedding.expand(B, -1)  # [B, embed_dim]
+        # -------------------------------------------------
+        # Base user embedding
+        # -------------------------------------------------
+        user_emb = self.user_embedding(user_id)  # [B, embed_dim]
         
-        # Online adaptation (if interaction features provided)
+        # -------------------------------------------------
+        # Contextual adaptation (optional, gated)
+        # -------------------------------------------------
         if interaction_features is not None:
-            combined = torch.cat([user_emb, interaction_features], dim=1)
-            user_emb = self.adaptation_network(combined)  # [B, embed_dim]
+            adapt_input = torch.cat([user_emb, interaction_features], dim=1)
+            
+            gate = self.adaptation_gate(adapt_input)
+            delta = self.adaptation_delta(adapt_input)
+            
+            user_emb = user_emb + gate * delta  # stable residual update
         
-        # Combine scene and user features
-        combined_features = torch.cat([scene_features, user_emb], dim=1)  # [B, input_dim + embed_dim]
+        # -------------------------------------------------
+        # Fuse scene + user
+        # -------------------------------------------------
+        fused = torch.cat([scene_features, user_emb], dim=1)
+        fused = self.fusion(fused)
         
-        # Attention adjustment
-        attention_weights = self.attention_adjuster(combined_features)  # [B, num_features]
-        
-        # Verbosity prediction
-        verbosity_logits = self.verbosity_predictor(combined_features)  # [B, 4]
-        verbosity_level = verbosity_logits.argmax(dim=1)  # [B]
-        
-        # Alert priority adjustment
-        alert_priority_weights = self.alert_priority_adjuster(combined_features)  # [B, num_alert_types]
+        # -------------------------------------------------
+        # Outputs (LOGITS FIRST - preferred for training)
+        # -------------------------------------------------
+        attention_logits = self.attention_head(fused)
+        alert_logits = self.alert_head(fused)
+        verbosity_logits = self.verbosity_head(fused)
         
         return {
-            'attention_weights': attention_weights,
-            'verbosity_level': verbosity_level,
+            # Raw logits (preferred for training)
+            'attention_logits': attention_logits,
+            'alert_priority_logits': alert_logits,
             'verbosity_logits': verbosity_logits,
-            'alert_priority_weights': alert_priority_weights,
+            
+            # Normalized (for inference-time use)
+            'attention_weights': torch.softmax(
+                attention_logits / self.temperature, dim=1
+            ),
+            'alert_priority_weights': torch.softmax(
+                alert_logits / self.temperature, dim=1
+            ),
+            
+            # Discrete verbosity level
+            'verbosity_level': verbosity_logits.argmax(dim=1),
+            
+            # Diagnostics
             'user_embedding': user_emb
         }
     
-    def update_user_preferences(
-        self,
-        user_id: int,
-        interaction_features: torch.Tensor,
-        feedback: Dict[str, torch.Tensor]
-    ):
-        """
-        Update user preferences based on interaction feedback.
-        
-        Args:
-            user_id: User ID
-            interaction_features: Interaction features [64]
-            feedback: Feedback dictionary with preferences
-        """
-        # In practice, this would update user-specific embeddings
-        # For now, this is a placeholder for online learning
-        pass
 
 
