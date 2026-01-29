@@ -6,7 +6,7 @@ Design goals:
 - Stable online adaptation (gated, not destructive)
 - Logit-first design (loss-friendly)
 - Clear separation of persistent vs contextual preferences
-- Temperature-controlled attention & alerts
+- Crisp-controlled attention & alerts (temperature scaling for distribution sharpness)
 
 Key improvements over v1:
 - Proper nn.Embedding table for users (not single Parameter)
@@ -40,13 +40,27 @@ class PersonalizationHead(nn.Module):
         num_alert_types: int = 5,
         embed_dim: int = 256,
         interaction_dim: int = 64,
-        temperature: float = 1.0
+        crisp: float = 1.0  # Temperature scaling for attention/alert sharpness
     ):
         super().__init__()
         
         self.num_features = num_features
         self.num_alert_types = num_alert_types
-        self.temperature = temperature
+        
+        # -------------------------------------------------
+        # Crisp parameter: Controls softmax distribution sharpness
+        # -------------------------------------------------
+        # crisp < 1.0: Sharper distribution (more confident, focused on top choice)
+        #   Example: crisp=0.5 makes [0.1, 0.2, 0.7] → [0.05, 0.15, 0.80]
+        # crisp = 1.0: Standard softmax (default, no scaling)
+        # crisp > 1.0: Softer distribution (less confident, more uniform)
+        #   Example: crisp=2.0 makes [0.1, 0.2, 0.7] → [0.15, 0.25, 0.60]
+        # 
+        # Use cases:
+        # - Lower crisp (0.3-0.7): When user wants confident, focused attention/alerts
+        # - Higher crisp (1.5-3.0): When user wants exploratory, distributed behavior
+        # - Can be learned or set per-user based on preferences
+        self.crisp = crisp
         
         # -------------------------------------------------
         # Persistent user representation (scales to real deployments)
@@ -139,11 +153,12 @@ class PersonalizationHead(nn.Module):
             'verbosity_logits': verbosity_logits,
             
             # Normalized (for inference-time use)
+            # Apply crisp scaling: lower = sharper/focused, higher = softer/distributed
             'attention_weights': torch.softmax(
-                attention_logits / self.temperature, dim=1
+                attention_logits / self.crisp, dim=1
             ),
             'alert_priority_weights': torch.softmax(
-                alert_logits / self.temperature, dim=1
+                alert_logits / self.crisp, dim=1
             ),
             
             # Discrete verbosity level
