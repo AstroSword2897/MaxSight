@@ -823,13 +823,11 @@ class MaxSightCNN(nn.Module):
             
             # Uncertainty estimation for priority-sensitive alerts
             # Predicts model confidence for each output
-            self.uncertainty_head = nn.Sequential(
-                nn.Linear(256, 128),
-                nn.LayerNorm(128),
-                nn.ReLU(),
-                nn.Dropout(0.2),
-                nn.Linear(128, 1),
-                nn.Sigmoid()  # Uncertainty score 0-1 (1 = high uncertainty)
+            from ml.models.heads.uncertainty_head import GlobalConfidenceAggregator
+            self.uncertainty_head = GlobalConfidenceAggregator(
+                scene_dim=256,
+                hidden_dim=128,
+                dropout=0.1
             )
         
         self._initialize_weights()
