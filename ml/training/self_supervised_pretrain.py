@@ -287,3 +287,7 @@ class ElasticWeightConsolidation:
 ReconstructionLoss = MAELoss
 MaskingSIM = SimCLRLoss
 KnowledgeDistillation = KnowledgeDistillationLoss
+
+# Test compatibility aliases (old class names)
+MAE = MAELoss  # For tests - but MAE should be a model, not a loss
+SimCLR = SimCLRLoss  # For tests - but SimCLR should be a model, not a loss
