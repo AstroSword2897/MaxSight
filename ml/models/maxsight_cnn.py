@@ -1382,8 +1382,10 @@ class MaxSightCNN(nn.Module):
         uncertainty_score = None
         if self.enable_accessibility_features:
             shared_scene_emb = self.shared_scene_embedding(combined_context)
-            uncertainty_score = self.uncertainty_head(shared_scene_emb)  # [B, 1]
+            uncertainty_outputs = self.uncertainty_head(shared_scene_emb)  # Dict with 'uncertainty_score', 'global_confidence', 'confidence_logit'
+            uncertainty_score = uncertainty_outputs['uncertainty_score']  # [B, 1]
             stage_a_outputs['uncertainty'] = uncertainty_score
+            stage_a_outputs['global_confidence'] = uncertainty_outputs['global_confidence']
         
         # Safety decision: Is user safe now?
         # If uncertainty > 0.7, we're in "fail-silent" mode - skip Stage B
@@ -1485,7 +1487,8 @@ class MaxSightCNN(nn.Module):
                 navigation_difficulty = self.navigation_difficulty_head(shared_scene_emb)  # [B, 1]
                 
                 # 5. Uncertainty Estimation (for priority-sensitive alerts)
-                uncertainty = self.uncertainty_head(shared_scene_emb)  # [B, 1]
+                uncertainty_outputs = self.uncertainty_head(shared_scene_emb)  # Dict
+                uncertainty = uncertainty_outputs['uncertainty_score']  # [B, 1]
                 
                 # Add to outputs
                 outputs.update({
