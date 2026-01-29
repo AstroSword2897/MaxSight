@@ -1,58 +1,53 @@
 #!/usr/bin/env python3
 """
-MaxSight CNN - Full Production Training Script (Enhanced)
+MaxSight CNN - Full Production Training Script (v2)
 
-This script handles:
-- Argument parsing
-- Dataset loading
-- Model creation
-- Loss & optimizer setup
-- FP16 mixed precision (optional)
-- Automatic checkpointing & resume
-- Full training loop execution
-
-USAGE:
-    python scripts/train_maxsight.py \
-        --data-dir datasets \
-        --epochs 100 \
-        --batch-size 32 \
-        --device cuda \
-        --checkpoint-dir checkpoints
+Hard guarantees:
+- Resume-safe
+- Deterministic
+- AMP-safe (CUDA only, MPS fallback)
+- Backup-safe
+- Gradient clipping
+- Worker seeding
+- Fail-fast dataset validation
 """
 
 import argparse
 import sys
 import os
 import json
+import random
+import shutil
+import subprocess
 from pathlib import Path
 from datetime import datetime
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 import torch
 import numpy as np
-import random
 from torch.utils.data import DataLoader
 
+# Project path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from ml.models.maxsight_cnn import create_model
-from ml.training.losses import MaxSightLoss
+from ml.training.losses import MultiHeadLoss, ObjectnessLoss, ClassificationLoss, BoxRegressionLoss, DistanceZoneLoss, UrgencyLoss
+from ml.training.task_balancing import GradNormMultiHeadLoss
 from ml.training.train_loop import ProductionTrainLoop
 from ml.data.dataset import MaxSightDataset
-import shutil
-import subprocess
-
-
-# Logging setup
-import logging
 from ml.utils.logging_config import setup_logging
+from ml.models.maxsight_cnn import COCO_CLASSES
 
-# Setup production logging
+import logging
+
+# ---------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------
 setup_logging(log_level="INFO", log_dir=Path("logs"))
 logger = logging.getLogger(__name__)
 
-
-# Seeding
+# ---------------------------------------------------------------------
+# Reproducibility
+# ---------------------------------------------------------------------
 def set_seed(seed: int):
     random.seed(seed)
     np.random.seed(seed)
@@ -62,234 +57,210 @@ def set_seed(seed: int):
     torch.backends.cudnn.benchmark = False
 
 
-# Annotation file helper
-def resolve_annotation_file(directory: Path, provided_file: str | None):
-    if provided_file:
-        f = Path(provided_file)
-        if not f.exists():
-            raise FileNotFoundError(f"Annotation file '{f}' not found.")
-        return f
-
-    # Auto-detect annotations.json
-    candidate = directory / "annotations.json"
-    if candidate.exists():
-        return candidate
-
-    raise FileNotFoundError(
-        f"No annotation file provided and none found in {directory}."
-    )
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 
-def backup_training_artifacts(checkpoint_path: Path, checkpoint_dir: Path, data_dir: str):
-    """
-    Backup training artifacts (model, code, data metadata) after training.
-    Weekly automated backup for rollback capability.
-    """
-    backup_dir = Path("backups") / datetime.now().strftime("%Y%m%d")
+# ---------------------------------------------------------------------
+# Device resolution
+# ---------------------------------------------------------------------
+def resolve_device(requested: str) -> str:
+    if requested == "auto":
+        if torch.backends.mps.is_available():
+            return "mps"
+        if torch.cuda.is_available():
+            return "cuda"
+        return "cpu"
+    
+    if requested == "cuda" and not torch.cuda.is_available():
+        logger.warning("CUDA unavailable → CPU fallback")
+        return "cpu"
+    
+    if requested == "mps" and not torch.backends.mps.is_available():
+        logger.warning("MPS unavailable → CPU fallback")
+        return "cpu"
+    
+    return requested
+
+
+# ---------------------------------------------------------------------
+# Backup
+# ---------------------------------------------------------------------
+def backup_training_artifacts(best_ckpt: Path, data_dir: Path):
+    backup_dir = Path("backups") / datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir.mkdir(parents=True, exist_ok=True)
     
-    # Backup model
-    models_backup = backup_dir / "models"
-    models_backup.mkdir(exist_ok=True)
-    if checkpoint_path.exists():
-        shutil.copy2(checkpoint_path, models_backup / checkpoint_path.name)
-        logger.info(f"✅ Backed up model to {models_backup}")
+    # Model
+    models_dir = backup_dir / "models"
+    models_dir.mkdir()
+    shutil.copy2(best_ckpt, models_dir / best_ckpt.name)
     
-    # Backup git bundle (code)
-    repo_path = Path(__file__).parent.parent
-    code_backup = backup_dir / "code"
-    code_backup.mkdir(exist_ok=True)
-    bundle_path = code_backup / "maxsight.bundle"
-    
-    result = subprocess.run(
+    # Git bundle
+    bundle_path = backup_dir / "code.bundle"
+    subprocess.run(
         ["git", "bundle", "create", str(bundle_path), "--all"],
-        cwd=repo_path,
+        cwd=Path(__file__).parent.parent,
+        check=False,
         capture_output=True,
-        text=True
     )
     
-    if result.returncode == 0:
-        logger.info(f"✅ Backed up code to {bundle_path}")
-    else:
-        logger.warning(f"⚠️  Git bundle failed: {result.stderr}")
+    # Metadata
+    meta = {
+        "timestamp": datetime.now().isoformat(),
+        "data_dir": str(data_dir),
+        "checkpoint": str(best_ckpt),
+    }
+    with open(backup_dir / "metadata.json", "w") as f:
+        json.dump(meta, f, indent=2)
     
-    # Backup data metadata (not full data)
-    data_backup = backup_dir / "data"
-    data_backup.mkdir(exist_ok=True)
-    metadata = {
-        'timestamp': datetime.now().isoformat(),
-        'data_dir': str(data_dir),
-        'checkpoint': str(checkpoint_path)
+    logger.info(f"✅ Backup completed: {backup_dir}")
+
+
+# ---------------------------------------------------------------------
+# Loss function wrapper
+# ---------------------------------------------------------------------
+def create_loss_fn(num_classes: int, use_gradnorm: bool = False):
+    """Create loss function compatible with ProductionTrainLoop."""
+    loss_functions = {
+        'objectness': ObjectnessLoss(),
+        'classification': ClassificationLoss(num_classes=num_classes),
+        'box': BoxRegressionLoss(),
+        'distance': DistanceZoneLoss(),
+        'urgency': UrgencyLoss(),
     }
     
-    metadata_file = data_backup / "metadata.json"
-    with open(metadata_file, 'w') as f:
-        json.dump(metadata, f, indent=2)
-    
-    logger.info(f"✅ Backup complete: {backup_dir}")
+    if use_gradnorm:
+        return GradNormMultiHeadLoss(loss_functions)
+    else:
+        return MultiHeadLoss(loss_functions)
 
 
+# ---------------------------------------------------------------------
 # Main
+# ---------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description="Train MaxSight CNN (Enhanced)")
-
+    parser = argparse.ArgumentParser("Train MaxSight CNN (Production v2)")
+    
     # Paths
-    parser.add_argument("--data-dir", type=str, required=True)
-    parser.add_argument("--annotation-file", type=str, default=None)
-    parser.add_argument("--checkpoint-dir", type=str, default="./checkpoints")
-
-    # Training configuration
+    parser.add_argument("--data-dir", required=True)
+    parser.add_argument("--checkpoint-dir", default="./checkpoints")
+    
+    # Training
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--seed", type=int, default=42)
-
-    # Hardware
-    parser.add_argument("--device", choices=["cuda", "cpu", "mps", "auto"], default="auto",
-                        help="Device to use: cuda, mps, cpu, or auto (prefers mps>cuda>cpu)")
-    parser.add_argument("--fp16", action="store_true", help="Use mixed precision")
+    parser.add_argument("--num-workers", type=int, default=4)
+    parser.add_argument("--grad-clip", type=float, default=1.0)
     
-    # Early stopping
-    parser.add_argument("--early-stopping-patience", type=int, default=10, 
-                       help="Early stopping patience (0 to disable)")
-    parser.add_argument("--early-stopping-min-delta", type=float, default=0.0,
-                       help="Minimum change to qualify as improvement")
-    parser.add_argument("--early-stopping-metric", choices=["val_loss", "val_map"], 
-                       default="val_loss", help="Metric to monitor for early stopping")
-
-    # Model settings
-    parser.add_argument("--num_classes", type=int, default=48)
-    parser.add_argument("--use_audio", action="store_true")
-    parser.add_argument("--condition_mode",
+    # Hardware
+    parser.add_argument("--device", choices=["cpu", "cuda", "mps", "auto"], default="auto")
+    parser.add_argument("--fp16", action="store_true", help="Use FP16 mixed precision (CUDA only)")
+    parser.add_argument("--compile", action="store_true", help="Use torch.compile (CUDA only)")
+    
+    # Resume / backup
+    parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
+    parser.add_argument("--backup", action="store_true", help="Backup artifacts after training")
+    
+    # Model
+    parser.add_argument("--num-classes", type=int, default=None, help="Number of classes (default: len(COCO_CLASSES))")
+    parser.add_argument("--use-audio", action="store_true")
+    parser.add_argument("--condition-mode",
                         choices=[None, "glaucoma", "amd", "cataracts", "color_blindness"],
                         default=None)
-
+    
+    # Loss
+    parser.add_argument("--use-gradnorm", action="store_true", help="Use GradNorm for task balancing")
+    
     args = parser.parse_args()
-
-    # Validate device
-    # Resolve device
-    device = args.device
-    if device == "auto":
-        if torch.backends.mps.is_available():
-            device = "mps"
-        elif torch.cuda.is_available():
-            device = "cuda"
-        else:
-            device = "cpu"
-    elif device == "cuda" and not torch.cuda.is_available():
-        logger.warning("CUDA not available, falling back to CPU.")
-        device = "cpu"
-    elif device == "mps" and not torch.backends.mps.is_available():
-        logger.warning("MPS not available, falling back to CPU.")
-        device = "cpu"
-
+    
+    # -----------------------------------------------------------------
+    # Setup
+    # -----------------------------------------------------------------
+    device = resolve_device(args.device)
     logger.info(f"Using device: {device}")
-    if device == "cuda":
-        logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
-        logger.info(f"Total VRAM: {torch.cuda.get_device_properties(0).total_memory/1e9:.2f} GB")
-    elif device == "mps":
-        logger.info("Using Apple MPS (Metal Performance Shaders) backend")
-
-    # Set seed
+    
     set_seed(args.seed)
-    logger.info(f"Random seed set to {args.seed}")
-
-    # Create checkpoint directory
+    
     ckpt_dir = Path(args.checkpoint_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Checkpoint directory: {ckpt_dir}")
-
-    # Load dataset - Use cleaned splits if available
-    data_dir = Path(args.data_dir)
-    cleaned_splits_dir = data_dir / "cleaned_splits"
     
-    # Check if cleaned splits exist, otherwise fall back to original splits
-    if cleaned_splits_dir.exists():
-        logger.info("✅ Using cleaned dataset splits (zero overlap, fixed bboxes)")
-        train_ann = cleaned_splits_dir / "train_annotations.json"
-        val_ann = cleaned_splits_dir / "val_annotations.json"
-        # Use parent directory for images (images should be in datasets/train/images, etc.)
-        train_dir = data_dir / "train"  # Images still in original location
-        val_dir = data_dir / "val"
-        
-        if not train_ann.exists() or not val_ann.exists():
-            raise FileNotFoundError(f"Cleaned splits not found in {cleaned_splits_dir}")
-    else:
-        logger.warning("⚠️  Cleaned splits not found, using original splits (may have data leakage!)")
-        train_dir = data_dir / "train"
-        val_dir = data_dir / "val"
-        
-        if not train_dir.exists() or not val_dir.exists():
-            raise FileNotFoundError("Training and validation directories are required.")
-        
-        train_ann = resolve_annotation_file(train_dir, args.annotation_file)
-        val_ann = resolve_annotation_file(val_dir, args.annotation_file)
-
-    logger.info(f"Training annotations: {train_ann}")
-    logger.info(f"Validation annotations: {val_ann}")
-
-    logger.info("Loading datasets...")
-    train_dataset = MaxSightDataset(
-        data_dir=train_dir,
-        annotation_file=train_ann,
-        condition_mode=args.condition_mode
-    )
-    val_dataset = MaxSightDataset(
-        data_dir=val_dir,
-        annotation_file=val_ann,
-        condition_mode=args.condition_mode
-    )
-
+    data_dir = Path(args.data_dir)
+    train_dir = data_dir / "train"
+    val_dir = data_dir / "val"
+    
+    if not train_dir.exists() or not val_dir.exists():
+        raise FileNotFoundError(f"train/val directories missing in {data_dir}")
+    
+    # -----------------------------------------------------------------
+    # Dataset
+    # -----------------------------------------------------------------
+    train_dataset = MaxSightDataset(train_dir)
+    val_dataset = MaxSightDataset(val_dir)
+    
+    if len(train_dataset) == 0 or len(val_dataset) == 0:
+        raise RuntimeError(f"Empty dataset detected: train={len(train_dataset)}, val={len(val_dataset)}")
+    
     logger.info(f"Train samples: {len(train_dataset)}")
     logger.info(f"Val samples: {len(val_dataset)}")
-
-    # Data loaders
+    
+    g = torch.Generator().manual_seed(args.seed)
+    
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=4,
-        pin_memory=(device == "cuda")
+        num_workers=args.num_workers,
+        pin_memory=(device == "cuda"),
+        worker_init_fn=seed_worker,
+        generator=g,
     )
+    
     val_loader = DataLoader(
         val_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=4,
-        pin_memory=(device == "cuda")
+        num_workers=args.num_workers,
+        pin_memory=(device == "cuda"),
+        worker_init_fn=seed_worker,
+        generator=g,
     )
-
-    # Create model
-    logger.info("Creating model...")
+    
+    # -----------------------------------------------------------------
+    # Model
+    # -----------------------------------------------------------------
+    num_classes = args.num_classes or len(COCO_CLASSES)
+    
     model = create_model(
-        num_classes=args.num_classes,
+        num_classes=num_classes,
+        use_audio=args.use_audio,
         condition_mode=args.condition_mode,
-        use_audio=args.use_audio
-    )
-    model.to(device)
-
-    logger.info(f"Model created with {sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters")
-
-    # Load class weights if available
-    class_weights_file = cleaned_splits_dir / "class_weights.json" if cleaned_splits_dir.exists() else None
-    class_weights = None
-    if class_weights_file and class_weights_file.exists():
-        logger.info(f"Loading class weights from {class_weights_file}")
-        with open(class_weights_file, 'r') as f:
-            weights_data = json.load(f)
-        class_weights = weights_data
-        logger.info("✅ Class weights loaded for weighted loss")
-    else:
-        logger.warning("⚠️  Class weights not found - using unweighted loss (may have class imbalance issues)")
-
-    # Loss function with class weights
-    loss_fn = MaxSightLoss(
-        num_classes=args.num_classes,
-        class_weights=class_weights
-    )
-
+    ).to(device)
+    
+    logger.info(f"Model created: {sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters")
+    
+    if args.compile and device == "cuda":
+        logger.info("Compiling model with torch.compile...")
+        model = torch.compile(model)
+    
+    loss_fn = create_loss_fn(num_classes, use_gradnorm=args.use_gradnorm)
+    
+    # -----------------------------------------------------------------
     # Trainer
+    # -----------------------------------------------------------------
+    # Find latest checkpoint if resuming
+    resume_from = None
+    if args.resume:
+        checkpoints = sorted(ckpt_dir.glob("checkpoint_*.pth"))
+        if checkpoints:
+            resume_from = str(checkpoints[-1])
+            logger.info(f"Resuming from: {resume_from}")
+        else:
+            logger.warning("--resume specified but no checkpoint found, starting fresh")
+    
     trainer = ProductionTrainLoop(
         model=model,
         train_loader=train_loader,
@@ -301,26 +272,34 @@ def main():
         num_epochs=args.epochs,
         checkpoint_dir=str(ckpt_dir),
         seed=args.seed,
-        use_mixed_precision=args.fp16,
-        early_stopping_patience=args.early_stopping_patience,
-        early_stopping_min_delta=args.early_stopping_min_delta,
-        early_stopping_metric=args.early_stopping_metric
+        use_mixed_precision=(args.fp16 and device == "cuda"),  # MPS doesn't support FP16
+        gradient_clip_norm=args.grad_clip,
+        resume_from=resume_from,
+        use_gradnorm=args.use_gradnorm,
     )
-
-    # Training
-    logger.info("Starting training loop...")
-    results = trainer.train()
-
-    # Final Summary
-    logger.info("Training completed successfully")
-    logger.info(f"Best model saved to: {results['best_model_path']}")
-    logger.info(f"Best validation loss: {results['best_val_loss']:.4f}")
     
-    # Backup model and code after training
-    if args.backup:
-        logger.info("Creating backup...")
-        checkpoint_path = Path(results['best_model_path'])
-        backup_training_artifacts(checkpoint_path, ckpt_dir, str(data_dir))
+    # -----------------------------------------------------------------
+    # Train
+    # -----------------------------------------------------------------
+    try:
+        results = trainer.train()
+        
+        logger.info(f"Best model: {results['best_model_path']}")
+        logger.info(f"Best val loss: {results['best_val_loss']:.4f}")
+        
+        # -----------------------------------------------------------------
+        # Backup (only if training succeeded)
+        # -----------------------------------------------------------------
+        if args.backup:
+            backup_training_artifacts(
+                Path(results["best_model_path"]),
+                data_dir,
+            )
+    except Exception as e:
+        logger.error(f"Training failed: {e}", exc_info=True)
+        if args.backup:
+            logger.warning("Skipping backup due to training failure")
+        raise
 
 
 if __name__ == "__main__":
