@@ -1,74 +1,88 @@
 """
-Personalization Head for MaxSight 3.0
+Personalization Head for MaxSight 3.0 (v2)
 
-Learns user-specific patterns for attention adjustment, verbosity, and alert priorities.
+Design goals:
+- True user-specific embeddings (scales to real deployments)
+- Stable online adaptation (gated, not destructive)
+- Logit-first design (loss-friendly)
+- Clear separation of persistent vs contextual preferences
+- Temperature-controlled attention & alerts
+
+Key improvements over v1:
+- Proper nn.Embedding table for users (not single Parameter)
+- Contextual gating instead of overwriting embeddings
+- Logits returned (softmax only applied when needed)
+- Ready for offline + online learning
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Optional
-from dataclasses import dataclass
-
-
-@dataclass
-class UserPreferences:
-    """User preference settings."""
-    attention_weights: torch.Tensor  # [num_features]
-    verbosity_level: int  # 0-3
-    alert_priority_weights: torch.Tensor  # [num_alert_types]
-    preferred_output_channel: str  # 'audio', 'visual', 'haptic'
 
 
 class PersonalizationHead(nn.Module):
     """
-    Personalization head for user-specific adaptation.
+    Personalization head for user-specific adaptation (v2).
     
     Learns:
     - Attention adjustment (what user focuses on)
     - Description verbosity preferences
     - Alert priority preferences
-    - Online learning from user interactions
+    - Stable online learning from user interactions
     """
     
     def __init__(
         self,
         input_dim: int = 512,
+        num_users: int = 10_000,
         num_features: int = 10,  # Number of attention features
         num_alert_types: int = 5,
-        embed_dim: int = 256
+        embed_dim: int = 256,
+        interaction_dim: int = 64,
+        temperature: float = 1.0
     ):
         super().__init__()
         
         self.num_features = num_features
         self.num_alert_types = num_alert_types
+        self.temperature = temperature
         
-        # User embedding (learned per user)
-        self.user_embedding = nn.Parameter(torch.randn(1, embed_dim) * 0.02)
+        # -------------------------------------------------
+        # Persistent user representation (scales to real deployments)
+        # -------------------------------------------------
+        self.user_embedding = nn.Embedding(num_users, embed_dim)
+        nn.init.normal_(self.user_embedding.weight, std=0.02)
         
-        # Attention adjustment network
-        self.attention_adjuster = nn.Sequential(
-            nn.Linear(input_dim + embed_dim, 256),
-            nn.ReLU(),
-            nn.Linear(256, num_features),
-            nn.Softmax(dim=1)
+        # -------------------------------------------------
+        # Contextual adaptation (gated residual update - stable)
+        # -------------------------------------------------
+        self.adaptation_gate = nn.Sequential(
+            nn.Linear(embed_dim + interaction_dim, embed_dim),
+            nn.Sigmoid()
         )
         
-        # Verbosity predictor
-        self.verbosity_predictor = nn.Sequential(
-            nn.Linear(input_dim + embed_dim, 128),
+        self.adaptation_delta = nn.Sequential(
+            nn.Linear(embed_dim + interaction_dim, embed_dim),
             nn.ReLU(),
-            nn.Linear(128, 4),  # 4 verbosity levels (0-3)
-            nn.Softmax(dim=1)
+            nn.Linear(embed_dim, embed_dim)
         )
         
-        # Alert priority adjuster
-        self.alert_priority_adjuster = nn.Sequential(
-            nn.Linear(input_dim + embed_dim, 128),
-            nn.ReLU(),
-            nn.Linear(128, num_alert_types),
-            nn.Softmax(dim=1)
+        # -------------------------------------------------
+        # Shared fusion trunk
+        # -------------------------------------------------
+        fused_dim = input_dim + embed_dim
+        self.fusion = nn.Sequential(
+            nn.Linear(fused_dim, 512),
+            nn.ReLU()
         )
+        
+        # -------------------------------------------------
+        # Heads (logit-first design)
+        # -------------------------------------------------
+        self.attention_head = nn.Linear(512, num_features)
+        self.verbosity_head = nn.Linear(512, 4)  # logits (0-3)
+        self.alert_head = nn.Linear(512, num_alert_types)
         
         # Online learning: adaptation network
         self.adaptation_network = nn.Sequential(
