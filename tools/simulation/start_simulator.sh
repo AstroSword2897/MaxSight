@@ -19,7 +19,7 @@ cd "$(dirname "$0")"
 # Start the simulator
 echo "🚀 Starting MaxSight Simulator..."
 echo ""
-echo "📍 Access the simulator at: http://localhost:5001"
+echo "📍 Access the simulator at: http://localhost:8002"
 echo ""
 echo "Press Ctrl+C to stop"
 echo ""
