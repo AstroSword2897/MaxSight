@@ -15,11 +15,13 @@
 - **Path**: `/Users/nani/2026-Prototype/datasets/coco_raw/`
 - **Status**: 🟢 **GREEN**
 - **Evidence**:
-  - ✅ `val2017/` directory exists with images
+  - ✅ `val2017/` directory exists with 5,000 images
   - ✅ `annotations/instances_val2017.json` exists
-  - ✅ `MaxSightDataset` can load samples successfully
-- **Next Action**: Run `scripts/setup_coco_splits.py` to generate cleaned splits
-- **Owner**: System
+  - ✅ `annotations/instances_train2017.json` exists
+  - ✅ `MaxSightDataset` can load samples successfully (4,952 samples verified)
+  - ✅ Split annotations generated: 5,000 train, 1,000 val, 111,266 test samples
+- **Verification Command**: `python3 -c "from ml.data.dataset import MaxSightDataset; ds = MaxSightDataset('datasets/coco_raw'); print(f'Dataset size: {len(ds)}')"`
+- **Owner**: System (Complete)
 
 ### Train Images (Optional)
 - **Status**: 🟠 **ORANGE**
