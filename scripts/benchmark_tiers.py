@@ -101,9 +101,15 @@ def benchmark_model(
         
         with torch.no_grad():
             for _ in range(num_runs):
-                start = time.time()
+                # CRITICAL: Synchronize GPU before timing for accurate latency measurements
+                if device.type == 'cuda':
+                    torch.cuda.synchronize()
+                start = time.perf_counter()
                 outputs = model(images, audio=audio)
-                elapsed = (time.time() - start) * 1000  # ms
+                # CRITICAL: Synchronize GPU after inference to ensure completion
+                if device.type == 'cuda':
+                    torch.cuda.synchronize()
+                elapsed = (time.perf_counter() - start) * 1000  # ms
                 latencies.append(elapsed)
                 
                 # Try to get stage timings if available

@@ -88,17 +88,24 @@ class TestSoundEventHead:
         from ml.models.heads.sound_event_head import SoundEventHead
         
         sound_head = SoundEventHead(
-            input_dim=256,
+            freq_bins=128,
             num_classes=15,  # Match actual default
-            num_directions=4  # Match actual default
+            num_directions=4,  # Match actual default
+            embed_dim=256
         )
         sound_head.eval()
         
-        audio_features = torch.randn(2, 10, 256)  # [B, T, D]
-        outputs = sound_head(audio_features)
+        # Input should be spectrogram: [B, T, freq_bins]
+        spectrogram = torch.randn(2, 10, 128)  # [B, T, freq_bins]
+        outputs = sound_head(spectrogram)
         
         assert outputs is not None
         assert isinstance(outputs, dict)
+        assert 'sound_logits' in outputs
+        assert 'sound_probs' in outputs
+        assert 'direction_logits' in outputs
+        assert 'priority' in outputs
+        assert 'urgency' in outputs
 
 
 class TestPersonalizationHead:
@@ -121,12 +128,14 @@ class TestPersonalizationHead:
         )
         personal_head.eval()
         
-        features = torch.randn(2, 512)
+        scene_features = torch.randn(2, 512)  # [B, input_dim]
+        user_id = torch.LongTensor([0, 1])  # [B] - required parameter
         
-        outputs = personal_head(features)
+        outputs = personal_head(scene_features, user_id)
         
         assert outputs is not None
         assert isinstance(outputs, dict)
+        assert 'attention_logits' in outputs or 'attention' in outputs
 
 
 class TestPredictiveAlertHead:

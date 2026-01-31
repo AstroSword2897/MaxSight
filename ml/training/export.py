@@ -225,6 +225,11 @@ def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', in
             # Default: single output (will fail if model returns dict, but user should use validate=True)
             output_types = [ct.TensorType(name="output")]
         
+        # CRITICAL: Explicitly define all input shapes to avoid runtime errors
+        # If model accepts audio_features, add them here with fixed shape
+        # Example: inputs=[ct.TensorType(name="image", shape=input_size),
+        #                  ct.TensorType(name="audio_features", shape=(1, 128))]
+        # For now, only image input is defined - update if model signature changes
         coreml_model = ct.convert(
             traced_model,
             inputs=[ct.TensorType(name="image", shape=input_size)],

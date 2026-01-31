@@ -566,7 +566,7 @@ class MaxSightCNN(nn.Module):
                 num_heads=8
             )
             self.sound_event_head = SoundEventHead(
-                input_dim=256,
+                freq_bins=128,  # Spectrogram frequency bins
                 num_classes=15,
                 embed_dim=256,
                 num_heads=8

@@ -20,7 +20,7 @@ SOUND_CLASSES = [
 ]
 
 
-def verify_coco_dataset(data_dir: Path = Path("datasets/coco")) -> Dict[str, bool]:
+def verify_coco_dataset(data_dir: Path = Path("datasets/coco"), check_coco_raw: bool = True) -> Dict[str, bool]:
     """
     Verify COCO dataset is properly downloaded and structured.
     
@@ -35,10 +35,18 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco")) -> Dict[str, boo
         'val_annotations': False
     }
     
+    # Check both datasets/coco and datasets/coco_raw (common locations)
+    coco_raw_dir = Path("datasets/coco_raw")
+    if check_coco_raw and coco_raw_dir.exists():
+        # Use coco_raw if it exists
+        actual_data_dir = coco_raw_dir
+    else:
+        actual_data_dir = data_dir
+    
     # Check directories
-    train_img_dir = data_dir / "train2017"
-    val_img_dir = data_dir / "val2017"
-    ann_dir = data_dir / "annotations"
+    train_img_dir = actual_data_dir / "train2017"
+    val_img_dir = actual_data_dir / "val2017"
+    ann_dir = actual_data_dir / "annotations"
     
     # Check image directories
     if train_img_dir.exists():
@@ -88,44 +96,137 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco")) -> Dict[str, boo
 
 def download_coco_dataset(data_dir: Path = Path("datasets/coco"), auto_download: bool = False):
     """
-    Download COCO dataset
+    Download COCO dataset with improved error handling and multiple download methods.
     
     Args:
         data_dir: Directory to save COCO dataset
-        auto_download: If True, attempt automatic download (requires wget/curl)
+        auto_download: If True, attempt automatic download (tries multiple methods)
     
-    Note: COCO dataset is large (~20GB). Manual download recommended.
+    Note: COCO dataset is large (~20GB). Manual download recommended for reliability.
     """
     data_dir.mkdir(parents=True, exist_ok=True)
     
+    # COCO dataset URLs (official)
+    urls = {
+        'train_images': {
+            'url': 'http://images.cocodataset.org/zips/train2017.zip',
+            'size': '18GB',
+            'filename': 'train2017.zip'
+        },
+        'val_images': {
+            'url': 'http://images.cocodataset.org/zips/val2017.zip',
+            'size': '1GB',
+            'filename': 'val2017.zip'
+        },
+        'annotations': {
+            'url': 'http://images.cocodataset.org/annotations/annotations_trainval2017.zip',
+            'size': '241MB',
+            'filename': 'annotations_trainval2017.zip'
+        }
+    }
+    
     if auto_download:
         print("Attempting automatic COCO dataset download...")
+        print("Note: Downloads are large (~20GB total). This may take a while.\n")
+        
+        import subprocess
+        import shutil
+        
+        # Try multiple download methods
+        download_methods = []
+        
+        # Method 1: Try wget
+        if shutil.which('wget'):
+            download_methods.append(('wget', ['wget', '-c', '--progress=bar', '--tries=3']))
+        
+        # Method 2: Try curl
+        if shutil.which('curl'):
+            download_methods.append(('curl', ['curl', '-L', '-C', '-', '--progress-bar', '--retry', '3']))
+        
+        # Method 3: Try Python requests (fallback)
         try:
-            import subprocess
-            urls = {
-                'train_images': 'http://images.cocodataset.org/zips/train2017.zip',
-                'val_images': 'http://images.cocodataset.org/zips/val2017.zip',
-                'annotations': 'http://images.cocodataset.org/annotations/annotations_trainval2017.zip'
-            }
-            for name, url in urls.items():
-                print(f"Downloading {name}...")
-                subprocess.run(['wget', '-c', url, '-P', str(data_dir)], check=False)
-            print("Download complete. Please extract zip files manually.")
-        except Exception as e:
-            print(f"Automatic download failed: {e}")
-            print("Falling back to manual download instructions...")
+            import requests
+            download_methods.append(('requests', None))
+        except ImportError:
+            pass
+        
+        if not download_methods:
+            print("No download tools available (wget, curl, or requests).")
+            print("Please install one of: wget, curl, or requests library")
             auto_download = False
+        else:
+            for name, info in urls.items():
+                filepath = data_dir / info['filename']
+                
+                # Skip if already exists
+                if filepath.exists():
+                    print(f"✓ {name} already exists: {filepath}")
+                    continue
+                
+                print(f"Downloading {name} ({info['size']})...")
+                print(f"  URL: {info['url']}")
+                
+                success = False
+                for method_name, method_cmd in download_methods:
+                    try:
+                        if method_name == 'requests':
+                            # Use requests for download with progress
+                            response = requests.get(info['url'], stream=True, timeout=30)
+                            response.raise_for_status()
+                            
+                            total_size = int(response.headers.get('content-length', 0))
+                            downloaded = 0
+                            
+                            with open(filepath, 'wb') as f:
+                                for chunk in response.iter_content(chunk_size=8192):
+                                    if chunk:
+                                        f.write(chunk)
+                                        downloaded += len(chunk)
+                                        if total_size > 0:
+                                            percent = (downloaded / total_size) * 100
+                                            print(f"\r  Progress: {percent:.1f}%", end='', flush=True)
+                            
+                            print()  # New line after progress
+                            success = True
+                            break
+                        else:
+                            # Use wget or curl
+                            cmd = method_cmd + [info['url'], '-O', str(filepath)]
+                            result = subprocess.run(cmd, check=True, capture_output=True)
+                            success = True
+                            break
+                    except subprocess.CalledProcessError as e:
+                        print(f"  {method_name} failed: {e}")
+                        continue
+                    except Exception as e:
+                        print(f"  {method_name} error: {e}")
+                        continue
+                
+                if success:
+                    print(f"✓ {name} downloaded successfully")
+                else:
+                    print(f"✗ {name} download failed with all methods")
+                    print(f"  Please download manually from: {info['url']}")
+            
+            print("\nDownload complete. Please extract zip files manually.")
+            print(f"Extract to: {data_dir}")
     
     if not auto_download:
-        print("COCO Dataset Download Instructions:")
-        print("1. Visit: https://cocodataset.org/#download")
-        print("2. Download: 2017 Train images (18GB)")
-        print("3. Download: 2017 Val images (1GB)")
-        print("4. Download: 2017 Train/Val annotations (241MB)")
-        print("5. Extract to: datasets/coco/")
-        print("\nOr use COCO API:")
-        print("  from pycocotools.coco import COCO")
-        print("  coco = COCO('annotations/instances_train2017.json')")
+        print("\n" + "="*70)
+        print("COCO Dataset Download Instructions")
+        print("="*70)
+        print("\nOption 1: Automatic Download (Recommended)")
+        print("  Run: python -c \"from ml.data.download_datasets import download_coco_dataset; download_coco_dataset(auto_download=True)\"")
+        print("\nOption 2: Manual Download")
+        print("  1. Visit: https://cocodataset.org/#download")
+        print("  2. Download the following files:")
+        for name, info in urls.items():
+            print(f"     - {name}: {info['url']} ({info['size']})")
+        print(f"  3. Extract all zip files to: {data_dir}")
+        print("\nOption 3: Direct Download Links")
+        for name, info in urls.items():
+            print(f"  {name}: {info['url']}")
+        print("\n" + "="*70)
     
     print(f"\nDataset directory: {data_dir}")
     
@@ -288,11 +389,30 @@ def create_synthetic_impairments():
         darken_mask = np.clip(dist / darken_radius, 0, 1)
         if len(image.shape) == 3:
             darken_mask = darken_mask[:, :, np.newaxis]
-        return image * (1 - darken_mask * 0.7)
+        # CRITICAL: Normalize image to [0, 1] before scaling to avoid overflow
+        # Ensure image is float and in valid range
+        if image.dtype != np.float32 and image.dtype != np.float64:
+            image = image.astype(np.float32) / 255.0
+        elif image.max() > 1.0:
+            image = image / 255.0
+        # Apply scaling and clamp to valid range
+        result = image * (1 - darken_mask * 0.7)
+        return np.clip(result, 0.0, 1.0)
     
     def apply_low_light(image: np.ndarray, brightness: float = 0.3) -> np.ndarray:
         """Reduce brightness for retinitis pigmentosa."""
-        return np.clip(image * brightness, 0, 255).astype(image.dtype)
+        # CRITICAL: Normalize image to [0, 1] before scaling to avoid overflow
+        original_dtype = image.dtype
+        if image.dtype != np.float32 and image.dtype != np.float64:
+            image = image.astype(np.float32) / 255.0
+        elif image.max() > 1.0:
+            image = image / 255.0
+        # Apply scaling and clamp to valid range
+        result = np.clip(image * brightness, 0.0, 1.0)
+        # Convert back to original dtype if needed
+        if original_dtype != np.float32 and original_dtype != np.float64:
+            result = (result * 255.0).astype(original_dtype)
+        return result
     
     def apply_color_shift(image: np.ndarray, shift_type: str = 'protanopia') -> np.ndarray:
         """Apply color shifts for color blindness."""

@@ -77,8 +77,6 @@ def test_scene_graph_consistency():
     print(f"   Edges: {edge_index.shape[1]}")
     print(f"   Relations: {len(relations)}")
     print(f"   Edge attributes: {edge_attr.shape[0]}")
-    
-    return True
 
 
 def test_scene_graph_with_pruning():
@@ -126,8 +124,6 @@ def test_scene_graph_with_pruning():
         print(f"   Pruned edges: {pruned_edge_index.shape[1]}")
         print(f"   Original relations: {len(relations)}")
         print(f"   Pruned relations: {len(pruned_relations)}")
-    
-    return True
 
 
 if __name__ == "__main__":

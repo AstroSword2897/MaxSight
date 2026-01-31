@@ -115,6 +115,24 @@ class KnowledgeDistillationLoss(nn.Module):
     
     Teacher is frozen, AMP-safe, correct gradients.
     
+    ⚠️ CRITICAL WARNING: Student models MUST be fine-tuned after distillation!
+    After training with KD loss, fine-tune the student on ground truth only for
+    minimum 10 epochs to recover accuracy. See example:
+    
+    ```python
+    # 1. Train student with distillation
+    for epoch in range(50):
+        kd_loss = kd_loss_fn(student_logits, teacher_logits, labels)
+        kd_loss.backward()
+        optimizer.step()
+    
+    # 2. Fine-tune student on ground truth only (CRITICAL!)
+    for epoch in range(10):
+        gt_loss = criterion(student_logits, labels)  # Ground truth only
+        gt_loss.backward()
+        optimizer.step()
+    ```
+    
     Args:
         temperature: Temperature for softmax (default: 3.0)
         alpha: Weight for KD loss vs CE loss (default: 0.7)

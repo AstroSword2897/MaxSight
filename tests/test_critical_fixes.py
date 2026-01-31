@@ -170,8 +170,11 @@ class TestOverlayRendering:
     
     def test_overlay_with_detections(self):
         """Test overlay rendering with actual detections."""
+        from ml.utils.output_scheduler import OutputMode
         sim = MaxSightSimulator(device='cpu')
         sim.set_user_condition('normal')
+        # Set to dev mode to get full output including detections
+        sim.output_mode = OutputMode.DEV
         
         # Create image that might trigger detections
         test_image = Image.new('RGB', (224, 224), color='white')
@@ -182,7 +185,7 @@ class TestOverlayRendering:
         assert 'overlay_image' in result, "overlay_image missing"
         assert result['overlay_image'] is not None, "overlay_image is None"
         
-        # Should have detections list
+        # In dev mode, should have detections list
         assert 'detections' in result, "detections missing"
         assert isinstance(result['detections'], list), "detections should be list"
         
@@ -305,14 +308,17 @@ class TestIntegration:
     
     def test_full_pipeline_with_overlay(self):
         """Test full pipeline: preprocessing -> inference -> overlay."""
+        from ml.utils.output_scheduler import OutputMode
         sim = MaxSightSimulator(device='cpu')
         sim.set_user_condition('cataracts')
+        # Set to dev mode to get full output
+        sim.output_mode = OutputMode.DEV
         
         test_image = Image.new('RGB', (224, 224), color='purple')
         
         result = sim.process_frame(test_image)
         
-        # Check all expected outputs
+        # Check all expected outputs (dev mode has all fields)
         assert 'overlay_image' in result, "Missing overlay_image"
         assert 'detections' in result, "Missing detections"
         assert 'scene_description' in result, "Missing scene_description"

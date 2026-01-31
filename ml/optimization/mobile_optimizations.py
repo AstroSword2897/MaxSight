@@ -35,13 +35,23 @@ class MobileOptimizer:
         """
         Prune model weights for mobile deployment.
         
+        ⚠️ CRITICAL WARNING: Pruned models MUST be fine-tuned after pruning!
+        Accuracy typically drops 5-15% immediately after pruning. Fine-tune for
+        minimum 10-20 epochs to recover accuracy. See example:
+        
+        ```python
+        pruned_model = MobileOptimizer.prune_model(model, pruning_ratio=0.3)
+        trainer = TrainingLoop(pruned_model, train_loader, val_loader, config)
+        trainer.train(num_epochs=10)  # CRITICAL: Fine-tune after pruning
+        ```
+        
         Args:
             model: Model to prune
             pruning_ratio: Fraction of weights to prune (0.0-1.0)
             method: Pruning method ('magnitude', 'gradient', 'random')
         
         Returns:
-            Pruned model
+            Pruned model (MUST be fine-tuned before use!)
         """
         pruned_model = copy.deepcopy(model)
         pruned_model.eval()

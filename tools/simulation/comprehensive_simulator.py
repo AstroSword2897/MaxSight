@@ -11,6 +11,7 @@ Features:
 """
 
 import torch
+import torch.cuda  # For torch.cuda.synchronize()
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple

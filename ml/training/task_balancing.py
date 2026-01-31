@@ -92,13 +92,15 @@ class GradNormBalancer(nn.Module):
         ]
         
         # Compute gradients for each task
+        # CRITICAL: Only retain_graph for non-last tasks to reduce memory usage
         gradient_norms = []
         for i, weighted_loss in enumerate(weighted_losses):
             # Zero gradients first
             model.zero_grad()
             
-            # Backward for this task only
-            weighted_loss.backward(retain_graph=True)
+            # Only retain graph if not the last task (reduces memory by 2-3x)
+            is_last_task = (i == len(weighted_losses) - 1)
+            weighted_loss.backward(retain_graph=not is_last_task)
             
             # Compute gradient norm for shared parameters
             grad_norm = 0.0

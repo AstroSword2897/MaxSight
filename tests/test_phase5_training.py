@@ -28,29 +28,27 @@ class TestSelfSupervisedPretraining:
         assert MAE is not None
     
     def test_mae_forward(self):
-        """Test MAE forward pass."""
-        from ml.training.self_supervised_pretrain import MAE
+        """Test MAE loss computation."""
+        from ml.training.self_supervised_pretrain import MAELoss
         
-        # Create dummy encoder that accepts mask
-        class DummyEncoder(nn.Module):
-            def forward(self, x, mask=None):
-                return x
+        # MAELoss is a loss function, not a model
+        mae_loss = MAELoss(patch_size=16)
         
-        encoder = DummyEncoder()
-        decoder = nn.Sequential(
-            nn.Conv2d(3, 3, 3, padding=1),
-            nn.Sigmoid()
-        )
+        # Create dummy reconstructed patches, target patches, and mask
+        B, N = 2, 196  # 14x14 patches
+        P = 16
+        C = 3
+        patch_dim = P * P * C
         
-        mae = MAE(encoder, decoder, mask_ratio=0.75)
-        mae.eval()
+        recon = torch.randn(B, N, patch_dim)
+        target = torch.randn(B, N, patch_dim)
+        mask = torch.rand(B, N) > 0.25  # 75% masked
         
-        x = torch.randn(2, 3, 224, 224)
-        output = mae(x)
+        loss = mae_loss(recon, target, mask)
         
-        assert isinstance(output, dict)
-        assert 'reconstruction' in output
-        assert 'mask' in output
+        assert isinstance(loss, torch.Tensor)
+        assert loss.dim() == 0  # Scalar
+        assert loss.item() >= 0
     
     def test_simclr_import(self):
         """Test that SimCLR can be imported."""
@@ -58,29 +56,22 @@ class TestSelfSupervisedPretraining:
         assert SimCLR is not None
     
     def test_simclr_forward(self):
-        """Test SimCLR forward pass."""
-        from ml.training.self_supervised_pretrain import SimCLR
+        """Test SimCLR loss computation."""
+        from ml.training.self_supervised_pretrain import SimCLRLoss
         
-        # Create dummy encoder
-        class DummyEncoder(nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.output_dim = 256
-            
-            def forward(self, x):
-                return torch.randn(x.shape[0], self.output_dim)
+        # SimCLRLoss is a loss function, not a model
+        simclr_loss = SimCLRLoss(temperature=0.07)
         
-        encoder = DummyEncoder()
-        simclr = SimCLR(encoder, projection_dim=128, temperature=0.07)
-        simclr.eval()
+        # Create dummy normalized embeddings from two augmented views
+        B, D = 4, 256
+        z1 = torch.randn(B, D)  # Embeddings from view 1
+        z2 = torch.randn(B, D)  # Embeddings from view 2
         
-        x1 = torch.randn(2, 3, 224, 224)
-        x2 = torch.randn(2, 3, 224, 224)
+        loss = simclr_loss(z1, z2)
         
-        output = simclr(x1, x2)
-        
-        assert isinstance(output, dict)
-        assert 'similarity' in output
+        assert isinstance(loss, torch.Tensor)
+        assert loss.dim() == 0  # Scalar
+        assert loss.item() >= 0
 
 
 class TestKnowledgeDistillation:
@@ -93,25 +84,24 @@ class TestKnowledgeDistillation:
     
     def test_knowledge_distillation_loss(self):
         """Test Knowledge Distillation loss computation."""
-        from ml.training.self_supervised_pretrain import KnowledgeDistillation
+        from ml.training.self_supervised_pretrain import KnowledgeDistillationLoss
         
-        # Create dummy teacher and student
-        teacher = nn.Linear(10, 10)
-        student = nn.Linear(10, 10)
+        # KnowledgeDistillationLoss is a loss function, not a model
+        kd_loss = KnowledgeDistillationLoss(temperature=3.0, alpha=0.7)
         
-        kd = KnowledgeDistillation(teacher, student, temperature=3.0, alpha=0.7)
-        kd.eval()
+        # Create dummy logits
+        B, C = 4, 10
+        student_logits = torch.randn(B, C)
+        teacher_logits = torch.randn(B, C)
+        labels = torch.randint(0, C, (B,))
         
-        student_logits = torch.randn(4, 10)
-        teacher_logits = torch.randn(4, 10)
-        labels = torch.randint(0, 10, (4,))
-        
-        loss_dict = kd.distillation_loss(student_logits, teacher_logits, labels)
+        loss_dict = kd_loss(student_logits, teacher_logits, labels)
         
         assert isinstance(loss_dict, dict)
         assert 'total_loss' in loss_dict
         assert 'kd_loss' in loss_dict
         assert 'ce_loss' in loss_dict
+        assert loss_dict['total_loss'].item() >= 0
 
 
 class TestContinualLearning:
@@ -139,16 +129,17 @@ class TestContinualLearning:
         model = nn.Linear(10, 10)
         ewc = ElasticWeightConsolidation(model, lambda_ewc=0.4)
         
-        # Set dummy Fisher info and optimal params
+        # Set dummy Fisher info and optimal params (attribute is 'fisher', not 'fisher_info')
         for name, param in model.named_parameters():
-            ewc.fisher_info[name] = torch.ones_like(param.data)
+            ewc.fisher[name] = torch.ones_like(param.data)
             ewc.optimal_params[name] = param.data.clone()
         
-        # Compute EWC loss
-        ewc_loss = ewc.ewc_loss()
+        # Compute EWC penalty
+        ewc_penalty = ewc.penalty()
         
-        assert ewc_loss is not None
-        assert isinstance(ewc_loss, torch.Tensor)
+        assert ewc_penalty is not None
+        assert isinstance(ewc_penalty, torch.Tensor)
+        assert ewc_penalty.item() >= 0
 
 
 class TestDataAugmentation:

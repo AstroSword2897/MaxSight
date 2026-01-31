@@ -213,6 +213,11 @@ class InferenceEngine:
             self.initialize()
         
         # Run inference with timing
+        # CRITICAL: Synchronize GPU before timing to get accurate latency measurements
+        device = next(self.model.parameters()).device if self.model is not None else torch.device('cpu')
+        if device.type == 'cuda':
+            torch.cuda.synchronize()
+        
         start_time = time.perf_counter()
         
         try:
@@ -221,6 +226,10 @@ class InferenceEngine:
                     outputs = self.model(image, audio_features)
                 else:
                     outputs = self.model(image)
+            
+            # CRITICAL: Synchronize GPU after inference to ensure completion
+            if device.type == 'cuda':
+                torch.cuda.synchronize()
             
             latency_ms = (time.perf_counter() - start_time) * 1000
             
@@ -252,6 +261,9 @@ class InferenceEngine:
             
         except Exception as e:
             logger.error(f"Inference failed: {e}")
+            # Synchronize GPU even on error to get accurate timing
+            if device.type == 'cuda':
+                torch.cuda.synchronize()
             latency_ms = (time.perf_counter() - start_time) * 1000
             
             self.metrics.add_inference(
