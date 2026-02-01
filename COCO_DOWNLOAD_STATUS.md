@@ -4,14 +4,15 @@
 
 ## Current Status
 
-✅ **Download in Progress**: `train2017.zip` is downloading via `curl` in background
+✅ **Download Resumed and Active**: `train2017.zip` is downloading via `curl` in background
 
 ### Download Progress
 
 - **File**: `datasets/coco_raw/train2017.zip`
 - **Expected Size**: ~18 GB
-- **Current Size**: ~640 MB (3.5% complete)
+- **Current Size**: ~6.8 GB (37.5% complete)
 - **Download Method**: `curl` with resume capability (`-C -`)
+- **Status**: ✅ **Download is active and progressing**
 
 ### Already Complete
 
@@ -98,12 +99,19 @@ Based on typical download speeds:
    ps aux | grep curl | grep train2017
    ```
 
-2. **If download stopped, resume it**:
+2. **If download stopped, resume it** (easiest method):
+   ```bash
+   ./scripts/resume_coco_download.sh
+   ```
+
+   Or manually:
    ```bash
    cd datasets/coco_raw
-   curl -L -C - --progress-bar --retry 3 -o train2017.zip \
+   curl -L -C - --progress-bar --retry 3 --max-time 3600 -o train2017.zip \
      "http://images.cocodataset.org/zips/train2017.zip"
    ```
+
+3. **Note**: The file is NOT corrupted if it's incomplete - you just can't validate it until download completes. This is normal behavior.
 
 3. **Check disk space**:
    ```bash
