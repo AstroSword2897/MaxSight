@@ -1240,29 +1240,32 @@ class MaxSightCNN(nn.Module):
         box_preds = torch.sigmoid(box_preds)  # Boxes are normalized to [0, 1]
         
         # CRITICAL: Sanitize box predictions to prevent NaN/Inf and zero-width boxes
-        # Replace NaN/Inf with default valid boxes
+        # Use non-inplace operations to avoid breaking GradNorm's multiple backward passes
         nan_inf_mask = torch.isnan(box_preds) | torch.isinf(box_preds)
         if nan_inf_mask.any():
             default_box = torch.tensor([0.5, 0.5, 0.1, 0.1], device=box_preds.device, dtype=box_preds.dtype)
-            for j in range(4):
-                box_preds[:, :, j].masked_fill_(nan_inf_mask[:, :, j], default_box[j])
+            # Use non-inplace masked_fill to avoid breaking computation graph
+            box_preds = torch.where(nan_inf_mask, default_box.unsqueeze(0).unsqueeze(0), box_preds)
         
         # Ensure minimum box dimensions (width and height must be >= 1e-4)
-        # This prevents matching failures during early training
-        box_preds[:, :, 2] = torch.clamp(box_preds[:, :, 2], min=1e-4, max=1.0)  # width
-        box_preds[:, :, 3] = torch.clamp(box_preds[:, :, 3], min=1e-4, max=1.0)  # height
+        # Use non-inplace clamp to avoid breaking computation graph
+        box_preds = torch.cat([
+            torch.clamp(box_preds[:, :, 0:1], min=0.0, max=1.0),  # x center
+            torch.clamp(box_preds[:, :, 1:2], min=0.0, max=1.0),  # y center
+            torch.clamp(box_preds[:, :, 2:3], min=1e-4, max=1.0),  # width
+            torch.clamp(box_preds[:, :, 3:4], min=1e-4, max=1.0)   # height
+        ], dim=2)
         
-        # Ensure box centers are in valid range [0, 1]
-        box_preds[:, :, 0] = torch.clamp(box_preds[:, :, 0], min=0.0, max=1.0)  # x center
-        box_preds[:, :, 1] = torch.clamp(box_preds[:, :, 1], min=0.0, max=1.0)  # y center
-        
-        # Sanitize logits to prevent NaN/Inf before sigmoid
+        # Sanitize logits to prevent NaN/Inf before sigmoid (non-inplace)
         if torch.isnan(obj_logits).any() or torch.isinf(obj_logits).any():
-            obj_logits.masked_fill_(torch.isnan(obj_logits) | torch.isinf(obj_logits), 0.0)
+            obj_logits = torch.where(torch.isnan(obj_logits) | torch.isinf(obj_logits), 
+                                     torch.zeros_like(obj_logits), obj_logits)
         if torch.isnan(text_logits).any() or torch.isinf(text_logits).any():
-            text_logits.masked_fill_(torch.isnan(text_logits) | torch.isinf(text_logits), 0.0)
+            text_logits = torch.where(torch.isnan(text_logits) | torch.isinf(text_logits),
+                                     torch.zeros_like(text_logits), text_logits)
         if torch.isnan(cls_logits).any() or torch.isinf(cls_logits).any():
-            cls_logits.masked_fill_(torch.isnan(cls_logits) | torch.isinf(cls_logits), 0.0)
+            cls_logits = torch.where(torch.isnan(cls_logits) | torch.isinf(cls_logits),
+                                    torch.zeros_like(cls_logits), cls_logits)
         
         obj_scores = torch.sigmoid(obj_logits)  # Objectness confidence - probability there's an object
         text_scores = torch.sigmoid(text_logits)  # Text probability - probability it's text
