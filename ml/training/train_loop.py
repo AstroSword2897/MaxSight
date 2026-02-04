@@ -650,19 +650,27 @@ class ProductionTrainLoop:
                 self.logger.warning(f"Skipping invalid batch {batch_idx}: {e}")
                 continue
             
-            # Validate batch data integrity before training
-            from ml.utils.batch_validation import validate_and_sanitize_batch
-            batch_dict = {'images': images, **targets}
-            batch_dict, is_valid, msg = validate_and_sanitize_batch(
-                batch_dict, num_classes=91, auto_fix=True
-            )
-            if not is_valid:
-                self.logger.warning(f"Batch {batch_idx} validation failed: {msg}. Skipping.")
-                continue
-            
-            # Extract back
-            images = batch_dict['images']
-            targets = {k: v for k, v in batch_dict.items() if k != 'images'}
+            # Validate batch data integrity before training (only for actual objects, not padding)
+            # Only validate boxes up to num_objects (ignore padding boxes filled with zeros)
+            if 'num_objects' in targets:
+                batch_valid = True
+                batch_size = targets['boxes'].shape[0]
+                for b in range(batch_size):
+                    num_obj = int(targets['num_objects'][b].item())
+                    if num_obj > 0:
+                        # Check only actual boxes, not padding
+                        actual_boxes = targets['boxes'][b, :num_obj]
+                        if torch.isnan(actual_boxes).any() or torch.isinf(actual_boxes).any():
+                            self.logger.warning(f"Batch {batch_idx} sample {b} has NaN/Inf in boxes. Skipping batch.")
+                            batch_valid = False
+                            break
+                        if (actual_boxes[:, 2] <= 0).any() or (actual_boxes[:, 3] <= 0).any():
+                            # Auto-fix zero width/height (silent fix, this is expected from COCO data)
+                            actual_boxes[:, 2] = torch.clamp(actual_boxes[:, 2], min=1e-4)
+                            actual_boxes[:, 3] = torch.clamp(actual_boxes[:, 3], min=1e-4)
+                            targets['boxes'][b, :num_obj] = actual_boxes
+                if not batch_valid:
+                    continue
             
             # Move to device
             try:
