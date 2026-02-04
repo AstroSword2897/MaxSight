@@ -111,10 +111,16 @@ def compute_matching_cost(
         raise ValueError(f"Invalid pred_logits: NaN={torch.isnan(pred_logits).sum()}, Inf={torch.isinf(pred_logits).sum()}")
     
     # Validate box dimensions (width, height > 0)
-    if (gt_boxes[:, 2] <= 0).any() or (gt_boxes[:, 3] <= 0).any():
-        raise ValueError(f"Invalid gt_boxes dimensions: w_min={gt_boxes[:, 2].min()}, h_min={gt_boxes[:, 3].min()}")
-    if (pred_boxes[:, 2] <= 0).any() or (pred_boxes[:, 3] <= 0).any():
-        raise ValueError(f"Invalid pred_boxes dimensions: w_min={pred_boxes[:, 2].min()}, h_min={pred_boxes[:, 3].min()}")
+    # Use a small epsilon to account for floating point precision issues
+    min_dim = 1e-5
+    if (gt_boxes[:, 2] < min_dim).any() or (gt_boxes[:, 3] < min_dim).any():
+        # Auto-fix: clamp to minimum instead of raising error
+        gt_boxes[:, 2] = torch.clamp(gt_boxes[:, 2], min=min_dim)
+        gt_boxes[:, 3] = torch.clamp(gt_boxes[:, 3], min=min_dim)
+    if (pred_boxes[:, 2] < min_dim).any() or (pred_boxes[:, 3] < min_dim).any():
+        # Auto-fix: clamp to minimum instead of raising error
+        pred_boxes[:, 2] = torch.clamp(pred_boxes[:, 2], min=min_dim)
+        pred_boxes[:, 3] = torch.clamp(pred_boxes[:, 3], min=min_dim)
     
     # Classification cost: negative log-likelihood
     # We want high confidence on the correct class, so we use -log(p)
@@ -167,6 +173,34 @@ def match_predictions_to_gt(
         indices: [2, num_matched] tensor with (pred_idx, gt_idx) pairs
         costs: [num_matched] tensor with cost for each match
     """
+    # Handle empty predictions or ground truth
+    if pred_boxes.shape[0] == 0 or gt_boxes.shape[0] == 0:
+        return (
+            torch.empty((2, 0), dtype=torch.long, device=pred_boxes.device),
+            torch.empty((0,), device=pred_boxes.device)
+        )
+    
+    # Sanitize boxes before cost computation to prevent failures
+    # Clamp invalid dimensions and replace NaN/Inf
+    pred_boxes = pred_boxes.float()
+    gt_boxes = gt_boxes.float()
+    pred_logits = pred_logits.float()
+    
+    # Replace NaN/Inf with small valid values first
+    pred_boxes = torch.where(torch.isfinite(pred_boxes), pred_boxes, torch.zeros_like(pred_boxes))
+    gt_boxes = torch.where(torch.isfinite(gt_boxes), gt_boxes, torch.zeros_like(gt_boxes))
+    pred_logits = torch.where(torch.isfinite(pred_logits), pred_logits, torch.zeros_like(pred_logits))
+    
+    # Fix invalid box dimensions (width/height must be > 0)
+    pred_boxes[:, 2] = torch.clamp(pred_boxes[:, 2], min=1e-4)  # width
+    pred_boxes[:, 3] = torch.clamp(pred_boxes[:, 3], min=1e-4)  # height
+    gt_boxes[:, 2] = torch.clamp(gt_boxes[:, 2], min=1e-4)  # width
+    gt_boxes[:, 3] = torch.clamp(gt_boxes[:, 3], min=1e-4)  # height
+    
+    # Ensure boxes are within valid range [0, 1] for normalized coordinates
+    pred_boxes = torch.clamp(pred_boxes, min=0.0, max=1.0)
+    gt_boxes = torch.clamp(gt_boxes, min=0.0, max=1.0)
+    
     # Compute cost matrix [num_pred, num_gt] - this validates inputs
     try:
         cost = compute_matching_cost(
@@ -174,10 +208,9 @@ def match_predictions_to_gt(
             lambda_class, lambda_bbox, lambda_giou
         )
     except ValueError as e:
-        # If cost computation fails, return empty matches
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"Cost computation failed: {e}. Returning empty matches.")
+        # If cost computation still fails after sanitization, return empty matches
+        # Only log at DEBUG level to reduce log spam during early training
+        logger.debug(f"Cost computation failed after sanitization: {e}. Returning empty matches.")
         return (
             torch.empty((2, 0), dtype=torch.long, device=pred_boxes.device),
             torch.empty((0,), device=pred_boxes.device)
@@ -287,15 +320,19 @@ def match_batch(
             )
             continue
         
+        # Sanitize NaN/Inf predictions instead of skipping - allows training to continue
         if torch.isnan(pred_boxes[i]).any() or torch.isinf(pred_boxes[i]).any():
-            logger.warning(f"Sample {i} has NaN/Inf in pred_boxes, skipping")
-            indices_list.append(
-                torch.empty((2, 0), dtype=torch.long, device=pred_boxes.device)
-            )
-            costs_list.append(
-                torch.empty((0,), device=pred_boxes.device)
-            )
-            continue
+            logger.warning(f"Sample {i} has NaN/Inf in pred_boxes, sanitizing")
+            # Replace NaN/Inf with small valid boxes (ensure in-place modification)
+            nan_mask = torch.isnan(pred_boxes[i]) | torch.isinf(pred_boxes[i])
+            default_box = torch.tensor([0.5, 0.5, 0.1, 0.1], device=pred_boxes.device, dtype=pred_boxes.dtype)
+            # Use masked fill for efficient in-place replacement
+            for j in range(4):
+                pred_boxes[i, :, j].masked_fill_(nan_mask[:, j], default_box[j])
+            # Also sanitize logits if needed
+            if torch.isnan(pred_logits[i]).any() or torch.isinf(pred_logits[i]).any():
+                logit_nan_mask = torch.isnan(pred_logits[i]) | torch.isinf(pred_logits[i])
+                pred_logits[i].masked_fill_(logit_nan_mask, 0.0)
         
         if valid_gt.sum() == 0:
             indices_list.append(

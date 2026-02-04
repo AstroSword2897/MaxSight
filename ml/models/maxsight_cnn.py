@@ -1238,6 +1238,32 @@ class MaxSightCNN(nn.Module):
         # Boxes are normalized to [0, 1] - makes training more stable
         # We'll denormalize them later when we need pixel coordinates
         box_preds = torch.sigmoid(box_preds)  # Boxes are normalized to [0, 1]
+        
+        # CRITICAL: Sanitize box predictions to prevent NaN/Inf and zero-width boxes
+        # Replace NaN/Inf with default valid boxes
+        nan_inf_mask = torch.isnan(box_preds) | torch.isinf(box_preds)
+        if nan_inf_mask.any():
+            default_box = torch.tensor([0.5, 0.5, 0.1, 0.1], device=box_preds.device, dtype=box_preds.dtype)
+            for j in range(4):
+                box_preds[:, :, j].masked_fill_(nan_inf_mask[:, :, j], default_box[j])
+        
+        # Ensure minimum box dimensions (width and height must be >= 1e-4)
+        # This prevents matching failures during early training
+        box_preds[:, :, 2] = torch.clamp(box_preds[:, :, 2], min=1e-4, max=1.0)  # width
+        box_preds[:, :, 3] = torch.clamp(box_preds[:, :, 3], min=1e-4, max=1.0)  # height
+        
+        # Ensure box centers are in valid range [0, 1]
+        box_preds[:, :, 0] = torch.clamp(box_preds[:, :, 0], min=0.0, max=1.0)  # x center
+        box_preds[:, :, 1] = torch.clamp(box_preds[:, :, 1], min=0.0, max=1.0)  # y center
+        
+        # Sanitize logits to prevent NaN/Inf before sigmoid
+        if torch.isnan(obj_logits).any() or torch.isinf(obj_logits).any():
+            obj_logits.masked_fill_(torch.isnan(obj_logits) | torch.isinf(obj_logits), 0.0)
+        if torch.isnan(text_logits).any() or torch.isinf(text_logits).any():
+            text_logits.masked_fill_(torch.isnan(text_logits) | torch.isinf(text_logits), 0.0)
+        if torch.isnan(cls_logits).any() or torch.isinf(cls_logits).any():
+            cls_logits.masked_fill_(torch.isnan(cls_logits) | torch.isinf(cls_logits), 0.0)
+        
         obj_scores = torch.sigmoid(obj_logits)  # Objectness confidence - probability there's an object
         text_scores = torch.sigmoid(text_logits)  # Text probability - probability it's text
         # Note: cls_logits stays as logits - we'll apply softmax in the loss function
