@@ -420,7 +420,9 @@ class GradNormMultiHeadLoss(nn.Module):
                     pred = aligned_pred.get('classification')
                     targ = aligned_target.get('labels')
                     if pred is not None and pred.numel() == 0:
-                        head_loss_dicts[head_name] = {'loss': torch.tensor(0.0, device=device)}
+                        # Create zero loss with requires_grad=True for GradNorm compatibility
+                        zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
+                        head_loss_dicts[head_name] = {'loss': zero_loss}
                         continue
                     # ClassificationLoss expects [B, N, C] and [B, N]; matched are [N, C] and [N]
                     if pred is not None and targ is not None and pred.dim() == 2:
@@ -430,13 +432,17 @@ class GradNormMultiHeadLoss(nn.Module):
                     pred = aligned_pred.get('box')
                     targ = aligned_target.get('boxes')
                     if pred is not None and pred.numel() == 0:
-                        head_loss_dicts[head_name] = {'loss': torch.tensor(0.0, device=device)}
+                        # Create zero loss with requires_grad=True for GradNorm compatibility
+                        zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
+                        head_loss_dicts[head_name] = {'loss': zero_loss}
                         continue
                 elif head_name == 'distance' and aligned_pred is not None:
                     pred = aligned_pred.get('distance')
                     targ = aligned_target.get('distance')
                     if pred is not None and pred.numel() == 0:
-                        head_loss_dicts[head_name] = {'loss': torch.tensor(0.0, device=device)}
+                        # Create zero loss with requires_grad=True for GradNorm compatibility
+                        zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
+                        head_loss_dicts[head_name] = {'loss': zero_loss}
                         continue
                 elif head_name == 'urgency':
                     pred = outputs.get('urgency_scores')
@@ -448,7 +454,9 @@ class GradNormMultiHeadLoss(nn.Module):
                     pred = outputs.get(out_key) if isinstance(outputs.get(out_key), torch.Tensor) else None
                     targ = targets.get(targ_key) if isinstance(targets.get(targ_key), torch.Tensor) else None
                 if pred is None or targ is None:
-                    head_loss_dicts[head_name] = {'loss': torch.tensor(0.0, device=device)}
+                    # Create zero loss with requires_grad=True for GradNorm compatibility
+                    zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
+                    head_loss_dicts[head_name] = {'loss': zero_loss}
                     continue
                 # ObjectnessLoss expects logits; model may return sigmoid scores
                 if head_name == 'objectness' and pred.dtype == torch.float32 and pred.min() >= 0 and pred.max() <= 1:
@@ -459,10 +467,14 @@ class GradNormMultiHeadLoss(nn.Module):
                 elif isinstance(loss, dict) and 'loss' in loss:
                     head_loss_dicts[head_name] = loss
                 else:
-                    head_loss_dicts[head_name] = {'loss': torch.tensor(0.0, device=device)}
+                    # Create zero loss with requires_grad=True for GradNorm compatibility
+                    zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
+                    head_loss_dicts[head_name] = {'loss': zero_loss}
             except Exception as e:
                 logger.warning(f"Failed to compute loss for {head_name}: {e}")
-                head_loss_dicts[head_name] = {'loss': torch.tensor(0.0, device=device)}
+                # Create zero loss with requires_grad=True for GradNorm compatibility
+                zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
+                head_loss_dicts[head_name] = {'loss': zero_loss}
         return head_loss_dicts
     
     def compute_gradient_norms(
@@ -489,6 +501,9 @@ class GradNormMultiHeadLoss(nn.Module):
         weighted_losses = []
         for i, head_name in enumerate(self.head_names):
             loss = head_losses[head_name]
+            # Ensure loss requires grad for GradNorm computation
+            if torch.is_tensor(loss) and not loss.requires_grad:
+                loss = loss.detach().requires_grad_(True)
             weighted_loss = self.task_weights[i] * loss
             weighted_losses.append(weighted_loss)
         
@@ -496,6 +511,11 @@ class GradNormMultiHeadLoss(nn.Module):
         gradient_norms = []
         
         for i, weighted_loss in enumerate(weighted_losses):
+            # Ensure weighted_loss requires grad before backward pass
+            if not weighted_loss.requires_grad:
+                logger.warning(f"Head {self.head_names[i]} loss does not require grad, skipping gradient norm computation")
+                gradient_norms.append(0.0)
+                continue
             model.zero_grad()
             weighted_loss.backward(retain_graph=True)
             grad_norm = 0.0
@@ -586,10 +606,19 @@ class GradNormMultiHeadLoss(nn.Module):
         self.iteration += 1
         
         head_loss_dicts = self.compute_head_losses(outputs, targets)
-        head_losses = {
-            name: loss_dict.get('loss', torch.tensor(0.0))
-            for name, loss_dict in head_loss_dicts.items()
-        }
+        # Extract losses, ensuring all have requires_grad=True for GradNorm compatibility
+        device = next((t.device for t in outputs.values() if torch.is_tensor(t)), torch.device('cpu'))
+        head_losses = {}
+        for name, loss_dict in head_loss_dicts.items():
+            loss = loss_dict.get('loss', None)
+            if loss is None:
+                loss = torch.tensor(0.0, device=device, requires_grad=True)
+            elif torch.is_tensor(loss) and not loss.requires_grad:
+                # If loss doesn't require grad, create a new tensor that does
+                loss = loss.detach().requires_grad_(True)
+            elif not torch.is_tensor(loss):
+                loss = torch.tensor(float(loss), device=device, requires_grad=True)
+            head_losses[name] = loss
         
         gradnorm_metrics = {}
         if model is not None and self.iteration % self.update_interval == 0:
