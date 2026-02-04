@@ -9,6 +9,7 @@ pillow>=9.5.0
 tqdm>=4.65.0
 tensorboard>=2.13.0
 scipy>=1.10.0
+optuna>=3.0.0  # AutoML hyperparameter tuning
 
 # Data handling
 pandas>=2.0.0
