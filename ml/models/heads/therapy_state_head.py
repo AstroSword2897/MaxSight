@@ -292,7 +292,7 @@ class TherapyStateHead(nn.Module):
         uncertainty = self.uncertainty_conv(uncertainty_feat).squeeze(1)  # [B, H, W]
         
         # Zone classification
-        depth_flat = depth_map.contiguous().reshape(B, -1)
+        depth_flat = depth_map.contiguous().reshape(B, -1).float()  # Ensure float for quantile
         p25 = torch.quantile(depth_flat, 0.25, dim=1)
         p50 = torch.quantile(depth_flat, 0.5, dim=1)
         p75 = torch.quantile(depth_flat, 0.75, dim=1)

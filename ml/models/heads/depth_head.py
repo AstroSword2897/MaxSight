@@ -201,7 +201,7 @@ class DepthHead(nn.Module):
         
         # Zone classification: grounded in depth with distributional statistics
         # Zones are distributional, not scalar - use percentiles, not just mean
-        depth_flat = depth_map.contiguous().reshape(B, -1)  # [B, H*W]
+        depth_flat = depth_map.contiguous().reshape(B, -1).float()  # [B, H*W] - ensure float for quantile
         
         # Compute depth percentiles (p25, p50, p75) for distributional awareness
         p25 = torch.quantile(depth_flat, 0.25, dim=1)  # [B]
