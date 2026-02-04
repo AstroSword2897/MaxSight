@@ -862,15 +862,38 @@ See `processing_reference.py` for complete reference:
 
 
 if __name__ == "__main__":
+    import argparse
     from ml.models.maxsight_cnn import create_model
-    
+
+    parser = argparse.ArgumentParser(description="Export MaxSight model to JIT, CoreML, ONNX, or ExecuTorch")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Path to checkpoint (.pth/.pt); if omitted, use untrained create_model()")
+    parser.add_argument("--format", type=str, choices=["jit", "coreml", "onnx", "executorch"], default=None, help="Export format (default: run all)")
+    parser.add_argument("--output", type=str, default=None, help="Output path (default: test_maxsight_<format>.<ext>)")
+    parser.add_argument("--device", type=str, choices=["cpu", "cuda", "mps"], default="cpu", help="Device for export")
+    args = parser.parse_args()
+
     model = create_model()
+    if args.checkpoint and Path(args.checkpoint).exists():
+        ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
+        if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+            model.load_state_dict(ckpt["model_state_dict"], strict=False)
+        else:
+            model.load_state_dict(ckpt, strict=False)
+        logger.info("Loaded checkpoint %s", args.checkpoint)
+    model = model.to(args.device)
     model.eval()
-    
-    print("Testing export functionality...")
-    export_to_jit(model, 'test_maxsight_traced.pt')
-    export_to_executorch(model, 'test_maxsight.pte')
-    export_to_coreml(model, 'test_maxsight.mlpackage')
-    export_to_onnx(model, 'test_maxsight.onnx')
-    print("Export system ready!")
+
+    defaults = {"jit": "test_maxsight.pt", "coreml": "test_maxsight.mlpackage", "onnx": "test_maxsight.onnx", "executorch": "test_maxsight.pte"}
+    formats_to_run = [args.format] if args.format else ["jit", "coreml", "onnx", "executorch"]
+    for fmt in formats_to_run:
+        out_path = args.output if (args.format and args.output) else (args.output or defaults[fmt])
+        if fmt == "jit":
+            export_to_jit(model, out_path, device=args.device)
+        elif fmt == "coreml":
+            export_to_coreml(model, out_path, device=args.device)
+        elif fmt == "onnx":
+            export_to_onnx(model, out_path)
+        elif fmt == "executorch":
+            export_to_executorch(model, out_path)
+    print("Export done.")
 

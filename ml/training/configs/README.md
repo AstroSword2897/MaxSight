@@ -42,13 +42,19 @@ This directory contains YAML configuration files for training different capabili
 
 ## Usage
 
-```bash
-# Train T0 baseline
-python scripts/train_maxsight.py --config ml/training/configs/t0_baseline.yaml
+`train_maxsight.py` does not take `--config`; it uses explicit arguments. Use the same data layout as `scripts/gather_training_data.py`:
 
-# Train T2 hybrid
-python scripts/train_maxsight.py --config ml/training/configs/t2_hybrid_vit.yaml
+```bash
+# Train (default tier T0)
+python scripts/train_maxsight.py \
+  --data-dir datasets/coco_raw \
+  --train-annotation datasets/cleaned_splits/maxsight_train.json \
+  --val-annotation datasets/cleaned_splits/maxsight_val.json \
+  --image-dir datasets/coco_raw \
+  --epochs 100 --device cuda
 ```
+
+The YAML files in this directory describe hyperparameters and tier settings for reference; to use a different tier you would need to pass a tier config into `create_model()` (e.g. via a future `--tier` flag).
 
 ## Configuration Structure
 

@@ -25,7 +25,6 @@ Usage:
         --output inference_stats.json
 """
 
-import argparse
 import json
 import sys
 from pathlib import Path
@@ -358,34 +357,4 @@ def collect_inference_data(
     return collector.compute_statistics()
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Collect inference dataset statistics")
-    parser.add_argument("--dataset", type=str, default="coco", 
-                       choices=["coco", "open_images", "bdd100k", "ade20k"],
-                       help="Dataset name")
-    parser.add_argument("--data-dir", type=str, required=True, help="Dataset directory")
-    parser.add_argument("--output", type=str, default="inference_stats.json", help="Output JSON file")
-    parser.add_argument("--max-samples", type=int, default=None, help="Maximum samples to process")
-    
-    args = parser.parse_args()
-    
-    data_dir = Path(args.data_dir)
-    output_path = Path(args.output)
-    
-    if not data_dir.exists():
-        print(f"❌ Dataset directory not found: {data_dir}")
-        return 1
-    
-    collect_inference_data(
-        dataset_name=args.dataset,
-        data_dir=data_dir,
-        output_path=output_path,
-        max_samples=args.max_samples
-    )
-    
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
 

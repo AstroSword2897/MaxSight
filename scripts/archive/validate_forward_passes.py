@@ -12,6 +12,7 @@ Tests:
 4. End-to-end dry run (no training)
 """
 
+import argparse
 import torch
 import torch.nn as nn
 import time
@@ -27,14 +28,24 @@ from ml.models.maxsight_cnn import create_model, CapabilityTier, TierConfig
 from ml.utils.preprocessing import ImagePreprocessor
 
 
-def get_device():
-    """Get best available device."""
+def get_device(requested: str = None):
+    """Get device. If requested is given, use it (with fallback). Else pick best available."""
+    if requested and requested != "auto":
+        if requested == "cuda" and torch.cuda.is_available():
+            return torch.device("cuda")
+        if requested == "mps" and getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            return torch.device("mps")
+        if requested == "cpu":
+            return torch.device("cpu")
+        if requested == "cuda":
+            return torch.device("cpu")
+        if requested == "mps":
+            return torch.device("cpu")
     if torch.cuda.is_available():
         return torch.device("cuda")
-    elif torch.backends.mps.is_available():
+    elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
         return torch.device("mps")
-    else:
-        return torch.device("cpu")
+    return torch.device("cpu")
 
 
 def create_test_input(batch_size: int = 2, device: torch.device = None) -> Dict[str, torch.Tensor]:
@@ -120,9 +131,11 @@ def test_tier_forward_pass(
                     _ = model(inputs['images'], audio_features=inputs['audio'])
                 else:
                     _ = model(inputs['images'])
-                # CUDA sync after warmup
+                # GPU sync after warmup (CUDA or MPS)
                 if device.type == 'cuda':
                     torch.cuda.synchronize()
+                elif device.type == 'mps':
+                    torch.mps.synchronize()
             except Exception as e:
                 print(f"  ⚠️  Warmup failed: {e}")
                 raise
@@ -134,6 +147,7 @@ def test_tier_forward_pass(
             torch.cuda.synchronize()
             memory_before = torch.cuda.memory_allocated() / 1024**2
         elif device.type == 'mps':
+            torch.mps.synchronize()
             torch.mps.empty_cache()
             memory_before = torch.mps.current_allocated_memory() / 1024**2
         else:
@@ -147,9 +161,11 @@ def test_tier_forward_pass(
         print("  Running forward passes...")
         with torch.no_grad():
             for i in range(num_runs):
-                # CUDA sync before timing
+                # GPU sync before timing (CUDA or MPS)
                 if device.type == 'cuda':
                     torch.cuda.synchronize()
+                elif device.type == 'mps':
+                    torch.mps.synchronize()
                 
                 start_time = time.time()
                 
@@ -160,9 +176,11 @@ def test_tier_forward_pass(
                 else:
                     outputs = model(inputs['images'])
                 
-                # CUDA sync after forward pass (critical for accurate timing)
+                # GPU sync after forward pass (critical for accurate timing)
                 if device.type == 'cuda':
                     torch.cuda.synchronize()
+                elif device.type == 'mps':
+                    torch.mps.synchronize()
                 
                 # Measure Stage A latency (if available)
                 if hasattr(model, '_last_stage_a_time'):
@@ -257,11 +275,15 @@ def test_tier_forward_pass(
 
 def main():
     """Run forward-pass validation for all tiers."""
+    parser = argparse.ArgumentParser(description="Forward-pass validation for all tiers")
+    parser.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda", "mps"], help="Device (default: auto)")
+    args = parser.parse_args()
+    
     print("="*60)
     print("HARD VALIDATION SPRINT: Forward-Pass Sanity Check")
     print("="*60)
     
-    device = get_device()
+    device = get_device(args.device)
     print(f"\nDevice: {device}")
     
     # Test all tiers (using correct enum names)

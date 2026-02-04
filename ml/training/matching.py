@@ -9,7 +9,11 @@ Based on DETR's approach with combined classification + bbox + GIoU costs.
 
 
 import torch
-from typing import Tuple, List
+import numpy as np
+import logging
+from typing import Tuple, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 def compute_giou_cost(pred_boxes: torch.Tensor, gt_boxes: torch.Tensor) -> torch.Tensor:
@@ -93,10 +97,30 @@ def compute_matching_cost(
     num_pred = pred_boxes.shape[0]
     num_gt = gt_boxes.shape[0]
     
+    # CRITICAL: Use float32 to avoid precision issues that cause NaN/Inf
+    pred_boxes = pred_boxes.float()
+    pred_logits = pred_logits.float()
+    gt_boxes = gt_boxes.float()
+    
+    # Validate inputs - check for NaN/Inf
+    if torch.isnan(pred_boxes).any() or torch.isinf(pred_boxes).any():
+        raise ValueError(f"Invalid pred_boxes: NaN={torch.isnan(pred_boxes).sum()}, Inf={torch.isinf(pred_boxes).sum()}")
+    if torch.isnan(gt_boxes).any() or torch.isinf(gt_boxes).any():
+        raise ValueError(f"Invalid gt_boxes: NaN={torch.isnan(gt_boxes).sum()}, Inf={torch.isinf(gt_boxes).sum()}")
+    if torch.isnan(pred_logits).any() or torch.isinf(pred_logits).any():
+        raise ValueError(f"Invalid pred_logits: NaN={torch.isnan(pred_logits).sum()}, Inf={torch.isinf(pred_logits).sum()}")
+    
+    # Validate box dimensions (width, height > 0)
+    if (gt_boxes[:, 2] <= 0).any() or (gt_boxes[:, 3] <= 0).any():
+        raise ValueError(f"Invalid gt_boxes dimensions: w_min={gt_boxes[:, 2].min()}, h_min={gt_boxes[:, 3].min()}")
+    if (pred_boxes[:, 2] <= 0).any() or (pred_boxes[:, 3] <= 0).any():
+        raise ValueError(f"Invalid pred_boxes dimensions: w_min={pred_boxes[:, 2].min()}, h_min={pred_boxes[:, 3].min()}")
+    
     # Classification cost: negative log-likelihood
     # We want high confidence on the correct class, so we use -log(p)
     probs = torch.softmax(pred_logits, dim=-1)
-    class_cost = -probs[:, gt_labels].log()  # [num_pred, num_gt]
+    # Add small epsilon to prevent log(0)
+    class_cost = -torch.log(probs[:, gt_labels] + 1e-8)  # [num_pred, num_gt]
     
     # L1 distance between box centers and sizes
     bbox_cost = torch.cdist(
@@ -114,6 +138,10 @@ def compute_matching_cost(
         lambda_bbox * bbox_cost +
         lambda_giou * giou_cost
     )
+    
+    # Final validation - ensure cost matrix is finite
+    if torch.isnan(total_cost).any() or torch.isinf(total_cost).any():
+        raise ValueError(f"Cost matrix contains invalid values: NaN={torch.isnan(total_cost).sum()}, Inf={torch.isinf(total_cost).sum()}")
     
     return total_cost
 
@@ -139,27 +167,47 @@ def match_predictions_to_gt(
         indices: [2, num_matched] tensor with (pred_idx, gt_idx) pairs
         costs: [num_matched] tensor with cost for each match
     """
-    # Compute cost matrix [num_pred, num_gt]
-    cost = compute_matching_cost(
-        pred_boxes, pred_logits, gt_boxes, gt_labels,
-        lambda_class, lambda_bbox, lambda_giou
-    )
+    # Compute cost matrix [num_pred, num_gt] - this validates inputs
+    try:
+        cost = compute_matching_cost(
+            pred_boxes, pred_logits, gt_boxes, gt_labels,
+            lambda_class, lambda_bbox, lambda_giou
+        )
+    except ValueError as e:
+        # If cost computation fails, return empty matches
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Cost computation failed: {e}. Returning empty matches.")
+        return (
+            torch.empty((2, 0), dtype=torch.long, device=pred_boxes.device),
+            torch.empty((0,), device=pred_boxes.device)
+        )
     
     if use_hungarian:
         # Use proper Hungarian algorithm for globally optimal assignment
         try:
             from scipy.optimize import linear_sum_assignment
-            cost_np = cost.cpu().numpy()
-            pred_indices, gt_indices = linear_sum_assignment(cost_np)
+            cost_np = cost.detach().cpu().numpy()
             
-            pred_idx = torch.tensor(pred_indices, dtype=torch.long, device=pred_boxes.device)
-            gt_idx = torch.tensor(gt_indices, dtype=torch.long, device=pred_boxes.device)
-            matched_costs = cost[pred_idx, gt_idx]
-            
-            indices = torch.stack([pred_idx, gt_idx])
-            return indices, matched_costs
-        except ImportError:
-            print("Warning: scipy not available, falling back to greedy matching")
+            # Final check: scipy will fail if cost matrix has NaN/Inf
+            if not np.isfinite(cost_np).all():
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Cost matrix has non-finite values, falling back to greedy matching")
+                use_hungarian = False
+            else:
+                pred_indices, gt_indices = linear_sum_assignment(cost_np)
+                
+                pred_idx = torch.tensor(pred_indices, dtype=torch.long, device=pred_boxes.device)
+                gt_idx = torch.tensor(gt_indices, dtype=torch.long, device=pred_boxes.device)
+                matched_costs = cost[pred_idx, gt_idx]
+                
+                indices = torch.stack([pred_idx, gt_idx])
+                return indices, matched_costs
+        except (ImportError, ValueError) as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Hungarian matching failed ({e}), falling back to greedy matching")
             use_hungarian = False
     
     # Greedy matching (faster, usually sufficient)
@@ -225,8 +273,29 @@ def match_batch(
     costs_list = []
     
     for i in range(batch_size):
-        # Skip samples with no ground truth
-        valid_gt = (gt_boxes[i, :, 2] > 0)
+        # Skip samples with no ground truth or invalid boxes
+        valid_gt = (gt_boxes[i, :, 2] > 0) & (gt_boxes[i, :, 3] > 0)
+        
+        # Additional validation: check for NaN/Inf in this sample
+        if torch.isnan(gt_boxes[i]).any() or torch.isinf(gt_boxes[i]).any():
+            logger.warning(f"Sample {i} has NaN/Inf in gt_boxes, skipping")
+            indices_list.append(
+                torch.empty((2, 0), dtype=torch.long, device=pred_boxes.device)
+            )
+            costs_list.append(
+                torch.empty((0,), device=pred_boxes.device)
+            )
+            continue
+        
+        if torch.isnan(pred_boxes[i]).any() or torch.isinf(pred_boxes[i]).any():
+            logger.warning(f"Sample {i} has NaN/Inf in pred_boxes, skipping")
+            indices_list.append(
+                torch.empty((2, 0), dtype=torch.long, device=pred_boxes.device)
+            )
+            costs_list.append(
+                torch.empty((0,), device=pred_boxes.device)
+            )
+            continue
         
         if valid_gt.sum() == 0:
             indices_list.append(
@@ -241,7 +310,7 @@ def match_batch(
         gt_boxes_valid = gt_boxes[i][valid_gt]
         gt_labels_valid = gt_labels[i][valid_gt]
         
-        # Find matches
+        # Find matches (with built-in error handling)
         indices, costs = match_predictions_to_gt(
             pred_boxes[i],
             pred_logits[i],
@@ -254,3 +323,83 @@ def match_batch(
         costs_list.append(costs)
     
     return indices_list, costs_list
+
+
+def build_matched_pred_targets(
+    outputs: Dict[str, Any],
+    targets: Dict[str, Any],
+) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+    """
+    Use Hungarian matching to align per-location predictions to per-object targets.
+    Returns (aligned_pred, aligned_target) dicts with keys expected by loss heads:
+    objectness, classification, box, distance, urgency (urgency left as-is from batch).
+
+    - objectness: pred [B, N], target [B, N] with 1 at matched locations, 0 elsewhere
+    - classification: pred [total_matched, C], target [total_matched]
+    - box: pred [total_matched, 4], target [total_matched, 4]
+    - distance: pred [total_matched, 3], target [total_matched]
+    - urgency: pred [B, 4], target [B] (unchanged)
+    """
+    import torch
+    B = outputs["boxes"].size(0)
+    N = outputs["boxes"].size(1)
+    device = outputs["boxes"].device
+    pred_boxes = outputs["boxes"]
+    pred_logits = outputs["classifications"]
+    gt_boxes = targets["boxes"]
+    gt_labels = targets["labels"].float().clamp(min=0).long()
+
+    indices_list, _ = match_batch(pred_boxes, pred_logits, gt_boxes, gt_labels)
+
+    # Objectness target: [B, N] with 1 at matched pred indices
+    target_objectness = torch.zeros(B, N, device=device, dtype=pred_boxes.dtype)
+    matched_pred_cls = []
+    matched_gt_cls = []
+    matched_pred_box = []
+    matched_gt_box = []
+    matched_pred_dist = []
+    matched_gt_dist = []
+
+    for i in range(B):
+        idx = indices_list[i]
+        if idx.size(1) == 0:
+            continue
+        valid_gt = (gt_boxes[i, :, 2] > 0)
+        gt_boxes_valid = gt_boxes[i][valid_gt]
+        gt_labels_valid = gt_labels[i][valid_gt]
+        num_gt_valid = gt_labels_valid.size(0)
+        N_i = pred_boxes.size(1)
+        # linear_sum_assignment(cost [num_pred, num_gt]) returns (row_ind=pred_idx, col_ind=gt_idx)
+        if idx[0].max().item() < N_i and idx[1].max().item() < num_gt_valid:
+            pred_idx, gt_idx = idx[0], idx[1]
+        elif idx[1].max().item() < N_i and idx[0].max().item() < num_gt_valid:
+            pred_idx, gt_idx = idx[1], idx[0]
+        else:
+            continue
+        target_objectness[i, pred_idx] = 1.0
+
+        gt_dist_valid = targets["distance"][i][valid_gt].long().clamp(0, 2)
+
+        matched_pred_cls.append(pred_logits[i][pred_idx])
+        matched_gt_cls.append(gt_labels_valid[gt_idx])
+        matched_pred_box.append(pred_boxes[i][pred_idx])
+        matched_gt_box.append(gt_boxes_valid[gt_idx])
+        if "distance_zones" in outputs and outputs["distance_zones"] is not None:
+            matched_pred_dist.append(outputs["distance_zones"][i][pred_idx])
+            matched_gt_dist.append(gt_dist_valid[gt_idx])
+
+    aligned_pred = {
+        "objectness": outputs["objectness"],
+        "classification": torch.cat(matched_pred_cls, dim=0) if matched_pred_cls else torch.empty(0, pred_logits.size(-1), device=device),
+        "box": torch.cat(matched_pred_box, dim=0) if matched_pred_box else torch.empty(0, 4, device=device),
+        "distance": torch.cat(matched_pred_dist, dim=0) if matched_pred_dist else torch.empty(0, 3, device=device),
+        "urgency_scores": outputs.get("urgency_scores"),
+    }
+    aligned_target = {
+        "objectness": target_objectness,
+        "labels": torch.cat(matched_gt_cls, dim=0) if matched_gt_cls else torch.empty(0, dtype=torch.long, device=device),
+        "boxes": torch.cat(matched_gt_box, dim=0) if matched_gt_box else torch.empty(0, 4, device=device),
+        "distance": torch.cat(matched_gt_dist, dim=0) if matched_gt_dist else torch.empty(0, dtype=torch.long, device=device),
+        "urgency": targets.get("urgency"),
+    }
+    return aligned_pred, aligned_target

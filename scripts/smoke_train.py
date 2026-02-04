@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+Meant to overfit as a boundary
 Smoke Training: Proof of Life (1-2 days)
 
 Goal: Verify gradients, loss flow, and stability.
@@ -9,8 +10,6 @@ NOT "real" training - this is about proof of life.
 - 1-2 epochs only
 - Overfit on purpose
 - Watch: loss decreasing, no NaNs, GPU memory stable, throughput reasonable
-
-If it can't overfit a tiny set, something is wrong. Fix it now, not later.
 """
 
 import torch
@@ -418,7 +417,7 @@ def smoke_train(
 def main():
     parser = argparse.ArgumentParser(description="Smoke training: proof of life")
     parser.add_argument("--tier", type=str, default="T2_HYBRID_VIT",
-                       choices=["T0_MOBILE", "T1_EDGE", "T2_HYBRID_VIT", "T3_CROSS_MODAL", "T4_CROSS_MODAL", "T5_TEMPORAL"],
+                       choices=["T0_BASELINE_CNN", "T1_ATTENTION", "T2_HYBRID_VIT", "T3_CROSS_TASK", "T4_CROSS_MODAL", "T5_TEMPORAL"],
                        help="Capability tier to test")
     parser.add_argument("--epochs", type=int, default=2, help="Number of epochs")
     parser.add_argument("--batches", type=int, default=10, help="Batches per epoch")

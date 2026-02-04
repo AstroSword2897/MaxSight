@@ -59,8 +59,8 @@ class ClassificationLoss(nn.Module):
             targets: [B, N] class indices
         """
         ce_loss = F.cross_entropy(
-            predictions.view(-1, self.num_classes),
-            targets.view(-1),
+            predictions.reshape(-1, self.num_classes),
+            targets.reshape(-1),
             reduction='none'
         )
         
@@ -122,8 +122,8 @@ class DistanceZoneLoss(nn.Module):
             targets: [B, N] zone indices
         """
         ce_loss = F.cross_entropy(
-            predictions.view(-1, self.num_zones),
-            targets.view(-1),
+            predictions.reshape(-1, self.num_zones),
+            targets.reshape(-1),
             weight=self.class_weights,
             reduction='mean'
         )
@@ -270,7 +270,7 @@ class SceneDescriptionLoss(nn.Module):
             predictions: [B, seq_len, vocab_size] logits
             targets: [B, seq_len] token indices
         """
-        return self.ce(predictions.view(-1, self.vocab_size), targets.view(-1))
+        return self.ce(predictions.reshape(-1, self.vocab_size), targets.reshape(-1))
 
 
 class OCRLoss(nn.Module):

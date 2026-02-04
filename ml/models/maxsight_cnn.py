@@ -9,6 +9,8 @@ import re  # For word boundary matching in urgency detection
 from typing import Dict, Optional, List, Any, Tuple
 from functools import lru_cache
 
+from ml.utils.stage_a_smoother import StageATemporalSmoother
+
 # COCO 80 base classes + accessibility classes for navigation
 COCO_BASE_CLASSES = [
     'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat',
@@ -1982,17 +1984,16 @@ class MaxSightCNN(nn.Module):
                 dist_id = int(filtered_distances[idx].argmax().item())
                 is_text = bool(filtered_text[idx].item() > 0.5)
                 
-                # Get urgency: use image-level if available, otherwise class-based per-detection
-                # NOTE: image_urgency applies to all detections in the image (scene-level risk)
+                # Safe lookups (class_name needed for urgency)
+                class_name = COCO_CLASSES[cls_id] if 0 <= cls_id < len(COCO_CLASSES) else 'unknown'
+                # Box area (normalized) for safety bias: box is [cx, cy, w, h]
+                box_t = filtered_boxes[idx]
+                box_area = float((box_t[2] * box_t[3]).item()) if box_t.dim() > 0 else 0.01
+                # Get urgency: use image-level if available, otherwise class-based with safety bias
                 if image_urgency is not None:
                     urgency_val = image_urgency  # Use image-level urgency
                 else:
-                    # Fallback to class-based urgency per detection
-                    class_name = COCO_CLASSES[cls_id] if 0 <= cls_id < len(COCO_CLASSES) else 'unknown'
-                    urgency_val = self._get_urgency(class_name)
-                
-                # Safe lookups
-                class_name = COCO_CLASSES[cls_id] if 0 <= cls_id < len(COCO_CLASSES) else 'unknown'
+                    urgency_val = self._get_urgency(class_name, box_size=box_area, confidence=score)
                 distance = DISTANCE_ZONES[dist_id] if 0 <= dist_id < len(DISTANCE_ZONES) else 'medium'
                 
                 # Calculate priority score (0-100) based on urgency and class
@@ -2015,6 +2016,10 @@ class MaxSightCNN(nn.Module):
                 
                 img_detections.append(detection)
             
+            # Stage A temporal smoothing (reduce flicker across frames)
+            if not hasattr(self, '_temporal_smoother'):
+                self._temporal_smoother = StageATemporalSmoother(alpha=0.7, max_age=5)
+            img_detections = self._temporal_smoother.smooth_detections(img_detections)
             detections.append(img_detections)
         
         return detections
@@ -2172,9 +2177,15 @@ class MaxSightCNN(nn.Module):
         
         return iou
     
-    def _get_urgency(self, class_name: str) -> int:
+    def _get_urgency(
+        self,
+        class_name: str,
+        box_size: Optional[float] = None,
+        confidence: Optional[float] = None,
+    ) -> int:
         """
-        Map object class to urgency level for user safety prioritization
+        Map object class to urgency level for user safety prioritization.
+        Safety bias: hazard classes and large/close objects get boosted urgency.
         
         Urgency levels:
         - 0: safe (low priority)
@@ -2184,42 +2195,47 @@ class MaxSightCNN(nn.Module):
         """
         # Urgency map is now initialized in __init__ for thread safety
         class_lower = class_name.lower()  # Case-insensitive matching
-        # Lowercase everything so "Car" and "car" are treated the same
-        
-        # CRITICAL FIX (Issue 5): Use exact mapping instead of substring matching
-        # Substring matching causes false positives: "cart" → contains "car" (wrong!)
-        # Use exact class name lookup with word boundaries for safety
         
         # Build exact match map from urgency_map (once, cached)
         if not hasattr(self, '_urgency_exact_map'):
             self._urgency_exact_map = {}
             for level, keywords in self._urgency_map.items():
                 for keyword in keywords:
-                    # Use word boundaries to prevent substring matches
                     pattern = r'\b' + re.escape(keyword.lower()) + r'\b'
                     self._urgency_exact_map[pattern] = level
         
-        # Check for exact matches with word boundaries
+        base_urgency = 0
         for pattern, level in self._urgency_exact_map.items():
             if re.search(pattern, class_lower):
                 if level == 'danger':
-                    return 3  # danger - highest priority
+                    base_urgency = 3
+                    break
                 elif level == 'warning':
-                    return 2  # warning - high priority
+                    base_urgency = 2
+                    break
                 elif level == 'caution':
-                    return 1  # caution - moderate priority
+                    base_urgency = 1
+                    break
         
-        # Fallback: Check exact class name match (most reliable)
-        if class_lower in [k.lower() for k in self._urgency_map.get('danger', [])]:
-            return 3
-        elif class_lower in [k.lower() for k in self._urgency_map.get('warning', [])]:
-            return 2
-        elif class_lower in [k.lower() for k in self._urgency_map.get('caution', [])]:
-            return 1
+        if base_urgency == 0:
+            if class_lower in [k.lower() for k in self._urgency_map.get('danger', [])]:
+                base_urgency = 3
+            elif class_lower in [k.lower() for k in self._urgency_map.get('warning', [])]:
+                base_urgency = 2
+            elif class_lower in [k.lower() for k in self._urgency_map.get('caution', [])]:
+                base_urgency = 1
         
-        # Everything else is safe - low priority
-        # Default case - if it doesn't match any keywords, it's probably not urgent
-        return 0  # safe - low priority
+        # Safety bias: over-warn for hazards and large/close objects
+        HAZARD_CLASSES = {
+            'car', 'truck', 'bus', 'motorcycle', 'bicycle', 'vehicle', 'train',
+            'fire', 'hazard', 'emergency', 'siren', 'alarm',
+        }
+        if confidence is not None and class_lower in HAZARD_CLASSES and confidence > 0.3:
+            base_urgency = max(base_urgency, 2)
+        if box_size is not None and box_size > 0.2:
+            base_urgency = min(base_urgency + 1, 3)
+        
+        return base_urgency
     
     def _calculate_priority(self, class_name: str, urgency: int, confidence: float) -> int:
         """

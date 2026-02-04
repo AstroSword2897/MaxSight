@@ -91,8 +91,8 @@ def test_parameter_count():
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     
-    # Model has grown to ~250M parameters (comprehensive class system)
-    assert 200_000_000 < total_params < 300_000_000
+    # T0 baseline ~99.6M; larger tiers up to ~250M (comprehensive class system)
+    assert 90_000_000 < total_params < 350_000_000
     assert trainable_params == total_params  # All should be trainable initially
     
     print(f"Parameter count test passed: {total_params:,} parameters")

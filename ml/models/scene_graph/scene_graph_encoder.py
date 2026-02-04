@@ -172,8 +172,8 @@ class SceneGraphEncoder(nn.Module):
         if boxes.dim() == 3:
             # Batched input - flatten for processing
             B, K, _ = boxes.shape
-            boxes_flat = boxes.view(-1, 4)
-            embeddings_flat = object_embeddings.view(-1, object_embeddings.shape[-1])
+            boxes_flat = boxes.reshape(-1, 4)
+            embeddings_flat = object_embeddings.reshape(-1, object_embeddings.shape[-1])
             if isinstance(object_classes[0], list):
                 classes_flat = [cls for scene_classes in object_classes for cls in scene_classes]
             else:
@@ -287,7 +287,12 @@ if TORCH_GEOMETRIC_AVAILABLE:
             self.lin = nn.Linear(in_channels, out_channels)
 
         def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: Optional[torch.Tensor] = None):
-            edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+            num_nodes = x.size(0)
+            edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)
+            # After self-loops we have num_edges + num_nodes edges; pad edge_attr with zeros for self-loops
+            if edge_attr is not None and edge_attr.size(0) < edge_index.size(1):
+                self_loop_attr = torch.zeros(num_nodes, edge_attr.size(1), device=edge_attr.device, dtype=edge_attr.dtype)
+                edge_attr = torch.cat([edge_attr, self_loop_attr], dim=0)
             return self.propagate(edge_index, x=x, edge_attr=edge_attr)
 
         def message(self, x_j, edge_attr=None):

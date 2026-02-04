@@ -210,6 +210,47 @@ def generate_edge_case_transforms() -> Dict[str, Callable]:
         result = x.clone()
         result[..., :new_h, :new_w] = x_back
         return result
+
+    def rain_simulation(x: torch.Tensor) -> torch.Tensor:
+        """Additive noise + blur + contrast reduction."""
+        if x.dim() == 3:
+            x = x.unsqueeze(0)
+        noise = torch.randn_like(x, device=x.device) * 0.1
+        kernel_size = 5
+        kernel = torch.ones(1, 1, kernel_size, kernel_size, device=x.device) / (kernel_size * kernel_size)
+        channels = x.shape[1]
+        kernel = kernel.expand(channels, 1, kernel_size, kernel_size)
+        blurred = F.conv2d(x + noise, kernel, padding=kernel_size // 2, groups=channels)
+        return (blurred * 0.8).clamp(0, 1).squeeze(0) if x.dim() == 4 else (blurred * 0.8).clamp(0, 1)
+
+    def glare_simulation(x: torch.Tensor) -> torch.Tensor:
+        """Specular highlights + overexposure patches."""
+        out = x.clone()
+        if out.dim() == 3:
+            h, w = out.shape[-2:]
+            n_patches = 3
+            for _ in range(n_patches):
+                py = int(torch.randint(0, max(1, h - 10), (1,)).item())
+                px = int(torch.randint(0, max(1, w - 10), (1,)).item())
+                out[..., py:py + 15, px:px + 15] = torch.clamp(
+                    out[..., py:py + 15, px:px + 15] + 0.6, 0, 1
+                )
+        return out
+
+    def camera_tilt(x: torch.Tensor) -> torch.Tensor:
+        """Affine rotation +/- 5 degrees."""
+        import math
+        angle_deg = (torch.rand(1).item() * 10 - 5) if x.device.type != 'cpu' else (np.random.uniform(-5, 5))
+        angle_rad = angle_deg * math.pi / 180
+        theta = torch.tensor([
+            [math.cos(angle_rad), -math.sin(angle_rad), 0],
+            [math.sin(angle_rad), math.cos(angle_rad), 0]
+        ], dtype=x.dtype, device=x.device).unsqueeze(0)
+        if x.dim() == 3:
+            x = x.unsqueeze(0)
+        grid = F.affine_grid(theta, x.size(), align_corners=False)
+        out = F.grid_sample(x, grid, align_corners=False, mode='bilinear', padding_mode='zeros')
+        return out.squeeze(0) if out.dim() == 4 and out.size(0) == 1 else out
     
     transforms = {
         'extreme_overexposure': extreme_overexposure,
@@ -219,6 +260,9 @@ def generate_edge_case_transforms() -> Dict[str, Callable]:
         'fog_haze': fog_haze,
         'sensor_noise': sensor_noise,
         'heavy_compression': heavy_compression,
+        'rain_simulation': rain_simulation,
+        'glare_simulation': glare_simulation,
+        'camera_tilt': camera_tilt,
     }
     
     return transforms

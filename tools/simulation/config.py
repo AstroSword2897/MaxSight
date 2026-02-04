@@ -25,6 +25,8 @@ class SimulatorConfig:
     max_ocr_texts_in_description: int = 3
     therapy_difficulty: float = 0.5
     urgency_warning_threshold: int = 2
+    max_alerts_per_frame: int = 5
+    alert_cooldown_frames: int = 5
     
     # Haptic/voice settings
     haptic_intensity_high: float = 0.7
@@ -51,6 +53,9 @@ class SimulatorConfig:
     
     # Default output mode
     default_output_mode: OutputMode = OutputMode.PATIENT
+
+    # Optional: path to trained checkpoint; if set, load state_dict into model after create_model()
+    model_checkpoint_path: Optional[str] = None
     
     # Confidence gating (patient safety)
     min_confidence_for_patient_output: float = 0.5  # Don't show low-confidence results

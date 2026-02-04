@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 *.so
@@ -74,6 +75,12 @@ exports/
 test_results/
 test_images/
 
+# Outputs and run artifacts
+outputs/
+baseline_output*
+production_rehearsal*
+throughput_results*
+
 # Temporary files
 *.tmp
 *.temp
@@ -105,8 +112,7 @@ forward_pass_paths.md
 ml/models/attention/cbam_attention.py
 ml/models/attention/cross_modal_attention.py
 ml/models/attention/cross_task_attention.py
-ml/utils/preprocessing.py
-ml/utils/output_scheduler.py
+# ml.utils.preprocessing.py and output_scheduler.py: required for training/simulator; do NOT ignore so they can be committed
 ml/training/train_loop.py
 ml/training/export.py
 ml/data/create_accessibility_dataset.py

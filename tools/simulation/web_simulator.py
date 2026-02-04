@@ -131,6 +131,8 @@ from .priority_queue import PriorityQueue, MessagePriority
 from .degraded_modes import DegradedState, DegradedMode
 from .output_hierarchy import OutputAuthorityManager, OutputAuthority, OutputRequest
 from .utils import get_device, preprocess_image, postprocess_outputs, run_inference, extract_urgency_level, prepare_scene_detections
+from ml.utils.priority_filter import PriorityBudgetFilter
+from ml.utils.alert_cooldown import AlertCooldownFilter
 
 # Setup structured logging
 logger = setup_structured_logging(config.log_level)
@@ -163,6 +165,41 @@ global_rate_limiter = GlobalRateLimiter(config.rate_limit_global)
 INFERENCE_SEMAPHORE = threading.Semaphore(value=1)  # Serialize inference for safety
 
 
+# ----------------------------------------------------------------------------
+# Pipeline latency tracker (per-stage timing for bottleneck analysis)
+# ----------------------------------------------------------------------------
+class PipelineLatencyTracker:
+    """Track per-stage pipeline timing: preprocess, gpu_transfer, model, postprocess, overlay, audio."""
+
+    STAGES = ("preprocess", "gpu_transfer", "model", "postprocess", "overlay", "audio")
+
+    def __init__(self):
+        self._stage_start: Optional[float] = None
+        self._current_stage: Optional[str] = None
+        self._times_ms: Dict[str, float] = {s: 0.0 for s in self.STAGES}
+
+    def start_stage(self, name: str) -> None:
+        if self._current_stage is not None:
+            self.end_stage()
+        self._current_stage = name
+        self._stage_start = time.perf_counter()
+
+    def end_stage(self) -> None:
+        if self._current_stage is not None and self._stage_start is not None:
+            elapsed_ms = (time.perf_counter() - self._stage_start) * 1000
+            self._times_ms[self._current_stage] = elapsed_ms
+        self._current_stage = None
+        self._stage_start = None
+
+    def get_breakdown(self) -> Dict[str, float]:
+        if self._current_stage is not None:
+            self.end_stage()
+        total = sum(self._times_ms.values())
+        out = dict(self._times_ms)
+        out["total_ms"] = total
+        return out
+
+
 # ============================================================================
 # Multi-User Architecture: Core (Shared) and Session (Per-User)
 # ============================================================================
@@ -188,6 +225,12 @@ class MaxSightCore:
         core_logger.info("Loading model")
         try:
             self.model = create_model()
+            checkpoint_path = getattr(config, "model_checkpoint_path", None)
+            if checkpoint_path and Path(checkpoint_path).exists():
+                ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+                state = ckpt.get("model_state_dict", ckpt) if isinstance(ckpt, dict) else ckpt
+                self.model.load_state_dict(state, strict=False)
+                core_logger.info("Loaded checkpoint: %s", checkpoint_path)
             self.model = self.model.to(self.device)
             self.model.eval()
             core_logger.info("Model loaded successfully")
@@ -760,34 +803,50 @@ class MaxSightSession:
                                       session_id=self.session_id,
                                       count=self._spatial_memory_count)
             
+            # Pipeline latency tracker (per-stage timing)
+            tracker = PipelineLatencyTracker()
+            
             # 1. Preprocessing
+            tracker.start_stage('preprocess')
             try:
                 image_tensor = self._preprocess_image(image)
             except Exception as e:
+                tracker.end_stage()
                 session_logger.error(f"Image preprocessing failed: {str(e)}", 
                                     session_id=self.session_id)
                 self.degraded_state.set_degraded(DegradedMode.VISION_UNSTABLE, str(e))
                 return {'error': 'Image preprocessing failed', 'degraded_mode': 'vision_unstable'}
+            tracker.end_stage()
             
             # Check abort before expensive operations
             if self._aborted:
                 return {'error': 'Session aborted', 'session_id': self.session_id}
             
             # 2. Model inference (thread-safe under no_grad)
+            tracker.start_stage('model')
             try:
                 outputs, inference_time = self._run_inference(image_tensor, audio_features)
             except Exception as e:
+                tracker.end_stage()
                 session_logger.error(f"Model inference failed: {str(e)}", 
                                     session_id=self.session_id)
                 self.degraded_state.set_degraded(DegradedMode.VISION_UNSTABLE, str(e))
                 return {'error': 'Model inference failed', 'degraded_mode': 'vision_unstable'}
+            tracker.end_stage()
             
             # Check abort after inference
             if self._aborted:
                 return {'error': 'Session aborted', 'session_id': self.session_id}
             
-            # 3. Post-process detections
+            # 3. Post-process detections + priority budget + alert cooldown
+            tracker.start_stage('postprocess')
             detections_list = self._postprocess_outputs(outputs, confidence_threshold=config.confidence_threshold)
+            if not hasattr(self, 'priority_filter'):
+                self.priority_filter = PriorityBudgetFilter(max_alerts_per_frame=config.max_alerts_per_frame)
+                self.alert_cooldown = AlertCooldownFilter(cooldown_frames=config.alert_cooldown_frames)
+            detections_list = self.priority_filter.filter_alerts(detections_list)
+            detections_list = self.alert_cooldown.filter_alerts(detections_list, frame_id=frame_id)
+            tracker.end_stage()
             
             # 4. OCR text detection
             ocr_results = self._run_ocr(image, outputs)
@@ -818,14 +877,47 @@ class MaxSightSession:
             if self._aborted:
                 return {'error': 'Session aborted', 'session_id': self.session_id}
             
-            # 10. Generate overlays
-            overlay_image_b64 = self._render_overlay(image, detections_list, ocr_results, path_info)
+            # Pipeline breakdown so far (for adaptive skip)
+            breakdown_so_far = tracker.get_breakdown()
+            total_so_far_ms = float(breakdown_so_far.get('total_ms', 0.0))
+            skip_non_critical = total_so_far_ms > 200.0
+            try:
+                import psutil
+                if psutil.cpu_percent(interval=None) > 80.0:
+                    skip_non_critical = True
+            except Exception:
+                pass
+            if skip_non_critical:
+                session_logger.debug(
+                    "Adaptive skip: pipeline %.0fms > 200ms or CPU > 80%%, skipping overlay/audio",
+                    total_so_far_ms,
+                    session_id=self.session_id,
+                )
             
-            # 11. Queue outputs (voice and haptic) - only if not aborted
-            if not self._aborted:
+            # 10. Generate overlays (skip if adaptive skip)
+            if not skip_non_critical:
+                tracker.start_stage('overlay')
+                overlay_image_b64 = self._render_overlay(image, detections_list, ocr_results, path_info)
+                tracker.end_stage()
+            else:
+                overlay_image_b64 = None
+            
+            # 11. Queue outputs (voice and haptic) - only if not aborted and not skipped
+            if not self._aborted and not skip_non_critical:
+                tracker.start_stage('audio')
                 voice_announcements, haptic_patterns = self._queue_outputs(scene_description, outputs, detections_list)
+                tracker.end_stage()
             else:
                 voice_announcements, haptic_patterns = [], []
+            
+            pipeline_breakdown = tracker.get_breakdown()
+            if session_logger.isEnabledFor(logging.DEBUG):
+                session_logger.debug(
+                    "Pipeline: total=%.1fms model=%.1fms",
+                    pipeline_breakdown.get('total_ms', 0),
+                    pipeline_breakdown.get('model', 0),
+                    session_id=self.session_id,
+                )
             
             # Update statistics
             self.stats['frames_processed'] += 1
@@ -857,6 +949,7 @@ class MaxSightSession:
                 final_judgment=final_judgment,
                 scheduled_outputs=scheduled_outputs
             )
+            result['pipeline_breakdown'] = pipeline_breakdown
             
             # Save baseline output for regression testing (first frame only)
             self._save_baseline_output(result)
@@ -1671,15 +1764,27 @@ class MaxSightSimulator:
         Returns response shaped by output_mode (patient/clinician/dev).
         """
         start_time = time.perf_counter()
+        tracker = PipelineLatencyTracker()
         
         # 1. Preprocessing
+        tracker.start_stage('preprocess')
         image_tensor = self._preprocess_image(image)
+        tracker.end_stage()
         
         # 2. Model inference
+        tracker.start_stage('model')
         outputs, inference_time = self._run_inference(image_tensor, audio_features)
+        tracker.end_stage()
         
-        # 3. Post-process detections
+        # 3. Post-process detections + priority budget + alert cooldown
+        tracker.start_stage('postprocess')
         detections_list = self._postprocess_outputs(outputs, confidence_threshold=config.confidence_threshold)
+        if not hasattr(self, 'priority_filter'):
+            self.priority_filter = PriorityBudgetFilter(max_alerts_per_frame=config.max_alerts_per_frame)
+            self.alert_cooldown = AlertCooldownFilter(cooldown_frames=config.alert_cooldown_frames)
+        detections_list = self.priority_filter.filter_alerts(detections_list)
+        detections_list = self.alert_cooldown.filter_alerts(detections_list, frame_id=None)
+        tracker.end_stage()
         
         # 4. OCR text detection
         ocr_results = self._run_ocr(image, outputs)
@@ -1706,11 +1811,33 @@ class MaxSightSimulator:
                     difficulty=config.therapy_difficulty
             )
         
+        breakdown_so_far = tracker.get_breakdown()
+        total_so_far_ms = float(breakdown_so_far.get('total_ms', 0.0))
+        skip_non_critical = total_so_far_ms > 200.0
+        try:
+            import psutil
+            if psutil.cpu_percent(interval=None) > 80.0:
+                skip_non_critical = True
+        except Exception:
+            pass
+        
         # 10. Generate overlays
-        overlay_image_b64 = self._render_overlay(image, detections_list, ocr_results, path_info)
+        if not skip_non_critical:
+            tracker.start_stage('overlay')
+            overlay_image_b64 = self._render_overlay(image, detections_list, ocr_results, path_info)
+            tracker.end_stage()
+        else:
+            overlay_image_b64 = None
         
         # 11. Queue outputs (voice and haptic)
-        voice_announcements, haptic_patterns = self._queue_outputs(scene_description, outputs, detections_list)
+        if not skip_non_critical:
+            tracker.start_stage('audio')
+            voice_announcements, haptic_patterns = self._queue_outputs(scene_description, outputs, detections_list)
+            tracker.end_stage()
+        else:
+            voice_announcements, haptic_patterns = [], []
+        
+        pipeline_breakdown = tracker.get_breakdown()
         
         # Update statistics
         self.stats['frames_processed'] += 1
@@ -1742,6 +1869,7 @@ class MaxSightSimulator:
             final_judgment=final_judgment,
             scheduled_outputs=scheduled_outputs
         )
+        result['pipeline_breakdown'] = pipeline_breakdown
         
         # Save baseline output for regression testing (first frame only)
         self._save_baseline_output(result)
@@ -2028,16 +2156,16 @@ class MaxSightSimulator:
         """
         if self.stats['frames_processed'] == config.baseline_save_frame:
             try:
-                # Convert tensors to lists for JSON serialization
+                stats = result.get('stats', {})
                 baseline = {
-                    'frame_number': result['frame_number'],
-                    'num_detections': result['num_detections'],
-                    'num_text_regions': result['num_text_regions'],
-                    'processing_time_ms': result['processing_time_ms'],
-                    'inference_time_ms': result['inference_time_ms'],
-                    'scene_description': result.get('scene_description', ''),
+                    'frame_number': result.get('frame_number', stats.get('frames_processed', 0)),
+                    'num_detections': result.get('num_detections', stats.get('total_detections', 0)),
+                    'num_text_regions': result.get('num_text_regions', 0),
+                    'processing_time_ms': result.get('processing_time_ms', result.get('total_time_ms', 0)),
+                    'inference_time_ms': result.get('inference_time_ms', stats.get('avg_latency_ms', 0)),
+                    'scene_description': result.get('scene_description', result.get('message', '')),
                     'urgency_scores': result.get('urgency_scores', []),
-                    'stats': result.get('stats', {})
+                    'stats': stats
                 }
                 with open(self.baseline_output_path, 'w') as f:
                     json.dump(baseline, f, indent=2)

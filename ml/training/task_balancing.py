@@ -376,20 +376,92 @@ class GradNormMultiHeadLoss(nn.Module):
         """Set shared parameters for gradient norm computation."""
         self.shared_params = shared_params
     
+    # Map loss head names to model output keys and batch target keys (for aligned tensor extraction)
+    OUTPUT_KEY_MAP = {
+        'objectness': 'objectness',
+        'classification': 'classifications',
+        'box': 'boxes',
+        'distance': 'distance_zones',
+        'urgency': 'urgency_scores',
+    }
+    TARGET_KEY_MAP = {
+        'objectness': 'objectness',  # batch may not have; build from labels or skip
+        'classification': 'labels',
+        'box': 'boxes',
+        'distance': 'distance',
+        'urgency': 'urgency',
+    }
+
     def compute_head_losses(
         self,
         outputs: Dict[str, torch.Tensor],
         targets: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        """Compute losses for all heads."""
+        """Compute losses for all heads. Uses Hungarian matching to align detection pred/targets, then per-head losses."""
         head_loss_dicts = {}
+        device = next((t.device for t in outputs.values() if torch.is_tensor(t)), torch.device('cpu'))
+        aligned_pred, aligned_target = None, None
+        if ('boxes' in outputs and 'classifications' in outputs and
+                'boxes' in targets and 'labels' in targets and
+                outputs['boxes'].dim() == 3 and targets['boxes'].dim() == 3):
+            try:
+                from ml.training.matching import build_matched_pred_targets
+                aligned_pred, aligned_target = build_matched_pred_targets(outputs, targets)
+            except Exception as e:
+                logger.warning(f"Matching failed, using direct keys: {e}")
+
         for head_name, loss_fn in self.head_losses.items():
             try:
-                loss_dict = loss_fn(outputs, targets)
-                head_loss_dicts[head_name] = loss_dict
+                pred, targ = None, None
+                if head_name == 'objectness' and aligned_pred is not None:
+                    pred = aligned_pred.get('objectness')
+                    targ = aligned_target.get('objectness')
+                elif head_name == 'classification' and aligned_pred is not None:
+                    pred = aligned_pred.get('classification')
+                    targ = aligned_target.get('labels')
+                    if pred is not None and pred.numel() == 0:
+                        head_loss_dicts[head_name] = {'loss': torch.tensor(0.0, device=device)}
+                        continue
+                    # ClassificationLoss expects [B, N, C] and [B, N]; matched are [N, C] and [N]
+                    if pred is not None and targ is not None and pred.dim() == 2:
+                        pred = pred.unsqueeze(0)
+                        targ = targ.unsqueeze(0)
+                elif head_name == 'box' and aligned_pred is not None:
+                    pred = aligned_pred.get('box')
+                    targ = aligned_target.get('boxes')
+                    if pred is not None and pred.numel() == 0:
+                        head_loss_dicts[head_name] = {'loss': torch.tensor(0.0, device=device)}
+                        continue
+                elif head_name == 'distance' and aligned_pred is not None:
+                    pred = aligned_pred.get('distance')
+                    targ = aligned_target.get('distance')
+                    if pred is not None and pred.numel() == 0:
+                        head_loss_dicts[head_name] = {'loss': torch.tensor(0.0, device=device)}
+                        continue
+                elif head_name == 'urgency':
+                    pred = outputs.get('urgency_scores')
+                    targ = targets.get('urgency')
+
+                if pred is None or targ is None:
+                    out_key = self.OUTPUT_KEY_MAP.get(head_name, head_name)
+                    targ_key = self.TARGET_KEY_MAP.get(head_name, head_name)
+                    pred = outputs.get(out_key) if isinstance(outputs.get(out_key), torch.Tensor) else None
+                    targ = targets.get(targ_key) if isinstance(targets.get(targ_key), torch.Tensor) else None
+                if pred is None or targ is None:
+                    head_loss_dicts[head_name] = {'loss': torch.tensor(0.0, device=device)}
+                    continue
+                # ObjectnessLoss expects logits; model may return sigmoid scores
+                if head_name == 'objectness' and pred.dtype == torch.float32 and pred.min() >= 0 and pred.max() <= 1:
+                    pred = torch.logit(torch.clamp(pred, 1e-4, 1.0 - 1e-4))
+                loss = loss_fn(pred, targ)
+                if torch.is_tensor(loss):
+                    head_loss_dicts[head_name] = {'loss': loss}
+                elif isinstance(loss, dict) and 'loss' in loss:
+                    head_loss_dicts[head_name] = loss
+                else:
+                    head_loss_dicts[head_name] = {'loss': torch.tensor(0.0, device=device)}
             except Exception as e:
                 logger.warning(f"Failed to compute loss for {head_name}: {e}")
-                device = next(iter(outputs.values())).device
                 head_loss_dicts[head_name] = {'loss': torch.tensor(0.0, device=device)}
         return head_loss_dicts
     
@@ -447,42 +519,59 @@ class GradNormMultiHeadLoss(nn.Module):
         head_losses: Dict[str, torch.Tensor],
         gradient_norms: torch.Tensor
     ) -> Dict[str, float]:
-        """Update task weights using GradNorm algorithm."""
+        """Update task weights using GradNorm algorithm.
+        On MPS, GradNorm math runs on CPU to avoid unsupported ops; weights are then copied back.
+        """
+        orig_device = self.task_weights.device
+        use_cpu_fallback = orig_device.type == 'mps'
+        if use_cpu_fallback:
+            gradient_norms = gradient_norms.detach().cpu()
+
         if not self.initialized:
             head_loss_list = [head_losses[name] for name in self.head_names]
             self.initial_losses = torch.stack([
                 loss.detach() if torch.is_tensor(loss) else torch.tensor(loss)
                 for loss in head_loss_list
             ])
+            if use_cpu_fallback:
+                self.initial_losses = self.initial_losses.cpu()
+            self.initial_losses = self.initial_losses.to(gradient_norms.device)
             self.initialized = True
             return {}
-        
+
         head_loss_list = [head_losses[name] for name in self.head_names]
         current_losses = torch.stack([
             loss.detach() if torch.is_tensor(loss) else torch.tensor(loss)
             for loss in head_loss_list
         ])
-        relative_losses = current_losses / (self.initial_losses + 1e-8)
+        current_losses = current_losses.to(gradient_norms.device)
+        init_losses = self.initial_losses.to(gradient_norms.device)
+
+        relative_losses = current_losses / (init_losses + 1e-8)
         avg_grad_norm = gradient_norms.mean()
         relative_inverse_rates = relative_losses ** self.alpha
         target_grad_norms = avg_grad_norm * relative_inverse_rates
         gradnorm_loss = F.l1_loss(gradient_norms, target_grad_norms)
-        
+
         weight_updates = (target_grad_norms - gradient_norms) / (gradient_norms + 1e-8)
         weight_updates = torch.clamp(weight_updates, -0.1, 0.1)
-        
+
         with torch.no_grad():
-            self.task_weights.data = self.task_weights.data * (1.0 + 0.01 * weight_updates)
-            self.task_weights.data = torch.clamp(self.task_weights.data, 0.1, 10.0)
-        
+            weights = self.task_weights.data.to(gradient_norms.device)
+            weights = weights * (1.0 + 0.01 * weight_updates)
+            weights = torch.clamp(weights, 0.1, 10.0)
+            self.task_weights.data = weights.to(orig_device)
+            if use_cpu_fallback:
+                self.initial_losses = init_losses.to(orig_device)
+
         metrics = {
             'gradnorm_loss': gradnorm_loss.item(),
             'avg_grad_norm': avg_grad_norm.item(),
-            'task_weights': {name: self.task_weights[i].item() 
+            'task_weights': {name: self.task_weights[i].item()
                            for i, name in enumerate(self.head_names)},
-            'relative_losses': {name: relative_losses[i].item() 
+            'relative_losses': {name: relative_losses[i].item()
                                for i, name in enumerate(self.head_names)},
-            'gradient_norms': {name: gradient_norms[i].item() 
+            'gradient_norms': {name: gradient_norms[i].item()
                              for i, name in enumerate(self.head_names)}
         }
         return metrics

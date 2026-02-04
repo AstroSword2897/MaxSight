@@ -99,6 +99,43 @@ class CircuitBreakerConfig:
     stabilization_window: int = 3  # Frames to stabilize before alerts
 
 
+class ThermalThrottleDetector:
+    """
+    Detect sustained latency degradation (e.g. thermal throttling).
+    Uses a sliding window: if current avg latency > baseline * 2.0, return True.
+    """
+
+    def __init__(self, window_size_seconds: float = 30.0):
+        self.window_size = window_size_seconds
+        self.latency_history: List[Tuple[float, float]] = []  # (timestamp, latency_ms)
+        self.baseline_latency: Optional[float] = None
+
+    def check_thermal_throttle(self, current_latency: float) -> bool:
+        now = time.time()
+        self.latency_history.append((now, current_latency))
+        # Prune old entries
+        cutoff = now - self.window_size
+        self.latency_history = [(t, L) for t, L in self.latency_history if t >= cutoff]
+        if len(self.latency_history) < 10:
+            return False
+        # Baseline = avg of first 5
+        if self.baseline_latency is None:
+            self.baseline_latency = sum(L for _, L in self.latency_history[:5]) / 5.0
+        # Current = avg of last 10
+        recent = self.latency_history[-10:]
+        current_avg = sum(L for _, L in recent) / len(recent)
+        if self.baseline_latency <= 0:
+            return False
+        if current_avg > self.baseline_latency * 2.0:
+            logger.warning(
+                "Thermal throttling detected: current_avg=%.1fms baseline=%.1fms",
+                current_avg,
+                self.baseline_latency,
+            )
+            return True
+        return False
+
+
 class InferenceEngine:
     """
     Spine of MaxSight inference with state machine and circuit breaker.
@@ -116,16 +153,18 @@ class InferenceEngine:
         device: Optional[str] = None,
         condition_mode: Optional[str] = None,
         output_mode: OutputMode = OutputMode.PATIENT,
-        circuit_breaker_config: Optional[CircuitBreakerConfig] = None
+        circuit_breaker_config: Optional[CircuitBreakerConfig] = None,
+        checkpoint_path: Optional[str] = None,
     ):
         """
         Initialize inference engine.
-        
+
         Args:
             device: Device to run on ('cpu', 'cuda', 'mps')
             condition_mode: Visual condition mode
             output_mode: Output mode (patient/clinician/dev)
             circuit_breaker_config: Circuit breaker configuration
+            checkpoint_path: Optional path to trained checkpoint; if set, load state_dict in initialize()
         """
         self.output_mode = output_mode
         self.condition_mode = condition_mode
@@ -156,20 +195,27 @@ class InferenceEngine:
         # Warmup/stabilization tracking
         self.warmup_count = 0
         self.in_stabilization = True
-    
+        self.thermal_detector = ThermalThrottleDetector(window_size_seconds=30.0)
+        self.checkpoint_path = checkpoint_path
+
     def initialize(self):
         """Initialize model and preprocessor."""
         if self.state != InferenceState.INIT:
             logger.warning(f"Cannot initialize from state {self.state}")
             return
-        
+
         logger.info("Initializing model and preprocessor...")
-        
+
         # Load model
         self.model = create_model(condition_mode=self.condition_mode)
+        if self.checkpoint_path and Path(self.checkpoint_path).exists():
+            ckpt = torch.load(self.checkpoint_path, map_location="cpu", weights_only=True)
+            state = ckpt.get("model_state_dict", ckpt) if isinstance(ckpt, dict) else ckpt
+            self.model.load_state_dict(state, strict=False)
+            logger.info("Loaded checkpoint: %s", self.checkpoint_path)
         self.model = self.model.to(self.device)
         self.model.eval()
-        
+
         # Load preprocessor
         self.preprocessor = ImagePreprocessor(condition_mode=self.condition_mode)
         
@@ -182,12 +228,12 @@ class InferenceEngine:
     def _warmup(self):
         """Warmup model with dummy inputs."""
         logger.info("Warming up model...")
+        if self.model is None:
+            return
         dummy_input = torch.randn(1, 3, 224, 224).to(self.device)
-        
         with torch.no_grad():
             for _ in range(3):
                 _ = self.model(dummy_input)
-        
         logger.info("Warmup complete")
     
     def infer(
@@ -211,12 +257,15 @@ class InferenceEngine:
         
         if self.model is None:
             self.initialize()
+        assert self.model is not None  # Narrow type after initialize()
         
         # Run inference with timing
-        # CRITICAL: Synchronize GPU before timing to get accurate latency measurements
-        device = next(self.model.parameters()).device if self.model is not None else torch.device('cpu')
+        # CRITICAL: Synchronize GPU before timing (CUDA or MPS) for accurate latency measurements
+        device = next(self.model.parameters()).device
         if device.type == 'cuda':
             torch.cuda.synchronize()
+        elif device.type == 'mps':
+            torch.mps.synchronize()
         
         start_time = time.perf_counter()
         
@@ -230,6 +279,8 @@ class InferenceEngine:
             # CRITICAL: Synchronize GPU after inference to ensure completion
             if device.type == 'cuda':
                 torch.cuda.synchronize()
+            elif device.type == 'mps':
+                torch.mps.synchronize()
             
             latency_ms = (time.perf_counter() - start_time) * 1000
             
@@ -243,6 +294,12 @@ class InferenceEngine:
                 success=True,
                 fallback_used=False
             )
+            
+            # Thermal throttling: sustained degradation -> DEGRADED
+            if self.thermal_detector.check_thermal_throttle(latency_ms):
+                if self.state == InferenceState.STABLE:
+                    logger.warning("Thermal throttling detected, transitioning to DEGRADED")
+                    self.state = InferenceState.DEGRADED
             
             # Check state transitions
             self._check_state_transition()
@@ -264,6 +321,8 @@ class InferenceEngine:
             # Synchronize GPU even on error to get accurate timing
             if device.type == 'cuda':
                 torch.cuda.synchronize()
+            elif device.type == 'mps':
+                torch.mps.synchronize()
             latency_ms = (time.perf_counter() - start_time) * 1000
             
             self.metrics.add_inference(

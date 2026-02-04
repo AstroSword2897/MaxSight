@@ -1,20 +1,14 @@
 {
   "frame_number": 1,
-  "num_detections": 20,
+  "num_detections": 2,
   "num_text_regions": 0,
-  "processing_time_ms": 32.855041325092316,
-  "inference_time_ms": 29.78945802897215,
-  "scene_description": "No objects detected",
-  "urgency_scores": [
-    0.05024956911802292,
-    0.24673359096050262,
-    0.014839294366538525,
-    0.01911264657974243
-  ],
+  "processing_time_ms": 0,
+  "inference_time_ms": 49.77079201489687,
+  "scene_description": "No objects detected Text detected: [Text detected - install pytesseract for extraction], [Text detected - install pytesseract for extraction], [Text detected - install pytesseract for extraction].",
+  "urgency_scores": [],
   "stats": {
     "frames_processed": 1,
-    "total_detections": 20,
-    "avg_latency_ms": 29.78945802897215,
-    "total_inference_time": 0.02978945802897215
+    "avg_latency_ms": 49.77079201489687,
+    "total_detections": 2
   }
 }

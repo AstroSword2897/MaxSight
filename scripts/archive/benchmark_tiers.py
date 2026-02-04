@@ -26,18 +26,29 @@ import argparse
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ml.models.maxsight_cnn import create_model, CapabilityTier
+from ml.models.maxsight_cnn import create_model, CapabilityTier, TierConfig
 from ml.training.export import export_to_coreml, export_to_onnx, export_to_jit
 
 
-def get_device():
-    """Get best available device."""
+def get_device(requested: str = None):
+    """Get device. If requested is 'cpu', 'cuda', or 'mps', use it (with fallback). If None or 'auto', pick best available."""
+    if requested and requested != "auto":
+        if requested == "cuda" and torch.cuda.is_available():
+            return torch.device("cuda")
+        if requested == "mps" and getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            return torch.device("mps")
+        if requested == "cpu":
+            return torch.device("cpu")
+        # Fallback if requested device not available
+        if requested == "cuda":
+            return torch.device("cpu")
+        if requested == "mps":
+            return torch.device("cpu")
     if torch.cuda.is_available():
         return torch.device("cuda")
-    elif torch.backends.mps.is_available():
+    elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
         return torch.device("mps")
-    else:
-        return torch.device("cpu")
+    return torch.device("cpu")
 
 
 def benchmark_model(
@@ -59,10 +70,9 @@ def benchmark_model(
     try:
         # Create model
         model = create_model(
-            tier=tier,
             num_classes=91,
             use_audio=(tier.value >= 4),
-            device=device
+            tier_config=TierConfig.for_tier(tier)
         )
         model.eval()
         model = model.to(device)
@@ -76,14 +86,17 @@ def benchmark_model(
             'total_mb': total_params * 4 / 1024**2,  # Assume float32
         }
         
-        # Create input
+        # Create input (model expects audio_features [B, 128], not raw waveform)
         images = torch.randn(batch_size, 3, 224, 224, device=device)
-        audio = torch.randn(batch_size, 16000, device=device) if tier.value >= 4 else None
+        audio_features = torch.randn(batch_size, 128, device=device) if tier.value >= 4 else None
         
         # Warmup
         with torch.no_grad():
             for _ in range(5):
-                _ = model(images, audio=audio)
+                if audio_features is not None:
+                    _ = model(images, audio_features=audio_features)
+                else:
+                    _ = model(images)
         
         # Measure memory
         if device.type == 'cuda':
@@ -101,14 +114,20 @@ def benchmark_model(
         
         with torch.no_grad():
             for _ in range(num_runs):
-                # CRITICAL: Synchronize GPU before timing for accurate latency measurements
+                # CRITICAL: Synchronize GPU before timing (CUDA or MPS) for accurate latency
                 if device.type == 'cuda':
                     torch.cuda.synchronize()
+                elif device.type == 'mps':
+                    torch.mps.synchronize()
                 start = time.perf_counter()
-                outputs = model(images, audio=audio)
-                # CRITICAL: Synchronize GPU after inference to ensure completion
+                if audio_features is not None:
+                    outputs = model(images, audio_features=audio_features)
+                else:
+                    outputs = model(images)
                 if device.type == 'cuda':
                     torch.cuda.synchronize()
+                elif device.type == 'mps':
+                    torch.mps.synchronize()
                 elapsed = (time.perf_counter() - start) * 1000  # ms
                 latencies.append(elapsed)
                 
@@ -200,25 +219,21 @@ def benchmark_export(tier: CapabilityTier, device: torch.device) -> Dict:
     try:
         # Create model
         model = create_model(
-            tier=tier,
             num_classes=91,
             use_audio=(tier.value >= 4),
-            device=device
+            tier_config=TierConfig.for_tier(tier)
         )
         model.eval()
+        model = model.to(device)
         
-        # Create dummy input
-        dummy_input = torch.randn(1, 3, 224, 224)
-        if tier.value >= 4:
-            dummy_audio = torch.randn(1, 16000)
-        else:
-            dummy_audio = None
+        # Dummy input size for export (image only)
+        input_size = (1, 3, 224, 224)
         
         # Test JIT export
         try:
             print("  Testing JIT export...")
             jit_path = Path(f"/tmp/maxsight_{tier.name.lower()}_jit.pt")
-            export_to_jit(model, str(jit_path), device=str(device))
+            export_to_jit(model, str(jit_path), input_size=input_size, device=str(device))
             jit_size = jit_path.stat().st_size / 1024**2  # MB
             results['exports']['jit'] = {'size_mb': jit_size, 'success': True}
             print(f"    ✅ JIT: {jit_size:.2f} MB")
@@ -231,7 +246,7 @@ def benchmark_export(tier: CapabilityTier, device: torch.device) -> Dict:
         try:
             print("  Testing ONNX export...")
             onnx_path = Path(f"/tmp/maxsight_{tier.name.lower()}_onnx.onnx")
-            export_to_onnx(model, str(onnx_path), dummy_input, device=str(device))
+            export_to_onnx(model, str(onnx_path), input_size)
             onnx_size = onnx_path.stat().st_size / 1024**2  # MB
             results['exports']['onnx'] = {'size_mb': onnx_size, 'success': True}
             print(f"    ✅ ONNX: {onnx_size:.2f} MB")
@@ -244,7 +259,7 @@ def benchmark_export(tier: CapabilityTier, device: torch.device) -> Dict:
         try:
             print("  Testing CoreML export...")
             coreml_path = Path(f"/tmp/maxsight_{tier.name.lower()}_coreml.mlpackage")
-            export_to_coreml(model, str(coreml_path), dummy_input, device=str(device))
+            export_to_coreml(model, str(coreml_path), input_size=input_size, device=str(device))
             if coreml_path.is_dir():
                 # .mlpackage is a directory
                 coreml_size = sum(f.stat().st_size for f in coreml_path.rglob('*') if f.is_file()) / 1024**2
@@ -273,15 +288,17 @@ def benchmark_export(tier: CapabilityTier, device: torch.device) -> Dict:
 def main():
     parser = argparse.ArgumentParser(description="Benchmark all tiers")
     parser.add_argument("--tier", type=str, default=None,
-                       choices=["T0_MOBILE", "T1_EDGE", "T2_HYBRID_VIT", "T3_CROSS_MODAL", "T4_CROSS_MODAL", "T5_TEMPORAL"],
+                       choices=["T0_BASELINE_CNN", "T1_ATTENTION", "T2_HYBRID_VIT", "T3_CROSS_TASK", "T4_CROSS_MODAL", "T5_TEMPORAL"],
                        help="Specific tier to benchmark (default: all)")
     parser.add_argument("--runs", type=int, default=50, help="Number of runs per tier")
     parser.add_argument("--export", action="store_true", help="Also benchmark exports")
     parser.add_argument("--output", type=str, default="benchmark_results.json", help="Output JSON file")
+    parser.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda", "mps"],
+                        help="Device (default: auto)")
     
     args = parser.parse_args()
     
-    device = get_device()
+    device = get_device(args.device)
     print("="*60)
     print("BENCHMARK BEFORE SCALING")
     print("="*60)
@@ -293,10 +310,10 @@ def main():
         tiers = [CapabilityTier[args.tier]]
     else:
         tiers = [
-            CapabilityTier.T0_MOBILE,
-            CapabilityTier.T1_EDGE,
+            CapabilityTier.T0_BASELINE_CNN,
+            CapabilityTier.T1_ATTENTION,
             CapabilityTier.T2_HYBRID_VIT,
-            CapabilityTier.T3_CROSS_MODAL,
+            CapabilityTier.T3_CROSS_TASK,
             CapabilityTier.T4_CROSS_MODAL,
             CapabilityTier.T5_TEMPORAL,
         ]

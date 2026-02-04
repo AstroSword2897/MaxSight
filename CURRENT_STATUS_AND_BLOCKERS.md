@@ -230,10 +230,14 @@ find ~ -name "*.log" -size +100M -delete
 
 #### Option B: Use External Drive for Checkpoints
 ```bash
-# Train with checkpoints on external drive
+# Train with checkpoints on external drive (use your data paths from scripts/gather_training_data.py)
 python scripts/train_maxsight.py \
+  --data-dir datasets/coco_raw \
+  --train-annotation datasets/cleaned_splits/maxsight_train.json \
+  --val-annotation datasets/cleaned_splits/maxsight_val.json \
+  --image-dir datasets/coco_raw \
   --checkpoint-dir /Volumes/ExternalDrive/checkpoints \
-  --config ml/training/configs/t0_baseline.yaml
+  --epochs 100 --device cuda
 ```
 
 #### Option C: Start Training Now
@@ -353,11 +357,14 @@ python scripts/extract_coco.py
    python scripts/smoke_train.py --tier T0_BASELINE_CNN --epochs 2
    ```
 
-4. **Start full training** (1-2 days)
+4. **Start full training** (1-2 days). Use data paths from `scripts/gather_training_data.py`:
    ```bash
    python scripts/train_maxsight.py \
-     --config ml/training/configs/t0_baseline.yaml \
-     --device cuda
+     --data-dir datasets/coco_raw \
+     --train-annotation datasets/cleaned_splits/maxsight_train.json \
+     --val-annotation datasets/cleaned_splits/maxsight_val.json \
+     --image-dir datasets/coco_raw \
+     --epochs 100 --device cuda
    ```
 
 **Timeline**: Can start immediately once GPU access is available
@@ -432,11 +439,14 @@ python scripts/extract_coco.py
    - Target: 20-30 GB free
    - Or use external drive
 
-2. **Start full T0 training** (1-2 days)
+2. **Start full T0 training** (1-2 days). Use data paths from `scripts/gather_training_data.py`:
    ```bash
    python scripts/train_maxsight.py \
-     --config ml/training/configs/t0_baseline.yaml \
-     --device cuda
+     --data-dir datasets/coco_raw \
+     --train-annotation datasets/cleaned_splits/maxsight_train.json \
+     --val-annotation datasets/cleaned_splits/maxsight_val.json \
+     --image-dir datasets/coco_raw \
+     --epochs 100 --device cuda
    ```
 
 3. **Monitor training** on cloud GPU

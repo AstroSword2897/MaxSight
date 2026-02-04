@@ -169,11 +169,14 @@ python scripts/smoke_train.py \
 **Goal**: Train T0_BASELINE_CNN to completion
 
 ```bash
-# Full training with YAML config
+# Full training (use data paths from scripts/gather_training_data.py)
 python scripts/train_maxsight.py \
-  --config ml/training/configs/t0_baseline.yaml \
-  --device cuda \
-  --resume-from-checkpoint null
+  --data-dir datasets/coco_raw \
+  --train-annotation datasets/cleaned_splits/maxsight_train.json \
+  --val-annotation datasets/cleaned_splits/maxsight_val.json \
+  --image-dir datasets/coco_raw \
+  --epochs 150 --device cuda \
+  --resume
 
 # Monitor training
 tensorboard --logdir runs/
@@ -199,17 +202,14 @@ tensorboard --logdir runs/
 **Goal**: Progressive tier training
 
 ```bash
-# T1: Add attention mechanisms
+# Training uses create_model() (default T0). For other tiers, use scripts/smoke_train.py --tier T1_ATTENTION etc.
+# Full training with same data layout:
 python scripts/train_maxsight.py \
-  --config ml/training/configs/t1_attention.yaml
-
-# T2: Add hybrid CNN-ViT
-python scripts/train_maxsight.py \
-  --config ml/training/configs/t2_hybrid_vit.yaml
-
-# T3: Add cross-task attention
-python scripts/train_maxsight.py \
-  --config ml/training/configs/t3_cross_task.yaml
+  --data-dir datasets/coco_raw \
+  --train-annotation datasets/cleaned_splits/maxsight_train.json \
+  --val-annotation datasets/cleaned_splits/maxsight_val.json \
+  --image-dir datasets/coco_raw \
+  --epochs 100 --device cuda
 ```
 
 **Timeline**: 3-6 days total
@@ -222,10 +222,9 @@ python scripts/train_maxsight.py \
 
 ```bash
 # First: Ensure T2 is fully trained and validated
-# Then: Transfer to T5
-python scripts/transfer_t2_to_t5.py \
-  --t2-checkpoint checkpoints/t2_hybrid_vit/best.pt \
-  --config ml/training/configs/t2_to_t5_transfer.yaml
+# Then: Transfer to T5 (script in scripts/archive/)
+python scripts/archive/transfer_t2_to_t5.py \
+  --t2-checkpoint checkpoints/t2_hybrid_vit/best.pt
 ```
 
 **Timeline**: 2-3 days
