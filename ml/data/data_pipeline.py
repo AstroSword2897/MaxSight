@@ -52,7 +52,14 @@ def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
         # Copy labels, boxes, distance
         if num_obj > 0:
             labels[i, :num_obj] = item['labels'][:num_obj]
-            boxes[i, :num_obj] = item['boxes'][:num_obj]
+            
+            # Sanitize boxes to ensure valid dimensions (prevents warnings downstream)
+            item_boxes = item['boxes'][:num_obj].clone()
+            # Ensure minimum box dimensions to avoid zero-width/height warnings
+            item_boxes[:, 2] = torch.clamp(item_boxes[:, 2], min=1e-4)  # width
+            item_boxes[:, 3] = torch.clamp(item_boxes[:, 3], min=1e-4)  # height
+            boxes[i, :num_obj] = item_boxes
+            
             distance[i, :num_obj] = item['distance'][:num_obj]
         
         urgency[i] = item['urgency']

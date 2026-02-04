@@ -97,10 +97,11 @@ def compute_matching_cost(
     num_pred = pred_boxes.shape[0]
     num_gt = gt_boxes.shape[0]
     
-    # CRITICAL: Use float32 to avoid precision issues that cause NaN/Inf
-    pred_boxes = pred_boxes.float()
-    pred_logits = pred_logits.float()
-    gt_boxes = gt_boxes.float()
+    # CRITICAL: Clone and convert to float32 to avoid precision issues and inplace operation errors
+    # Cloning ensures we don't modify the original tensors which may be part of the computation graph
+    pred_boxes = pred_boxes.clone().float()
+    pred_logits = pred_logits.clone().float()
+    gt_boxes = gt_boxes.clone().float()
     
     # Validate inputs - check for NaN/Inf
     if torch.isnan(pred_boxes).any() or torch.isinf(pred_boxes).any():
@@ -112,13 +113,16 @@ def compute_matching_cost(
     
     # Validate box dimensions (width, height > 0)
     # Use a small epsilon to account for floating point precision issues
+    # CRITICAL: Use non-inplace operations to avoid breaking computation graph
     min_dim = 1e-5
     if (gt_boxes[:, 2] < min_dim).any() or (gt_boxes[:, 3] < min_dim).any():
-        # Auto-fix: clamp to minimum instead of raising error
+        # Auto-fix: clamp to minimum using non-inplace operations
+        gt_boxes = gt_boxes.clone()
         gt_boxes[:, 2] = torch.clamp(gt_boxes[:, 2], min=min_dim)
         gt_boxes[:, 3] = torch.clamp(gt_boxes[:, 3], min=min_dim)
     if (pred_boxes[:, 2] < min_dim).any() or (pred_boxes[:, 3] < min_dim).any():
-        # Auto-fix: clamp to minimum instead of raising error
+        # Auto-fix: clamp to minimum using non-inplace operations
+        pred_boxes = pred_boxes.clone()
         pred_boxes[:, 2] = torch.clamp(pred_boxes[:, 2], min=min_dim)
         pred_boxes[:, 3] = torch.clamp(pred_boxes[:, 3], min=min_dim)
     
@@ -320,19 +324,24 @@ def match_batch(
             )
             continue
         
+        # CRITICAL: Clone tensors before sanitizing to avoid breaking computation graph
+        # Inplace operations (masked_fill_) break GradNorm gradient computation
+        pred_boxes_i = pred_boxes[i].clone()
+        pred_logits_i = pred_logits[i].clone()
+        
         # Sanitize NaN/Inf predictions instead of skipping - allows training to continue
-        if torch.isnan(pred_boxes[i]).any() or torch.isinf(pred_boxes[i]).any():
+        if torch.isnan(pred_boxes_i).any() or torch.isinf(pred_boxes_i).any():
             logger.warning(f"Sample {i} has NaN/Inf in pred_boxes, sanitizing")
-            # Replace NaN/Inf with small valid boxes (ensure in-place modification)
-            nan_mask = torch.isnan(pred_boxes[i]) | torch.isinf(pred_boxes[i])
+            # Replace NaN/Inf with small valid boxes (use non-inplace operations)
+            nan_mask = torch.isnan(pred_boxes_i) | torch.isinf(pred_boxes_i)
             default_box = torch.tensor([0.5, 0.5, 0.1, 0.1], device=pred_boxes.device, dtype=pred_boxes.dtype)
-            # Use masked fill for efficient in-place replacement
+            # Use non-inplace masked_fill to avoid breaking computation graph
             for j in range(4):
-                pred_boxes[i, :, j].masked_fill_(nan_mask[:, j], default_box[j])
+                pred_boxes_i[:, j] = pred_boxes_i[:, j].masked_fill(nan_mask[:, j], default_box[j])
             # Also sanitize logits if needed
-            if torch.isnan(pred_logits[i]).any() or torch.isinf(pred_logits[i]).any():
-                logit_nan_mask = torch.isnan(pred_logits[i]) | torch.isinf(pred_logits[i])
-                pred_logits[i].masked_fill_(logit_nan_mask, 0.0)
+            if torch.isnan(pred_logits_i).any() or torch.isinf(pred_logits_i).any():
+                logit_nan_mask = torch.isnan(pred_logits_i) | torch.isinf(pred_logits_i)
+                pred_logits_i = pred_logits_i.masked_fill(logit_nan_mask, 0.0)
         
         if valid_gt.sum() == 0:
             indices_list.append(
@@ -348,9 +357,10 @@ def match_batch(
         gt_labels_valid = gt_labels[i][valid_gt]
         
         # Find matches (with built-in error handling)
+        # Use sanitized cloned tensors instead of original tensors
         indices, costs = match_predictions_to_gt(
-            pred_boxes[i],
-            pred_logits[i],
+            pred_boxes_i,
+            pred_logits_i,
             gt_boxes_valid,
             gt_labels_valid,
             lambda_class, lambda_bbox, lambda_giou

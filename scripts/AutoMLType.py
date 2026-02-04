@@ -154,7 +154,7 @@ def main() -> int:
         # Sample hyperparameters
         learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
         weight_decay = trial.suggest_float("weight_decay", 1e-5, 1e-1, log=True)
-        batch_size = trial.suggest_categorical("batch_size", [8, 16, 32])
+        batch_size = trial.suggest_categorical("batch_size", [4, 8, 16])  # Reduced for T4 GPU stability
         gradient_clip_norm = trial.suggest_float("gradient_clip_norm", 0.5, 2.0)
 
         # Per-trial checkpoint subdir so trials do not overwrite each other
@@ -226,6 +226,7 @@ def main() -> int:
             gradient_clip_norm=gradient_clip_norm,
             resume_from=None,
             use_gradnorm=args.use_gradnorm,
+            checkpoint_interval=0,  # Only save best/last, no intermediate checkpoints (saves storage)
         )
 
         try:

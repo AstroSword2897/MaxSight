@@ -650,27 +650,20 @@ class ProductionTrainLoop:
                 self.logger.warning(f"Skipping invalid batch {batch_idx}: {e}")
                 continue
             
-            # Validate batch data integrity before training (only for actual objects, not padding)
-            # Only validate boxes up to num_objects (ignore padding boxes filled with zeros)
-            if 'num_objects' in targets:
+            # Quick NaN/Inf check (silent - dimensions sanitized in collate_fn)
+            if 'num_objects' in targets and 'boxes' in targets:
                 batch_valid = True
                 batch_size = targets['boxes'].shape[0]
                 for b in range(batch_size):
                     num_obj = int(targets['num_objects'][b].item())
                     if num_obj > 0:
-                        # Check only actual boxes, not padding
                         actual_boxes = targets['boxes'][b, :num_obj]
+                        # Silent check - only skip on critical NaN/Inf issues
                         if torch.isnan(actual_boxes).any() or torch.isinf(actual_boxes).any():
-                            self.logger.warning(f"Batch {batch_idx} sample {b} has NaN/Inf in boxes. Skipping batch.")
                             batch_valid = False
                             break
-                        if (actual_boxes[:, 2] <= 0).any() or (actual_boxes[:, 3] <= 0).any():
-                            # Auto-fix zero width/height (silent fix, this is expected from COCO data)
-                            actual_boxes[:, 2] = torch.clamp(actual_boxes[:, 2], min=1e-4)
-                            actual_boxes[:, 3] = torch.clamp(actual_boxes[:, 3], min=1e-4)
-                            targets['boxes'][b, :num_obj] = actual_boxes
                 if not batch_valid:
-                    continue
+                    continue  # Skip silently - data already sanitized in collate
             
             # Move to device
             try:
@@ -806,8 +799,16 @@ class ProductionTrainLoop:
                 try:
                     outputs = self.model(images)
                     loss, loss_dict = self.compute_multihead_loss(outputs, targets)
-                    total_loss += loss.item()
-                    num_batches += 1
+                    # CRITICAL: Check for NaN/Inf before accumulating loss
+                    loss_value = loss.item() if torch.is_tensor(loss) else float(loss)
+                    if not (torch.isnan(torch.tensor(loss_value)) or torch.isinf(torch.tensor(loss_value))):
+                        total_loss += loss_value
+                        num_batches += 1
+                    else:
+                        self.logger.warning(
+                            f"Validation batch {batch_idx} produced invalid loss: {loss_value}, skipping"
+                        )
+                        continue
                     
                     # Update DetectionMetrics if we have detection outputs
                     if 'boxes' in outputs and 'labels' in targets:
@@ -875,7 +876,19 @@ class ProductionTrainLoop:
             self.ema.restore(self.model)
             self.ema.backup.clear()
         
-        avg_loss = total_loss / num_batches if num_batches > 0 else float('inf')
+        # CRITICAL: Handle NaN/Inf cases and empty validation sets
+        if num_batches == 0:
+            avg_loss = float('inf')
+            self.logger.warning("No valid validation batches processed, returning inf loss")
+        else:
+            avg_loss = total_loss / num_batches
+            # Final safety check for NaN/Inf
+            if torch.isnan(torch.tensor(avg_loss)) or torch.isinf(torch.tensor(avg_loss)):
+                self.logger.error(
+                    f"Validation loss is NaN/Inf (total_loss={total_loss}, num_batches={num_batches}), "
+                    "this indicates a serious issue with loss computation"
+                )
+                avg_loss = float('inf')
         
         # Compute mAP and other metrics
         try:

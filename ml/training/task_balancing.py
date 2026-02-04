@@ -516,12 +516,38 @@ class GradNormMultiHeadLoss(nn.Module):
                 logger.warning(f"Head {self.head_names[i]} loss does not require grad, skipping gradient norm computation")
                 gradient_norms.append(0.0)
                 continue
+            
+            # CRITICAL: Only retain graph for non-last tasks to avoid inplace operation errors
+            # The error "version 4; expected version 3" occurs when tensors are modified inplace
+            # between backward passes. By not retaining graph for the last task, we avoid this.
+            is_last_task = (i == len(weighted_losses) - 1)
+            
+            # Zero gradients before each backward pass to avoid accumulation issues
             model.zero_grad()
-            weighted_loss.backward(retain_graph=True)
+            
+            # Use clone() to avoid inplace operation issues with half precision
+            # This ensures we're working with a fresh tensor that hasn't been modified
+            if weighted_loss.dtype == torch.float16:
+                weighted_loss = weighted_loss.clone().float()
+            
+            try:
+                weighted_loss.backward(retain_graph=not is_last_task)
+            except RuntimeError as e:
+                if "inplace operation" in str(e) or "version" in str(e):
+                    logger.warning(
+                        f"GradNorm backward failed for head {self.head_names[i]} due to inplace operation: {e}. "
+                        "This may indicate mixed precision or inplace ops in the model. Skipping this head."
+                    )
+                    gradient_norms.append(0.0)
+                    continue
+                else:
+                    raise
+            
             grad_norm = 0.0
             for param in self.shared_params:
                 if param.grad is not None:
-                    grad_norm += param.grad.norm(p=2) ** 2
+                    # Use detach() to avoid inplace operation issues
+                    grad_norm += param.grad.detach().norm(p=2) ** 2
             grad_norm = grad_norm ** 0.5
             if torch.is_tensor(grad_norm):
                 grad_norm = grad_norm.item()

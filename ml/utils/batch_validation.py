@@ -181,7 +181,41 @@ def validate_and_sanitize_batch(
     Returns:
         (sanitized_batch, is_valid, message)
     """
-    # First validation
+    # Only validate actual objects (not padding) if num_objects is available
+    if 'num_objects' in batch and 'boxes' in batch:
+        batch_size = batch['boxes'].shape[0]
+        batch_valid = True
+        needs_fix = False
+        
+        for b in range(batch_size):
+            num_obj = int(batch['num_objects'][b].item())
+            if num_obj > 0:
+                # Check only actual boxes, not padding
+                actual_boxes = batch['boxes'][b, :num_obj]
+                
+                # Check for NaN/Inf
+                if torch.isnan(actual_boxes).any() or torch.isinf(actual_boxes).any():
+                    if not auto_fix:
+                        return batch, False, f"Sample {b} has NaN/Inf in boxes"
+                    batch['boxes'][b, :num_obj] = sanitize_boxes(actual_boxes)
+                    needs_fix = True
+                    continue
+                
+                # Check for invalid dimensions (silent fix for common COCO padding issues)
+                if (actual_boxes[:, 2] <= 0).any() or (actual_boxes[:, 3] <= 0).any():
+                    if auto_fix:
+                        # Silent fix - this is expected from COCO data
+                        actual_boxes[:, 2] = torch.clamp(actual_boxes[:, 2], min=1e-4)
+                        actual_boxes[:, 3] = torch.clamp(actual_boxes[:, 3], min=1e-4)
+                        batch['boxes'][b, :num_obj] = actual_boxes
+                        needs_fix = True
+                    else:
+                        return batch, False, f"Sample {b} has non-positive box dimensions"
+        
+        # Return success (with or without silent fixes)
+        return batch, True, "Batch valid" if not needs_fix else "Batch sanitized (silent)"
+    
+    # Fallback to full validation if num_objects not available
     is_valid, msg = validate_batch(batch, num_classes)
     
     if is_valid:
