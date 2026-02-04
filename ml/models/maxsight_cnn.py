@@ -208,16 +208,11 @@ COCO_CLASSES = _get_unique_classes(COCO_BASE_CLASSES, ACCESSIBILITY_CLASSES)
 
 COCO_CLASSES_DICT = {i: name for i, name in enumerate(COCO_CLASSES)}
 
-# These help prioritize what to tell the user about
-# Urgency is super important - we don't want to miss dangerous stuff
 URGENCY_LEVELS = ['safe', 'caution', 'warning', 'danger'] 
-DISTANCE_ZONES = ['near', 'medium', 'far']  # How far away is it?
-# FUTURE ENHANCEMENT: Consider adding 'very_near' and 'very_far' distance zones for finer-grained navigation.
-# Current 3-zone setup (near/medium/far) works well, but 5 zones could provide more precision.
- 
+DISTANCE_ZONES = ['near', 'medium', 'far']
+
 
 class SimplifiedFPN(nn.Module):
-    """Lightweight FPN for multi-scale detection. Stripped down for mobile speed."""
     
     def __init__(self, in_channels_list=[256, 512, 1024, 2048], out_channels=256):
         super().__init__()
@@ -1956,21 +1951,16 @@ class MaxSightCNN(nn.Module):
             try:
                 nms_indices = torch.ops.torchvision.nms(boxes_xyxy, final_scores, nms_threshold)
             except (AttributeError, RuntimeError) as e:
-                # Fallback ONLY for debugging - should not happen in production
                 import warnings
                 warnings.warn(
-                    f"torchvision NMS not available, using slow O(N²) fallback: {e}. "
-                    "Install torchvision or fix deployment environment.",
+                    f"torchvision NMS not available, using original fallback: {e}",
                     RuntimeWarning
                 )
                 nms_indices = torch.tensor(self._nms(filtered_boxes, final_scores, nms_threshold), 
                                          device=filtered_boxes.device)
             
-            # Limit to max_detections
             nms_indices = nms_indices[:max_detections]
             
-            # CRITICAL FIX: Urgency is image-level, not per-detection
-            # Get image-level urgency from outputs if available
             image_urgency = None
             if 'urgency_scores' in outputs:
                 # This is image-level urgency [B, 4] -> single value per image

@@ -34,6 +34,7 @@ from ml.training.losses import MultiHeadLoss, ObjectnessLoss, ClassificationLoss
 from ml.training.task_balancing import GradNormMultiHeadLoss
 from ml.training.train_loop import ProductionTrainLoop
 from ml.data.dataset import MaxSightDataset
+from ml.data.data_pipeline import create_data_loaders
 from ml.utils.logging_config import setup_logging
 from ml.models.maxsight_cnn import COCO_CLASSES
 
@@ -67,9 +68,8 @@ def seed_worker(worker_id):
 # Device resolution
 # ---------------------------------------------------------------------
 def resolve_device(requested: str) -> str:
+    # NEVER use MPS - it has backward pass errors with .view() operations
     if requested == "auto":
-        if torch.backends.mps.is_available():
-            return "mps"
         if torch.cuda.is_available():
             return "cuda"
         return "cpu"
@@ -78,8 +78,13 @@ def resolve_device(requested: str) -> str:
         logger.warning("CUDA unavailable → CPU fallback")
         return "cpu"
     
-    if requested == "mps" and not torch.backends.mps.is_available():
-        logger.warning("MPS unavailable → CPU fallback")
+    if requested == "mps":
+        logger.error("MPS explicitly disabled - has backward pass errors. Use 'cpu' or 'mlx' instead.")
+        return "cpu"
+    
+    # MLX-style: use CPU (MPS has backward pass errors, never use it)
+    if requested == "mlx":
+        logger.info("DEVICE=mlx → using CPU (MPS disabled due to backward pass errors)")
         return "cpu"
     
     return requested
@@ -144,8 +149,11 @@ def main():
     parser = argparse.ArgumentParser("Train MaxSight CNN (Production v2)")
     
     # Paths
-    parser.add_argument("--data-dir", required=True)
+    parser.add_argument("--data-dir", required=True, help="Data root (COCO dir or parent of train/val)")
     parser.add_argument("--checkpoint-dir", default="./checkpoints")
+    parser.add_argument("--train-annotation", type=Path, default=None, help="Train split JSON (e.g. datasets/cleaned_splits/maxsight_train.json)")
+    parser.add_argument("--val-annotation", type=Path, default=None, help="Val split JSON (e.g. datasets/cleaned_splits/maxsight_val.json)")
+    parser.add_argument("--image-dir", type=Path, default=None, help="Image root (default: data-dir; used with train/val-annotation)")
     
     # Training
     parser.add_argument("--epochs", type=int, default=100)
@@ -155,14 +163,30 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--grad-clip", type=float, default=1.0)
+    parser.add_argument("--grad-accumulation-steps", type=int, default=1, help="Gradient accumulation (effective batch = batch_size * this)")
+    parser.add_argument("--scheduler-type", choices=["cosine", "onecycle", "cosine_restarts"], default="cosine")
+    parser.add_argument("--warmup-epochs", type=int, default=5, help="LR warmup epochs (e.g. 10%% of 50)")
+    parser.add_argument("--lr-backbone", type=float, default=None, help="Learning rate for backbone (default: lr * 0.1)")
+    parser.add_argument("--lr-head", type=float, default=None, help="Learning rate for heads (default: --learning-rate)")
+    parser.add_argument("--early-stopping-patience", type=int, default=10, help="Stop if no improvement for N epochs (0 = disabled)")
+    parser.add_argument("--checkpoint-interval", type=int, default=0, help="Save snapshot every N epochs (0 = only last/best)")
+    parser.add_argument(
+        "--hyperparameters",
+        type=Path,
+        default=None,
+        help="Path to best_hyperparameters.json from scripts/AutoMLType.py; overrides lr, weight_decay, batch_size, grad_clip for full training with tuned values",
+    )
     
     # Hardware
-    parser.add_argument("--device", choices=["cpu", "cuda", "mps", "auto"], default="auto")
+    parser.add_argument("--device", choices=["cpu", "cuda", "mps", "mlx", "auto"], default="auto",
+                        help="mlx = CPU (MPS disabled due to backward errors); mps also maps to CPU")
     parser.add_argument("--fp16", action="store_true", help="Use FP16 mixed precision (CUDA only)")
     parser.add_argument("--compile", action="store_true", help="Use torch.compile (CUDA only)")
     
     # Resume / backup
-    parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
+    parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint in --checkpoint-dir")
+    parser.add_argument("--resume-from", type=str, default=None, metavar="PATH", help="Resume from this checkpoint file (e.g. after copying to another GPU)")
+    parser.add_argument("--resume-model-only", action="store_true", help="With --resume-from: load only model + epoch; use current optimizer/scheduler (e.g. new LRs, MLX-style)")
     parser.add_argument("--backup", action="store_true", help="Backup artifacts after training")
     
     # Model
@@ -176,6 +200,26 @@ def main():
     parser.add_argument("--use-gradnorm", action="store_true", help="Use GradNorm for task balancing")
     
     args = parser.parse_args()
+
+    # Apply AutoML best hyperparameters if provided
+    if args.hyperparameters is not None:
+        hp_path = Path(args.hyperparameters)
+        if not hp_path.exists():
+            raise FileNotFoundError(f"Hyperparameters file not found: {hp_path}")
+        with open(hp_path) as f:
+            hp_data = json.load(f)
+        params = hp_data.get("hyperparameters", hp_data)
+        if "learning_rate" in params:
+            args.learning_rate = float(params["learning_rate"])
+        if "weight_decay" in params:
+            args.weight_decay = float(params["weight_decay"])
+        if "batch_size" in params:
+            args.batch_size = int(params["batch_size"])
+        if "gradient_clip_norm" in params:
+            args.grad_clip = float(params["gradient_clip_norm"])
+        logger.info(
+            f"Using tuned hyperparameters from {hp_path}: lr={args.learning_rate}, wd={args.weight_decay}, batch={args.batch_size}, grad_clip={args.grad_clip}"
+        )
     
     # -----------------------------------------------------------------
     # Setup
@@ -189,45 +233,63 @@ def main():
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     
     data_dir = Path(args.data_dir)
-    train_dir = data_dir / "train"
-    val_dir = data_dir / "val"
-    
-    if not train_dir.exists() or not val_dir.exists():
-        raise FileNotFoundError(f"train/val directories missing in {data_dir}")
-    
-    # -----------------------------------------------------------------
-    # Dataset
-    # -----------------------------------------------------------------
-    train_dataset = MaxSightDataset(train_dir)
-    val_dataset = MaxSightDataset(val_dir)
-    
-    if len(train_dataset) == 0 or len(val_dataset) == 0:
-        raise RuntimeError(f"Empty dataset detected: train={len(train_dataset)}, val={len(val_dataset)}")
-    
-    logger.info(f"Train samples: {len(train_dataset)}")
-    logger.info(f"Val samples: {len(val_dataset)}")
-    
-    g = torch.Generator().manual_seed(args.seed)
-    
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
-        pin_memory=(device == "cuda"),
-        worker_init_fn=seed_worker,
-        generator=g,
-    )
-    
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.num_workers,
-        pin_memory=(device == "cuda"),
-        worker_init_fn=seed_worker,
-        generator=g,
-    )
+    image_dir = args.image_dir or data_dir
+
+    if args.train_annotation and args.val_annotation:
+        # Annotation-based: use create_data_loaders (e.g. after gather_training_data / setup_training_data)
+        train_ann = Path(args.train_annotation)
+        val_ann = Path(args.val_annotation)
+        if not train_ann.exists() or not val_ann.exists():
+            raise FileNotFoundError(f"Annotation files not found: {train_ann} / {val_ann}")
+        logger.info(f"Using annotations: train={train_ann}, val={val_ann}, image_dir={image_dir}")
+        train_loader, val_loader, _ = create_data_loaders(
+            train_annotation_file=train_ann,
+            val_annotation_file=val_ann,
+            test_annotation_file=None,
+            image_dir=image_dir,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            pin_memory=(device == "cuda"),
+            condition_mode=args.condition_mode,
+            apply_lighting_augmentation=True,
+        )
+        logger.info(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
+    else:
+        # Legacy: data_dir/train and data_dir/val as directory per split (each with annotation or images)
+        train_dir = data_dir / "train"
+        val_dir = data_dir / "val"
+        if not train_dir.exists() or not val_dir.exists():
+            raise FileNotFoundError(
+                f"train/val directories missing in {data_dir}. "
+                "Use --train-annotation and --val-annotation with paths from scripts/gather_training_data.py or setup_training_data.py."
+            )
+        train_dataset = MaxSightDataset(train_dir)
+        val_dataset = MaxSightDataset(val_dir)
+        if len(train_dataset) == 0 or len(val_dataset) == 0:
+            raise RuntimeError(
+                f"Empty dataset: train={len(train_dataset)}, val={len(val_dataset)}. "
+                "Use --train-annotation and --val-annotation pointing to MaxSight JSON splits (e.g. datasets/cleaned_splits/maxsight_train.json)."
+            )
+        logger.info(f"Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}")
+        g = torch.Generator().manual_seed(args.seed)
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=args.num_workers,
+            pin_memory=(device == "cuda"),
+            worker_init_fn=seed_worker,
+            generator=g,
+        )
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=args.num_workers,
+            pin_memory=(device == "cuda"),
+            worker_init_fn=seed_worker,
+            generator=g,
+        )
     
     # -----------------------------------------------------------------
     # Model
@@ -251,14 +313,29 @@ def main():
     # -----------------------------------------------------------------
     # Trainer
     # -----------------------------------------------------------------
-    # Find latest checkpoint if resuming
+    # Find checkpoint to resume from (same machine or after copy to another GPU)
     resume_from = None
-    if args.resume:
-        checkpoints = sorted(ckpt_dir.glob("checkpoint_*.pth"))
-        if checkpoints:
-            resume_from = str(checkpoints[-1])
+    if args.resume_from:
+        p = Path(args.resume_from)
+        if p.exists():
+            resume_from = str(p.resolve())
             logger.info(f"Resuming from: {resume_from}")
         else:
+            raise FileNotFoundError(f"--resume-from: file not found: {args.resume_from}")
+    elif args.resume:
+        # Prefer last_checkpoint.pt (saved by train_loop), then best_model.pt, then legacy checkpoint_*.pth
+        for name in ("last_checkpoint.pt", "best_model.pt"):
+            c = ckpt_dir / name
+            if c.exists():
+                resume_from = str(c)
+                logger.info(f"Resuming from: {resume_from}")
+                break
+        if resume_from is None:
+            checkpoints = sorted(ckpt_dir.glob("checkpoint_*.pth"))
+            if checkpoints:
+                resume_from = str(checkpoints[-1])
+                logger.info(f"Resuming from: {resume_from}")
+        if resume_from is None:
             logger.warning("--resume specified but no checkpoint found, starting fresh")
     
     trainer = ProductionTrainLoop(
@@ -274,7 +351,15 @@ def main():
         seed=args.seed,
         use_mixed_precision=(args.fp16 and device == "cuda"),  # MPS doesn't support FP16
         gradient_clip_norm=args.grad_clip,
+        gradient_accumulation_steps=args.grad_accumulation_steps,
+        scheduler_type=args.scheduler_type,
+        warmup_epochs=args.warmup_epochs,
+        learning_rate_backbone=args.lr_backbone,
+        learning_rate_head=args.lr_head,
+        checkpoint_interval=args.checkpoint_interval,
+        early_stopping_patience=args.early_stopping_patience,
         resume_from=resume_from,
+        resume_model_only=args.resume_model_only,
         use_gradnorm=args.use_gradnorm,
     )
     
