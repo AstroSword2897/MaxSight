@@ -1,0 +1,138 @@
+{
+  "total_images": 200,
+  "config": {
+    "seed": 999,
+    "image_size": [
+      224,
+      224
+    ],
+    "max_objects_per_image": 15,
+    "min_objects_per_image": 1,
+    "impairment_probability": 0.7,
+    "lighting_variation_probability": 0.8,
+    "noise_probability": 0.3,
+    "accessibility_class_boost": 2.0,
+    "scenario_weights": {
+      "indoor_home": 0.15,
+      "indoor_office": 0.1,
+      "indoor_retail": 0.12,
+      "indoor_medical": 0.08,
+      "outdoor_street": 0.15,
+      "outdoor_park": 0.08,
+      "transit_station": 0.1,
+      "transit_vehicle": 0.07,
+      "building_entrance": 0.08,
+      "emergency_scenario": 0.07
+    }
+  },
+  "generated_at": "2025-12-21T12:46:33.662184",
+  "classes": 622,
+  "scenarios": [
+    "indoor_home",
+    "indoor_office",
+    "indoor_retail",
+    "indoor_medical",
+    "outdoor_street",
+    "outdoor_park",
+    "transit_station",
+    "transit_vehicle",
+    "building_entrance",
+    "emergency_scenario"
+  ],
+  "impairments": [
+    "none",
+    "glaucoma",
+    "amd",
+    "cataracts",
+    "diabetic_retinopathy",
+    "retinitis_pigmentosa",
+    "color_blindness_protanopia",
+    "color_blindness_deuteranopia",
+    "color_blindness_tritanopia",
+    "myopia",
+    "hyperopia",
+    "astigmatism",
+    "low_vision",
+    "night_blindness"
+  ],
+  "lighting_conditions": [
+    "bright",
+    "normal",
+    "dim",
+    "dark",
+    "mixed",
+    "outdoor_sunny",
+    "outdoor_overcast",
+    "glare"
+  ],
+  "test": {
+    "num_images": 200,
+    "num_annotations": 1537,
+    "scenario_distribution": {
+      "transit_vehicle": 14,
+      "indoor_home": 35,
+      "indoor_office": 12,
+      "indoor_retail": 26,
+      "outdoor_street": 25,
+      "building_entrance": 20,
+      "outdoor_park": 18,
+      "indoor_medical": 15,
+      "transit_station": 22,
+      "emergency_scenario": 13
+    },
+    "lighting_distribution": {
+      "glare": 25,
+      "outdoor_overcast": 23,
+      "outdoor_sunny": 21,
+      "dark": 18,
+      "normal": 55,
+      "dim": 21,
+      "bright": 20,
+      "mixed": 17
+    },
+    "impairment_distribution": {
+      "myopia": 17,
+      "color_blindness_protanopia": 18,
+      "night_blindness": 12,
+      "none": 58,
+      "astigmatism": 10,
+      "retinitis_pigmentosa": 13,
+      "color_blindness_tritanopia": 6,
+      "color_blindness_deuteranopia": 9,
+      "amd": 10,
+      "low_vision": 11,
+      "glaucoma": 12,
+      "cataracts": 8,
+      "diabetic_retinopathy": 7,
+      "hyperopia": 9
+    },
+    "urgency_distribution": {
+      "2": 142,
+      "0": 1242,
+      "3": 32,
+      "1": 121
+    },
+    "top_classes": {
+      "door": 39,
+      "stairs": 31,
+      "handrail": 28,
+      "exit_sign": 28,
+      "elevator": 26,
+      "window": 20,
+      "bed": 20,
+      "train": 20,
+      "dining table": 19,
+      "couch": 19,
+      "bus": 19,
+      "automatic_door": 18,
+      "fire hydrant": 18,
+      "bench": 17,
+      "chair": 17,
+      "first_aid": 17,
+      "refrigerator": 17,
+      "traffic light": 16,
+      "sink": 16,
+      "defibrillator": 16
+    }
+  }
+}

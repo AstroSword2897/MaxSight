@@ -1,6 +1,9 @@
 """
 Eye/Face Micro-Model
 
+STUB - NOT INTEGRATED: This component is a stub implementation and not currently integrated into the forward pass.
+See README.md for integration status. Future integration planned.
+
 Tiny CNN for eye tracking and fatigue detection:
 - Blink probability
 - Fixation vs saccade patterns

@@ -164,13 +164,15 @@ def generate_annotations_from_coco(
     image_dir: Path,
     output_file: Path,
     num_samples: int = 6000,
-    train_split: float = 0.83  # 5000/6000 = 0.83
-) -> Tuple[Path, Path]:
+    train_split: float = 0.7,
+    val_split: float = 0.15,
+    test_split: float = 0.15
+) -> Tuple[Path, Path, Path]:
     """
     Generate MaxSight annotations from COCO dataset.
     
     Purpose: Converts COCO annotations to MaxSight format with environmental categories,
-             urgency scores, distance zones, and scene descriptions. Creates train/val splits.
+             urgency scores, distance zones, and scene descriptions. Creates train/val/test splits.
     
     Complexity: O(N) where N=number of COCO annotations - processes all annotations
     Relationship: Preprocessing step before training - generates annotation files that
@@ -179,12 +181,14 @@ def generate_annotations_from_coco(
         Arguments:
         coco_annotation_file: Path to COCO annotation JSON file
         image_dir: Directory containing COCO images
-        output_file: Base path for output annotation files (will create train/val versions)
+        output_file: Base path for output annotation files (will create train/val/test versions)
         num_samples: Total number of samples to generate (default 6000)
-        train_split: Fraction of samples for training (default 0.83 for 5000/1000 split)
+        train_split: Fraction of samples for training (default 0.7)
+        val_split: Fraction of samples for validation (default 0.15)
+        test_split: Fraction of samples for testing (default 0.15)
     
     Returns:
-        Tuple of (train_annotation_file, val_annotation_file) paths
+        Tuple of (train_annotation_file, val_annotation_file, test_annotation_file) paths
     """
     print(f"Loading COCO annotations from {coco_annotation_file}...")
     
@@ -257,12 +261,23 @@ def generate_annotations_from_coco(
         maxsight_annotations.append(maxsight_ann)
     
     random.shuffle(maxsight_annotations)
-    split_idx = int(len(maxsight_annotations) * train_split)
-    train_annotations = maxsight_annotations[:split_idx]
-    val_annotations = maxsight_annotations[split_idx:]
+    
+    # Validate splits sum to 1.0
+    if abs(train_split + val_split + test_split - 1.0) > 1e-6:
+        raise ValueError(f"Splits must sum to 1.0, got {train_split + val_split + test_split}")
+    
+    # Calculate split indices
+    total = len(maxsight_annotations)
+    train_end = int(total * train_split)
+    val_end = train_end + int(total * val_split)
+    
+    train_annotations = maxsight_annotations[:train_end]
+    val_annotations = maxsight_annotations[train_end:val_end]
+    test_annotations = maxsight_annotations[val_end:]
     
     train_file = output_file.parent / f'{output_file.stem}_train.json'
     val_file = output_file.parent / f'{output_file.stem}_val.json'
+    test_file = output_file.parent / f'{output_file.stem}_test.json'
     
     with open(train_file, 'w') as f:
         json.dump(train_annotations, f, indent=2)
@@ -270,11 +285,15 @@ def generate_annotations_from_coco(
     with open(val_file, 'w') as f:
         json.dump(val_annotations, f, indent=2)
     
-    print(f"Generated {len(train_annotations)} training annotations")
-    print(f"Generated {len(val_annotations)} validation annotations")
-    print(f"Saved to {train_file} and {val_file}")
+    with open(test_file, 'w') as f:
+        json.dump(test_annotations, f, indent=2)
     
-    return train_file, val_file
+    print(f"Generated {len(train_annotations)} training annotations ({len(train_annotations)/total*100:.1f}%)")
+    print(f"Generated {len(val_annotations)} validation annotations ({len(val_annotations)/total*100:.1f}%)")
+    print(f"Generated {len(test_annotations)} test annotations ({len(test_annotations)/total*100:.1f}%)")
+    print(f"Saved to {train_file}, {val_file}, and {test_file}")
+    
+    return train_file, val_file, test_file
 
 
 if __name__ == "__main__":

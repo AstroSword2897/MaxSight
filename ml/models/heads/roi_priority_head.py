@@ -211,6 +211,10 @@ class ROIPriorityHead(nn.Module):
         if roi_mask is not None:
             scores = scores.masked_fill(~roi_mask, 0.0)
         
+        # FIXED: Normalize scores per image as attention distribution
+        # ROI priority isn't about absolute importance — it's about relative attention allocation
+        scores = scores / (scores.sum(dim=1, keepdim=True) + 1e-6)  # [B, N] normalized
+        
         # Validate output
         if torch.isnan(scores).any() or torch.isinf(scores).any():
             raise RuntimeError(
@@ -252,58 +256,23 @@ class ROIPriorityHead(nn.Module):
             # Need at least 2 ROIs for ranking
             return torch.tensor(0.0, device=scores.device)
         
-        total_loss = torch.tensor(0.0, device=scores.device)
-        valid_pairs = 0
-        
-        # Process each sample in batch
-        for b in range(B):
-            batch_scores = scores[b]  # [N]
-            batch_rankings = rankings[b]  # [N]
-            
-            # Generate all pairs
-            for i in range(N):
-                for j in range(i + 1, N):
-                    rank_diff = batch_rankings[i] - batch_rankings[j]
-                    score_diff = batch_scores[i] - batch_scores[j]
-                    
-                    # Only consider pairs where rankings differ (exclude ties)
-                    if abs(rank_diff) > 1e-6:  # Not a tie
-                        valid_pairs += 1
-                        
-                        # Expected: sign(score_diff) == sign(rank_diff)
-                        # Loss when order doesn't match
-                        expected_sign = torch.sign(rank_diff)
-                        loss = torch.clamp(margin - score_diff * expected_sign, min=0.0)
-                        
-                        # Weight by rank difference magnitude (larger differences more important)
-                        loss = loss * abs(rank_diff)
-                        total_loss += loss
-        
-        # Average over valid pairs
-        if valid_pairs > 0:
-            return total_loss / valid_pairs
-        else:
-            return torch.tensor(0.0, device=scores.device)
-        
-        # Optimized pairwise comparisons (vectorized)
-        # score_diff[i, j] = score[i] - score[j]
+        # Vectorized pairwise ranking loss
+        # Compute all pairwise differences: score_diff[i,j] = score[i] - score[j]
         score_diff = scores.unsqueeze(2) - scores.unsqueeze(1)  # [B, N, N]
-        # rank_diff[i, j] = rank[i] - rank[j]
         rank_diff = rankings.unsqueeze(2) - rankings.unsqueeze(1)  # [B, N, N]
         
-        # Loss when score order doesn't match rank order (vectorized)
-        # Should have score_i > score_j when rank_i > rank_j
-        # sign(rank_diff) = +1 if rank_i > rank_j, -1 if rank_i < rank_j
-        # We want score_diff * sign(rank_diff) > margin
+        # Loss when score order doesn't match rank order
+        # We want: score_diff * sign(rank_diff) > margin
         loss_matrix = F.relu(margin - score_diff * torch.sign(rank_diff))
         
-        # Only consider valid pairs (where rankings differ) - efficient masking
-        valid_pairs = (rank_diff != 0).float()
-        valid_count = valid_pairs.sum()
+        # Mask valid pairs (where rankings differ)
+        valid_mask = (rank_diff != 0).float()
+        valid_count = valid_mask.sum()
         
         if valid_count > 0:
-            # Efficient: sum only valid pairs, divide by count
-            loss = (loss_matrix * valid_pairs).sum() / valid_count
+            # Weight by rank difference magnitude
+            weights = torch.abs(rank_diff)
+            loss = (loss_matrix * valid_mask * weights).sum() / valid_count
         else:
             loss = torch.tensor(0.0, device=scores.device, dtype=scores.dtype)
         

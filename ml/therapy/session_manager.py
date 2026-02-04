@@ -1,6 +1,9 @@
 """
 Session Manager
 
+STUB - NOT INTEGRATED: This component is a placeholder implementation and not currently integrated into the main training pipeline.
+See README.md for integration status. Future integration planned.
+
 Manages therapy sessions, tracks performance, and generates progress reports.
 
 PROJECT PHILOSOPHY & APPROACH:

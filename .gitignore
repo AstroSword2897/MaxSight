@@ -1,48 +1,119 @@
 # Python
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Virtual environments
 venv/
 env/
 ENV/
+.venv
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# PyTorch
+*.pt
+*.pth
+*.ckpt
+checkpoints/*.pt
+checkpoints/*.pth
+!checkpoints/.gitkeep
+
+# Datasets
+datasets/
+*.jpg
+*.jpeg
+*.png
+*.json
+!datasets/.gitkeep
+!requirements.txt
+!pyproject.toml
+!README.md
+
+# Documentation files (not tracked)
+docs/*.md
+!docs/README.md
+
+# Logs
+logs/
+*.log
+
+# Exports
+exports/
+*.mlpackage
+*.pte
+*.onnx
+
+# Test results
+test_results/
+test_images/
+
+# Outputs and run artifacts
+outputs/
+baseline_output*
+production_rehearsal*
+throughput_results*
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Model files
-*.pt
-*.pth
-*.onnx
-*.mlmodel
+# Cleanup and comparison files
+CLEANUP_*.md
+LINTER_*.md
+*_COMPARISON_*.md
+*_DIFFERENCES_*.md
 
-# Data files
-*.h5
-*.hdf5
-
-# Logs
-*.log
-logs/
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Installers
-*.sh
-Miniforge*
-
-
+# iOS
 ios_bundle.zip
-*.zip
 ios_bundle/
 maxsight_ios_bundle/
+test_ios_bundle/
+*.zip
+
+# Throughput results
+throughput_results.txt
+forward_pass_paths.md
+
+# Copied from 2026-prototype (do not track)
+ml/models/attention/cbam_attention.py
+ml/models/attention/cross_modal_attention.py
+ml/models/attention/cross_task_attention.py
+# ml.utils.preprocessing.py and output_scheduler.py: required for training/simulator; do NOT ignore so they can be committed
+ml/training/train_loop.py
+ml/training/export.py
+ml/data/create_accessibility_dataset.py
+ml/data/advanced_augmentation.py

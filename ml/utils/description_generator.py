@@ -596,6 +596,28 @@ class DescriptionGenerator:
             return f"⚠️ Warning: {class_name} {distance_desc} {h_dir}"
         else:  # Caution
             return f"Caution: {class_name} {distance_desc} {h_dir}"
+    
+    def generate_description(
+        self,
+        detections: List[Dict],
+        urgency_score: int = 0,
+        verbosity: Optional[str] = None
+    ) -> str:
+        """
+        Generate description from detections (wrapper for generate_scene_description).
+        
+        This method provides backward compatibility for code that calls generate_description()
+        instead of generate_scene_description().
+        
+        Arguments:
+            detections: List of detection dictionaries with class_name, box, distance, urgency
+            urgency_score: Overall scene urgency
+            verbosity: Override default verbosity
+        
+        Returns:
+            Scene description string
+        """
+        return self.generate_scene_description(detections, urgency_score, verbosity)
 
 
 def create_description_generator(verbosity: str = 'normal') -> DescriptionGenerator:

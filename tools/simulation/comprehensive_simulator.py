@@ -11,6 +11,7 @@ Features:
 """
 
 import torch
+import torch.cuda  # For torch.cuda.synchronize()
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
@@ -18,6 +19,7 @@ import time
 import json
 from PIL import Image
 import cv2
+import logging
 
 # Add parent directory to path
 import sys
@@ -28,6 +30,11 @@ from ml.utils.preprocessing import ImagePreprocessor
 from ml.utils.output_scheduler import OutputScheduler
 from ml.therapy.session_manager import SessionManager
 from ml.therapy.task_generator import TaskGenerator
+from ml.utils.logging_config import setup_logging
+
+# Setup logging
+logger = setup_logging(log_level="INFO")
+logger = logging.getLogger(__name__)
 
 
 class ComprehensiveSimulator:
@@ -75,16 +82,16 @@ class ComprehensiveSimulator:
             self.device = torch.device(device)
         
         if self.verbose:
-            print(f"Initializing simulator on device: {self.device}")
+            logger.info(f"Initializing simulator on device: {self.device}")
         
         # Load model
         if model_path and Path(model_path).exists():
             if self.verbose:
-                print(f"Loading model from: {model_path}")
+                logger.info(f"Loading model from: {model_path}")
             self.model = torch.load(model_path, map_location=self.device)
         else:
             if self.verbose:
-                print("Creating new model...")
+                logger.info("Creating new model...")
             self.model = create_model(condition_mode=condition_mode)
         
         self.model = self.model.to(self.device)

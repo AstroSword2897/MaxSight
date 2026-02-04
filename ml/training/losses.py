@@ -1,363 +1,411 @@
+"""
+Per-Head Loss Definitions for MaxSight 3.0
+
+Explicit loss functions for each head with ground truth specifications.
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Tuple, Optional
+from typing import Dict, Optional, Tuple
 
 
-class FocalLoss(nn.Module):
+class ObjectnessLoss(nn.Module):
+    """
+    Objectness head loss.
     
-    def __init__(
-        self,
-        alpha: float = 0.25,
-        gamma: float = 2.0,
-        reduction: str = 'mean'
-    ):
+    Ground Truth: Binary labels (0/1) indicating presence of object at location
+    Loss: Binary Cross-Entropy with focal loss for hard negatives
+    """
+    
+    def __init__(self, alpha: float = 0.25, gamma: float = 2.0):
         super().__init__()
         self.alpha = alpha
         self.gamma = gamma
-        self.reduction = reduction
+        self.bce = nn.BCEWithLogitsLoss(reduction='none')
     
-    def forward(
-        self,
-        logits: torch.Tensor,
-        targets: torch.Tensor
-    ) -> torch.Tensor:
-        ce_loss = F.cross_entropy(logits, targets, reduction='none')
-        pt = torch.exp(-ce_loss)
-        
-        # Use torch.tensor(1.0) instead of literal 1 for proper type inference
-        focal_loss = self.alpha * (torch.tensor(1.0, device=pt.device, dtype=pt.dtype) - pt) ** self.gamma * ce_loss
-        
-        if self.reduction == 'mean':
-            return focal_loss.mean()
-        elif self.reduction == 'sum':
-            return focal_loss.sum()
-        return focal_loss
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            predictions: [B, N] logits
+            targets: [B, N] binary labels (0/1)
+        """
+        bce_loss = self.bce(predictions, targets)
+        p_t = torch.sigmoid(predictions)
+        p_t = torch.where(targets == 1, p_t, 1 - p_t)
+        focal_weight = self.alpha * (1 - p_t) ** self.gamma
+        loss = focal_weight * bce_loss
+        return loss.mean()
 
 
-class IoULoss(nn.Module):
+class ClassificationLoss(nn.Module):
+    """
+    Classification head loss.
     
-    def __init__(self, loss_type: str = 'iou', reduction: str = 'mean'):
+    Ground Truth: Class indices [0, num_classes-1] per location
+    Loss: Focal loss for class imbalance
+    """
+    
+    def __init__(self, num_classes: int, alpha: float = 0.25, gamma: float = 2.0):
         super().__init__()
-        self.loss_type = loss_type.lower()
-        self.reduction = reduction
+        self.num_classes = num_classes
+        self.alpha = alpha
+        self.gamma = gamma
+    
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            predictions: [B, N, num_classes] logits
+            targets: [B, N] class indices
+        """
+        ce_loss = F.cross_entropy(
+            predictions.reshape(-1, self.num_classes),
+            targets.reshape(-1),
+            reduction='none'
+        )
         
-        assert self.loss_type in ['iou', 'giou', 'diou', 'ciou'], \
-            f"Invalid loss_type: {loss_type}"
+        # Focal loss weighting
+        p = F.softmax(predictions, dim=-1)
+        p_t = p.gather(2, targets.unsqueeze(-1)).squeeze(-1)
+        focal_weight = self.alpha * (1 - p_t) ** self.gamma
+        loss = focal_weight * ce_loss
+        return loss.mean()
+
+
+class BoxRegressionLoss(nn.Module):
+    """
+    Box regression head loss.
+    
+    Ground Truth: Normalized box coordinates [x_center, y_center, width, height] in [0, 1]
+    Loss: Smooth L1 loss (Huber loss)
+    """
+    
+    def __init__(self, beta: float = 1.0):
+        super().__init__()
+        self.beta = beta
+    
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            predictions: [B, N, 4] normalized boxes
+            targets: [B, N, 4] normalized boxes
+        """
+        diff = predictions - targets
+        abs_diff = torch.abs(diff)
+        smooth_l1 = torch.where(
+            abs_diff < self.beta,
+            0.5 * diff ** 2 / self.beta,
+            abs_diff - 0.5 * self.beta
+        )
+        return smooth_l1.mean()
+
+
+class DistanceZoneLoss(nn.Module):
+    """
+    Distance zone head loss.
+    
+    Ground Truth: Zone indices (0=near, 1=medium, 2=far)
+    Loss: Cross-entropy with class weights
+    """
+    
+    def __init__(self, num_zones: int = 3, class_weights: Optional[torch.Tensor] = None):
+        super().__init__()
+        self.num_zones = num_zones
+        if class_weights is None:
+            class_weights = torch.ones(num_zones)
+        self.register_buffer('class_weights', class_weights)
+    
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            predictions: [B, N, num_zones] logits
+            targets: [B, N] zone indices
+        """
+        ce_loss = F.cross_entropy(
+            predictions.reshape(-1, self.num_zones),
+            targets.reshape(-1),
+            weight=self.class_weights,
+            reduction='mean'
+        )
+        return ce_loss
+
+
+class UrgencyLoss(nn.Module):
+    """
+    Urgency head loss.
+    
+    Ground Truth: Urgency levels (0=safe, 1=caution, 2=warning, 3=danger)
+    Loss: Focal loss with class weights (danger weighted higher)
+    """
+    
+    def __init__(self, num_levels: int = 4, alpha: float = 0.25, gamma: float = 2.0):
+        super().__init__()
+        self.num_levels = num_levels
+        self.alpha = alpha
+        self.gamma = gamma
+        # Weight danger higher
+        self.register_buffer('class_weights', torch.tensor([1.0, 1.5, 2.0, 3.0]))
+    
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            predictions: [B, num_levels] logits
+            targets: [B] urgency level indices
+        """
+        ce_loss = F.cross_entropy(
+            predictions,
+            targets,
+            weight=self.class_weights,
+            reduction='none'
+        )
+        
+        # Focal loss
+        p = F.softmax(predictions, dim=-1)
+        p_t = p.gather(1, targets.unsqueeze(-1)).squeeze(-1)
+        focal_weight = self.alpha * (1 - p_t) ** self.gamma
+        loss = focal_weight * ce_loss
+        return loss.mean()
+
+
+class UncertaintyLoss(nn.Module):
+    """
+    Uncertainty head loss.
+    
+    Ground Truth: Uncertainty scores [0, 1] derived from prediction variance
+    Loss: Uncertainty-weighted loss (learns to predict its own uncertainty)
+    """
+    
+    def __init__(self):
+        super().__init__()
+        self.mse = nn.MSELoss()
     
     def forward(
         self,
-        pred_boxes: torch.Tensor,
-        target_boxes: torch.Tensor
+        predictions: torch.Tensor,
+        targets: torch.Tensor,
+        prediction_variance: torch.Tensor
     ) -> torch.Tensor:
-        iou = self._compute_iou(pred_boxes, target_boxes)
+        """
+        Args:
+            predictions: [B, 1] predicted uncertainty
+            targets: [B, 1] ground truth uncertainty (from prediction variance)
+            prediction_variance: [B, 1] actual prediction variance
+        """
+        # Use prediction variance as ground truth
+        if targets is None:
+            targets = prediction_variance
         
-        if self.loss_type == 'iou':
-            loss = torch.tensor(1.0, device=iou.device, dtype=iou.dtype) - iou
-        elif self.loss_type == 'giou':
-            giou = self._compute_giou(pred_boxes, target_boxes, iou)
-            loss = torch.tensor(1.0, device=giou.device, dtype=giou.dtype) - giou
-        elif self.loss_type in ['diou', 'ciou']:
-            diou_ciou = self._compute_diou_ciou(pred_boxes, target_boxes, iou)
-            loss = torch.tensor(1.0, device=diou_ciou.device, dtype=diou_ciou.dtype) - diou_ciou
-        
-        if self.reduction == 'mean':
-            return loss.mean()
-        elif self.reduction == 'sum':
-            return loss.sum()
-        return loss
+        return self.mse(predictions, targets)
+
+
+class DepthLoss(nn.Module):
+    """
+    Depth head loss.
     
-    def _compute_iou(
+    Ground Truth: Depth maps [B, H, W] in meters (or normalized [0, 1])
+    Loss: Uncertainty-weighted L1 loss
+    """
+    
+    def __init__(self):
+        super().__init__()
+        self.l1 = nn.L1Loss(reduction='none')
+    
+    def forward(
         self,
-        boxes1: torch.Tensor,
-        boxes2: torch.Tensor
+        predictions: torch.Tensor,
+        targets: torch.Tensor,
+        uncertainty: torch.Tensor
     ) -> torch.Tensor:
-        b1_x1 = boxes1[:, 0] - boxes1[:, 2] / 2
-        b1_y1 = boxes1[:, 1] - boxes1[:, 3] / 2
-        b1_x2 = boxes1[:, 0] + boxes1[:, 2] / 2
-        b1_y2 = boxes1[:, 1] + boxes1[:, 3] / 2
-        
-        b2_x1 = boxes2[:, 0] - boxes2[:, 2] / 2
-        b2_y1 = boxes2[:, 1] - boxes2[:, 3] / 2
-        b2_x2 = boxes2[:, 0] + boxes2[:, 2] / 2
-        b2_y2 = boxes2[:, 1] + boxes2[:, 3] / 2
-        
-        inter_x1 = torch.max(b1_x1, b2_x1)
-        inter_y1 = torch.max(b1_y1, b2_y1)
-        inter_x2 = torch.min(b1_x2, b2_x2)
-        inter_y2 = torch.min(b1_y2, b2_y2)
-        
-        inter_area = (
-            (inter_x2 - inter_x1).clamp(min=0) *
-            (inter_y2 - inter_y1).clamp(min=0)
-        )
-        
-        b1_area = boxes1[:, 2] * boxes1[:, 3]
-        b2_area = boxes2[:, 2] * boxes2[:, 3]
-        union_area = b1_area + b2_area - inter_area
-        
-        return inter_area / (union_area + 1e-8)
+        """
+        Args:
+            predictions: [B, H, W] predicted depth
+            targets: [B, H, W] ground truth depth
+            uncertainty: [B, H, W] depth uncertainty (for weighting)
+        """
+        l1_loss = self.l1(predictions, targets)
+        # Weight by inverse uncertainty (high uncertainty = low weight)
+        weights = 1.0 / (uncertainty + 1e-6)
+        weighted_loss = weights * l1_loss
+        return weighted_loss.mean()
+
+
+class MotionLoss(nn.Module):
+    """
+    Motion head loss (Tier 2+).
     
-    def _compute_giou(
+    Ground Truth: Optical flow vectors [B, 2, H, W] or motion magnitude [B, H, W]
+    Loss: L2 loss for flow vectors
+    """
+    
+    def __init__(self):
+        super().__init__()
+        self.mse = nn.MSELoss()
+    
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            predictions: [B, 2, H, W] or [B, H, W] motion predictions
+            targets: [B, 2, H, W] or [B, H, W] ground truth motion
+        """
+        return self.mse(predictions, targets)
+
+
+class SceneDescriptionLoss(nn.Module):
+    """
+    Scene description head loss (Tier 3+).
+    
+    Ground Truth: Text descriptions (tokenized)
+    Loss: Cross-entropy for language modeling
+    """
+    
+    def __init__(self, vocab_size: int, ignore_index: int = -100):
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.ignore_index = ignore_index
+        self.ce = nn.CrossEntropyLoss(ignore_index=ignore_index)
+    
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            predictions: [B, seq_len, vocab_size] logits
+            targets: [B, seq_len] token indices
+        """
+        return self.ce(predictions.reshape(-1, self.vocab_size), targets.reshape(-1))
+
+
+class OCRLoss(nn.Module):
+    """
+    OCR head loss (Tier 3+).
+    
+    Ground Truth: Text detections with bounding boxes and text
+    Loss: Detection loss (boxes) + Recognition loss (text)
+    """
+    
+    def __init__(self, vocab_size: int):
+        super().__init__()
+        self.box_loss = BoxRegressionLoss()
+        self.text_loss = SceneDescriptionLoss(vocab_size)
+    
+    def forward(
         self,
-        boxes1: torch.Tensor,
-        boxes2: torch.Tensor,
-        iou: torch.Tensor
-    ) -> torch.Tensor:
-        b1_x1 = boxes1[:, 0] - boxes1[:, 2] / 2
-        b1_y1 = boxes1[:, 1] - boxes1[:, 3] / 2
-        b1_x2 = boxes1[:, 0] + boxes1[:, 2] / 2
-        b1_y2 = boxes1[:, 1] + boxes1[:, 3] / 2
-        
-        b2_x1 = boxes2[:, 0] - boxes2[:, 2] / 2
-        b2_y1 = boxes2[:, 1] - boxes2[:, 3] / 2
-        b2_x2 = boxes2[:, 0] + boxes2[:, 2] / 2
-        b2_y2 = boxes2[:, 1] + boxes2[:, 3] / 2
-        
-        c_x1 = torch.min(b1_x1, b2_x1)
-        c_y1 = torch.min(b1_y1, b2_y1)
-        c_x2 = torch.max(b1_x2, b2_x2)
-        c_y2 = torch.max(b1_y2, b2_y2)
-        
-        c_area = (c_x2 - c_x1) * (c_y2 - c_y1)
-        
-        b1_area = boxes1[:, 2] * boxes1[:, 3]
-        b2_area = boxes2[:, 2] * boxes2[:, 3]
-        union_area = b1_area + b2_area - iou * (b1_area + b2_area) / (1 + iou)
-        
-        giou = iou - (c_area - union_area) / (c_area + 1e-8)
-        return giou
-    
-    def _compute_diou_ciou(
-        self,
-        boxes1: torch.Tensor,
-        boxes2: torch.Tensor,
-        iou: torch.Tensor
-    ) -> torch.Tensor:
-        center_dist_sq = (
-            (boxes1[:, 0] - boxes2[:, 0]) ** 2 +
-            (boxes1[:, 1] - boxes2[:, 1]) ** 2
-        )
-        
-        b1_x1 = boxes1[:, 0] - boxes1[:, 2] / 2
-        b1_y1 = boxes1[:, 1] - boxes1[:, 3] / 2
-        b1_x2 = boxes1[:, 0] + boxes1[:, 2] / 2
-        b1_y2 = boxes1[:, 1] + boxes1[:, 3] / 2
-        
-        b2_x1 = boxes2[:, 0] - boxes2[:, 2] / 2
-        b2_y1 = boxes2[:, 1] - boxes2[:, 3] / 2
-        b2_x2 = boxes2[:, 0] + boxes2[:, 2] / 2
-        b2_y2 = boxes2[:, 1] + boxes2[:, 3] / 2
-        
-        c_x1 = torch.min(b1_x1, b2_x1)
-        c_y1 = torch.min(b1_y1, b2_y1)
-        c_x2 = torch.max(b1_x2, b2_x2)
-        c_y2 = torch.max(b1_y2, b2_y2)
-        
-        diagonal_sq = (c_x2 - c_x1) ** 2 + (c_y2 - c_y1) ** 2
-        
-        diou = iou - center_dist_sq / (diagonal_sq + 1e-8)
-        
-        if self.loss_type == 'diou':
-            return diou
-        
-        v = (4 / (torch.pi ** 2)) * torch.pow(
-            torch.atan(boxes2[:, 2] / (boxes2[:, 3] + 1e-8)) -
-            torch.atan(boxes1[:, 2] / (boxes1[:, 3] + 1e-8)),
-            2
-        )
-        
-        alpha = v / (1 - iou + v + 1e-8)
-        ciou = diou - alpha * v
-        
-        return ciou
+        box_predictions: torch.Tensor,
+        box_targets: torch.Tensor,
+        text_predictions: torch.Tensor,
+        text_targets: torch.Tensor
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Args:
+            box_predictions: [B, N, 4] box predictions
+            box_targets: [B, N, 4] box targets
+            text_predictions: [B, N, seq_len, vocab_size] text predictions
+            text_targets: [B, N, seq_len] text targets
+        """
+        box_loss = self.box_loss(box_predictions, box_targets)
+        text_loss = self.text_loss(text_predictions, text_targets)
+        return {
+            'box_loss': box_loss,
+            'text_loss': text_loss,
+            'total_loss': box_loss + text_loss
+        }
 
 
-def assign_targets_to_anchors(
-    gt_boxes: torch.Tensor,
-    gt_labels: torch.Tensor,
-    anchor_points: torch.Tensor,
-    num_classes: int
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    N = anchor_points.shape[0]
-    M = gt_boxes.shape[0]
-    device = gt_boxes.device
+class FatigueLoss(nn.Module):
+    """
+    Fatigue head loss (Tier 5+).
     
-    assigned_labels = torch.zeros(N, dtype=torch.long, device=device)
-    assigned_boxes = torch.zeros(N, 4, device=device)
-    assigned_mask = torch.zeros(N, dtype=torch.float32, device=device)
+    Ground Truth: Binary fatigue labels (0=not fatigued, 1=fatigued)
+    Loss: Binary cross-entropy
+    """
     
-    if M == 0:
-        return assigned_labels, assigned_boxes, assigned_mask
+    def __init__(self):
+        super().__init__()
+        self.bce = nn.BCEWithLogitsLoss()
     
-    # Vectorized assignment: compute all GT box bounds at once
-    gt_x1 = gt_boxes[:, 0] - gt_boxes[:, 2] / 2  # [M]
-    gt_y1 = gt_boxes[:, 1] - gt_boxes[:, 3] / 2  # [M]
-    gt_x2 = gt_boxes[:, 0] + gt_boxes[:, 2] / 2  # [M]
-    gt_y2 = gt_boxes[:, 1] + gt_boxes[:, 3] / 2  # [M]
-    
-    # Expand for broadcasting: [N, 1] vs [1, M] -> [N, M]
-    anchor_x = anchor_points[:, 0:1]  # [N, 1]
-    anchor_y = anchor_points[:, 1:2]  # [N, 1]
-    
-    gt_x1_exp = gt_x1.unsqueeze(0)  # [1, M]
-    gt_y1_exp = gt_y1.unsqueeze(0)  # [1, M]
-    gt_x2_exp = gt_x2.unsqueeze(0)  # [1, M]
-    gt_y2_exp = gt_y2.unsqueeze(0)  # [1, M]
-    
-    # Check which anchors are inside which GT boxes: [N, M]
-    inside_matrix = (
-        (anchor_x >= gt_x1_exp) & (anchor_x <= gt_x2_exp) &
-        (anchor_y >= gt_y1_exp) & (anchor_y <= gt_y2_exp)
-    )
-    
-    # For each anchor, find the first GT box it's inside (priority to first GT)
-    inside_any, gt_indices = inside_matrix.max(dim=1)  # [N]
-    
-    # Assign labels and boxes for anchors inside any GT box
-    inside_mask = inside_any.bool()
-    if inside_mask.any():
-        assigned_labels[inside_mask] = gt_labels[gt_indices[inside_mask]] + 1
-        assigned_boxes[inside_mask] = gt_boxes[gt_indices[inside_mask]]
-        assigned_mask[inside_mask] = 1.0
-    
-    return assigned_labels, assigned_boxes, assigned_mask
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            predictions: [B, 1] fatigue logits
+            targets: [B, 1] binary fatigue labels
+        """
+        return self.bce(predictions, targets)
 
 
-class DetectionLoss(nn.Module):
+class MultiHeadLoss(nn.Module):
+    """
+    Combined multi-head loss with task balancing.
+    
+    Uses GradNorm or simple weighted combination.
+    """
     
     def __init__(
         self,
-        num_classes: int,
-        classification_weight: float = 1.0,
-        localization_weight: float = 5.0,
-        objectness_weight: float = 1.0,
-        urgency_weight: float = 0.5,
-        distance_weight: float = 0.5,
-        text_weight: float = 0.3,
-        focal_alpha: float = 0.25,
-        focal_gamma: float = 2.0,
-        iou_loss_type: str = 'iou'
+        loss_functions: Dict[str, nn.Module],
+        loss_weights: Optional[Dict[str, float]] = None,
+        use_gradnorm: bool = False
     ):
         super().__init__()
+        self.loss_functions = loss_functions
+        self.use_gradnorm = use_gradnorm
         
-        self.num_classes = num_classes
-        self.classification_weight = classification_weight
-        self.localization_weight = localization_weight
-        self.objectness_weight = objectness_weight
-        self.urgency_weight = urgency_weight
-        self.distance_weight = distance_weight
-        self.text_weight = text_weight
-        
-        self.focal_loss = FocalLoss(alpha=focal_alpha, gamma=focal_gamma)
-        self.iou_loss = IoULoss(loss_type=iou_loss_type)
-        self.bce_loss = nn.BCELoss(reduction='mean')
-        self.ce_loss = nn.CrossEntropyLoss()
+        if loss_weights is None:
+            # Default weights (can be learned)
+            loss_weights = {
+                'objectness': 1.0,
+                'classification': 1.0,
+                'box': 1.0,
+                'distance': 0.5,
+                'urgency': 2.0,  # Higher weight for safety
+                'uncertainty': 0.5,
+                'depth': 1.0,
+                'motion': 0.3,
+                'scene_description': 0.2,
+                'ocr': 0.2,
+                'fatigue': 0.1
+            }
+        self.register_buffer('loss_weights', torch.tensor([
+            loss_weights.get(name, 1.0) for name in loss_functions.keys()
+        ]))
     
     def forward(
         self,
         predictions: Dict[str, torch.Tensor],
         targets: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        batch_size = predictions['classifications'].size(0)
-        num_locations = predictions['classifications'].size(1)
-        device = predictions['classifications'].device
+        """
+        Compute losses for all heads.
         
-        grid_size = int(num_locations ** 0.5)
-        y_coords = torch.linspace(0, 1, grid_size, device=device)
-        x_coords = torch.linspace(0, 1, grid_size, device=device)
-        yy, xx = torch.meshgrid(y_coords, x_coords, indexing='ij')
-        anchor_points = torch.stack([xx.flatten(), yy.flatten()], dim=1)
+        Args:
+            predictions: Dictionary of head predictions
+            targets: Dictionary of ground truth targets
         
-        cls_loss = torch.tensor(0.0, device=device)
-        box_loss = torch.tensor(0.0, device=device)
-        obj_loss = torch.tensor(0.0, device=device)
-        num_positives = 0
+        Returns:
+            Dictionary of losses and total loss
+        """
+        losses = {}
+        total_loss = 0.0
         
-        for b in range(batch_size):
-            cls_logits = predictions['classifications'][b]
-            box_preds = predictions['boxes'][b]
-            obj_preds = predictions['objectness'][b]
-            
-            gt_labels = targets['labels'][b]
-            gt_boxes = targets['boxes'][b]
-            num_objs = targets.get('num_objects', torch.tensor([len(gt_labels)]))[b]
-            
-            gt_labels = gt_labels[:num_objs]
-            gt_boxes = gt_boxes[:num_objs]
-            
-            assigned_labels, assigned_boxes, assigned_mask = assign_targets_to_anchors(
-                gt_boxes, gt_labels, anchor_points, self.num_classes
-            )
-            
-            pos_mask = assigned_mask > 0
-            if pos_mask.any():
-                pos_labels = (assigned_labels[pos_mask] - 1).clamp(0, self.num_classes - 1)
-                cls_loss += self.focal_loss(cls_logits[pos_mask], pos_labels)
-                
-                box_loss += self.iou_loss(box_preds[pos_mask], assigned_boxes[pos_mask])
-                
-                num_positives += pos_mask.sum().item()
-            
-            obj_loss += self.bce_loss(obj_preds, assigned_mask)
+        for i, (head_name, loss_fn) in enumerate(self.loss_functions.items()):
+            if head_name in predictions and head_name in targets:
+                loss = loss_fn(predictions[head_name], targets[head_name])
+                weighted_loss = self.loss_weights[i] * loss
+                losses[head_name] = loss
+                total_loss += weighted_loss
         
-        cls_loss = cls_loss / batch_size if num_positives > 0 else cls_loss
-        box_loss = box_loss / batch_size if num_positives > 0 else box_loss
-        obj_loss = obj_loss / batch_size
-        
-        urgency_loss = torch.tensor(0.0, device=device)
-        if 'urgency' in targets and 'urgency_scores' in predictions:
-            urgency_loss = self.ce_loss(
-                predictions['urgency_scores'],
-                targets['urgency']
-            )
-        
-        distance_loss = torch.tensor(0.0, device=device)
-        if 'distance' in targets and 'distance_zones' in predictions and num_positives > 0:
-            for b in range(batch_size):
-                dist_preds = predictions['distance_zones'][b]
-                gt_distances = targets['distance'][b]
-                num_objs = targets.get('num_objects', torch.tensor([len(gt_distances)]))[b]
-                gt_distances = gt_distances[:num_objs]
-                
-                if len(gt_distances) > 0:
-                    K = min(len(gt_distances), num_locations)
-                    top_k_indices = torch.topk(predictions['objectness'][b], K).indices
-                    
-                    distance_loss += self.ce_loss(
-                        dist_preds[top_k_indices],
-                        gt_distances[:K]
-                    )
-            
-            distance_loss = distance_loss / batch_size
-        
-        # Text detection loss (binary classification: text vs non-text)
-        text_loss = torch.tensor(0.0, device=device)
-        if 'text_regions' in predictions and 'text_mask' in targets:
-            text_preds = predictions['text_regions']  # [B, H*W]
-            text_targets = targets['text_mask']  # [B, H*W] binary mask
-            if text_preds.shape == text_targets.shape:
-                text_loss = self.bce_loss(text_preds, text_targets.float())
-        
-        total_loss = (
-            self.classification_weight * cls_loss +
-            self.localization_weight * box_loss +
-            self.objectness_weight * obj_loss +
-            self.urgency_weight * urgency_loss +
-            self.distance_weight * distance_loss +
-            self.text_weight * text_loss
-        )
-        
-        return {
-            'total_loss': total_loss,
-            'classification_loss': cls_loss,
-            'localization_loss': box_loss,
-            'objectness_loss': obj_loss,
-            'urgency_loss': urgency_loss,
-            'distance_loss': distance_loss,
-            'text_loss': text_loss,
-            'num_positives': torch.tensor(num_positives, device=device, dtype=torch.long)
-        }
+        losses['total_loss'] = total_loss
+        return losses
 
 
-MaxSightLoss = DetectionLoss
+# Ground Truth Data Sources Documentation
+GROUND_TRUTH_SOURCES = {
+    'objectness': 'COCO annotations (binary object presence)',
+    'classification': 'COCO class labels',
+    'box': 'COCO bounding boxes (normalized)',
+    'distance': 'Synthetic/calibrated distance zones',
+    'urgency': 'Expert-annotated urgency labels',
+    'uncertainty': 'Derived from prediction variance (self-supervised)',
+    'depth': 'Depth sensors (RGB-D) or stereo vision',
+    'motion': 'Optical flow (Lucas-Kanade or deep flow)',
+    'scene_description': 'Human-annotated scene descriptions',
+    'ocr': 'Text detection datasets (ICDAR, COCO-Text)',
+    'fatigue': 'User interaction logs (time-based, interaction patterns)'
+}

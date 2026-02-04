@@ -25,6 +25,9 @@ class TaskGenerator:
     """
     Generates adaptive therapy tasks.
     
+    STUB - NOT INTEGRATED: This component is a placeholder implementation and not currently integrated into the main training pipeline.
+    See README.md for integration status. Contains TODO comments for future implementation.
+    
     Reads:
     - user profile
     - recent failures

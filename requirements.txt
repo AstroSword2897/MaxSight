@@ -17,8 +17,14 @@ opencv-python>=4.8.0
 # Audio Processing (optional, for MFCC)
 # librosa>=0.10.0  # Uncomment if using librosa for MFCC
 
+# Text Encoding (optional, for OCR encoder)
+# sentence-transformers>=2.0.0  # Uncomment if using OCR encoder with sentence-transformers
+
 # Testing
 pytest>=9.0.1
+
+# Hyperparameter tuning (AutoML)
+optuna>=3.0.0
 
 # Model Optimization
 torchao>=0.14.1

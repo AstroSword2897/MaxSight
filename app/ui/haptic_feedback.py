@@ -9,6 +9,10 @@ See docs/therapy_system_implementation_plan.md for implementation details.
 
 from typing import Optional
 from enum import Enum
+import logging
+
+# Use structured logging instead of print
+logger = logging.getLogger(__name__)
 
 
 class HapticPattern(Enum):
@@ -42,8 +46,8 @@ class HapticFeedback:
         if not self.enabled:
             return
         
-        # TODO: Implement actual haptic feedback
-        print(f"[Haptic] {pattern.value} (intensity: {intensity})")
+        # Use logger instead of print
+        logger.info(f"Haptic {pattern.value} intensity: {intensity}")
     
     def micro_pulse(self, intensity: float = 0.3):
         """Short pulse for target found."""

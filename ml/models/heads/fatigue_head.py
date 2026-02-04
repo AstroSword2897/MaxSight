@@ -166,7 +166,7 @@ class FatigueHead(nn.Module):
     def forward(
         self,
         eye_features: torch.Tensor,
-        temporal_features: torch.Tensor
+        motion_features: torch.Tensor  # FIXED: Motion as temporal anchor (renamed from temporal_features)
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass to generate fatigue and gaze predictions.
@@ -179,7 +179,7 @@ class FatigueHead(nn.Module):
         
         Arguments:
             eye_features: Eye model features [B, eye_dim]
-            temporal_features: Temporal features [B, temporal_dim]
+            motion_features: Motion features [B, motion_dim] - FIXED: Motion as temporal anchor
         
         Returns:
             Dictionary with:
@@ -191,21 +191,21 @@ class FatigueHead(nn.Module):
         # Validate inputs
         if eye_features.dim() != 2:
             raise ValueError(f"Expected 2D eye_features [B, eye_dim], got {eye_features.shape}")
-        if temporal_features.dim() != 2:
-            raise ValueError(f"Expected 2D temporal_features [B, temporal_dim], got {temporal_features.shape}")
+        if motion_features.dim() != 2:
+            raise ValueError(f"Expected 2D motion_features [B, motion_dim], got {motion_features.shape}")
         
         B_eye = eye_features.shape[0]
-        B_temp = temporal_features.shape[0]
-        if B_eye != B_temp:
-            raise ValueError(f"Batch size mismatch: eye_features {B_eye} vs temporal_features {B_temp}")
+        B_motion = motion_features.shape[0]
+        if B_eye != B_motion:
+            raise ValueError(f"Batch size mismatch: eye_features {B_eye} vs motion_features {B_motion}")
         
         if eye_features.shape[1] != self.eye_dim:
             raise ValueError(f"Expected eye_dim={self.eye_dim}, got {eye_features.shape[1]}")
-        if temporal_features.shape[1] != self.temporal_dim:
-            raise ValueError(f"Expected temporal_dim={self.temporal_dim}, got {temporal_features.shape[1]}")
+        if motion_features.shape[1] != self.temporal_dim:
+            raise ValueError(f"Expected motion_dim={self.temporal_dim}, got {motion_features.shape[1]}")
         
-        # Combine inputs
-        combined = torch.cat([eye_features, temporal_features], dim=1)
+        # FIXED: Motion as temporal anchor - fatigue uses motion stability
+        combined = torch.cat([eye_features, motion_features], dim=1)
         
         # Initial feature extraction
         initial_features = self.initial_net(combined)  # [B, hidden_dim]

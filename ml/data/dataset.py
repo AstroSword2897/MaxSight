@@ -26,18 +26,7 @@ class MaxSightDataset(Dataset):
         apply_lighting_augmentation: bool = True,
         max_objects: int = 10
     ):
-        """
-        Initialize MaxSight dataset.
-        
-        Arguments:
-            data_dir: Root directory containing dataset
-            annotation_file: Path to JSON annotation file (COCO format or custom)
-            image_dir: Directory containing images (default: data_dir/images)
-            audio_dir: Directory containing audio clips (default: data_dir/audio, optional)
-            condition_mode: Visual condition to simulate ('glaucoma', 'amd', 'cataracts', etc.)
-            apply_lighting_augmentation: Whether to apply lighting condition augmentation
-            max_objects: Maximum number of objects per image (for padding)
-        """
+
         self.data_dir = Path(data_dir)
         self.annotation_file = Path(annotation_file) if annotation_file else None
         self.image_dir = Path(image_dir) if image_dir else self.data_dir / 'images'
@@ -49,15 +38,15 @@ class MaxSightDataset(Dataset):
         # Initialize preprocessor with condition-specific transforms
         self.preprocessor = ImagePreprocessor(condition_mode=condition_mode)
         
+        # Class name to index mapping (must be defined before _load_annotations)
+        self.class_to_idx = {cls_name: idx for idx, cls_name in enumerate(COCO_CLASSES)}
+        self.idx_to_class = {idx: cls_name for idx, cls_name in enumerate(COCO_CLASSES)}
+        
         # Load annotations
         self.annotations = self._load_annotations()
         
         # Create image/annotation mapping
         self.image_ids = list(self.annotations.keys()) if self.annotations else []
-        
-        # Class name to index mapping
-        self.class_to_idx = {cls_name: idx for idx, cls_name in enumerate(COCO_CLASSES)}
-        self.idx_to_class = {idx: cls_name for idx, cls_name in enumerate(COCO_CLASSES)}
     
     def _load_annotations(self) -> Dict[str, Any]:
         """Load annotations from JSON (COCO or custom format)."""
@@ -95,10 +84,22 @@ class MaxSightDataset(Dataset):
                 img_height = img_info.get('height', 224)
                 
                 # Convert to center format and normalize to [0, 1]
-                cx = (bbox[0] + bbox[2] / 2) / img_width
-                cy = (bbox[1] + bbox[3] / 2) / img_height
-                w = bbox[2] / img_width
-                h = bbox[3] / img_height
+                # Clamp bbox values to prevent invalid boxes
+                bbox_x = max(0, float(bbox[0]))
+                bbox_y = max(0, float(bbox[1]))
+                bbox_w = max(1e-3, float(bbox[2]))  # Minimum 1e-3 to avoid zero-width
+                bbox_h = max(1e-3, float(bbox[3]))  # Minimum 1e-3 to avoid zero-height
+                
+                cx = (bbox_x + bbox_w / 2) / max(1.0, img_width)
+                cy = (bbox_y + bbox_h / 2) / max(1.0, img_height)
+                w = bbox_w / max(1.0, img_width)
+                h = bbox_h / max(1.0, img_height)
+                
+                # Clamp normalized values to [0, 1]
+                cx = max(0.0, min(1.0, cx))
+                cy = max(0.0, min(1.0, cy))
+                w = max(1e-4, min(1.0, w))
+                h = max(1e-4, min(1.0, h))
                 
                 # Map COCO category to MaxSight class index
                 category_name = category_map.get(ann['category_id'], 'unknown')
@@ -142,31 +143,10 @@ class MaxSightDataset(Dataset):
         return annotations
     
     def __len__(self) -> int:
-        """Return dataset size - O(1) complexity"""
         return len(self.image_ids)
     
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        """
-        Load one sample from dataset with environmental context and audio.
-        
-        Loads image, applies condition-specific preprocessing and lighting augmentation,
-        loads audio clip if available, and formats targets for training.
-        
-        Arguments:
-            idx: Sample index
-        
-        Returns:
-            Dictionary with:
-                - 'images': torch.Tensor [3, H, W] - preprocessed image tensor
-                - 'labels': torch.Tensor [max_objects] - class labels (padded)
-                - 'boxes': torch.Tensor [max_objects, 4] - bounding boxes in center format
-                - 'urgency': torch.Tensor - scene urgency level (0-3)
-                - 'distance': torch.Tensor [max_objects] - distance zones (0-2) per object
-                - 'num_objects': torch.Tensor - number of valid objects
-                - 'lighting': str - lighting condition ('bright', 'normal', 'dim', 'dark')
-                - 'audio': Optional[torch.Tensor] - audio features if available
-                - 'condition_mode': Optional[str] - visual condition mode if applied
-        """
+
         image_id = self.image_ids[idx]
         ann = self.annotations[image_id]
         
@@ -233,7 +213,22 @@ class MaxSightDataset(Dataset):
         for i in range(num_objs):
             obj = objects[i]
             labels[i] = obj.get('class', 0)
-            boxes[i] = torch.tensor(obj.get('box', [0.5, 0.5, 0.1, 0.1]), dtype=torch.float32)
+            
+            # Validate and clamp box coordinates
+            box = obj.get('box', [0.5, 0.5, 0.1, 0.1])
+            box_tensor = torch.tensor(box, dtype=torch.float32)
+            
+            # Clamp to valid ranges: center [0, 1], size [1e-4, 1]
+            box_tensor[0] = torch.clamp(box_tensor[0], 0.0, 1.0)  # cx
+            box_tensor[1] = torch.clamp(box_tensor[1], 0.0, 1.0)  # cy
+            box_tensor[2] = torch.clamp(box_tensor[2], 1e-4, 1.0)  # w
+            box_tensor[3] = torch.clamp(box_tensor[3], 1e-4, 1.0)  # h
+            
+            # Check for NaN/Inf
+            if torch.isnan(box_tensor).any() or torch.isinf(box_tensor).any():
+                box_tensor = torch.tensor([0.5, 0.5, 0.1, 0.1], dtype=torch.float32)
+            
+            boxes[i] = box_tensor
             distance[i] = obj.get('distance', 1)
         
         # Get scene urgency (max of all object urgencies)
@@ -247,7 +242,7 @@ class MaxSightDataset(Dataset):
             'labels': labels,  # [max_objects] class labels (padded)
             'boxes': boxes,  # [max_objects, 4] bounding boxes in center format (cx, cy, w, h)
             'urgency': torch.tensor(urgency, dtype=torch.long),  # Scene urgency (0-3)
-            'distance': distance,  # [max_objects] distance zones (0-2)
+            'distance': distance, 
             'num_objects': torch.tensor(num_objs, dtype=torch.long),  # Valid object count
             'lighting': lighting  # Lighting condition string
         }
