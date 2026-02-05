@@ -8,6 +8,11 @@ Everything we set up: T5 fixes, 14 vision conditions, warning recognition,
 GradNorm, EMA, checkpoints on Drive. No --use-ema or --use-mixed-precision
 (those flags don't exist; EMA is on by default, FP32 only).
 
+REQUIRED: Put maxsight_train.json and maxsight_val.json in:
+  /content/drive/MyDrive/MaxSight_Training/cleaned_splits/
+Create them with: python scripts/gather_training_data.py --coco-dir <path> --output-dir <path>/cleaned_splits
+Or use your own train/val JSON paths and set TRAIN_ANN / VAL_ANN in Cell 3.
+
 ----------------------------------------------
 CELL 1: Mount Drive + go to repo
 ----------------------------------------------
@@ -34,6 +39,9 @@ CONDITIONS = [
 ]
 DATA = "/content/drive/MyDrive/MaxSight_Training"
 BASE_CKPT = "/content/drive/MyDrive/MaxSight"
+# Annotation JSONs (required: create with gather_training_data.py or put maxsight_train.json + maxsight_val.json here)
+TRAIN_ANN = f"{DATA}/cleaned_splits/maxsight_train.json"
+VAL_ANN = f"{DATA}/cleaned_splits/maxsight_val.json"
 
 for cond in CONDITIONS:
     ckpt_dir = f"{BASE_CKPT}/checkpoints_{cond}"
@@ -41,6 +49,8 @@ for cond in CONDITIONS:
     !python scripts/train_maxsight.py \
         --data-dir {DATA} \
         --image-dir {DATA} \
+        --train-annotation {TRAIN_ANN} \
+        --val-annotation {VAL_ANN} \
         --batch-size 16 \
         --epochs 20 \
         --num-workers 2 \
@@ -76,6 +86,8 @@ Alternative: Train a single condition (e.g. glaucoma)
 !python scripts/train_maxsight.py \
     --data-dir /content/drive/MyDrive/MaxSight_Training \
     --image-dir /content/drive/MyDrive/MaxSight_Training \
+    --train-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_train.json \
+    --val-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json \
     --batch-size 16 \
     --epochs 20 \
     --num-workers 2 \
@@ -103,6 +115,8 @@ If OOM: reduce batch, increase grad accumulation
 !python scripts/train_maxsight.py \
     --data-dir /content/drive/MyDrive/MaxSight_Training \
     --image-dir /content/drive/MyDrive/MaxSight_Training \
+    --train-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_train.json \
+    --val-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json \
     --batch-size 8 \
     --grad-accumulation-steps 4 \
     --epochs 20 \
