@@ -801,39 +801,91 @@ class MaxSightCNN(nn.Module):
             # Multi-scale attention for inconsistent vision
             self.attention_weights = nn.Parameter(torch.ones(4))
         
-        # MVP Accessibility Features - Shared Scene Embedding for Functional Vision
+        # ============================================================================
+        # COMPLETE AWARENESS & THERAPY FEATURES (Problem Statement Alignment)
+        # ============================================================================
         if enable_accessibility_features:
-            # Shared scene embedding for functional vision and environmental context
-            # This reduces computation by reusing the same features
+            # Import all specialized heads
+            from ml.models.heads.contrast_head import ContrastMapHead
+            from ml.models.heads.fatigue_head import FatigueHead
+            from ml.models.heads.motion_head import MotionHead
+            from ml.models.heads.predictive_alert_head import PredictiveAlertHead
+            from ml.models.heads.roi_priority_head import ROIPriorityHead
+            from ml.models.heads.therapy_state_head import TherapyStateHead
+            from ml.models.heads.uncertainty_head import GlobalConfidenceAggregator
+            
+            # Shared scene embedding for functional vision
             self.shared_scene_embedding = nn.Sequential(
                 nn.Linear(scene_input_dim, 256),
                 nn.LayerNorm(256),
                 nn.ReLU(),
                 nn.Dropout(0.2),
-                nn.Linear(256, 256)  # Shared 256-dim embedding
+                nn.Linear(256, 256)
             )
             
-            # 1. Contrast Sensitivity Head (0-1 score)
-            self.contrast_head = nn.Sequential(
-                nn.Linear(256, 128),  # Uses shared embedding
-                nn.LayerNorm(128),
-                nn.ReLU(),
-                nn.Dropout(0.2),
-                nn.Linear(128, 1),
-                nn.Sigmoid()
+            # 1. Contrast Map - Advanced contrast sensitivity with edge awareness
+            self.contrast_head = ContrastMapHead(
+                in_channels=256,
+                motion_dim=256,
+                use_edge_aware=True
             )
             
-            # 2. Glare Risk Level Head (0-3 levels)
+            # 2. Motion Head - Tracks movement for temporal understanding & hazard prediction
+            self.motion_head = MotionHead(
+                in_channels=128,
+                hidden_channels=256,
+                use_refinement=True,
+                num_refinement_stages=3,
+                use_temporal_stacking=True,
+                use_multi_scale=True
+            )
+            
+            # 3. Fatigue Detection - User state awareness for adaptive assistance & safety
+            self.fatigue_head = FatigueHead(
+                eye_dim=4,
+                temporal_dim=128,
+                hidden_dim=64,
+                use_lstm=True
+            )
+            
+            # 4. ROI Priority - Attention guidance, information filtering & therapy focus
+            self.roi_priority_head = ROIPriorityHead(
+                scene_dim=256,
+                roi_dim=256,
+                hidden_dim=128,
+                use_attention=True
+            )
+            
+            # 5. Predictive Alerts - Hazard anticipation for proactive safety
+            self.predictive_alert_head = PredictiveAlertHead(
+                input_dim=512,
+                motion_dim=256,
+                num_hazard_types=10,
+                embed_dim=256
+            )
+            
+            # 6. Therapy State Tracker - Unified therapy progress (fatigue + depth + contrast)
+            self.therapy_state_head = TherapyStateHead(
+                eye_dim=4,
+                motion_dim=256,
+                temporal_dim=128,
+                in_channels_depth=256,
+                in_channels_contrast=256,
+                use_lstm=True,
+                use_depth_multi_scale=True,
+                use_edge_aware=True
+            )
+            
+            # 7. Glare Detection (scene-level, 4 classes)
             self.glare_head = nn.Sequential(
-                nn.Linear(256, 128),  # Uses shared embedding
+                nn.Linear(256, 128),
                 nn.LayerNorm(128),
                 nn.ReLU(),
                 nn.Dropout(0.2),
-                nn.Linear(128, 4),  # 0-3 levels + uncertainty
-                nn.Softmax(dim=1)
+                nn.Linear(128, 4)  # no_glare, low, medium, high
             )
             
-            # 3. Object Findability Head (per-location, 0-1 score)
+            # 8. Findability Score (simple version for baseline - contrast_head provides advanced)
             self.findability_head = nn.Sequential(
                 nn.Conv2d(256, 128, 3, padding=1, bias=False),
                 nn.BatchNorm2d(128),
@@ -842,9 +894,9 @@ class MaxSightCNN(nn.Module):
                 nn.Sigmoid()
             )
             
-            # 4. Navigation Difficulty Head (scene-level, 0-1 score)
+            # 9. Navigation Difficulty (scene-level complexity assessment)
             self.navigation_difficulty_head = nn.Sequential(
-                nn.Linear(256, 128),  # Uses shared embedding
+                nn.Linear(256, 128),
                 nn.LayerNorm(128),
                 nn.ReLU(),
                 nn.Dropout(0.2),
@@ -852,9 +904,7 @@ class MaxSightCNN(nn.Module):
                 nn.Sigmoid()
             )
             
-            # Uncertainty estimation for priority-sensitive alerts
-            # Predicts model confidence for each output
-            from ml.models.heads.uncertainty_head import GlobalConfidenceAggregator
+            # 10. Uncertainty Aggregator - Confidence estimation for all outputs
             self.uncertainty_head = GlobalConfidenceAggregator(
                 scene_dim=256,
                 hidden_dim=128,
@@ -876,6 +926,11 @@ class MaxSightCNN(nn.Module):
             modules.extend([
                 self.shared_scene_embedding,
                 self.contrast_head,
+                self.motion_head,
+                self.fatigue_head,
+                self.roi_priority_head,
+                self.predictive_alert_head,
+                self.therapy_state_head,
                 self.glare_head,
                 self.findability_head,
                 self.navigation_difficulty_head,
@@ -1531,35 +1586,92 @@ class MaxSightCNN(nn.Module):
                 assert combined_context.is_contiguous(), "combined_context not contiguous before shared_scene_embedding"
                 assert det_feats.is_contiguous(), "det_feats not contiguous before findability_head"
                 
-                # 1. Contrast Sensitivity (0-1 score)
-                contrast_sensitivity = self.contrast_head(shared_scene_emb)  # [B, 1]
+                # 1. Contrast Map - Advanced multi-scale contrast sensitivity
+                contrast_outputs = self.contrast_head(det_feats)  # Dict with contrast_map, edge_map
+                contrast_map = contrast_outputs.get('contrast_map', contrast_outputs.get('contrast_sensitivity'))  # [B, 1, H, W]
                 
-                # 2. Glare Risk Level (0-3, with probabilities)
+                # 2. Motion Tracking - Optical flow and movement analysis
+                motion_outputs = self.motion_head(det_feats)  # Dict with 'flow', 'magnitude'
+                motion_flow = motion_outputs.get('flow')  # [B, 2, H, W]
+                motion_magnitude = motion_outputs.get('magnitude')  # [B, 1, H, W]
+                
+                # 3. Fatigue Detection - User state for adaptive assistance
+                # Requires eye model and temporal features (use dummy if not available)
+                eye_features = torch.zeros(batch_size, 4, device=det_feats.device)  # Placeholder
+                temporal_features = torch.zeros(batch_size, 128, device=det_feats.device)  # From temporal encoder if available
+                fatigue_outputs = self.fatigue_head(eye_features, temporal_features)  # Dict with scores
+                
+                # 4. ROI Priority - Attention guidance (requires scene + ROI features)
+                # Use detection features as ROI features [B, C, H, W] → flatten to [B, H*W, C]
+                roi_features = det_feats.permute(0, 2, 3, 1).contiguous().view(batch_size, H*W, -1)  # [B, H*W, 256]
+                roi_priority_outputs = self.roi_priority_head(
+                    scene_embedding=shared_scene_emb.unsqueeze(1),  # [B, 1, 256]
+                    roi_features=roi_features  # [B, H*W, 256]
+                )  # Dict with 'roi_utility'
+                roi_utility = roi_priority_outputs.get('roi_utility')  # [B, H*W]
+                
+                # 5. Predictive Alerts - Hazard anticipation
+                # Requires motion features from motion_head
+                alert_outputs = self.predictive_alert_head(
+                    scene_features=combined_context,
+                    motion_features=motion_magnitude.mean(dim=[2, 3]) if motion_magnitude is not None else None
+                )  # Dict with 'hazard_probs', 'time_to_hazard', 'recommended_action'
+                
+                # 6. Therapy State - Unified therapy tracking (fatigue + depth + contrast)
+                therapy_outputs = self.therapy_state_head(
+                    eye_features=eye_features,
+                    motion_features=motion_magnitude,
+                    temporal_features=temporal_features,
+                    depth_features=det_feats,  # Use detection features for depth
+                    contrast_features=det_feats  # Use detection features for contrast
+                )  # Dict with therapy state scores
+                
+                # 7. Glare Risk Level (scene-level, 4 classes)
                 glare_probs = self.glare_head(shared_scene_emb)  # [B, 4]
                 glare_level = torch.argmax(glare_probs, dim=1).float()  # [B] 0-3
                 glare_confidence = torch.max(glare_probs, dim=1)[0]  # [B] confidence
                 
-                # 3. Object Findability (per-location, 0-1 score)
+                # 8. Object Findability (simple per-location score for baseline compatibility)
                 findability_scores = self.findability_head(det_feats)  # [B, 1, H, W]
                 findability_scores = findability_scores.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W)  # [B, H*W]
                 
-                # 4. Navigation Difficulty (scene-level, 0-1 score)
+                # 9. Navigation Difficulty (scene-level complexity)
                 navigation_difficulty = self.navigation_difficulty_head(shared_scene_emb)  # [B, 1]
                 
-                # 5. Uncertainty Estimation (for priority-sensitive alerts)
+                # 10. Uncertainty Aggregator - Global confidence estimation
                 uncertainty_outputs = self.uncertainty_head(shared_scene_emb)  # Dict
                 uncertainty = uncertainty_outputs['uncertainty_score']  # [B, 1]
                 
-                # Add to outputs
+                # Add ALL awareness & therapy features to outputs
                 outputs.update({
-                    'contrast_sensitivity': contrast_sensitivity,
+                    # Awareness features (raised awareness goal)
+                    'contrast_map': contrast_map,
+                    'contrast_sensitivity': contrast_map.mean(dim=[2, 3]) if contrast_map.dim() == 4 else contrast_map,
+                    'edge_map': contrast_outputs.get('edge_map'),
+                    'motion_flow': motion_flow,
+                    'motion_magnitude': motion_magnitude,
                     'glare_risk_level': glare_level,
                     'glare_confidence': glare_confidence,
                     'glare_probs': glare_probs,
                     'object_findability': findability_scores,
+                    'roi_utility': roi_utility,
                     'navigation_difficulty': navigation_difficulty,
                     'uncertainty': uncertainty,
-                    'shared_scene_embedding': shared_scene_emb  # Expose for debugging/analysis
+                    
+                    # Therapy features (skill development goal)
+                    'fatigue_score': fatigue_outputs.get('fatigue_score'),
+                    'blink_rate': fatigue_outputs.get('blink_rate'),
+                    'fixation_stability': fatigue_outputs.get('fixation_stability'),
+                    'therapy_state': therapy_outputs.get('therapy_state'),
+                    'therapy_progress': therapy_outputs.get('progress'),
+                    
+                    # Predictive features (proactive safety goal)
+                    'hazard_probs': alert_outputs.get('hazard_probs'),
+                    'time_to_hazard': alert_outputs.get('time_to_hazard'),
+                    'recommended_action': alert_outputs.get('recommended_action'),
+                    
+                    # Shared embeddings (for debugging/analysis)
+                    'shared_scene_embedding': shared_scene_emb
                 })
         
         # ============================================================
