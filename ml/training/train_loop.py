@@ -557,8 +557,10 @@ class ProductionTrainLoop:
         """
         # Use GradNorm if enabled
         if self.use_gradnorm and self.gradnorm_loss is not None:
-            # GradNorm requires model for gradient computation
-            total_loss, loss_dict = self.gradnorm_loss(outputs, targets, model=self.model)
+            # Pass model only when training (grad enabled). During validation we're in no_grad(),
+            # and GradNorm's backward() would yield zero/NaN gradient norms and corrupt the loss.
+            gradnorm_model = self.model if torch.is_grad_enabled() else None
+            total_loss, loss_dict = self.gradnorm_loss(outputs, targets, model=gradnorm_model)
             # GradNorm returns (loss, metrics_dict)
             # Ensure loss_dict has 'total_loss' key
             if 'total_loss' not in loss_dict:
