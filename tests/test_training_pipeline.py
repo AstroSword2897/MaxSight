@@ -367,36 +367,25 @@ def test_gradient_accumulation():
     print("  ✅ PASSED: Gradient accumulation works")
 
 
-def test_mixed_precision_training():
-    """Test mixed precision training (FP16) if available."""
-    print("\nTraining Pipeline Test 5: Mixed Precision Training")
+def test_fp32_training():
+    """Test FP32 training (CUDA if available)."""
+    print("\nTraining Pipeline Test 5: FP32 Training")
     
     if not torch.cuda.is_available():
-        print("  ⚠️ SKIPPED: CUDA not available for mixed precision")
+        print("  ⚠️ SKIPPED: CUDA not available")
         return
     
     model = create_model()
     model = model.cuda()
     model.train()
-    
-    # Use autocast for mixed precision
-    scaler = torch.cuda.amp.GradScaler()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-    
     dummy_image = torch.randn(2, 3, 224, 224).cuda()
-    
     optimizer.zero_grad()
-    
-    with torch.cuda.amp.autocast():
-        outputs = model(dummy_image)
-        # Dummy loss
-        loss = outputs['classifications'].sum()
-    
-    scaler.scale(loss).backward()
-    scaler.step(optimizer)
-    scaler.update()
-    
-    print("  ✅ PASSED: Mixed precision training works")
+    outputs = model(dummy_image)
+    loss = outputs['classifications'].sum()
+    loss.backward()
+    optimizer.step()
+    print("  ✅ PASSED: FP32 training works")
 
 
 if __name__ == "__main__":
@@ -407,7 +396,7 @@ if __name__ == "__main__":
     test_data_loader()
     test_training_loop_iteration()
     test_gradient_accumulation()
-    test_mixed_precision_training()
+    test_fp32_training()
     
     print("\n" + "=" * 50)
     print("All training pipeline tests passed!")

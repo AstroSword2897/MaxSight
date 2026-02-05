@@ -2,8 +2,10 @@
 Configuration for MaxSight Web Simulator.
 Centralizes all magic numbers and settings.
 """
+import os
 from dataclasses import dataclass
 from typing import Optional
+from pathlib import Path
 from ml.utils.output_scheduler import OutputMode
 
 
@@ -55,6 +57,7 @@ class SimulatorConfig:
     default_output_mode: OutputMode = OutputMode.PATIENT
 
     # Optional: path to trained checkpoint; if set, load state_dict into model after create_model()
+    # Can be set via environment variable MAXSIGHT_CHECKPOINT_PATH or config.model_checkpoint_path
     model_checkpoint_path: Optional[str] = None
     
     # Confidence gating (patient safety)
@@ -83,4 +86,13 @@ class SimulatorConfig:
 
 # Global config instance
 config = SimulatorConfig()
+
+# Override checkpoint path from environment variable if set
+if os.getenv('MAXSIGHT_CHECKPOINT_PATH'):
+    checkpoint_path = Path(os.getenv('MAXSIGHT_CHECKPOINT_PATH')).expanduser().resolve()
+    if checkpoint_path.exists():
+        config.model_checkpoint_path = str(checkpoint_path)
+    else:
+        import warnings
+        warnings.warn(f"Checkpoint path from environment variable does not exist: {checkpoint_path}")
 

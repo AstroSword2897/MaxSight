@@ -106,7 +106,7 @@ def main() -> int:
     parser.add_argument("--n-trials", type=int, default=20, help="Number of Optuna trials")
     parser.add_argument("--epochs-per-trial", type=int, default=5, help="Epochs per trial (short for feasible search)")
     parser.add_argument("--seed", type=int, default=42, help="Base random seed")
-    parser.add_argument("--use-fp16", action="store_true", help="Use FP16 mixed precision (CUDA only)")
+    # FP32 only (--use-fp16 removed)
     parser.add_argument("--use-gradnorm", action="store_true", help="Use GradNorm for task balancing")
     parser.add_argument("--study-name", type=str, default="maxsight_tuning", help="Optuna study name")
     parser.add_argument("--storage", type=str, default=None, help="Optuna storage URL (e.g. sqlite:///optuna.db) for resume")
@@ -127,12 +127,38 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    data_dir = Path(args.data_dir)
+    data_dir = Path(args.data_dir).resolve()
     use_annotation_based = args.train_annotation is not None and args.val_annotation is not None
     if use_annotation_based:
-        if not args.train_annotation.exists() or not args.val_annotation.exists():
-            logger.error("--train-annotation and --val-annotation files must exist")
+        train_ann = Path(args.train_annotation).resolve()
+        val_ann = Path(args.val_annotation).resolve()
+        # If not found, try under data-dir (e.g. Colab: data-dir on Drive with cleaned_splits inside)
+        if not train_ann.exists():
+            for candidate in [data_dir / "cleaned_splits" / train_ann.name, data_dir / train_ann.name]:
+                if candidate.exists():
+                    train_ann = candidate
+                    break
+        if not val_ann.exists():
+            for candidate in [data_dir / "cleaned_splits" / val_ann.name, data_dir / val_ann.name]:
+                if candidate.exists():
+                    val_ann = candidate
+                    break
+        if not train_ann.exists() or not val_ann.exists():
+            logger.error(
+                "--train-annotation and --val-annotation files must exist. Checked:\n"
+                "  train: %s, %s, %s\n  val:   %s, %s, %s\n"
+                "Create them with: python scripts/gather_training_data.py --coco-dir <coco> --output-dir datasets/cleaned_splits\n"
+                "Or use absolute paths (e.g. /content/drive/MyDrive/MaxSight/cleaned_splits/maxsight_train.json)",
+                Path(args.train_annotation).resolve(),
+                data_dir / "cleaned_splits" / Path(args.train_annotation).name,
+                data_dir / Path(args.train_annotation).name,
+                Path(args.val_annotation).resolve(),
+                data_dir / "cleaned_splits" / Path(args.val_annotation).name,
+                data_dir / Path(args.val_annotation).name,
+            )
             return 1
+        args.train_annotation = train_ann
+        args.val_annotation = val_ann
         image_dir = args.image_dir or data_dir
     else:
         train_dir = data_dir / "train"
@@ -144,7 +170,7 @@ def main() -> int:
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
     device = resolve_device(args.device)
     num_classes = args.num_classes or len(COCO_CLASSES)
-    use_fp16 = args.use_fp16 and device == "cuda"
+    use_fp16 = False  # FP32 only
 
     def objective(trial: optuna.Trial) -> float:
         # Reproducibility per trial
@@ -292,8 +318,7 @@ def main() -> int:
             cmd.extend(["--train-annotation", str(args.train_annotation), "--val-annotation", str(args.val_annotation)])
             if args.image_dir is not None:
                 cmd.extend(["--image-dir", str(args.image_dir)])
-        if args.use_fp16:
-            cmd.append("--fp16")
+        # FP32 only (no --fp16)
         if args.use_gradnorm:
             cmd.append("--use-gradnorm")
         if args.use_audio:

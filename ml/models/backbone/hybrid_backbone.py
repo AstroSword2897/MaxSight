@@ -350,9 +350,10 @@ class HybridCNNViTBackbone(nn.Module):
             
             # Add to ViT patches as residual
             cnn_context = cnn_to_vit_resized.flatten(2).transpose(1, 2)  # [B, N, D]
-            # FIXED: Constrain alpha with sigmoid for safety
+            # FIXED: Constrain alpha with sigmoid for safety (ensure Tensor for type checker)
             if hasattr(self, 'cross_layer_alpha_raw'):
-                alpha = torch.sigmoid(self.cross_layer_alpha_raw)
+                raw = self.cross_layer_alpha_raw
+                alpha = torch.sigmoid(raw if isinstance(raw, torch.Tensor) else torch.tensor(float(raw), device=vit_patches.device, dtype=vit_patches.dtype))
             else:
                 alpha = 0.1  # Default fallback
             vit_patches = vit_patches + alpha * cnn_context
@@ -370,8 +371,9 @@ class HybridCNNViTBackbone(nn.Module):
             )
             
             # Add as residual
-            # FIXED: Constrain alpha with sigmoid for safety
-            alpha = torch.sigmoid(self.cross_layer_alpha_raw)
+            # FIXED: Constrain alpha with sigmoid for safety (ensure Tensor for type checker)
+            raw = self.cross_layer_alpha_raw
+            alpha = torch.sigmoid(raw if isinstance(raw, torch.Tensor) else torch.tensor(float(raw), device=cnn_feat.device, dtype=cnn_feat.dtype))
             enhanced_cnn.append(cnn_feat + alpha * vit_to_cnn_resized)
         
         return enhanced_cnn, vit_patches

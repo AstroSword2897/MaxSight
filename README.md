@@ -2752,31 +2752,42 @@ python scripts/archive/run_stress_tests.py --checkpoint checkpoints/model.pt
 
 ## 📦 Deployment & Export
 
+### Quick Links
+
+- **Export for Xcode**: [EXPORT_FOR_XCODE.md](EXPORT_FOR_XCODE.md) - Complete export guide
+- **Deployment Workflow**: [STEP_BY_STEP_DEPLOYMENT.md](STEP_BY_STEP_DEPLOYMENT.md) - Step-by-step deployment
+- **Training Runbook**: [TRAINING_RUNBOOK.md](TRAINING_RUNBOOK.md) - Training commands and monitoring
+- **Pre-Train Checklist**: [PRE_TRAIN_CHECKLIST.md](PRE_TRAIN_CHECKLIST.md) - Verification before training
+- **Web Simulator**: [tools/simulation/README.md](tools/simulation/README.md) - Simulator setup and usage
+
 ### Export Formats
 
 - **CoreML**: iOS deployment (primary target)
+- **ExecuTorch (.pte)**: Mobile deployment (recommended for iOS)
+- **JIT (.pt)**: PyTorch mobile fallback
 - **ONNX**: Cross-platform deployment
-- **ExecuTorch**: Mobile deployment (PyTorch mobile)
 
-### Export process
+### Quick Export
 
-Use the export module CLI (no separate `export_model.py`):
-
+**iOS Bundle (recommended - includes everything):**
 ```bash
-# Export to a specific format (checkpoint optional; omit to use untrained create_model())
-python -m ml.training.export --checkpoint checkpoints/best_model.pt --format coreml --output exports/maxsight.mlpackage
-python -m ml.training.export --checkpoint checkpoints/best_model.pt --format onnx --output exports/maxsight.onnx
-python -m ml.training.export --checkpoint checkpoints/best_model.pt --format executorch --output exports/maxsight.pte
-python -m ml.training.export --checkpoint checkpoints/best_model.pt --format jit --output exports/maxsight.pt
+python scripts/export_for_xcode.py checkpoints/final_model.pt maxsight_ios_bundle
 ```
 
-**CoreML**: Image input only; audio/temporal inputs are not in the export (see [REQUIREMENTS.md](REQUIREMENTS.md)).
+**Individual formats:**
+```bash
+# Export to a specific format
+python -m ml.training.export --checkpoint checkpoints/final_model.pt --format coreml --output exports/maxsight.mlpackage
+python -m ml.training.export --checkpoint checkpoints/final_model.pt --format executorch --output exports/maxsight.pte
+python -m ml.training.export --checkpoint checkpoints/final_model.pt --format jit --output exports/maxsight.pt
+```
+
+**See [EXPORT_FOR_XCODE.md](EXPORT_FOR_XCODE.md) for complete export guide.**
 
 ### Running the simulator with a trained model
 
-- **Web simulator**: Set `model_checkpoint_path` in `tools/simulation/config.py` to your checkpoint path, then run the app.
-- **Comprehensive simulator**: Use `ComprehensiveSimulator(model_path="path/to/checkpoint.pt")`.
-- See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full deployment flow.
+- **Web simulator**: Set `MAXSIGHT_CHECKPOINT_PATH` environment variable or `model_checkpoint_path` in `tools/simulation/config.py`
+- **See**: [tools/simulation/README.md](tools/simulation/README.md) for setup instructions
 
 ### Mobile Optimization
 

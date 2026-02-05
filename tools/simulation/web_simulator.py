@@ -1385,6 +1385,12 @@ class MaxSightSimulator:
         logger.info("Loading model...")
         try:
             self.model = create_model()
+            checkpoint_path = getattr(config, "model_checkpoint_path", None)
+            if checkpoint_path and Path(checkpoint_path).exists():
+                ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+                state = ckpt.get("model_state_dict", ckpt) if isinstance(ckpt, dict) else ckpt
+                self.model.load_state_dict(state, strict=False)
+                logger.info("Loaded checkpoint: %s", checkpoint_path)
             self.model = self.model.to(self.device)
             self.model.eval()
             logger.info("Model loaded successfully")

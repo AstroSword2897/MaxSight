@@ -1,0 +1,52 @@
+# Download COCO train2017 + val2017 in Colab (~118k train, ~5k val)
+# Copy-paste the block below into a Colab cell and run it.
+# After this, use --image-dir /content for training (annotations stay on Drive).
+
+import os
+import zipfile
+import urllib.request
+from pathlib import Path
+
+CONTENT = Path("/content")
+ZIP_TRAIN = CONTENT / "train2017.zip"
+ZIP_VAL = CONTENT / "val2017.zip"
+URL_TRAIN = "http://images.cocodataset.org/zips/train2017.zip"
+URL_VAL = "http://images.cocodataset.org/zips/val2017.zip"
+
+def download_with_progress(url: str, dest: Path, label: str = "Downloading"):
+    if dest.exists() and dest.stat().st_size > 100_000_000:
+        print(f"{label}: found existing {dest.name} ({dest.stat().st_size // 1_000_000} MB), skipping download.")
+        return
+    print(f"{label} {dest.name} (~18 GB train / ~1 GB val)...")
+    def reporthook(block_num, block_size, total_size):
+        if total_size > 0:
+            pct = min(100, block_num * block_size * 100 // total_size)
+            mb = (block_num * block_size) // (1024 * 1024)
+            print(f"\r  {mb} MB ({pct}%)", end="", flush=True)
+    urllib.request.urlretrieve(url, dest, reporthook=reporthook)
+    print()
+
+# Download
+download_with_progress(URL_TRAIN, ZIP_TRAIN, "Downloading train2017")
+download_with_progress(URL_VAL, ZIP_VAL, "Downloading val2017")
+
+# Extract
+for zpath, name in [(ZIP_TRAIN, "train2017"), (ZIP_VAL, "val2017")]:
+    out_dir = CONTENT / name
+    if out_dir.exists() and len(list(out_dir.glob("*.jpg"))) > 1000:
+        print(f"Extract: {name} already has images, skipping.")
+        continue
+    print(f"Extracting {zpath.name} to /content/{name}...")
+    with zipfile.ZipFile(zpath, "r") as z:
+        z.extractall(CONTENT)
+    print(f"  Done {name}.")
+
+# Counts
+train_count = len(list((CONTENT / "train2017").glob("*.jpg")))
+val_count = len(list((CONTENT / "val2017").glob("*.jpg")))
+print(f"\nTrain: {train_count:,}  |  Val: {val_count:,}")
+print("Use --image-dir /content when training; keep annotations on Drive (SPLITS_DIR).")
+
+# Optional: remove zips to free disk (uncomment if you need space)
+# ZIP_TRAIN.unlink(missing_ok=True)
+# ZIP_VAL.unlink(missing_ok=True)

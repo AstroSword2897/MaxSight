@@ -22,6 +22,28 @@ pip install flask flask-cors
 # The simulator will use all existing MaxSight components
 ```
 
+## Configuration
+
+### Checkpoint Path
+
+To use a trained model checkpoint, set the checkpoint path via environment variable:
+
+```bash
+export MAXSIGHT_CHECKPOINT_PATH=checkpoints/final_model.pt
+python tools/simulation/web_simulator.py
+```
+
+Or set it in code by modifying `tools/simulation/config.py`:
+
+```python
+config.model_checkpoint_path = "checkpoints/final_model.pt"
+```
+
+**Note:** The simulator uses the same preprocessing as training/export:
+- Image size: 224x224 (ImageNet standard)
+- Normalization: ImageNet mean/std `[0.485, 0.456, 0.406]` / `[0.229, 0.224, 0.225]`
+- This ensures behavior matches what will run in Xcode
+
 ## Running the Simulator
 
 ```bash
@@ -38,11 +60,16 @@ python -m tools.simulation.web_simulator
 
 ## Usage
 
-1. **Select Visual Condition**: Choose from 13 different vision conditions
-2. **Select Scenario**: Pick a test scenario (general, navigation, text reading, etc.)
-3. **Start Session** (optional): Begin a therapy session for tracking
-4. **Upload Image**: Drag & drop or select an image file
-5. **View Results**: See detections, OCR results, descriptions, and feedback
+1. **Set Checkpoint** (optional but recommended): Set `MAXSIGHT_CHECKPOINT_PATH` environment variable to use a trained model
+2. **Start Simulator**: Run `python tools/simulation/web_simulator.py`
+3. **Open Browser**: Navigate to http://localhost:8002
+4. **Select Visual Condition**: Choose from 13 different vision conditions
+5. **Select Scenario**: Pick a test scenario (general, navigation, text reading, etc.)
+6. **Start Session** (optional): Begin a therapy session for tracking
+7. **Upload Image**: Drag & drop or select an image file
+8. **View Results**: See detections, OCR results, descriptions, and feedback
+
+**Important:** This simulator is for **demos and testing only**. It is not the Xcode build. The exported model for Xcode uses the same preprocessing pipeline but runs natively on iOS.
 
 ## Components Integrated
 

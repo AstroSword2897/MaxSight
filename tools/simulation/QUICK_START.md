@@ -8,10 +8,13 @@ cd tools/simulation
 ./start_simulator.sh
 ```
 
-### Option 2: Manual start
+### Option 2: Manual start (with checkpoint)
 ```bash
 # Install dependencies (if not already installed)
 pip install flask flask-cors
+
+# Set checkpoint path (optional but recommended)
+export MAXSIGHT_CHECKPOINT_PATH=checkpoints/final_model.pt
 
 # Run simulator
 cd tools/simulation
@@ -20,8 +23,15 @@ python web_simulator.py
 
 ### Option 3: Direct Python
 ```bash
+# With checkpoint
+export MAXSIGHT_CHECKPOINT_PATH=checkpoints/final_model.pt
+python tools/simulation/web_simulator.py
+
+# Without checkpoint (uses untrained model)
 python tools/simulation/web_simulator.py
 ```
+
+**Note:** If no checkpoint is set, the simulator will use an untrained model (random weights). For realistic results, always set `MAXSIGHT_CHECKPOINT_PATH` to a trained checkpoint.
 
 ## 🌐 Access the Simulator
 
@@ -105,7 +115,7 @@ Every single component is integrated:
 - `VoiceFeedback` - Audio announcements
 - `HapticFeedback` - Haptic patterns
 
-## 🎯 This is the Complete Product
+## 🎯 This is the Complete Product Demo
 
 The simulator shows **exactly** what users would experience:
 - Real-time processing
@@ -116,4 +126,12 @@ The simulator shows **exactly** what users would experience:
 - Performance metrics
 
 **It's a complete product demo running locally!**
+
+### Important Notes
+
+- **For demos/testing only**: This web simulator is not the Xcode build
+- **Same preprocessing**: Uses 224x224 images with ImageNet normalization (matches export/Xcode)
+- **Checkpoint required**: Set `MAXSIGHT_CHECKPOINT_PATH` for realistic results
+- **GPU optional**: Works on CPU, but GPU (CUDA) is faster if available
+- **Local network only**: Not hardened for internet exposure (development mode)
 

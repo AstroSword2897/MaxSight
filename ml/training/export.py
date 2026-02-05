@@ -684,6 +684,8 @@ class MaxSightModel {{
 
 ### 4. Preprocess Input
 
+**Critical: Use exact ImageNet normalization values**
+
 Reference `processing_reference.py` for preprocessing logic. Port to Swift:
 
 ```swift
@@ -691,15 +693,19 @@ func preprocessImage(_ image: UIImage, condition: VisionCondition) -> Tensor {{
     // 1. Resize to model input size ({input_size[2]}x{input_size[3]})
     let resized = image.resized(to: CGSize(width: {input_size[3]}, height: {input_size[2]}))
     
-    // 2. Apply condition-specific transform
+    // 2. Apply condition-specific transform (optional)
     let transformed = applyConditionTransform(resized, condition: condition)
     
-    // 3. Normalize to [0, 1] and convert to tensor
-    let normalized = transformed.normalized()
-    let tensor = Tensor.fromImage(normalized)
+    // 3. Convert to tensor [0, 1] range
+    let tensor = Tensor.fromImage(transformed)
     
-    // 4. Add batch dimension
-    return tensor.unsqueeze(0)  // [1, 3, H, W]
+    // 4. Normalize with ImageNet values (CRITICAL - must match exactly)
+    let mean = Tensor([0.485, 0.456, 0.406])  // ImageNet RGB channel means
+    let std = Tensor([0.229, 0.224, 0.225])   // ImageNet RGB channel std devs
+    let normalized = (tensor - mean) / std
+    
+    // 5. Add batch dimension
+    return normalized.unsqueeze(0)  // [1, 3, {input_size[2]}, {input_size[3]}]
 }}
 
 func applyConditionTransform(_ image: UIImage, condition: VisionCondition) -> UIImage {{

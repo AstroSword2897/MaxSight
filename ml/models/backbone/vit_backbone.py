@@ -745,7 +745,6 @@ class HybridCNNViTBackbone(nn.Module):
             nn.init.ones_(m.weight)
             nn.init.zeros_(m.bias)
 
-    @torch.cuda.amp.autocast()
     def extract_cnn_features(self, x: torch.Tensor, frame_id: Optional[int] = None) -> List[torch.Tensor]:
         """
         Extract CNN features with optional caching.
@@ -827,7 +826,6 @@ class HybridCNNViTBackbone(nn.Module):
         
         return enhanced_cnn, vit_patches
 
-    @torch.cuda.amp.autocast()
     def forward(
         self,
         images: torch.Tensor,
@@ -919,7 +917,6 @@ if __name__ == '__main__':
     print(f"Parameters: {sum(p.numel() for p in model.parameters())/1e6:.2f}M")
     
     x = torch.randn(4, 3, 224, 224).cuda()
-    with torch.cuda.amp.autocast():
-        fused, _ = model(x)
+    fused, _ = model(x)
     print(f"Output shape: {fused.shape}")
     

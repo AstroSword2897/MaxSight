@@ -41,7 +41,7 @@ training:
   min_lr: 1e-6  # Prevent late-stage collapse when temporal heads overfit
   warmup_epochs: 20  # Give GradNorm time to stabilize
   gradient_clip_norm: 1.0  # Lower to 0.8 if seeing loss spikes after warmup
-  mixed_precision: true
+  mixed_precision: false  # FP32 only
   accumulate_grad_batches: 8  # Effective batch size 32
 
 # Loss Configuration

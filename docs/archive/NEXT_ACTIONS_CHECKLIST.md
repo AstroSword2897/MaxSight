@@ -7,8 +7,8 @@ Use this checklist to close the loop on M3 Pro dev readiness and production rehe
 ## 1. MPS / Latency
 
 - [ ] On an M3 Pro (or Apple Silicon) machine, run benchmark scripts to confirm sync gives **consistent latency**:
-  - `python scripts/validate_forward_passes.py` (with MPS if available)
-  - `python scripts/benchmark_tiers.py` (tier of choice; MPS device)
+  - `python scripts/archive/validate_forward_passes.py` (with MPS if available)
+  - `python scripts/archive/benchmark_tiers.py` (tier of choice; MPS device)
 - [ ] Note: first-run warmup may show minor variance; a few runs should stabilize.
 
 ---
@@ -27,7 +27,7 @@ Use this checklist to close the loop on M3 Pro dev readiness and production rehe
 - [ ] **Decide** whether audio/temporal inputs are required for CoreML export.
 - [ ] If **yes**: extend `ml/training/export.py` → `export_to_coreml()` to add `audio_features` (and any temporal inputs) with **fixed shapes** (e.g. `(1, 128)`), then run a test export.
 - [ ] If **no**: document that CoreML export is **image-only** and close as known limitation.
-- [ ] Run CoreML export test on M3 Pro when ready: e.g. `pytest tests/test_export_validation.py` or the CoreML step in `scripts/benchmark_tiers.py`.
+- [ ] Run CoreML export test on M3 Pro when ready: e.g. `pytest tests/test_export_validation.py` or the CoreML step in `scripts/archive/benchmark_tiers.py`.
 
 ---
 
@@ -35,7 +35,7 @@ Use this checklist to close the loop on M3 Pro dev readiness and production rehe
 
 - [ ] Run full rehearsal and inspect logs:
   ```bash
-  python scripts/full_production_rehearsal.py --device mps --num-frames 5 --log-dir logs
+  python scripts/archive/full_production_rehearsal.py --device mps --num-frames 5 --log-dir logs
   ```
   (Use `--device cpu` if MPS not available.)
 - [ ] Check `logs/production_rehearsal.log` and `logs/production_rehearsal_results.json` for:
@@ -53,7 +53,7 @@ Use this checklist to close the loop on M3 Pro dev readiness and production rehe
   pytest tests/test_production_hardening.py tests/test_critical_fixes.py tests/test_model.py tests/test_gradnorm_integration.py tests/test_export_validation.py -v
   ```
 - [ ] Update docs: confirm **M3 Pro dev readiness** and any **CoreML multi-input limitation** are clearly stated (e.g. in `README.md`, `REQUIREMENTS.md`, or `docs/DEPLOYMENT_BOTTLENECKS.md`).
-- [ ] Optional: add a CI job or nightly that runs `full_production_rehearsal.py` and/or MPS benchmarks.
+- [ ] Optional: add a CI job or nightly that runs `scripts/archive/full_production_rehearsal.py` and/or MPS benchmarks.
 
 ---
 

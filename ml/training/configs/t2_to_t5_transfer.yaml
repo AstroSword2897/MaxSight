@@ -59,7 +59,7 @@ training:
   min_lr: 1e-6
   warmup_epochs: 20
   gradient_clip_norm: 1.0
-  mixed_precision: true
+  mixed_precision: false  # FP32 only
   accumulate_grad_batches: 8  # Effective batch size 32
 
 # Loss Configuration (with unlock schedule)

@@ -1,5 +1,30 @@
 # Colab Restart & System Verification Guide
 
+## 🚨 Hit Colab Quota Limits? Start Here
+
+**What's saved vs. lost:**
+- ❌ **LOST**: Anything in `/content/` (repo, checkpoints, packages)
+- ✅ **SAVED**: Anything in `/content/drive/MyDrive/...` (if you mounted Drive)
+
+**Check what you have on Drive:**
+```python
+from google.colab import drive
+drive.mount("/content/drive")
+
+# Check for checkpoints
+!ls -lh /content/drive/MyDrive/MaxSight/checkpoints/ 2>/dev/null || echo "No checkpoints found"
+
+# Check for data
+!ls -lh /content/drive/MyDrive/MaxSight/datasets/ 2>/dev/null || echo "No datasets found"
+```
+
+**If you have checkpoints on Drive:** → Jump to "Step 6: Resume Training"  
+**If you don't have checkpoints:** → Start fresh from Cell 1 in COLAB_RUNBOOK.md
+
+---
+
+# Colab Restart & System Verification Guide
+
 ## 🧹 Step 1: Cleanup Old Checkpoints
 
 After restarting the kernel, clean up old checkpoints to free space:
@@ -69,19 +94,42 @@ Total: 5/5 tests passed
 🎉 All systems operational!
 ```
 
+## 📁 Annotation files (train/val JSON)
+
+If you see **`--train-annotation and --val-annotation files must exist`**:
+
+1. **Put JSONs under your data-dir** so the script can find them:
+   - `{data-dir}/cleaned_splits/maxsight_train.json`
+   - `{data-dir}/cleaned_splits/maxsight_val.json`  
+   Example: if `--data-dir /content/drive/MyDrive/MaxSight/datasets/coco_raw`, place the files in  
+   `/content/drive/MyDrive/MaxSight/datasets/coco_raw/cleaned_splits/`.
+
+2. **Or use absolute paths** to where the files already are:
+   ```bash
+   --train-annotation /content/drive/MyDrive/MaxSight/cleaned_splits/maxsight_train.json
+   --val-annotation /content/drive/MyDrive/MaxSight/cleaned_splits/maxsight_val.json
+   ```
+
+3. **Create the splits** if you don’t have them yet:
+   ```bash
+   python scripts/gather_training_data.py --coco-dir <path-to-coco> --output-dir datasets/cleaned_splits
+   ```
+   Then upload the generated `maxsight_train.json` and `maxsight_val.json` to Drive (e.g. under `data-dir/cleaned_splits/`).
+
 ## 🧪 Step 3: Test AutoML
 
 Test AutoML with a quick trial:
 
 ```python
-# Quick AutoML test (1 trial)
+# Quick AutoML test (1 trial) – use paths where your JSONs actually are
 !python scripts/AutoMLType.py \
   --data-dir /content/drive/MyDrive/MaxSight/datasets/coco_raw \
-  --train-annotation datasets/cleaned_splits/maxsight_train.json \
-  --val-annotation datasets/cleaned_splits/maxsight_val.json \
+  --train-annotation maxsight_train.json \
+  --val-annotation maxsight_val.json \
+  --image-dir /content/drive/MyDrive/MaxSight/datasets/coco_raw \
   --checkpoint-dir checkpoints_automl \
   --n-trials 1 \
-  --epochs 1 \
+  --epochs-per-trial 1 \
   --device cuda
 ```
 
