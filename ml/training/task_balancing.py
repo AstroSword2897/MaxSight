@@ -91,27 +91,20 @@ class GradNormBalancer(nn.Module):
             for i, loss in enumerate(task_losses)
         ]
         
-        # Compute gradients for each task
-        # CRITICAL: Only retain_graph for non-last tasks to reduce memory usage
+        # Compute gradients for each task. retain_graph=True for ALL so the graph
+        # stays alive for the training loop's total_loss.backward(); then zero_grad.
         gradient_norms = []
         for i, weighted_loss in enumerate(weighted_losses):
-            # Zero gradients first
             model.zero_grad()
-            
-            # Only retain graph if not the last task (reduces memory by 2-3x)
-            is_last_task = (i == len(weighted_losses) - 1)
-            weighted_loss.backward(retain_graph=not is_last_task)
-            
-            # Compute gradient norm for shared parameters
+            weighted_loss.backward(retain_graph=True)
             grad_norm = 0.0
             for param in shared_params:
                 if param.grad is not None:
                     grad_norm += param.grad.norm(p=2) ** 2
             grad_norm = grad_norm ** 0.5
             gradient_norms.append(grad_norm)
-        
+        model.zero_grad()
         gradient_norms_tensor = torch.stack(gradient_norms)
-        
         return torch.stack(weighted_losses), gradient_norms_tensor
     
     def update_task_weights(
@@ -517,21 +510,12 @@ class GradNormMultiHeadLoss(nn.Module):
                 gradient_norms.append(0.0)
                 continue
             
-            # CRITICAL: Only retain graph for non-last tasks to avoid inplace operation errors
-            # The error "version 4; expected version 3" occurs when tensors are modified inplace
-            # between backward passes. By not retaining graph for the last task, we avoid this.
-            is_last_task = (i == len(weighted_losses) - 1)
-            
-            # Zero gradients before each backward pass to avoid accumulation issues
             model.zero_grad()
-            
-            # Use clone() to avoid inplace operation issues with half precision
-            # This ensures we're working with a fresh tensor that hasn't been modified
             if weighted_loss.dtype == torch.float16:
                 weighted_loss = weighted_loss.clone().float()
-            
+            # retain_graph=True so the graph stays for the train loop's total_loss.backward()
             try:
-                weighted_loss.backward(retain_graph=not is_last_task)
+                weighted_loss.backward(retain_graph=True)
             except RuntimeError as e:
                 if "inplace operation" in str(e) or "version" in str(e):
                     logger.warning(
@@ -553,6 +537,7 @@ class GradNormMultiHeadLoss(nn.Module):
                 grad_norm = grad_norm.item()
             gradient_norms.append(grad_norm)
         
+        model.zero_grad()
         gradient_norms_tensor = torch.tensor(
             gradient_norms, 
             device=weighted_losses_tensor.device,
