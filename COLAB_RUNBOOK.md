@@ -98,24 +98,32 @@ Each cell is a code block you can copy-paste into a Colab cell and run. Under ea
 
 ### Cell 1: Clone the repo and install dependencies
 
-**What it does:** Clones the MaxSight repo into Colab and installs Python packages with versions that work on Colab (avoids conflicts with pre-installed libraries).
+**What it does:** Clones the MaxSight repo (branch with T5 Colab script) into Colab and installs Python packages with versions that work on Colab.
 
-**Run this:** Once per new Colab session (or after “Factory reset runtime”).
+**Run this:** Once per new Colab session. **If you see “getcwd: cannot access parent directories” or “The folder you are executing pip from can no longer be found”, do Runtime → Restart session, then run this entire cell from the top (do not run any other cell first).**
 
 ```python
-!git clone -q https://github.com/AstroSword2897/2026-Prototype.git
+# Always start in /content so we're not inside a folder we might delete
+%cd /content
+
+# If you're re-running and need a fresh clone, uncomment the next line:
+# !rm -rf /content/2026-Prototype
+
+# Clone the branch that has train_t5_fast_colab.py (Cell 5b)
+!git clone -q -b feature/multimodal_refactor https://github.com/AstroSword2897/2026-Prototype.git
 %cd 2026-Prototype
 
+# Install deps (quoted so shell doesn't break on >=)
 !pip install -q "pandas==2.2.2"
 !pip install -q "numpy<2.1.0,>=1.26.0"
 !pip install -q "pillow<12.0,>=8.0"
-!pip install -q torchvision>=0.24.1 torchaudio>=2.9.1
-!pip install -q opencv-python>=4.8.0 scipy>=1.11.0 scikit-learn>=1.3.0
-!pip install -q pytest>=9.0.1 optuna>=3.0.0 torchao>=0.14.1
-!pip install -q matplotlib>=3.10.7 tqdm>=4.66.0 flask>=3.0.0 flask-cors>=4.0.0
+!pip install -q "torchvision>=0.24.1" "torchaudio>=2.9.1"
+!pip install -q "opencv-python>=4.8.0" "scipy>=1.11.0" "scikit-learn>=1.3.0"
+!pip install -q "pytest>=9.0.1" "optuna>=3.0.0" "torchao>=0.14.1"
+!pip install -q "matplotlib>=3.10.7" "tqdm>=4.66.0" "flask>=3.0.0" "flask-cors>=4.0.0"
 ```
 
-**Expected:** No errors. You may see “Requirement already satisfied” for some packages. The notebook’s working directory will be `/content/2026-Prototype`.
+**Expected:** No errors. You may see “Requirement already satisfied” for some packages. The working directory will be `/content/2026-Prototype`.
 
 **If something fails:** Note the last error message and paste it in [§7 Outputs and errors to report](#7-outputs-and-errors-to-report) so we can adjust the runbook.
 
@@ -466,6 +474,7 @@ print("Download /content/maxsight_exports.zip from the Colab Files panel (left s
 | **Training loss is NaN** | See **COLAB_RESTART_GUIDE.md** (NaN loss, GradNorm, learning rate). Reduce learning rate or try a smaller subset. |
 | **Export fails with “missing keys” or “unexpected keys”** | You may be loading a T5 checkpoint into the default (T0) model. Use **Option B** in Cell 8 and 9 for T5 checkpoints. |
 | **Mount Drive fails or “access denied”** | Complete the Google auth in the popup/link and allow Colab to access Drive. Try again in a new cell. |
+| **“getcwd: cannot access parent directories” / “The folder you are executing pip from can no longer be found” / “=0.24.1: No such file or directory”** | The shell’s current directory was deleted (e.g. you ran `rm -rf` on the repo while the kernel was inside it). **Fix:** Runtime → Restart session. Then run **only Cell 1** from the top (whole cell at once). Cell 1 now starts with `%cd /content` so the CWD is safe before any clone. Do not run a cell that only does `rm -rf` and clone while the kernel was already inside `2026-Prototype`. |
 
 More detailed troubleshooting: **COLAB_RESTART_GUIDE.md**, **QUICK_START_CLOUD.md** (for other clouds).
 

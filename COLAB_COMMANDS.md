@@ -1,21 +1,24 @@
 # Colab — copy-paste commands only
 
-Use **Runtime → Change runtime type → GPU** first. Run cells in order.
+Use **Runtime → Change runtime type → GPU** first. Run cells in order.  
+If you see "getcwd: cannot access parent directories": **Runtime → Restart session**, then run Cell 1 only (whole cell).
 
 ---
 
 ## Cell 1: Clone and install
 
 ```python
-!git clone -q https://github.com/AstroSword2897/2026-Prototype.git
+%cd /content
+# !rm -rf /content/2026-Prototype   # uncomment only if re-cloning
+!git clone -q -b feature/multimodal_refactor https://github.com/AstroSword2897/2026-Prototype.git
 %cd 2026-Prototype
 !pip install -q "pandas==2.2.2"
 !pip install -q "numpy<2.1.0,>=1.26.0"
 !pip install -q "pillow<12.0,>=8.0"
-!pip install -q torchvision>=0.24.1 torchaudio>=2.9.1
-!pip install -q opencv-python>=4.8.0 scipy>=1.11.0 scikit-learn>=1.3.0
-!pip install -q pytest>=9.0.1 optuna>=3.0.0 torchao>=0.14.1
-!pip install -q matplotlib>=3.10.7 tqdm>=4.66.0 flask>=3.0.0 flask-cors>=4.0.0
+!pip install -q "torchvision>=0.24.1" "torchaudio>=2.9.1"
+!pip install -q "opencv-python>=4.8.0" "scipy>=1.11.0" "scikit-learn>=1.3.0"
+!pip install -q "pytest>=9.0.1" "optuna>=3.0.0" "torchao>=0.14.1"
+!pip install -q "matplotlib>=3.10.7" "tqdm>=4.66.0" "flask>=3.0.0" "flask-cors>=4.0.0"
 ```
 
 ---
