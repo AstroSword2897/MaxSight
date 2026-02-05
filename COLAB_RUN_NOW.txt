@@ -1,0 +1,99 @@
+==============================================
+RUN THIS IN COLAB (copy-paste) — Batch size 16
+==============================================
+Everything we set up: T5 fixes, 14 vision conditions, warning recognition,
+GradNorm, EMA, checkpoints on Drive. No --use-ema or --use-mixed-precision
+(those flags don't exist; EMA is on by default, FP32 only).
+
+----------------------------------------------
+CELL 1: Mount Drive + go to repo
+----------------------------------------------
+from google.colab import drive
+drive.mount('/content/drive')
+
+import os
+os.chdir('/content/2026-Prototype')
+
+----------------------------------------------
+CELL 2: Install deps (if first time in session)
+----------------------------------------------
+!pip install -q -r requirements_colab.txt
+
+----------------------------------------------
+CELL 3: Train — batch size 16, T5, GradNorm, 20 epochs
+----------------------------------------------
+!python scripts/train_maxsight.py \
+    --data-dir /content/drive/MyDrive/MaxSight_Training \
+    --image-dir /content/drive/MyDrive/MaxSight_Training \
+    --batch-size 16 \
+    --epochs 20 \
+    --num-workers 2 \
+    --grad-accumulation-steps 2 \
+    --use-gradnorm \
+    --checkpoint-dir /content/drive/MyDrive/MaxSight/checkpoints \
+    --checkpoint-interval 5 \
+    --early-stopping-patience 10 \
+    --device cuda \
+    --seed 42
+
+----------------------------------------------
+Optional: Train for a specific vision condition
+----------------------------------------------
+# Add: --condition-mode glaucoma
+# Or: amd | cataracts | color_blindness | diabetic_retinopathy |
+#     retinitis_pigmentosa | cvi | amblyopia | strabismus |
+#     refractive_errors | myopia | hyperopia | astigmatism | presbyopia
+
+# Example (glaucoma):
+!python scripts/train_maxsight.py \
+    --data-dir /content/drive/MyDrive/MaxSight_Training \
+    --image-dir /content/drive/MyDrive/MaxSight_Training \
+    --batch-size 16 \
+    --epochs 20 \
+    --num-workers 2 \
+    --use-gradnorm \
+    --condition-mode glaucoma \
+    --checkpoint-dir /content/drive/MyDrive/MaxSight/checkpoints_glaucoma \
+    --device cuda
+
+----------------------------------------------
+Optional: Resume from checkpoint
+----------------------------------------------
+!python scripts/train_maxsight.py \
+    --data-dir /content/drive/MyDrive/MaxSight_Training \
+    --image-dir /content/drive/MyDrive/MaxSight_Training \
+    --batch-size 16 \
+    --epochs 30 \
+    --resume-from /content/drive/MyDrive/MaxSight/checkpoints/last_checkpoint.pt \
+    --checkpoint-dir /content/drive/MyDrive/MaxSight/checkpoints \
+    --use-gradnorm \
+    --device cuda
+
+----------------------------------------------
+If OOM: reduce batch, increase grad accumulation
+----------------------------------------------
+!python scripts/train_maxsight.py \
+    --data-dir /content/drive/MyDrive/MaxSight_Training \
+    --image-dir /content/drive/MyDrive/MaxSight_Training \
+    --batch-size 8 \
+    --grad-accumulation-steps 4 \
+    --epochs 20 \
+    --use-gradnorm \
+    --checkpoint-dir /content/drive/MyDrive/MaxSight/checkpoints \
+    --device cuda
+
+----------------------------------------------
+Monitor
+----------------------------------------------
+!nvidia-smi
+!tail -50 /content/drive/MyDrive/MaxSight/checkpoints/training.log
+
+==============================================
+What you have (no need to type)
+==============================================
+- 8 T5 training loop fixes (epoch_losses, GradNorm validation, device, early stopping, NaN, T5 batch validation, config validation, logging)
+- 14 vision conditions (--condition-mode)
+- SpatialMemorySystem + ReadinessMonitor wired
+- Warning recognition over time (consistent cues + adaptive hazard threshold + therapy drills)
+- EMA default 0.9999, FP32 only, GradNorm recommended for T5
+==============================================

@@ -10,12 +10,13 @@ drive.mount('/content/drive')
 import os
 os.chdir('/content/2026-Prototype')
 
-# 3. Train T5 with all fixes (RECOMMENDED)
+# 3. Train T5 with all fixes (RECOMMENDED) — batch size 16
 !python scripts/train_maxsight.py \
     --data-dir /content/drive/MyDrive/MaxSight_Training \
     --image-dir /content/drive/MyDrive/MaxSight_Training \
-    --batch-size 8 \
+    --batch-size 16 \
     --epochs 20 \
+    --num-workers 2 \
     --use-gradnorm \
     --checkpoint-dir /content/drive/MyDrive/MaxSight/checkpoints \
     --device cuda
