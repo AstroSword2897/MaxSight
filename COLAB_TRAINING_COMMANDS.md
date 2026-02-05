@@ -180,6 +180,9 @@ plt.show()
 | `--freeze-backbone-epochs` | 0 | Freeze backbone for first N epochs |
 | `--warmup-epochs` | 5 | LR warmup epochs |
 | `--scheduler-type` | cosine | LR scheduler (cosine/onecycle/cosine_restarts) |
+| `--condition-mode` | None | Vision condition (see VISION_CONDITIONS.md) |
+| `--tier` | T5 | Model tier (T0-T5) |
+| `--use-audio` | False | Enable audio-visual fusion |
 
 ---
 
