@@ -37,6 +37,8 @@ import logging
 from copy import deepcopy
 import numpy as np
 
+from ml.training.stability_manager import StabilityManager
+
 try:
     from torch.amp import autocast
     from torch.cuda.amp import GradScaler
@@ -415,6 +417,9 @@ class ProductionTrainLoop:
         
         self.optimizer = AdamW(param_groups, weight_decay=weight_decay)
         
+        # Stability manager for auto-adjustment during training
+        self.stability_manager = None  # Will be initialized after scheduler
+        
         # Scheduler - Use official PyTorch schedulers
         total_steps = len(train_loader) * num_epochs
         warmup_steps = warmup_epochs * len(train_loader) if warmup_epochs > 0 else 0
@@ -438,7 +443,7 @@ class ProductionTrainLoop:
                 self.optimizer,
                 T_0=len(train_loader) * 10,  # Restart every 10 epochs
                 T_mult=2,
-                eta_min=learning_rate * 0.01
+                eta_min=learning_rate * 0.001
             )
         elif scheduler_type == 'cosine':
             if warmup_steps > 0:
@@ -453,7 +458,7 @@ class ProductionTrainLoop:
                 cosine_scheduler = CosineAnnealingLR(
                     self.optimizer,
                     T_max=cosine_steps,
-                    eta_min=learning_rate * 0.01
+                    eta_min=learning_rate * 0.001  # Lower min LR for finer convergence and lower final loss
                 )
                 self.scheduler = SequentialLR(
                     self.optimizer,
@@ -464,7 +469,7 @@ class ProductionTrainLoop:
                 self.scheduler = CosineAnnealingLR(
                     self.optimizer,
                     T_max=max(1, total_steps),
-                    eta_min=learning_rate * 0.01
+                    eta_min=learning_rate * 0.001  # Lower min LR for finer convergence
                 )
         else:
             # Default: constant LR
@@ -478,6 +483,20 @@ class ProductionTrainLoop:
             num_classes=num_classes,
             iou_thresholds=[0.5, 0.75],
             device=torch.device(device)
+        )
+        
+        # Stability manager - auto-adjusts hyperparameters during training
+        self.stability_manager = StabilityManager(
+            optimizer=self.optimizer,
+            scheduler=self.scheduler,
+            gradnorm_loss=self.gradnorm_loss if self.use_gradnorm else None,
+            spike_threshold=0.3,  # 30% loss increase triggers adjustment
+            overfit_threshold=0.25,  # 25% val-train gap triggers regularization
+            lr_reduce_factor=0.5,  # Halve LR on spike
+            wd_increase_factor=1.5,  # 1.5x weight decay on overfit
+            max_wd=0.5,
+            min_lr=1e-7,
+            log_every=1,  # Log stability every epoch
         )
         
         # Training state
@@ -1154,6 +1173,16 @@ class ProductionTrainLoop:
                     self.history['val_precision'].append(val_precision)
                     self.history['val_recall'].append(val_recall)
                     self.history['val_f1'].append(val_f1)
+                    
+                    # Stability check and auto-adjustment
+                    train_loss_avg = sum(epoch_losses) / len(epoch_losses) if epoch_losses else float('inf')
+                    stability_metrics = self.stability_manager.check_and_adjust(
+                        epoch=epoch,
+                        train_loss=train_loss_avg,
+                        val_loss=val_loss,
+                        train_metrics={'map': 0.0},  # Could add train mAP if computed
+                        val_metrics=val_metrics,
+                    )
                     
                     # Check if best model
                     is_best = val_loss < self.best_val_loss or val_map > self.best_val_map
