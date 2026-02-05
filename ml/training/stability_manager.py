@@ -9,6 +9,7 @@ Auto-adjusts hyperparameters during training to:
 """
 
 import logging
+import math
 from typing import Dict, Optional, Any
 from dataclasses import dataclass
 import torch
@@ -29,6 +30,11 @@ class StabilityMetrics:
     task_imbalance: float  # GradNorm weight variance
     lr_current: float
     weight_decay_current: float
+    # Set when check_and_adjust applies an adjustment (for logging in train_loop)
+    lr_adjusted: bool = False
+    wd_adjusted: bool = False
+    new_lr: Optional[float] = None
+    new_wd: Optional[float] = None
 
 
 class StabilityManager:
@@ -125,39 +131,59 @@ class StabilityManager:
         Returns:
             StabilityMetrics with diagnostics
         """
-        # Get current LR and weight decay
+        # Get current LR and weight decay (guard empty param_groups)
+        if not self.optimizer.param_groups:
+            logger.warning("StabilityManager: optimizer has no param_groups, skipping check")
+            return StabilityMetrics(
+                epoch=epoch,
+                train_loss=float(train_loss) if train_loss is not None else 0.0,
+                val_loss=float(val_loss) if val_loss is not None else 0.0,
+                train_val_gap=0.0,
+                loss_spike=False,
+                loss_unstable=True,
+                task_imbalance=0.0,
+                lr_current=0.0,
+                weight_decay_current=0.0,
+            )
         lr_current = self.optimizer.param_groups[0]['lr']
         wd_current = self.optimizer.param_groups[0].get('weight_decay', 0.0)
-        
-        # Detect instability
-        loss_unstable = (
-            not torch.isfinite(torch.tensor(train_loss)).item() or
-            not torch.isfinite(torch.tensor(val_loss)).item()
-        )
+        train_loss_f = float(train_loss) if train_loss is not None else 0.0
+        val_loss_f = float(val_loss) if val_loss is not None else 0.0
+        # Detect instability (safe for NaN/Inf)
+        try:
+            loss_unstable = (
+                not math.isfinite(train_loss_f) or
+                not math.isfinite(val_loss_f)
+            )
+        except (TypeError, ValueError):
+            loss_unstable = True
         
         # Detect spike (loss increased sharply from recent average)
         loss_spike = False
         if len(self.loss_history) >= 3:
             recent_avg = sum(self.loss_history[-3:]) / 3
-            if train_loss > recent_avg * (1 + self.spike_threshold):
+            if train_loss_f > recent_avg * (1 + self.spike_threshold):
                 loss_spike = True
         
         # Detect overfitting
-        train_val_gap = (val_loss - train_loss) / (train_loss + 1e-8)
+        train_val_gap = (val_loss_f - train_loss_f) / (train_loss_f + 1e-8)
         overfitting = train_val_gap > self.overfit_threshold
         
         # Detect task imbalance (GradNorm)
         task_imbalance = 0.0
-        if self.gradnorm_loss is not None and hasattr(self.gradnorm_loss, 'task_weights'):
-            weights = self.gradnorm_loss.task_weights.detach().cpu()
-            if len(weights) > 1:
-                task_imbalance = weights.max().item() / (weights.min().item() + 1e-8)
+        try:
+            if self.gradnorm_loss is not None and hasattr(self.gradnorm_loss, 'task_weights'):
+                weights = self.gradnorm_loss.task_weights.detach().cpu()
+                if len(weights) > 1:
+                    task_imbalance = weights.max().item() / (weights.min().item() + 1e-8)
+        except (AttributeError, RuntimeError) as e:
+            logger.debug("StabilityManager: could not compute task_imbalance: %s", e)
         
-        # Build metrics
+        # Build metrics (adjustment fields set below when we apply changes)
         metrics = StabilityMetrics(
             epoch=epoch,
-            train_loss=train_loss,
-            val_loss=val_loss,
+            train_loss=train_loss_f,
+            val_loss=val_loss_f,
             train_val_gap=train_val_gap,
             loss_spike=loss_spike,
             loss_unstable=loss_unstable,
@@ -173,6 +199,8 @@ class StabilityManager:
         if loss_unstable:
             new_lr = max(lr_current * 0.1, self.min_lr)
             self._set_lr(new_lr)
+            metrics.lr_adjusted = True
+            metrics.new_lr = new_lr
             adjustments.append(f"NaN/Inf detected, reduced LR: {lr_current:.2e} → {new_lr:.2e}")
             self.adjustments_made += 1
             self.last_adjustment_epoch = epoch
@@ -181,8 +209,10 @@ class StabilityManager:
         elif loss_spike and epoch > 5:  # Skip early epochs (warmup)
             new_lr = max(lr_current * self.lr_reduce_factor, self.min_lr)
             self._set_lr(new_lr)
+            metrics.lr_adjusted = True
+            metrics.new_lr = new_lr
             adjustments.append(
-                f"Loss spike detected ({train_loss:.4f} vs recent {sum(self.loss_history[-3:])/3:.4f}), "
+                f"Loss spike detected ({train_loss_f:.4f} vs recent {sum(self.loss_history[-3:])/3:.4f}), "
                 f"reduced LR: {lr_current:.2e} → {new_lr:.2e}"
             )
             self.adjustments_made += 1
@@ -193,6 +223,8 @@ class StabilityManager:
             new_wd = min(wd_current * self.wd_increase_factor, self.max_wd)
             if new_wd > wd_current:
                 self._set_weight_decay(new_wd)
+                metrics.wd_adjusted = True
+                metrics.new_wd = new_wd
                 adjustments.append(
                     f"Overfitting detected (val-train gap: {train_val_gap:.2%}), "
                     f"increased weight decay: {wd_current:.2e} → {new_wd:.2e}"
@@ -216,13 +248,13 @@ class StabilityManager:
         if epoch % self.log_every == 0:
             logger.info(
                 f"Stability check (epoch {epoch}): "
-                f"train_loss={train_loss:.4f}, val_loss={val_loss:.4f}, "
+                f"train_loss={train_loss_f:.4f}, val_loss={val_loss_f:.4f}, "
                 f"gap={train_val_gap:.2%}, LR={lr_current:.2e}, WD={wd_current:.2e}, "
                 f"adjustments_total={self.adjustments_made}"
             )
         
         # Update history
-        self.loss_history.append(train_loss)
+        self.loss_history.append(train_loss_f)
         if len(self.loss_history) > 10:
             self.loss_history.pop(0)
         self.stability_history.append(metrics)

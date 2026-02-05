@@ -1080,7 +1080,35 @@ class ProductionTrainLoop:
         }
     
     def _save_checkpoint(self, epoch: int, is_best: bool = False, extra_path: Optional[Path] = None) -> None:
-        """Save checkpoint with comprehensive state. If extra_path is set, also save a copy there (e.g. checkpoint_epoch_N.pt)."""
+        """Save checkpoint with comprehensive state for resume on same or different GPU/machine. If extra_path is set, also save a copy there (e.g. checkpoint_epoch_N.pt)."""
+        # Capture current optimizer LR/weight decay (may have been adjusted by StabilityManager)
+        lr_current = self.optimizer.param_groups[0]['lr'] if self.optimizer.param_groups else self.learning_rate
+        wd_current = self.optimizer.param_groups[0].get('weight_decay', 0.0) if self.optimizer.param_groups else self.weight_decay
+        # Capture data paths from datasets when available (for resume on different machine)
+        data_paths: Dict[str, Optional[str]] = {}
+        try:
+            for name, loader in [('train', self.train_loader), ('val', self.val_loader)]:
+                if loader is None or not hasattr(loader, 'dataset'):
+                    continue
+                ds = loader.dataset
+                for attr in ('annotation_file', 'annotation_path', 'ann_file', 'img_root', 'image_root', 'root', 'data_dir'):
+                    try:
+                        if hasattr(ds, attr):
+                            val = getattr(ds, attr)
+                            if val is not None:
+                                data_paths[f'{name}_{attr}'] = str(Path(val).resolve()) if isinstance(val, (Path, str)) else str(val)
+                            break
+                    except Exception:
+                        continue
+                if not any(k.startswith(name + '_') for k in data_paths) and hasattr(ds, 'coco'):
+                    try:
+                        coco_ds = getattr(ds.coco, 'dataset', None)
+                        if isinstance(coco_ds, dict) and coco_ds.get('annotation_file'):
+                            data_paths[f'{name}_annotation_file'] = str(coco_ds.get('annotation_file'))
+                    except Exception:
+                        pass
+        except Exception as e:
+            self.logger.debug("Could not capture data paths for checkpoint: %s", e)
         checkpoint = {
             'epoch': epoch,
             'global_step': self.global_step,
@@ -1093,6 +1121,8 @@ class ProductionTrainLoop:
             'config': {
                 'learning_rate': self.learning_rate,
                 'weight_decay': self.weight_decay,
+                'lr_current': lr_current,
+                'weight_decay_current': wd_current,
                 'num_epochs': self.num_epochs,
                 'scheduler_type': self.scheduler_type,
                 'warmup_epochs': self.warmup_epochs,
@@ -1108,7 +1138,8 @@ class ProductionTrainLoop:
                 'seed': self.seed,
                 'early_stopping_patience': self.early_stopping_patience,
                 'early_stopping_min_delta': self.early_stopping_min_delta,
-                'early_stopping_metric': self.early_stopping_metric
+                'early_stopping_metric': self.early_stopping_metric,
+                'data_paths': data_paths if data_paths else None,
             },
             'metadata': {
                 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -1129,6 +1160,22 @@ class ProductionTrainLoop:
         except Exception as e:
             self.logger.error(f"Failed to save checkpoint: {e}")
             return
+        # Write resume manifest for recovery on different GPU/machine
+        resume_info = {
+            'checkpoint_path': str(last_checkpoint_path.resolve()),
+            'epoch': epoch,
+            'total_epochs': self.num_epochs,
+            'global_step': self.global_step,
+            'best_val_loss': self.best_val_loss,
+            'best_val_map': self.best_val_map,
+            'data_paths': checkpoint['config'].get('data_paths'),
+            'resume_command': 'Resume with --resume_from <path_to_last_checkpoint.pt> (and same data paths if you moved machines).',
+        }
+        try:
+            with open(self.checkpoint_dir / 'resume_info.json', 'w') as f:
+                json.dump(resume_info, f, indent=2)
+        except Exception as e:
+            self.logger.debug(f"Could not write resume_info.json: {e}")
         
         # Save best model
         if is_best:
@@ -1325,10 +1372,10 @@ class ProductionTrainLoop:
                             train_metrics={'map': 0.0},
                             val_metrics=val_metrics,
                         )
-                        if stability_metrics.get('lr_adjusted') or stability_metrics.get('wd_adjusted'):
+                        if stability_metrics.lr_adjusted or stability_metrics.wd_adjusted:
                             self.logger.info(
-                                f"Stability adjustment: LR={stability_metrics.get('new_lr', 'N/A')}, "
-                                f"WD={stability_metrics.get('new_wd', 'N/A')}"
+                                f"Stability adjustment: LR={stability_metrics.new_lr if stability_metrics.lr_adjusted else 'unchanged'}, "
+                                f"WD={stability_metrics.new_wd if stability_metrics.wd_adjusted else 'unchanged'}"
                             )
                     
                     # Check if best model
