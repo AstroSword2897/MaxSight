@@ -18,7 +18,7 @@ import torch.optim as optim
 import sys
 from pathlib import Path
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple, Any
 import argparse
 
 # CRITICAL: Enable anomaly detection for backward pass debugging
@@ -85,7 +85,7 @@ def get_device(
         return torch.device("cpu")
 
 
-def create_synthetic_batch(batch_size: int = 2, device: torch.device = None):
+def create_synthetic_batch(batch_size: int = 2, device: Optional[torch.device] = None):
     """
     Create synthetic training batch.
     Note: We'll create targets AFTER seeing model outputs to match shapes exactly.
@@ -116,7 +116,7 @@ def create_loss_functions():
     }
 
 
-def compute_losses(predictions: Dict, targets: Dict, loss_fns: Dict) -> Dict[str, torch.Tensor]:
+def compute_losses(predictions: Dict, targets: Dict, loss_fns: Dict) -> Tuple[Dict[str, Any], torch.Tensor]:
     """
     Compute losses for all heads - simplified for smoke test.
     Focus: Can gradients flow? Not accuracy.
@@ -326,7 +326,7 @@ def smoke_train(
                 losses, total_loss = compute_losses(outputs, targets, loss_fns)
                 
                 # Check for NaN
-                if torch.isnan(total_loss):
+                if torch.isnan(total_loss if isinstance(total_loss, torch.Tensor) else torch.tensor(total_loss)):
                     print(f"  ❌ NaN detected in loss at batch {batch_idx}")
                     nan_detected = True
                     break
