@@ -639,7 +639,18 @@ class GradNormMultiHeadLoss(nn.Module):
             except Exception as e:
                 logger.warning(f"GradNorm update failed: {e}")
         
-        total_loss = torch.tensor(0.0, device=list(head_losses.values())[0].device)
+        # Replace nan/inf head losses with 0 so validation (and training) get a finite total
+        device = list(head_losses.values())[0].device
+        for name in list(head_losses.keys()):
+            l = head_losses[name]
+            if torch.is_tensor(l) and (torch.isnan(l) | torch.isinf(l)).any().item():
+                logger.warning(
+                    "GradNorm: head %r produced nan/inf loss, using 0 for this step (check data or loss for this head)",
+                    name,
+                )
+                head_losses[name] = torch.tensor(0.0, device=device, requires_grad=True)
+        
+        total_loss = torch.tensor(0.0, device=device)
         for i, head_name in enumerate(self.head_names):
             if head_name in head_losses:
                 weighted_loss = self.task_weights[i] * head_losses[head_name]
