@@ -37,6 +37,9 @@
 7. **Supports practice and routine**  
    It can support simple “skill building” (e.g. contrast or focus tasks) and adapt to how you usually move and what you need day to day.
 
+8. **Helps you recognize warnings over time**  
+   The same hazard (e.g. stairs, vehicle) always uses the same sound or haptic pattern. At first you get more spoken alerts so you learn what each cue means; as you get better, the system can reduce repeats so you rely on the cues you've learned. Optional "learn this warning" drills reinforce what each alert means.
+
 ---
 
 ## Simple Analogy
@@ -68,7 +71,7 @@ The **model** is the “brain” that does the seeing and deciding; the **app** 
 | **What does it do?** | Detects objects, distances, and risks; describes them in speech, text, or other cues. |
 | **Who is it for?** | People with vision or hearing disabilities (and caregivers). |
 | **How does it help?** | By labeling the world clearly and in multiple ways (voice, text, visuals, haptics). |
-| **What makes it special?** | Adapts to many vision conditions and uses memory + multi-sense feedback. |
+| **What makes it special?** | Adapts to many vision conditions, uses memory + multi-sense feedback, and helps you learn to recognize warnings over time. |
 
 ---
 

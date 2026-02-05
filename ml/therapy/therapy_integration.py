@@ -50,6 +50,7 @@ class TherapyTaskType(Enum):
     CONTRAST_RECOGNITION = "contrast"  # Identify objects with different contrast
     EDGE_DETECTION = "edge"  # Identify edges and boundaries
     SPATIAL_AWARENESS = "spatial"  # Understand spatial relationships
+    WARNING_RECOGNITION = "warning"  # Learn to recognize hazard cues over time
 
 
 class TherapyTaskIntegrator:
@@ -205,6 +206,47 @@ class TherapyTaskIntegrator:
             'duration': int(30 + (1.0 - difficulty) * 30)
         }
     
+    def create_warning_recognition_task(
+        self,
+        hazard_type: str,
+        urgency_level: int,
+        cue_description: str,
+        difficulty: float = 0.5
+    ) -> Dict:
+        """
+        Create warning recognition task so the user learns to associate cues with hazards.
+        
+        WHY WARNING RECOGNITION:
+        Users need to learn over time what each alert means (e.g. "that tone = stairs").
+        Consistent cues (same hazard → same sound/haptic every time) plus optional drills
+        help users build recognition so they can react faster and need fewer verbal repeats.
+        
+        Supports "Skill Development Across Senses" and "helping the user over time
+        recognize warnings" by reinforcing hazard–cue associations.
+        
+        Arguments:
+            hazard_type: Type of hazard (e.g. 'stairs', 'vehicle', 'door')
+            urgency_level: 0=caution, 1=warning, 2=danger (matches model urgency)
+            cue_description: Human-readable description of the cue (e.g. "double beep, high pitch")
+            difficulty: Task difficulty (0-1)
+        
+        Returns:
+            Task configuration for warning recognition drill
+        """
+        return {
+            'task_type': TherapyTaskType.WARNING_RECOGNITION,
+            'hazard_type': hazard_type,
+            'urgency_level': urgency_level,
+            'cue_description': cue_description,
+            'difficulty': difficulty,
+            'instructions': (
+                f"Learn the cue for {hazard_type}. "
+                f"You will hear/feel: {cue_description}. "
+                "When you hear this in real use, it means this hazard is present."
+            ),
+            'duration': int(20 + (1.0 - difficulty) * 25)
+        }
+    
     def generate_task_from_scene(
         self,
         detections: List[Dict],
@@ -253,6 +295,18 @@ class TherapyTaskIntegrator:
             # Extract spatial relationships from detections
             relationships = ['left_of', 'right_of', 'near', 'far']
             return self.create_spatial_task(scene_description, relationships, difficulty)
+        
+        elif task_type == TherapyTaskType.WARNING_RECOGNITION:
+            # Use first high-urgency detection for warning recognition drill
+            hazard = next((d for d in detections if d.get('urgency', 0) >= 1), detections[0] if detections else {})
+            hazard_type = hazard.get('class_name', 'obstacle')
+            urgency_level = hazard.get('urgency', 1)
+            return self.create_warning_recognition_task(
+                hazard_type=hazard_type,
+                urgency_level=urgency_level,
+                cue_description=f"Alert for {hazard_type} (urgency {urgency_level})",
+                difficulty=difficulty
+            )
         
         else:
             # Default: attention task
