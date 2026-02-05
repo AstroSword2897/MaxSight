@@ -34,6 +34,7 @@ from pathlib import Path
 import json
 import time
 import logging
+import math
 from copy import deepcopy
 import numpy as np
 
@@ -197,6 +198,40 @@ class EMA:
         self.global_step = state_dict.get('global_step', 0)
 
 
+def _validate_training_config(
+    gradient_accumulation_steps: int,
+    ema_decay: float,
+    learning_rate: float,
+    weight_decay: float,
+    use_gradnorm: bool,
+    num_epochs: int,
+    warmup_epochs: int,
+) -> None:
+    """Validate training config before initialization (Fix #7)."""
+    errors = []
+    if gradient_accumulation_steps <= 0:
+        errors.append("gradient_accumulation_steps must be positive")
+    if not (0 <= ema_decay <= 1):
+        errors.append(f"ema_decay must be in [0, 1], got {ema_decay}")
+    if learning_rate <= 0:
+        errors.append(f"learning_rate must be positive, got {learning_rate}")
+    if weight_decay < 0:
+        errors.append(f"weight_decay must be non-negative, got {weight_decay}")
+    if warmup_epochs >= num_epochs:
+        errors.append(
+            f"warmup_epochs ({warmup_epochs}) must be < num_epochs ({num_epochs})"
+        )
+    if not use_gradnorm:
+        import sys
+        print(
+            "WARNING: GradNorm disabled. For T5's 15-head architecture, "
+            "GradNorm is STRONGLY recommended to prevent gradient warfare.",
+            file=sys.stderr,
+        )
+    if errors:
+        raise ValueError("Config validation failed:\n" + "\n".join(f"  • {e}" for e in errors))
+
+
 class ProductionTrainLoop:
     """
     Production-grade training loop with all improvements.
@@ -311,7 +346,18 @@ class ProductionTrainLoop:
         self.early_stopping_min_delta = early_stopping_min_delta
         self.early_stopping_metric = early_stopping_metric
         self.early_stopping_counter = 0
-        self.early_stopping_best_metric = float('inf') if early_stopping_metric == 'val_loss' else 0.0
+        self.early_stopping_best_metric = None  # Set on first validation (Fix #4)
+        
+        # Config validation (Fix #7)
+        _validate_training_config(
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            ema_decay=ema_decay,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            use_gradnorm=use_gradnorm,
+            num_epochs=num_epochs,
+            warmup_epochs=warmup_epochs,
+        )
         
         # Setup logger
         self.logger = logger or logging.getLogger(__name__)
@@ -341,7 +387,7 @@ class ProductionTrainLoop:
                 self.use_gradnorm = False
             else:
                 # Check if loss_fn is already a GradNormMultiHeadLoss or MultiHeadLoss
-                if GRADNORM_AVAILABLE and isinstance(loss_fn, GradNormMultiHeadLoss):
+                if GRADNORM_AVAILABLE and GradNormMultiHeadLoss is not None and isinstance(loss_fn, GradNormMultiHeadLoss):
                     # Already a GradNorm loss, use directly
                     self.gradnorm_loss = loss_fn
                     self.logger.info("Using provided GradNormMultiHeadLoss")
@@ -352,7 +398,7 @@ class ProductionTrainLoop:
                         # Get shared parameters (backbone) for GradNorm
                         shared_params = list(self.backbone_params) if self.backbone_params else None
                         
-                        if GRADNORM_AVAILABLE:
+                        if GRADNORM_AVAILABLE and GradNormMultiHeadLoss is not None:
                             self.gradnorm_loss = GradNormMultiHeadLoss(
                                 head_losses=head_losses,
                                 shared_params=shared_params,
@@ -557,33 +603,72 @@ class ProductionTrainLoop:
         if unfrozen_count > 0:
             self.logger.info(f"Backbone unfrozen ({unfrozen_count} parameters)")
     
+    def _validate_t5_batch(
+        self, images: torch.Tensor, targets: Dict[str, torch.Tensor]
+    ) -> bool:
+        """
+        Validate T5-specific batch requirements (Fix #6).
+        Returns False if batch should be skipped.
+        """
+        if images.dim() == 5:
+            B, T, C, H, W = images.shape
+            if T < 2:
+                self.logger.warning(f"Temporal sequence too short: T={T}")
+                return False
+        elif images.dim() == 4:
+            B, C, H, W = images.shape
+        else:
+            self.logger.warning(f"Invalid image dims: {images.shape}")
+            return False
+        if torch.isnan(images).any() or torch.isinf(images).any():
+            self.logger.warning("NaN/Inf in images")
+            return False
+        task_keys = [
+            'boxes', 'labels', 'depth', 'audio_events', 'scene_graph',
+            'motion', 'ocr', 'therapy_state', 'roi_priority',
+        ]
+        if not any(k in targets for k in task_keys):
+            self.logger.debug("No valid targets")
+            return False
+        if 'boxes' in targets and 'num_objects' in targets:
+            boxes = targets['boxes']
+            num_objects = targets['num_objects']
+            for b in range(boxes.shape[0]):
+                num_obj = int(num_objects[b].item())
+                if num_obj > 0 and num_obj <= boxes.shape[1]:
+                    actual_boxes = boxes[b, :num_obj]
+                    if torch.isnan(actual_boxes).any() or torch.isinf(actual_boxes).any():
+                        return False
+        return True
+    
     def compute_multihead_loss(
         self,
         outputs: Dict[str, torch.Tensor],
-        targets: Dict[str, torch.Tensor]
+        targets: Dict[str, torch.Tensor],
+        is_training: bool = True,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Compute multi-head loss with safe .get() defaults.
         
         Supports GradNorm integration for balanced multi-task learning.
+        Fix #2: Only use GradNorm during training; validation uses standard loss.
         
         Arguments:
             outputs: Model outputs dictionary
             targets: Target labels dictionary
+            is_training: If True use GradNorm; if False use standard loss (validation)
         
         Returns:
             Tuple of (total_loss, loss_dict)
         """
-        # Use GradNorm if enabled
-        if self.use_gradnorm and self.gradnorm_loss is not None:
-            # Pass model only when training (grad enabled). During validation we're in no_grad(),
-            # and GradNorm's backward() would yield zero/NaN gradient norms and corrupt the loss.
-            gradnorm_model = self.model if torch.is_grad_enabled() else None
-            total_loss, loss_dict = self.gradnorm_loss(outputs, targets, model=gradnorm_model)
-            # GradNorm returns (loss, metrics_dict)
-            # Ensure loss_dict has 'total_loss' key
+        if self.use_gradnorm and self.gradnorm_loss is not None and is_training:
+            total_loss, loss_dict = self.gradnorm_loss(outputs, targets, model=self.model)
             if 'total_loss' not in loss_dict:
                 loss_dict['total_loss'] = total_loss.item() if torch.is_tensor(total_loss) else total_loss
+            if self.global_step % 100 == 0:
+                task_weights = getattr(self.gradnorm_loss, 'task_weights', None)
+                if task_weights is not None:
+                    self.logger.debug(f"GradNorm task weights: {task_weights}")
         elif self.loss_fn is not None:
             # Standard loss computation
             loss_result = self.loss_fn(outputs, targets)
@@ -602,11 +687,10 @@ class ProductionTrainLoop:
                 else:
                     loss_dict = {'total_loss': torch.tensor(0.0, device=self.device)}
         else:
-            # Default loss computation - WARN if no loss function provided
-            if self.loss_fn is None:
+            if is_training and self.loss_fn is None:
                 self.logger.warning(
                     "No loss function provided! Training with zero loss. "
-                    "This will not update model weights. Please provide a loss_fn."
+                    "For T5's 15-head architecture, provide MultiHeadLoss or GradNormMultiHeadLoss."
                 )
             loss_dict = {
                 'total_loss': torch.tensor(0.0, device=self.device),
@@ -647,12 +731,78 @@ class ProductionTrainLoop:
         
         self.optimizer.zero_grad()
     
-    def train_epoch(self, epoch: int) -> Dict[str, float]:
+    def _log_training_progress(
+        self, epoch: int, batch_idx: int, batch_loss: float
+    ) -> None:
+        """Log training progress with T5-specific details (Fix #8)."""
+        current_lr = self.optimizer.param_groups[0]['lr']
+        if len(self.optimizer.param_groups) > 1:
+            backbone_lr = self.optimizer.param_groups[0]['lr']
+            head_lr = self.optimizer.param_groups[1]['lr']
+            self.logger.info(
+                f"Epoch {epoch+1} [{batch_idx+1}/{len(self.train_loader)}] "
+                f"Loss: {batch_loss:.4f}, LR: backbone={backbone_lr:.2e}, head={head_lr:.2e}"
+            )
+        else:
+            self.logger.info(
+                f"Epoch {epoch+1} [{batch_idx+1}/{len(self.train_loader)}] "
+                f"Loss: {batch_loss:.4f}, LR: {current_lr:.2e}"
+            )
+        if self.use_gradnorm and self.global_step % 500 == 0:
+            if hasattr(self, 'gradnorm_loss') and self.gradnorm_loss is not None:
+                weights = getattr(self.gradnorm_loss, 'task_weights', None)
+                if weights is not None:
+                    if isinstance(weights, dict):
+                        items = sorted(weights.items(), key=lambda x: x[1] if isinstance(x[1], (int, float)) else 0, reverse=True)
+                        top_5 = items[:5]
+                        bottom_5 = items[-5:] if len(items) >= 5 else items
+                        self.logger.info(
+                            f"GradNorm weights - Top: {dict(top_5)}, Bottom: {dict(bottom_5)}"
+                        )
+                    else:
+                        self.logger.info(f"GradNorm weights: {weights}")
+    
+    def _check_early_stopping(
+        self, epoch: int, val_loss: float, val_map: float
+    ) -> bool:
+        """Check early stopping with proper baseline initialization (Fix #4)."""
+        if self.early_stopping_patience <= 0:
+            return False
+        if self.early_stopping_best_metric is None:
+            if self.early_stopping_metric == 'val_loss':
+                self.early_stopping_best_metric = val_loss
+            else:
+                self.early_stopping_best_metric = val_map
+            self.logger.info(
+                f"Early stopping baseline ({self.early_stopping_metric}): "
+                f"{self.early_stopping_best_metric:.4f}"
+            )
+            return False
+        if self.early_stopping_metric == 'val_loss':
+            current_metric = val_loss
+            improvement = self.early_stopping_best_metric - current_metric
+        else:
+            current_metric = val_map
+            improvement = current_metric - self.early_stopping_best_metric
+        if improvement > self.early_stopping_min_delta:
+            self.early_stopping_best_metric = current_metric
+            self.early_stopping_counter = 0
+        else:
+            self.early_stopping_counter += 1
+        if self.early_stopping_counter >= self.early_stopping_patience:
+            self.logger.info(
+                f"Early stopping triggered after {epoch+1} epochs"
+            )
+            return True
+        return False
+    
+    def train_epoch(self, epoch: int) -> Dict[str, Any]:
         """Train for one epoch with fixed gradient accumulation."""
         self.model.train()
         total_loss = 0.0
         num_batches = 0
         accum_steps = 0  # Track accumulation steps
+        epoch_losses = []  # Fix #1: track all batch losses for stability manager
         
         # Progress bar for training
         try:
@@ -669,6 +819,9 @@ class ProductionTrainLoop:
                 images, targets = parse_batch(batch)
             except (ValueError, KeyError) as e:
                 self.logger.warning(f"Skipping invalid batch {batch_idx}: {e}")
+                continue
+            
+            if not self._validate_t5_batch(images, targets):  # Fix #6
                 continue
             
             # Quick NaN/Inf check (silent - dimensions sanitized in collate_fn)
@@ -694,23 +847,24 @@ class ProductionTrainLoop:
                 self.logger.error(f"Failed to move batch to device: {e}")
                 continue
             
-            # Forward pass with mixed precision - SAFE handling
+            # Forward pass with mixed precision - SAFE handling (Fix #3: device type)
             try:
-                if self.device.startswith('cuda'):
+                device_str = str(self.device)
+                if 'cuda' in device_str:
                     device_type = 'cuda'
-                elif self.device == 'mps':
-                    device_type = 'cpu'  # MPS uses CPU autocast
+                elif 'mps' in device_str:
+                    device_type = 'mps'
                 else:
                     device_type = 'cpu'
                 
                 if self.use_mixed_precision:
                     with autocast(device_type=device_type):  # type: ignore
                         outputs = self.model(images)
-                        loss, loss_dict = self.compute_multihead_loss(outputs, targets)
+                        loss, loss_dict = self.compute_multihead_loss(outputs, targets, is_training=True)
                         loss = loss / self.gradient_accumulation_steps
                 else:
                     outputs = self.model(images)
-                    loss, loss_dict = self.compute_multihead_loss(outputs, targets)
+                    loss, loss_dict = self.compute_multihead_loss(outputs, targets, is_training=True)
                     loss = loss / self.gradient_accumulation_steps
             except Exception as e:
                 self.logger.error(f"Forward pass failed at batch {batch_idx}: {e}")
@@ -751,37 +905,24 @@ class ProductionTrainLoop:
                 
                 self.global_step += 1
             
-            total_loss += loss.item() * self.gradient_accumulation_steps
+            batch_loss = loss.item() * self.gradient_accumulation_steps
+            epoch_losses.append(batch_loss)
+            total_loss += batch_loss
             num_batches += 1
             
             # Update progress bar
             if use_tqdm:
                 current_lr = self.optimizer.param_groups[0]['lr']
                 pbar.set_postfix({
-                    'loss': f"{loss.item() * self.gradient_accumulation_steps:.4f}",
+                    'loss': f"{batch_loss:.4f}",
                     'lr': f"{current_lr:.2e}"
                 })
             
-            # Logging
             if (batch_idx + 1) % self.log_interval == 0:
-                current_lr = self.optimizer.param_groups[0]['lr']
-                if len(self.optimizer.param_groups) > 1:
-                    backbone_lr = self.optimizer.param_groups[0]['lr']
-                    head_lr = self.optimizer.param_groups[1]['lr']
-                    self.logger.info(
-                        f"Epoch {epoch+1} [{batch_idx+1}/{len(self.train_loader)}] "
-                        f"Loss: {loss.item() * self.gradient_accumulation_steps:.4f}, "
-                        f"LR: backbone={backbone_lr:.2e}, head={head_lr:.2e}"
-                    )
-                else:
-                    self.logger.info(
-                        f"Epoch {epoch+1} [{batch_idx+1}/{len(self.train_loader)}] "
-                        f"Loss: {loss.item() * self.gradient_accumulation_steps:.4f}, "
-                        f"LR: {current_lr:.2e}"
-                    )
+                self._log_training_progress(epoch, batch_idx, batch_loss)
         
         avg_loss = total_loss / num_batches if num_batches > 0 else float('inf')
-        return {'loss': avg_loss}
+        return {'loss': avg_loss, 'all_losses': epoch_losses}
     
     def validate(self, epoch: int, use_ema: bool = True) -> Dict[str, float]:
         """
@@ -819,10 +960,9 @@ class ProductionTrainLoop:
                 
                 try:
                     outputs = self.model(images)
-                    loss, loss_dict = self.compute_multihead_loss(outputs, targets)
-                    # CRITICAL: Check for NaN/Inf before accumulating loss
+                    loss, loss_dict = self.compute_multihead_loss(outputs, targets, is_training=False)
                     loss_value = loss.item() if torch.is_tensor(loss) else float(loss)
-                    if not (torch.isnan(torch.tensor(loss_value)) or torch.isinf(torch.tensor(loss_value))):
+                    if not (math.isnan(loss_value) or math.isinf(loss_value)):
                         total_loss += loss_value
                         num_batches += 1
                     else:
@@ -903,8 +1043,7 @@ class ProductionTrainLoop:
             self.logger.warning("No valid validation batches processed, returning inf loss")
         else:
             avg_loss = total_loss / num_batches
-            # Final safety check for NaN/Inf
-            if torch.isnan(torch.tensor(avg_loss)) or torch.isinf(torch.tensor(avg_loss)):
+            if math.isnan(avg_loss) or math.isinf(avg_loss):
                 self.logger.error(
                     f"Validation loss is NaN/Inf (total_loss={total_loss}, num_batches={num_batches}), "
                     "this indicates a serious issue with loss computation"
@@ -1143,7 +1282,9 @@ class ProductionTrainLoop:
                 
                 # Train
                 train_metrics = self.train_epoch(epoch)
-                self.history['train_loss'].append(train_metrics['loss'])
+                train_loss = train_metrics['loss']
+                epoch_losses: List[float] = train_metrics.get('all_losses', [])
+                self.history['train_loss'].append(train_loss)
                 
                 # Step scheduler (per-epoch for most, per-batch for OneCycleLR/SequentialLR)
                 # NOTE: OneCycleLR and SequentialLR step per-batch in train_epoch()
@@ -1174,15 +1315,21 @@ class ProductionTrainLoop:
                     self.history['val_recall'].append(val_recall)
                     self.history['val_f1'].append(val_f1)
                     
-                    # Stability check and auto-adjustment
-                    train_loss_avg = sum(epoch_losses) / len(epoch_losses) if epoch_losses else float('inf')
-                    stability_metrics = self.stability_manager.check_and_adjust(
-                        epoch=epoch,
-                        train_loss=train_loss_avg,
-                        val_loss=val_loss,
-                        train_metrics={'map': 0.0},  # Could add train mAP if computed
-                        val_metrics=val_metrics,
-                    )
+                    # Stability check and auto-adjustment (Fix #1: use tracked epoch_losses)
+                    if self.stability_manager and len(epoch_losses) > 0:
+                        train_loss_avg = sum(epoch_losses) / len(epoch_losses)
+                        stability_metrics = self.stability_manager.check_and_adjust(
+                            epoch=epoch,
+                            train_loss=train_loss_avg,
+                            val_loss=val_loss,
+                            train_metrics={'map': 0.0},
+                            val_metrics=val_metrics,
+                        )
+                        if stability_metrics.get('lr_adjusted') or stability_metrics.get('wd_adjusted'):
+                            self.logger.info(
+                                f"Stability adjustment: LR={stability_metrics.get('new_lr', 'N/A')}, "
+                                f"WD={stability_metrics.get('new_wd', 'N/A')}"
+                            )
                     
                     # Check if best model
                     is_best = val_loss < self.best_val_loss or val_map > self.best_val_map
@@ -1191,31 +1338,8 @@ class ProductionTrainLoop:
                     if val_map > self.best_val_map:
                         self.best_val_map = val_map
                     
-                    # Early stopping check
-                    if self.early_stopping_patience > 0:
-                        if self.early_stopping_metric == 'val_loss':
-                            current_metric = val_loss
-                            improvement = self.early_stopping_best_metric - current_metric
-                            if improvement > self.early_stopping_min_delta:
-                                self.early_stopping_best_metric = current_metric
-                                self.early_stopping_counter = 0
-                            else:
-                                self.early_stopping_counter += 1
-                        else:  # val_map
-                            current_metric = val_map
-                            improvement = current_metric - self.early_stopping_best_metric
-                            if improvement > self.early_stopping_min_delta:
-                                self.early_stopping_best_metric = current_metric
-                                self.early_stopping_counter = 0
-                            else:
-                                self.early_stopping_counter += 1
-                        
-                        if self.early_stopping_counter >= self.early_stopping_patience:
-                            self.logger.info(
-                                f"Early stopping triggered after {epoch+1} epochs. "
-                                f"No improvement for {self.early_stopping_patience} epochs."
-                            )
-                            break
+                    if self._check_early_stopping(epoch, val_loss, val_map):
+                        break
                     
                     # Save checkpoint
                     self._save_checkpoint(epoch, is_best=is_best)

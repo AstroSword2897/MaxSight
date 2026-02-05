@@ -508,3 +508,25 @@ class SpatialMemory:
                 'object_types': list(self.objects.keys())
             }
 
+
+class SpatialMemorySystem(SpatialMemory):
+    """
+    Alias for SpatialMemory used by MaxSightCNN.
+    Accepts image_size for compatibility with the model's constructor.
+    """
+    def __init__(
+        self,
+        memory_duration: float = 30.0,
+        stability_threshold: float = 0.7,
+        image_size: Tuple[int, int] = (640, 480),
+        position_threshold: float = 0.1,
+        **kwargs: Any,
+    ):
+        super().__init__(
+            memory_duration=memory_duration,
+            position_threshold=position_threshold,
+            stability_threshold=stability_threshold,
+            **kwargs,
+        )
+        self.image_size = image_size
+

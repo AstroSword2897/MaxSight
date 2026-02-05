@@ -265,6 +265,27 @@ class PredictionMonitor:
         return sorted(alerts, key=lambda a: a.timestamp, reverse=True)
 
 
+class ReadinessMonitor(PredictionMonitor):
+    """
+    Alias used by MaxSightCNN for performance monitoring.
+    Accepts alert_threshold dict for compatibility with the model constructor.
+    """
+    def __init__(
+        self,
+        window_size: int = 100,
+        alert_threshold: Optional[Dict[str, float]] = None,
+        **kwargs: Any,
+    ):
+        if alert_threshold is None:
+            alert_threshold = {}
+        super().__init__(
+            window_size=window_size,
+            confidence_threshold=alert_threshold.get('confidence', 0.5),
+            drift_threshold=alert_threshold.get('drift', 0.1),
+            **kwargs,
+        )
+
+
 # ==================== Readiness Dashboard ====================
 
 class ReadinessDashboard:
