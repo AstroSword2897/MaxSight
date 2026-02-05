@@ -10,6 +10,9 @@ from typing import Dict, Optional, List, Any, Tuple
 from functools import lru_cache
 
 from ml.utils.stage_a_smoother import StageATemporalSmoother
+from ml.utils.spatial_memory import SpatialMemorySystem
+from ml.utils.monitoring import ReadinessMonitor
+from ml.therapy.therapy_integration import TherapyTaskIntegrator
 
 # COCO 80 base classes + accessibility classes for navigation
 COCO_BASE_CLASSES = [
@@ -728,6 +731,34 @@ class MaxSightCNN(nn.Module):
             nn.ReLU(),
             nn.Linear(256, 256)
         )
+        
+        # ============================================================================
+        # INTEGRATED SYSTEM COMPONENTS (Complete MaxSight Feature Set)
+        # ============================================================================
+        
+        # Spatial Memory System - Tracks objects across frames for navigation
+        # CRITICAL FEATURE: Enables cognitive mapping and spatial awareness over time
+        # Used during inference to remember object positions and support navigation
+        self.spatial_memory = SpatialMemorySystem(
+            memory_duration=30.0,  # Remember objects for 30 seconds
+            stability_threshold=0.7,  # Mark as stable if position variance < 30%
+            image_size=(640, 480)  # Default, updates dynamically
+        )
+        
+        # Performance Monitoring System - Self-assessment and drift detection
+        # CRITICAL FEATURE: Ensures model reliability, triggers alerts on degradation
+        # Monitors predictions in real-time, detects performance drift
+        self.performance_monitor = ReadinessMonitor(
+            window_size=100,  # Track last 100 predictions
+            alert_threshold={'confidence': 0.3, 'drift': 0.15}  # Thresholds for alerts
+        )
+        
+        # Therapy Task Integration - Adaptive therapy task generation
+        # CRITICAL FEATURE: Uses scene descriptions for vision training exercises
+        # Integrates real-world scene information into therapy tasks
+        self.therapy_integrator = TherapyTaskIntegrator()
+        
+        # ============================================================================
         
         # Condition-specific adaptations
         if condition_mode == 'color_blindness':
