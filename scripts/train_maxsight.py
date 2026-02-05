@@ -29,7 +29,7 @@ from torch.utils.data import DataLoader
 # Project path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ml.models.maxsight_cnn import create_model
+from ml.models.maxsight_cnn import create_model, TierConfig, CapabilityTier
 from ml.training.losses import MultiHeadLoss, ObjectnessLoss, ClassificationLoss, BoxRegressionLoss, DistanceZoneLoss, UrgencyLoss
 from ml.training.task_balancing import GradNormMultiHeadLoss
 from ml.training.train_loop import ProductionTrainLoop
@@ -191,6 +191,10 @@ def main():
     
     # Model
     parser.add_argument("--num-classes", type=int, default=None, help="Number of classes (default: len(COCO_CLASSES))")
+    parser.add_argument("--tier", 
+                        choices=["T0", "T1", "T2", "T3", "T4", "T5"], 
+                        default="T5",
+                        help="Model tier: T0 (baseline), T1 (attention), T2 (hybrid), T3 (cross-task), T4 (cross-modal), T5 (temporal+all features)")
     parser.add_argument("--use-audio", action="store_true")
     parser.add_argument("--condition-mode",
                         choices=[None, "glaucoma", "amd", "cataracts", "color_blindness"],
@@ -339,10 +343,33 @@ def main():
     # -----------------------------------------------------------------
     num_classes = args.num_classes or len(COCO_CLASSES)
     
+    # Create tier configuration
+    tier_map = {
+        "T0": CapabilityTier.T0_BASELINE_CNN,
+        "T1": CapabilityTier.T1_ATTENTION,
+        "T2": CapabilityTier.T2_HYBRID_VIT,
+        "T3": CapabilityTier.T3_CROSS_TASK,
+        "T4": CapabilityTier.T4_CROSS_MODAL,
+        "T5": CapabilityTier.T5_TEMPORAL,
+    }
+    tier = tier_map[args.tier]
+    tier_config = TierConfig.for_tier(tier)
+    
+    logger.info(f"Creating model with tier: {args.tier} ({tier.name})")
+    logger.info(f"  SE Attention: {tier_config.use_se_attention}")
+    logger.info(f"  CBAM Attention: {tier_config.use_cbam_attention}")
+    logger.info(f"  Hybrid Backbone (ResNet+ViT): {tier_config.use_hybrid_backbone}")
+    logger.info(f"  Dynamic Conv: {tier_config.use_dynamic_conv}")
+    logger.info(f"  Cross-Task Attention: {tier_config.use_cross_task_attention}")
+    logger.info(f"  Cross-Modal Attention: {tier_config.use_cross_modal_attention}")
+    logger.info(f"  Temporal Modeling: {tier_config.use_temporal_modeling}")
+    logger.info(f"  Retrieval: {tier_config.use_retrieval}")
+    
     model = create_model(
         num_classes=num_classes,
         use_audio=args.use_audio,
         condition_mode=args.condition_mode,
+        tier_config=tier_config,
     ).to(device)
     
     logger.info(f"Model created: {sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters")
