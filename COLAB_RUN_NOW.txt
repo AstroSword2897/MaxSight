@@ -1,6 +1,9 @@
 ==============================================
 RUN THIS IN COLAB (copy-paste) — Batch size 16
 ==============================================
+We are training EVERY condition: 14 separate runs (one per vision condition),
+each with its own checkpoint folder. Batch 16, T5, GradNorm, 20 epochs.
+
 Everything we set up: T5 fixes, 14 vision conditions, warning recognition,
 GradNorm, EMA, checkpoints on Drive. No --use-ema or --use-mixed-precision
 (those flags don't exist; EMA is on by default, FP32 only).
@@ -20,7 +23,38 @@ CELL 2: Install deps (if first time in session)
 !pip install -q -r requirements_colab.txt
 
 ----------------------------------------------
-CELL 3: Train — batch size 16, T5, GradNorm, 20 epochs
+CELL 3: Train EVERY condition (14 models) — batch 16, T5, GradNorm
+----------------------------------------------
+# Trains one model per vision condition; each saves to its own folder on Drive.
+CONDITIONS = [
+    "glaucoma", "amd", "cataracts", "color_blindness",
+    "diabetic_retinopathy", "retinitis_pigmentosa", "cvi",
+    "amblyopia", "strabismus",
+    "refractive_errors", "myopia", "hyperopia", "astigmatism", "presbyopia"
+]
+DATA = "/content/drive/MyDrive/MaxSight_Training"
+BASE_CKPT = "/content/drive/MyDrive/MaxSight"
+
+for cond in CONDITIONS:
+    ckpt_dir = f"{BASE_CKPT}/checkpoints_{cond}"
+    print(f"\n{'='*60}\nTraining condition: {cond} -> {ckpt_dir}\n{'='*60}\n")
+    !python scripts/train_maxsight.py \
+        --data-dir {DATA} \
+        --image-dir {DATA} \
+        --batch-size 16 \
+        --epochs 20 \
+        --num-workers 2 \
+        --grad-accumulation-steps 2 \
+        --use-gradnorm \
+        --condition-mode {cond} \
+        --checkpoint-dir {ckpt_dir} \
+        --checkpoint-interval 5 \
+        --early-stopping-patience 10 \
+        --device cuda \
+        --seed 42
+
+----------------------------------------------
+Alternative: Train general model only (no condition mode)
 ----------------------------------------------
 !python scripts/train_maxsight.py \
     --data-dir /content/drive/MyDrive/MaxSight_Training \
@@ -37,14 +71,8 @@ CELL 3: Train — batch size 16, T5, GradNorm, 20 epochs
     --seed 42
 
 ----------------------------------------------
-Optional: Train for a specific vision condition
+Alternative: Train a single condition (e.g. glaucoma)
 ----------------------------------------------
-# Add: --condition-mode glaucoma
-# Or: amd | cataracts | color_blindness | diabetic_retinopathy |
-#     retinitis_pigmentosa | cvi | amblyopia | strabismus |
-#     refractive_errors | myopia | hyperopia | astigmatism | presbyopia
-
-# Example (glaucoma):
 !python scripts/train_maxsight.py \
     --data-dir /content/drive/MyDrive/MaxSight_Training \
     --image-dir /content/drive/MyDrive/MaxSight_Training \
