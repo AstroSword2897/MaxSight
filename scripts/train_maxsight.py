@@ -197,8 +197,19 @@ def main():
                         help="Model tier: T0 (baseline), T1 (attention), T2 (hybrid), T3 (cross-task), T4 (cross-modal), T5 (temporal+all features)")
     parser.add_argument("--use-audio", action="store_true")
     parser.add_argument("--condition-mode",
-                        choices=[None, "glaucoma", "amd", "cataracts", "color_blindness"],
-                        default=None)
+                        choices=[
+                            None, 
+                            # Common conditions
+                            "glaucoma", "amd", "cataracts", "color_blindness",
+                            # Additional conditions
+                            "diabetic_retinopathy", "retinitis_pigmentosa", "cvi",
+                            # Developmental/alignment
+                            "amblyopia", "strabismus",
+                            # Refractive errors
+                            "refractive_errors", "myopia", "hyperopia", "astigmatism", "presbyopia"
+                        ],
+                        default=None,
+                        help="Vision condition adaptation mode")
     
     # Loss
     parser.add_argument("--use-gradnorm", action="store_true", help="Use GradNorm for task balancing")
