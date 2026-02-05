@@ -180,7 +180,7 @@ def main():
     # Hardware
     parser.add_argument("--device", choices=["cpu", "cuda", "mps", "mlx", "auto"], default="auto",
                         help="mlx = CPU (MPS disabled due to backward errors); mps also maps to CPU")
-    parser.add_argument("--fp16", action="store_true", help="Use FP16 mixed precision (CUDA only)")
+    # FP32 only (fp16 removed for stability; use_mixed_precision always False)
     parser.add_argument("--compile", action="store_true", help="Use torch.compile (CUDA only)")
     
     # Resume / backup
@@ -237,10 +237,53 @@ def main():
 
     if args.train_annotation and args.val_annotation:
         # Annotation-based: use create_data_loaders (e.g. after gather_training_data / setup_training_data)
-        train_ann = Path(args.train_annotation)
-        val_ann = Path(args.val_annotation)
+        data_dir_resolved = Path(args.data_dir).resolve()
+        train_ann = Path(args.train_annotation).resolve()
+        val_ann = Path(args.val_annotation).resolve()
+        # If not found, try under data-dir (e.g. Colab: data-dir on Drive with cleaned_splits inside)
+        if not train_ann.exists():
+            alt = data_dir_resolved / "cleaned_splits" / train_ann.name
+            if alt.exists():
+                train_ann = alt
+            elif (data_dir_resolved / train_ann.name).exists():
+                train_ann = data_dir_resolved / train_ann.name
+        if not val_ann.exists():
+            alt = data_dir_resolved / "cleaned_splits" / val_ann.name
+            if alt.exists():
+                val_ann = alt
+            elif (data_dir_resolved / val_ann.name).exists():
+                val_ann = data_dir_resolved / val_ann.name
+        # Colab: if path is bare (e.g. /maxsight_train.json from empty $SPLITS_DIR), try env then common Drive paths
+        def _resolve_bare(path: Path, name: str) -> Path:
+            if path.exists():
+                return path
+            for candidate_dir in [
+                os.environ.get("SPLITS_DIR"),
+                "/content/drive/MyDrive/MaxSight_Training/cleaned_splits",
+                "/content/drive/MyDrive/MaxSight/datasets/coco_raw/cleaned_splits",
+            ]:
+                if not candidate_dir:
+                    continue
+                candidate = Path(candidate_dir) / name
+                if candidate.exists():
+                    return candidate
+            return path
+
         if not train_ann.exists() or not val_ann.exists():
-            raise FileNotFoundError(f"Annotation files not found: {train_ann} / {val_ann}")
+            train_ann = _resolve_bare(train_ann, train_ann.name)
+            val_ann = _resolve_bare(val_ann, val_ann.name)
+        if not train_ann.exists() or not val_ann.exists():
+            hint = ""
+            if train_ann.name.endswith(".json") and len(train_ann.parts) <= 2:
+                hint = (
+                    " In Colab: run Cell 2 first, then use --train-annotation \"{SPLITS_DIR}/maxsight_train.json\" "
+                    "(curly braces so the notebook substitutes the path)."
+                )
+            raise FileNotFoundError(
+                f"Annotation files not found: {train_ann} / {val_ann}.{hint} "
+                "Create with: python scripts/gather_training_data.py --coco-dir <coco> --output-dir datasets/cleaned_splits "
+                "or use absolute paths (e.g. /content/drive/MyDrive/.../maxsight_train.json)."
+            )
         logger.info(f"Using annotations: train={train_ann}, val={val_ann}, image_dir={image_dir}")
         train_loader, val_loader, _ = create_data_loaders(
             train_annotation_file=train_ann,
@@ -338,6 +381,9 @@ def main():
         if resume_from is None:
             logger.warning("--resume specified but no checkpoint found, starting fresh")
     
+    # Type narrow for trainer (model may be compiled callable)
+    from torch.nn import Module
+    assert isinstance(model, Module), "model must be nn.Module"
     trainer = ProductionTrainLoop(
         model=model,
         train_loader=train_loader,
@@ -349,7 +395,7 @@ def main():
         num_epochs=args.epochs,
         checkpoint_dir=str(ckpt_dir),
         seed=args.seed,
-        use_mixed_precision=(args.fp16 and device == "cuda"),  # MPS doesn't support FP16
+        use_mixed_precision=False,  # FP32 only
         gradient_clip_norm=args.grad_clip,
         gradient_accumulation_steps=args.grad_accumulation_steps,
         scheduler_type=args.scheduler_type,

@@ -83,6 +83,7 @@ Use this to jump to the right place:
 | Situation | What to do |
 |-----------|------------|
 | **First time, I want to train T5 on Drive** | Run cells **1 → 2 → 2b** (optionally 3, 4), then **5b**. Later: **8** (Option B) and **9** if you want export. |
+| **I want 80k+ training images (download in Colab)** | Run **1 → 2**, then **2c** (download COCO train2017). Then train with **5b** or **5c** using `--image-dir /content` (see Cell 2c). |
 | **First time, I have data in the repo (e.g. `datasets/`)** | Run **1 → 2 → 4**, then **5a**. |
 | **I already trained; I just want to export** | Run **1 → 2**, then **8** (and **9** if you want the iOS bundle). Use Option B if you trained T5 (Cell 5b). |
 | **Colab disconnected / GPU timed out; I want to resume** | Run **1 → 2**, then the **resume** command in Cell 5b (or 5c). Checkpoints on Drive are used automatically. |
@@ -145,7 +146,14 @@ SPLITS_DIR = "/content/drive/MyDrive/MaxSight/datasets/coco_raw/cleaned_splits"
 CHECKPOINT_DIR = "/content/drive/MyDrive/MaxSight/checkpoints"
 EXPORT_DIR = "/content/drive/MyDrive/MaxSight/exports"
 
-!mkdir -p "$CHECKPOINT_DIR" "$EXPORT_DIR"
+# Export to environment so training cells can use $SPLITS_DIR etc. in shell commands
+import os
+os.environ["DATA_DIR"] = DATA_DIR
+os.environ["SPLITS_DIR"] = SPLITS_DIR
+os.environ["CHECKPOINT_DIR"] = CHECKPOINT_DIR
+os.environ["EXPORT_DIR"] = EXPORT_DIR
+
+!mkdir -p "{CHECKPOINT_DIR}" "{EXPORT_DIR}"
 ```
 
 **Expected:** A link to authorize access; after you click it, you should see “Mounted at /content/drive”. The `mkdir` creates the checkpoint and export folders if they don’t exist.
@@ -195,6 +203,75 @@ Then upload your COCO images into `MaxSight/datasets/coco_raw/` (e.g. `train2017
 
 ---
 
+### Cell 2c: Download COCO train2017 in Colab (optional, ~118k train images)
+
+**What it does:** Downloads COCO train2017 (~18 GB) and val2017 (~1 GB) from the official COCO site into `/content/train2017` and `/content/val2017`. Gives you **~118k training images** without storing them on Drive. Annotations still come from Drive (`SPLITS_DIR`).
+
+**When to use:** You want 80k+ training images and are okay with a one-time download in Colab (~30–60 min depending on connection). After this cell, use `--image-dir /content` in training cells (5b, 5c, 5d) instead of `--image-dir "{DATA_DIR}"`.
+
+**Run this:** After Cell 2 (Drive mounted). Run once per session; if the runtime restarts, run again (script skips existing files).
+
+```python
+import zipfile
+import urllib.request
+from pathlib import Path
+
+CONTENT = Path("/content")
+ZIP_TRAIN = CONTENT / "train2017.zip"
+ZIP_VAL = CONTENT / "val2017.zip"
+URL_TRAIN = "http://images.cocodataset.org/zips/train2017.zip"
+URL_VAL = "http://images.cocodataset.org/zips/val2017.zip"
+
+def download_with_progress(url: str, dest: Path, label: str = "Downloading"):
+    if dest.exists() and dest.stat().st_size > 100_000_000:
+        print(f"{label}: found existing {dest.name}, skipping.")
+        return
+    print(f"{label} {dest.name}...")
+    def reporthook(block_num, block_size, total_size):
+        if total_size > 0:
+            pct = min(100, block_num * block_size * 100 // total_size)
+            mb = (block_num * block_size) // (1024 * 1024)
+            print(f"\r  {mb} MB ({pct}%)", end="", flush=True)
+    urllib.request.urlretrieve(url, dest, reporthook=reporthook)
+    print()
+
+download_with_progress(URL_TRAIN, ZIP_TRAIN, "Downloading train2017")
+download_with_progress(URL_VAL, ZIP_VAL, "Downloading val2017")
+
+for zpath, name in [(ZIP_TRAIN, "train2017"), (ZIP_VAL, "val2017")]:
+    out_dir = CONTENT / name
+    if out_dir.exists() and len(list(out_dir.glob("*.jpg"))) > 1000:
+        print(f"Extract: {name} already has images, skipping.")
+        continue
+    print(f"Extracting {zpath.name}...")
+    with zipfile.ZipFile(zpath, "r") as z:
+        z.extractall(CONTENT)
+    print(f"  Done {name}.")
+
+train_count = len(list((CONTENT / "train2017").glob("*.jpg")))
+val_count = len(list((CONTENT / "val2017").glob("*.jpg")))
+print(f"\nTrain: {train_count:,}  |  Val: {val_count:,}")
+print("Use --image-dir /content when training.")
+```
+
+**After download:** Use training commands with `--image-dir /content`, for example:
+
+```python
+%cd /content/2026-Prototype
+!python scripts/train_t5_fast_colab.py \
+  --data-dir /content \
+  --train-annotation "{SPLITS_DIR}/maxsight_train.json" \
+  --val-annotation "{SPLITS_DIR}/maxsight_val.json" \
+  --image-dir /content \
+  --checkpoint-dir "{CHECKPOINT_DIR}" \
+  --epochs 55 --warmup-epochs 5 --batch-size 8 --grad-accumulation-steps 4 \
+  --train-fraction 0.08 --checkpoint-interval 1 --device cuda
+```
+
+(Annotations stay on Drive; images are read from `/content/train2017` and `/content/val2017`.)
+
+---
+
 ### Cell 3: (Optional) Cleanup old checkpoints
 
 **What it does:** Deletes old checkpoint files from the **local** `checkpoints/` directory (inside the repo), to free space. It does **not** delete files in `CHECKPOINT_DIR` on Drive.
@@ -225,6 +302,12 @@ print("CUDA:", torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch
 - Tests should finish with “PASS” / “OK” for the components that were run. Some tests may be skipped if data or GPU is missing; that’s often fine.
 
 **If tests fail:** Copy the failing test name and the traceback into [§7](#7-outputs-and-errors-to-report).
+
+---
+
+### Cell 5: Training
+
+**Important:** For cells that use Drive paths (5b, 5c, 5d), **run Cell 2 first**. Those cells use `{SPLITS_DIR}`, `{CHECKPOINT_DIR}`, etc. (curly braces) so the notebook substitutes the **Python** variables from Cell 2. If you see `FileNotFoundError: Annotation files not found: /maxsight_train.json`, the shell got empty paths because Cell 2 was not run (or the variables weren’t set).
 
 ---
 
@@ -260,11 +343,11 @@ Use `--device cpu` if you’re not using a GPU.
 ```python
 %cd /content/2026-Prototype
 !python scripts/train_t5_fast_colab.py \
-  --data-dir "$DATA_DIR" \
-  --train-annotation "$SPLITS_DIR/maxsight_train.json" \
-  --val-annotation "$SPLITS_DIR/maxsight_val.json" \
-  --image-dir "$DATA_DIR" \
-  --checkpoint-dir "$CHECKPOINT_DIR" \
+  --data-dir "{DATA_DIR}" \
+  --train-annotation "{SPLITS_DIR}/maxsight_train.json" \
+  --val-annotation "{SPLITS_DIR}/maxsight_val.json" \
+  --image-dir "{DATA_DIR}" \
+  --checkpoint-dir "{CHECKPOINT_DIR}" \
   --epochs 55 --warmup-epochs 5 --batch-size 8 --grad-accumulation-steps 4 \
   --train-fraction 0.08 --checkpoint-interval 1 --device cuda
 ```
@@ -278,14 +361,14 @@ Use `--device cpu` if you’re not using a GPU.
 ```python
 %cd /content/2026-Prototype
 !python scripts/train_t5_fast_colab.py \
-  --data-dir "$DATA_DIR" \
-  --train-annotation "$SPLITS_DIR/maxsight_train.json" \
-  --val-annotation "$SPLITS_DIR/maxsight_val.json" \
-  --image-dir "$DATA_DIR" \
-  --checkpoint-dir "$CHECKPOINT_DIR" \
+  --data-dir "{DATA_DIR}" \
+  --train-annotation "{SPLITS_DIR}/maxsight_train.json" \
+  --val-annotation "{SPLITS_DIR}/maxsight_val.json" \
+  --image-dir "{DATA_DIR}" \
+  --checkpoint-dir "{CHECKPOINT_DIR}" \
   --epochs 55 --warmup-epochs 5 --batch-size 8 --grad-accumulation-steps 4 \
   --train-fraction 0.08 --checkpoint-interval 1 --device cuda \
-  --resume-from "$CHECKPOINT_DIR/last_checkpoint.pt"
+  --resume-from "{CHECKPOINT_DIR}/last_checkpoint.pt"
 ```
 
 (Use `--device cpu` if you’re on CPU.)
@@ -303,11 +386,11 @@ Use `--device cpu` if you’re not using a GPU.
 ```python
 %cd /content/2026-Prototype
 !python scripts/train_maxsight.py \
-  --data-dir "$DATA_DIR" \
-  --train-annotation "$SPLITS_DIR/maxsight_train.json" \
-  --val-annotation "$SPLITS_DIR/maxsight_val.json" \
-  --image-dir "$DATA_DIR" \
-  --checkpoint-dir "$CHECKPOINT_DIR" \
+  --data-dir "{DATA_DIR}" \
+  --train-annotation "{SPLITS_DIR}/maxsight_train.json" \
+  --val-annotation "{SPLITS_DIR}/maxsight_val.json" \
+  --image-dir "{DATA_DIR}" \
+  --checkpoint-dir "{CHECKPOINT_DIR}" \
   --epochs 5 --batch-size 8 --device cuda \
   --use-gradnorm --checkpoint-interval 1
 ```
@@ -324,7 +407,7 @@ Use `--device cpu` if needed. **Expected:** Same kind of training logs as 5a, wi
 
 ```python
 %cd /content/2026-Prototype
-!DATA_DIR="$DATA_DIR" TRAIN_ANN="$SPLITS_DIR/maxsight_train.json" VAL_ANN="$SPLITS_DIR/maxsight_val.json" IMAGE_DIR="$DATA_DIR" EPOCHS=5 BATCH_SIZE=8 DEVICE=cuda ./scripts/run_production_training.sh --no-export
+!DATA_DIR="{DATA_DIR}" TRAIN_ANN="{SPLITS_DIR}/maxsight_train.json" VAL_ANN="{SPLITS_DIR}/maxsight_val.json" IMAGE_DIR="{DATA_DIR}" EPOCHS=5 BATCH_SIZE=8 DEVICE=cuda ./scripts/run_production_training.sh --no-export
 ```
 
 Use `DEVICE=cpu` if you’re on CPU.
@@ -437,8 +520,8 @@ For **generic (T0) training**, use `model = create_model()` and remove the `tier
 **What it does:** Zips the contents of `EXPORT_DIR` (on Drive) into a file under `/content/` so you can download it from the Colab “Files” panel. Alternatively, you can open Drive in the browser and download the export folder directly.
 
 ```python
-!ls -la "$EXPORT_DIR"
-!zip -r /content/maxsight_exports.zip "$EXPORT_DIR"
+!ls -la "{EXPORT_DIR}"
+!zip -r /content/maxsight_exports.zip "{EXPORT_DIR}"
 print("Download /content/maxsight_exports.zip from the Colab Files panel (left sidebar)")
 ```
 
@@ -454,9 +537,9 @@ print("Download /content/maxsight_exports.zip from the Colab Files panel (left s
 2. Run **Cell 1** (clone + install) and **Cell 2** (mount Drive, same paths).
 3. Check that checkpoints exist:
    ```python
-   !ls -lh "$CHECKPOINT_DIR"
+   !ls -lh "{CHECKPOINT_DIR}"
    ```
-4. Resume with the **resume** command from Cell 5b (or 5c), using `--resume-from "$CHECKPOINT_DIR/last_checkpoint.pt"` and the same flags (including `--device cpu` or `cuda`) as before.
+4. Resume with the **resume** command from Cell 5b (or 5c), using `--resume-from "{CHECKPOINT_DIR}/last_checkpoint.pt"` and the same flags (including `--device cpu` or `cuda`) as before.
 
 **If you didn’t save checkpoints to Drive:** Anything in `/content/` is gone. Start again from Cell 1 and 2, and use `CHECKPOINT_DIR` (and optionally 5b/5c) so future runs save to Drive.
 
