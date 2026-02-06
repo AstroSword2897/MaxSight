@@ -10,9 +10,13 @@ import torchvision.transforms as T
 # Optional transformers import (for CLIP)
 try:
     from transformers import CLIPModel, CLIPProcessor
+    import os
+    # Use HF_TOKEN if available (reduces rate limiting warnings)
+    HF_TOKEN = os.environ.get("HF_TOKEN")
 except ImportError:
     CLIPModel = None
     CLIPProcessor = None
+    HF_TOKEN = None
 
 
 class GlobalEncoder(nn.Module):
@@ -35,9 +39,12 @@ class GlobalEncoder(nn.Module):
         if use_clip:
             if CLIPModel is None or CLIPProcessor is None:
                 raise ImportError("transformers library not found. Install with: pip install transformers")
-            # Load CLIP model
-            self.clip_model = CLIPModel.from_pretrained(model_name)
-            self.clip_processor = CLIPProcessor.from_pretrained(model_name)
+            # Load CLIP model (use HF_TOKEN if available to avoid rate limiting warnings)
+            kwargs = {}
+            if HF_TOKEN:
+                kwargs['token'] = HF_TOKEN
+            self.clip_model = CLIPModel.from_pretrained(model_name, **kwargs)
+            self.clip_processor = CLIPProcessor.from_pretrained(model_name, **kwargs)
             
             # CLIP image encoder
             self.encoder = self.clip_model.vision_model
