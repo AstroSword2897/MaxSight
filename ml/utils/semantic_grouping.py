@@ -386,7 +386,8 @@ def visualize_semantic_groups(
     show: bool = False
 ) -> None:
     """Visualize semantic groups on an image for debugging."""
-    if not MATPLOTLIB_AVAILABLE:
+    plt, patches = _get_matplotlib()
+    if plt is None or patches is None:
         print("matplotlib not available, skipping visualization")
         return
     
