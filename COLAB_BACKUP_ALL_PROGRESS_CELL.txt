@@ -1,5 +1,5 @@
-# Backup ALL training progress: checkpoints, history, configs
-# Run this in Colab to save everything to a timestamped backup folder
+# Backup ALL training progress: checkpoints, models, history, configs
+# Use this before switching to CPU or when you want to save everything
 # Paste into a Colab cell and run (after mounting Drive)
 
 from pathlib import Path
@@ -12,12 +12,13 @@ TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 BACKUP_ROOT = BASE / f"training_backups"
 BACKUP_DIR = BACKUP_ROOT / f"backup_{TIMESTAMP}"
 
-# Option: Use a single "gathered" backup folder instead of timestamped
-# Set GATHER_MODE = True to collect all checkpoints in one place
-GATHER_MODE = False  # Set to True to gather all checkpoints into one folder
+# GATHER MODE: Collect all checkpoints into one folder (recommended for CPU switch)
+# Set to True to gather everything in one place, False for timestamped backups
+GATHER_MODE = True  # Set to True to gather all checkpoints into one folder
 if GATHER_MODE:
     BACKUP_DIR = BACKUP_ROOT / "gathered_backup"
     print("📦 GATHER MODE: Collecting all checkpoints into one backup folder")
+    print("   This is perfect for switching to CPU - all your progress in one place!")
 
 if not BASE.exists():
     print("❌ Base directory not found:", BASE)
@@ -30,7 +31,17 @@ else:
     print(f"Backup location: {BACKUP_DIR}")
     print(f"Mode: {'GATHER (collecting all)' if GATHER_MODE else 'TIMESTAMPED (new folder)'}")
     print("="*70)
-    print("Note: Files are COPIED (not moved). Original checkpoints remain untouched.")
+    print("📋 What gets backed up:")
+    print("   • best_model.pt (best model for each condition)")
+    print("   • last_checkpoint.pt (latest checkpoint for resuming)")
+    print("   • ALL checkpoint_epoch_*.pt files (all epoch snapshots)")
+    print("   • training_history.json/csv (full training history)")
+    print("   • resume_info.json (resume metadata)")
+    print("   • Any other .pt files (model exports)")
+    print("   • Any other .json/.csv files (configs, logs)")
+    print("="*70)
+    print("✅ Files are COPIED (not moved). Original checkpoints remain untouched.")
+    print("✅ Existing files in backup are skipped (no overwriting).")
     print("="*70)
     
     backed_up_conditions = []
@@ -58,6 +69,16 @@ else:
             "resume_info.json",
         ]
         
+        # Also look for any other .pt files (model exports, etc.)
+        other_pt_files = [f for f in ckpt_dir.glob("*.pt") 
+                         if f.name not in ["best_model.pt", "last_checkpoint.pt"] 
+                         and not f.name.startswith("checkpoint_epoch_")]
+        
+        # Look for any .json or .csv files (configs, logs, etc.)
+        other_data_files = list(ckpt_dir.glob("*.json")) + list(ckpt_dir.glob("*.csv"))
+        other_data_files = [f for f in other_data_files 
+                           if f.name not in ["training_history.json", "training_history.csv", "resume_info.json"]]
+        
         # Also backup any checkpoint_epoch_*.pt files
         epoch_checkpoints = list(ckpt_dir.glob("checkpoint_epoch_*.pt"))
         
@@ -80,7 +101,7 @@ else:
                 except Exception as e:
                     files_copied.append(f"  ❌ {filename}: {e}")
         
-        # Copy ALL epoch checkpoints (gather them all, not just last 5)
+        # Copy ALL epoch checkpoints (gather them all)
         if epoch_checkpoints:
             epoch_checkpoints.sort(key=lambda p: p.stat().st_mtime, reverse=True)
             for ckpt in epoch_checkpoints:
@@ -98,6 +119,38 @@ else:
                         total_files += 1
                 except Exception as e:
                     files_copied.append(f"  ❌ {ckpt.name}: {e}")
+        
+        # Copy other .pt files (model exports, etc.)
+        for pt_file in other_pt_files:
+            try:
+                dst = condition_backup / pt_file.name
+                if dst.exists():
+                    existing_size = dst.stat().st_size / (1024 * 1024)
+                    files_copied.append(f"  ⏭️  {pt_file.name} (already backed up, {existing_size:.2f} MB)")
+                else:
+                    shutil.copy2(pt_file, dst)
+                    size = pt_file.stat().st_size / (1024 * 1024)
+                    size_mb += size
+                    files_copied.append(f"  ✅ {pt_file.name} ({size:.2f} MB)")
+                    total_files += 1
+            except Exception as e:
+                files_copied.append(f"  ❌ {pt_file.name}: {e}")
+        
+        # Copy other data files (configs, logs, etc.)
+        for data_file in other_data_files:
+            try:
+                dst = condition_backup / data_file.name
+                if dst.exists():
+                    existing_size = dst.stat().st_size / (1024 * 1024)
+                    files_copied.append(f"  ⏭️  {data_file.name} (already backed up, {existing_size:.3f} MB)")
+                else:
+                    shutil.copy2(data_file, dst)
+                    size = data_file.stat().st_size / (1024 * 1024)
+                    size_mb += size
+                    files_copied.append(f"  ✅ {data_file.name} ({size:.3f} MB)")
+                    total_files += 1
+            except Exception as e:
+                files_copied.append(f"  ❌ {data_file.name}: {e}")
         
         if files_copied:
             print(f"\n📁 {condition}:")
