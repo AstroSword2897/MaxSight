@@ -1250,6 +1250,68 @@ class ProductionTrainLoop:
             self.logger.error(f"Failed to load checkpoint {checkpoint_path}: {e}")
             raise
     
+    def _run_sanity_check(self) -> None:
+        """Run 1 train step + 1 val batch to fail fast on data/loss/backward issues (~30–60s)."""
+        t0 = time.time()
+        self.logger.info("Sanity check: 1 train step + 1 val batch (fail fast)...")
+        self.model.train()
+        self.optimizer.zero_grad()
+        try:
+            batch = next(iter(self.train_loader))
+        except StopIteration:
+            raise RuntimeError("Sanity check failed: train_loader is empty.")
+        try:
+            images, targets = parse_batch(batch)
+        except Exception as e:
+            raise RuntimeError(f"Sanity check failed: parse_batch error: {e}") from e
+        if not self._validate_t5_batch(images, targets):
+            raise RuntimeError("Sanity check failed: first train batch failed _validate_t5_batch.")
+        images = images.to(self.device)
+        targets = move_targets_to_device(targets, self.device)
+        device_str = str(self.device)
+        device_type = 'cuda' if 'cuda' in device_str else ('mps' if 'mps' in device_str else 'cpu')
+        try:
+            if self.use_mixed_precision and AMP_AVAILABLE:
+                with autocast(device_type=device_type):  # type: ignore
+                    outputs = self.model(images)
+                    loss, _ = self.compute_multihead_loss(outputs, targets, is_training=True)
+            else:
+                outputs = self.model(images)
+                loss, _ = self.compute_multihead_loss(outputs, targets, is_training=True)
+        except Exception as e:
+            raise RuntimeError(f"Sanity check failed: train forward/loss error: {e}") from e
+        loss_val = loss.item() if torch.is_tensor(loss) else float(loss)
+        if math.isnan(loss_val) or math.isinf(loss_val):
+            raise RuntimeError(f"Sanity check failed: train loss is {loss_val} (NaN/Inf). Fix data or loss.")
+        try:
+            if self.scaler is not None:
+                self.scaler.scale(loss).backward()
+            else:
+                loss.backward()
+        except Exception as e:
+            raise RuntimeError(f"Sanity check failed: train backward error: {e}") from e
+        self.optimizer.zero_grad()
+        if self.val_loader is not None:
+            self.model.eval()
+            try:
+                batch_val = next(iter(self.val_loader))
+            except StopIteration:
+                raise RuntimeError("Sanity check failed: val_loader is empty.")
+            try:
+                with torch.no_grad():
+                    images_v, targets_v = parse_batch(batch_val)
+                    images_v = images_v.to(self.device)
+                    targets_v = move_targets_to_device(targets_v, self.device)
+                    outputs_v = self.model(images_v)
+                    loss_v, _ = self.compute_multihead_loss(outputs_v, targets_v, is_training=False)
+            except Exception as e:
+                raise RuntimeError(f"Sanity check failed: val forward/loss error: {e}") from e
+            loss_v_val = loss_v.item() if torch.is_tensor(loss_v) else float(loss_v)
+            if math.isnan(loss_v_val) or math.isinf(loss_v_val):
+                raise RuntimeError(f"Sanity check failed: val loss is {loss_v_val} (NaN/Inf). Fix data or loss.")
+        elapsed = time.time() - t0
+        self.logger.info(f"Sanity check passed in {elapsed:.1f}s (1 train step + 1 val batch).")
+
     def train(self) -> Dict[str, Any]:
         """Run full training loop."""
         self.logger.info("Starting Production Training Loop")
@@ -1266,6 +1328,7 @@ class ProductionTrainLoop:
             n_val = len(self.val_loader.dataset) if hasattr(self.val_loader, 'dataset') and hasattr(self.val_loader.dataset, '__len__') else 0
             self.logger.info(f"Val samples: {n_val}, Val batches: {len(self.val_loader)}")
         
+        self._run_sanity_check()
         start_time = time.time()
         
         try:
