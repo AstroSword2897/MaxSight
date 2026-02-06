@@ -1,8 +1,11 @@
 # Train remaining conditions (myopia, presbyopia, etc.)
-# This will resume if checkpoint exists, otherwise start fresh
+# This will resume if checkpoint exists and is valid, otherwise start fresh
 # Paste into Colab cell and run
 
 import os
+import torch
+from pathlib import Path
+
 REPO = "/content/2026-Prototype"
 os.chdir(REPO)
 
@@ -23,9 +26,31 @@ BASE_CKPT = "/content/drive/MyDrive/MaxSight"
 TRAIN_ANN = f"{DATA}/cleaned_splits/maxsight_train.json"
 VAL_ANN = f"{DATA}/cleaned_splits/maxsight_val.json"
 
+def is_checkpoint_valid(ckpt_path):
+    """Check if checkpoint file is valid and not corrupted."""
+    if not ckpt_path.exists():
+        return False
+    try:
+        ckpt = torch.load(str(ckpt_path), map_location="cpu", weights_only=True)
+        return isinstance(ckpt, dict) and len(ckpt) > 0
+    except (EOFError, RuntimeError, Exception):
+        return False
+
 for cond in CONDITIONS:
     ckpt_dir = f"{BASE_CKPT}/checkpoints_{cond}"
-    print(f"\n{'='*60}\nTraining condition: {cond} -> {ckpt_dir}\n{'='*60}\n")
+    last_ckpt = Path(ckpt_dir) / "last_checkpoint.pt"
+    
+    # Check if checkpoint is valid before using --resume
+    use_resume = is_checkpoint_valid(last_ckpt)
+    
+    print(f"\n{'='*60}\nTraining condition: {cond} -> {ckpt_dir}\n{'='*60}")
+    if use_resume:
+        print(f"✅ Resuming from checkpoint: {last_ckpt.name}\n")
+    else:
+        print(f"ℹ️  Starting fresh (no valid checkpoint found)\n")
+    
+    resume_flag = "--resume" if use_resume else ""
+    
     !python scripts/train_maxsight.py \
       --data-dir {DATA} \
       --image-dir {DATA} \
@@ -37,6 +62,6 @@ for cond in CONDITIONS:
       --use-gradnorm \
       --condition-mode {cond} \
       --checkpoint-dir {ckpt_dir} \
-      --resume \
+      {resume_flag} \
       --checkpoint-interval 5 \
       --device cuda
