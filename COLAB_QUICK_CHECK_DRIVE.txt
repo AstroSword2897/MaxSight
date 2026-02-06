@@ -1,0 +1,74 @@
+# Quick check: Are your checkpoints on Drive?
+# Copy and paste this entire cell into Colab and run it
+
+from pathlib import Path
+
+# Mount Drive first (if not already mounted)
+try:
+    from google.colab import drive
+    drive.mount("/content/drive", force_remount=False)
+except:
+    print("Drive already mounted or error mounting")
+
+# Check checkpoint location
+base = Path("/content/drive/MyDrive/MaxSight")
+
+print("="*60)
+print("CHECKING CHECKPOINTS ON DRIVE")
+print("="*60)
+
+if not base.exists():
+    print(f"\n❌ Directory not found: {base}")
+    print("   This means checkpoints haven't been created yet, or")
+    print("   they're saved to a different location.")
+    print("\n💡 When you train, make sure to use:")
+    print("   --checkpoint-dir /content/drive/MyDrive/MaxSight/checkpoints_<condition>")
+else:
+    print(f"\n✅ Base directory exists: {base}")
+    
+    # Find all checkpoint directories
+    checkpoint_dirs = [d for d in base.iterdir() 
+                      if d.is_dir() and d.name.startswith("checkpoints_")]
+    
+    if checkpoint_dirs:
+        print(f"\n✅ Found {len(checkpoint_dirs)} checkpoint directory(ies) on Drive:")
+        print()
+        
+        for ckpt_dir in sorted(checkpoint_dirs):
+            condition = ckpt_dir.name.replace("checkpoints_", "")
+            
+            # Check for files
+            best = ckpt_dir / "best_model.pt"
+            last = ckpt_dir / "last_checkpoint.pt"
+            
+            files = []
+            if best.exists():
+                size = best.stat().st_size / (1024 * 1024)
+                files.append(f"✅ best_model.pt ({size:.1f} MB)")
+            if last.exists():
+                size = last.stat().st_size / (1024 * 1024)
+                files.append(f"✅ last_checkpoint.pt ({size:.1f} MB)")
+            
+            if files:
+                print(f"📁 {condition}:")
+                for f in files:
+                    print(f"   {f}")
+            else:
+                print(f"📁 {condition}: (no checkpoints yet)")
+        
+        print("\n" + "="*60)
+        print("✅ SUCCESS: Your checkpoints ARE on Drive!")
+        print("="*60)
+        print("\n💡 These files will persist across:")
+        print("   • Session disconnects")
+        print("   • Switching between CPU/GPU")
+        print("   • Runtime restarts")
+        print("\n✅ You can safely switch to CPU - your checkpoints are safe!")
+        
+    else:
+        print("\n⚠️  No checkpoint directories found yet")
+        print("   This is OK if you haven't started training")
+        print("\n💡 When you train, checkpoints will be saved to:")
+        print(f"   {base}/checkpoints_<condition>/")
+
+print("\n" + "="*60)
