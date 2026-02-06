@@ -1,0 +1,127 @@
+# Quick check: Are your checkpoints on Drive or local disk?
+# Run this to verify where your files are actually stored
+# Paste into a Colab cell and run
+
+from pathlib import Path
+import os
+
+print("="*70)
+print("CHECKING WHERE YOUR CHECKPOINTS ARE STORED")
+print("="*70)
+
+# Check 1: Drive mount point
+drive_path = Path("/content/drive")
+if drive_path.exists():
+    print("\n✅ Drive is mounted at: /content/drive")
+    print("   Files here persist across sessions")
+else:
+    print("\n❌ Drive NOT mounted!")
+    print("   Run: from google.colab import drive; drive.mount('/content/drive')")
+    exit(1)
+
+# Check 2: Your checkpoint location
+checkpoint_base = Path("/content/drive/MyDrive/MaxSight")
+print(f"\n📁 Checking checkpoint location: {checkpoint_base}")
+
+if checkpoint_base.exists():
+    print("   ✅ This path EXISTS")
+    
+    # Check if it's actually on Drive (not a symlink to local)
+    real_path = checkpoint_base.resolve()
+    print(f"   📍 Real path: {real_path}")
+    
+    if "/content/drive" in str(real_path):
+        print("   ✅ CONFIRMED: Files are on Google Drive (will persist)")
+    elif "/content/" in str(real_path) and "/content/drive" not in str(real_path):
+        print("   ⚠️  WARNING: Files might be on local disk (will be lost on disconnect)")
+    else:
+        print("   ℹ️  Path location unclear")
+    
+    # List checkpoint directories
+    checkpoint_dirs = [d for d in checkpoint_base.iterdir() 
+                      if d.is_dir() and d.name.startswith("checkpoints_")]
+    
+    if checkpoint_dirs:
+        print(f"\n   Found {len(checkpoint_dirs)} checkpoint directory(ies):")
+        for ckpt_dir in sorted(checkpoint_dirs):
+            condition = ckpt_dir.name.replace("checkpoints_", "")
+            
+            # Check for files
+            best_model = ckpt_dir / "best_model.pt"
+            last_ckpt = ckpt_dir / "last_checkpoint.pt"
+            
+            files = []
+            if best_model.exists():
+                size_mb = best_model.stat().st_size / (1024 * 1024)
+                files.append(f"best_model.pt ({size_mb:.1f} MB)")
+            if last_ckpt.exists():
+                size_mb = last_ckpt.stat().st_size / (1024 * 1024)
+                files.append(f"last_checkpoint.pt ({size_mb:.1f} MB)")
+            
+            if files:
+                print(f"      • {condition}: {', '.join(files)}")
+            else:
+                print(f"      • {condition}: (empty)")
+    else:
+        print("   ℹ️  No checkpoint directories found yet")
+else:
+    print("   ⚠️  This path does NOT exist")
+    print("   Checkpoints will be created here when you train")
+
+# Check 3: Compare with local disk
+print("\n📊 Comparison:")
+local_checkpoint = Path("/content/checkpoints")
+if local_checkpoint.exists():
+    print(f"   ⚠️  Local checkpoints found: {local_checkpoint}")
+    print("      ⚠️  These will be LOST when session ends!")
+    print("      💡 Copy them to Drive if needed:")
+    print(f"         !cp -r {local_checkpoint}/* {checkpoint_base}/")
+else:
+    print("   ✅ No local checkpoints (good - using Drive)")
+
+# Check 4: How to verify persistence
+print("\n" + "="*70)
+print("HOW TO VERIFY FILES ARE ON DRIVE:")
+print("="*70)
+print("""
+Method 1: Check the path
+  ✅ /content/drive/MyDrive/... = ON DRIVE (persists)
+  ❌ /content/... (without /drive) = LOCAL (lost on disconnect)
+
+Method 2: Disconnect and reconnect
+  1. Runtime → Disconnect and delete runtime
+  2. Mount Drive again
+  3. Check if files still exist at the same path
+  ✅ If files exist → They're on Drive
+  ❌ If files gone → They were local
+
+Method 3: Check file size
+  - Drive files show size immediately
+  - Large files (>100MB) are definitely on Drive
+  - Local /content/ has limited space (~80GB)
+
+Method 4: Open Google Drive in browser
+  1. Go to drive.google.com
+  2. Navigate to: My Drive → MaxSight → checkpoints_<condition>
+  3. ✅ If you see files → They're on Drive!
+""")
+
+# Check 5: Show current training script paths
+print("\n" + "="*70)
+print("YOUR CURRENT SETUP:")
+print("="*70)
+
+# Check what the training script uses
+training_script_path = Path("/content/2026-Prototype/scripts/train_maxsight.py")
+if training_script_path.exists():
+    with open(training_script_path) as f:
+        content = f.read()
+        if "/content/drive/MyDrive/MaxSight" in content:
+            print("✅ Training script uses Drive paths (good!)")
+        elif "./checkpoints" in content or "checkpoints" in content:
+            print("⚠️  Training script might use local paths")
+            print("   Make sure to set --checkpoint-dir to Drive path!")
+
+print("\n💡 RECOMMENDED: Always use Drive paths in training:")
+print("   --checkpoint-dir /content/drive/MyDrive/MaxSight/checkpoints_<condition>")
+print("="*70)
