@@ -41,25 +41,28 @@ class GradNormBalancer(nn.Module):
         task_losses: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute gradient norms for each task...."""
-        # Compute weighted losses
+        # Apply learnable task weights to balance loss magnitudes
         weighted_losses = [
             self.task_weights[i] * loss 
             for i, loss in enumerate(task_losses)
         ]
         
-        # Compute gradients for each task. retain_graph=True for ALL so the graph
-        # stays alive for the training loop's total_loss.backward(); then zero_grad.
+        # Compute gradient norms for each task
+        # retain_graph=True keeps computation graph alive for multiple backward passes
         gradient_norms = []
         for i, weighted_loss in enumerate(weighted_losses):
             model.zero_grad()
             weighted_loss.backward(retain_graph=True)
+            
+            # Compute L2 norm of gradients on shared parameters
             grad_norm = 0.0
             for param in shared_params:
                 if param.grad is not None:
                     grad_norm += param.grad.norm(p=2) ** 2
             grad_norm = grad_norm ** 0.5
             gradient_norms.append(grad_norm)
-        model.zero_grad()
+        
+        model.zero_grad()  # Clear gradients after computing norms
         gradient_norms_tensor = torch.stack(gradient_norms)
         return torch.stack(weighted_losses), gradient_norms_tensor
     
@@ -75,21 +78,21 @@ class GradNormBalancer(nn.Module):
             self.initial_losses = torch.stack([loss.detach() for loss in task_losses])
             self.initialized = True
         
-        # Compute relative losses (current / initial)
+        # Compute relative losses (current / initial) to track training progress per task
         current_losses = torch.stack([loss.detach() for loss in task_losses])
         relative_losses = current_losses / (self.initial_losses + 1e-8)
         
-        # Compute average gradient norm
+        # Average gradient norm across all tasks (target for balancing)
         avg_grad_norm = gradient_norms.mean()
         
-        # Compute relative inverse training rates
-        # Tasks with higher relative loss should have higher gradient norm
+        # Relative inverse training rates: tasks with higher relative loss need more learning
+        # alpha controls restoring force (higher = stronger rebalancing)
         relative_inverse_rates = relative_losses ** self.alpha
         
-        # Target gradient norms (proportional to relative inverse rates)
+        # Target gradient norms: tasks that are behind should have larger gradients
         target_grad_norms = avg_grad_norm * relative_inverse_rates
         
-        # Compute GradNorm loss (difference between actual and target norms)
+        # GradNorm loss: minimize difference between actual and target gradient norms
         gradnorm_loss = F.l1_loss(gradient_norms, target_grad_norms)
         
         # Update task weights via gradient descent on gradnorm_loss
@@ -132,14 +135,14 @@ class PCGradBalancer:
         for i, grad_i in enumerate(gradients):
             grad_i_proj = grad_i.clone()
             
-            # Project grad_i onto other gradients
+            # Project grad_i onto other gradients to resolve conflicts
             for j, grad_j in enumerate(gradients):
                 if i != j:
-                    # Check if gradients conflict (negative dot product)
+                    # Negative dot product indicates conflicting update directions
                     dot_product = (grad_i * grad_j).sum()
                     
-                    if dot_product < 0:  # Conflicting gradients
-                        # Project grad_i onto grad_j's normal plane
+                    if dot_product < 0:  # Gradients point in opposite directions
+                        # Project grad_i onto plane orthogonal to grad_j (remove conflict component)
                         grad_i_proj = grad_i_proj - (dot_product / (grad_j.norm() ** 2 + 1e-8)) * grad_j
             
             projected_grads.append(grad_i_proj)

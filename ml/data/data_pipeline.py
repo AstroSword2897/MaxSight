@@ -18,11 +18,11 @@ def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
     # Separate images and targets
     images = torch.stack([item['images'] for item in batch])
     
-    # Get batch size and max objects
+    # Get batch size and determine padding size
     batch_size = len(batch)
     max_objects = max(item['num_objects'].item() for item in batch) if batch else 10
     
-    # Pad to max_objects in batch (or use dataset max_objects)
+    # Ensure max_objects doesn't exceed actual label tensor size
     max_objects = min(max_objects, batch[0].get('labels', torch.zeros(10)).shape[0])
     
     # Initialize target tensors
@@ -46,9 +46,8 @@ def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
         if num_obj > 0:
             labels[i, :num_obj] = item['labels'][:num_obj]
             
-            # Sanitize boxes to ensure valid dimensions (prevents warnings downstream)
+            # Sanitize boxes: ensure minimum dimensions to prevent downstream errors
             item_boxes = item['boxes'][:num_obj].clone()
-            # Ensure minimum box dimensions to avoid zero-width/height warnings
             item_boxes[:, 2] = torch.clamp(item_boxes[:, 2], min=1e-4)  # width
             item_boxes[:, 3] = torch.clamp(item_boxes[:, 3], min=1e-4)  # height
             boxes[i, :num_obj] = item_boxes

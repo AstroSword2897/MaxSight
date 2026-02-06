@@ -100,14 +100,24 @@ class DistanceZoneLoss(nn.Module):
         self.register_buffer('class_weights', class_weights)
     
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Args:
-            predictions: [B, N, num_zones] logits
-            targets: [B, N] zone indices (use -1 or value >= num_zones for ignore)"""
+        """Compute distance zone classification loss.
+        
+        Args:
+            predictions: [B, N, num_zones] logits for each location
+            targets: [B, N] zone indices (0=near, 1=medium, 2=far, -1=ignore)
+        
+        Returns:
+            Cross-entropy loss (zero if no valid targets)
+        """
         pred_flat = predictions.reshape(-1, self.num_zones)
         tgt_flat = targets.reshape(-1).long()
+        
+        # Filter out invalid targets (padding or ignore labels)
         valid = (tgt_flat >= 0) & (tgt_flat < self.num_zones)
         if valid.sum() == 0:
+            # Return safe zero instead of NaN when no valid targets
             return torch.zeros((), device=predictions.device, dtype=predictions.dtype)
+        
         ce_loss = F.cross_entropy(
             pred_flat[valid],
             tgt_flat[valid],
@@ -140,6 +150,7 @@ class UrgencyLoss(nn.Module):
         targets = targets.long()
         valid = (targets >= 0) & (targets < self.num_levels)
         if valid.sum() == 0:
+            # Return safe zero when no valid urgency targets (prevents NaN)
             return torch.zeros((), device=predictions.device, dtype=predictions.dtype)
         pred_valid = predictions[valid]
         tgt_valid = targets[valid]

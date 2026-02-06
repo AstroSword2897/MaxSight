@@ -74,21 +74,28 @@ def move_targets_to_device(targets: Dict[str, torch.Tensor], device: str) -> Dic
 
 
 def parse_batch(batch: Any) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    """Parse batch from dataloader with validation...."""
+    """Parse batch from dataloader with validation.
+    
+    Handles multiple batch formats:
+    - List/tuple: (images, targets)
+    - Dict: {'images': ..., 'labels': ..., ...}
+    
+    Returns:
+        Tuple of (images tensor, targets dict)
+    """
     if isinstance(batch, (list, tuple)):
         images = batch[0]
         targets = batch[1] if len(batch) > 1 else {}
     elif isinstance(batch, dict):
-        images = batch.get('images')
-        if images is None:
-            images = batch.get('image')
+        # Support both 'images' and 'image' keys for flexibility
+        images = batch.get('images') or batch.get('image')
         if images is None:
             raise ValueError("Batch must contain 'images' or 'image' key")
         targets = {k: v for k, v in batch.items() if k not in ['images', 'image']}
     else:
         raise ValueError(f"Unsupported batch format: {type(batch)}")
     
-    # Validate images
+    # Validate image tensor shape
     if not torch.is_tensor(images):
         raise ValueError(f"Images must be a tensor, got {type(images)}")
     if images.dim() != 4:
@@ -1141,12 +1148,14 @@ class ProductionTrainLoop:
                     "Optimizer/scheduler use current config (new LRs, schedule)."
                 )
         except EOFError as e:
+            # Corrupted checkpoint (incomplete file write) - start fresh instead of crashing
             self.logger.error(f"Checkpoint {checkpoint_path} is corrupted (EOFError). Starting training from scratch.")
             self.current_epoch = 0
             self.best_val_loss = float('inf')
             self.best_val_map = 0.0
             return
         except Exception as e:
+            # Other errors (missing keys, device mismatch, etc.) - start fresh
             self.logger.error(f"Failed to load checkpoint {checkpoint_path}: {e}")
             self.logger.warning("Starting training from scratch due to checkpoint load failure.")
             self.current_epoch = 0

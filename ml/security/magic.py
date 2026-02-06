@@ -19,14 +19,20 @@ MAGIC_NUMBERS = {
 
 
 def detect_magic(file_bytes: bytes) -> Optional[str]:
-    """Detect file type from magic number...."""
+    """Detect file type from magic number (first few bytes).
+    
+    Args:
+        file_bytes: Raw file bytes to check
+    
+    Returns:
+        File type string (e.g., 'jpg', 'png') or None if unknown
+    """
     if len(file_bytes) < 4:
         return None
     
-    # Check each magic number pattern
     for magic_bytes, file_type in MAGIC_NUMBERS.items():
         if file_bytes.startswith(magic_bytes):
-            # Special handling for WEBP (needs RIFF + WEBP)
+            # WEBP requires both RIFF header and WEBP identifier at offset 8
             if file_type == "webp" and len(file_bytes) >= 12:
                 if b"WEBP" in file_bytes[8:12]:
                     return "webp"
