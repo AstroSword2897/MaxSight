@@ -64,7 +64,8 @@ def log_slow_operations(threshold: float = 0.1) -> None:
     """Log summary of slow operations.
     
     Arguments:
-        threshold: Minimum time to consider "slow""""
+        threshold: Minimum time to consider slow
+    """
     stats = get_performance_stats()
     slow_ops = {
         name: s for name, s in stats.items()

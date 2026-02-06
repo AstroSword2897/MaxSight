@@ -28,10 +28,11 @@ class VoiceFeedback:
     """Manages voice feedback for therapy tasks.
     
     Short, therapy-style prompts:
-    - "Try the closer object."
-    - "Follow the movement."
-    - "Shift focus farther."
-    - "Take a short rest.""""
+    - Try the closer object.
+    - Follow the movement.
+    - Shift focus farther.
+    - Take a short rest.
+    """
     
     def __init__(self, enabled: bool = True):
         self.enabled = enabled
