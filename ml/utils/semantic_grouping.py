@@ -4,12 +4,28 @@ import torch
 from typing import Dict, List, Optional, Tuple, Any
 from collections import defaultdict
 import numpy as np
-try:
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as patches
-    MATPLOTLIB_AVAILABLE = True
-except ImportError:
-    MATPLOTLIB_AVAILABLE = False
+
+# Lazy-load matplotlib only when needed (slow import)
+MATPLOTLIB_AVAILABLE = None
+
+def _get_matplotlib():
+    """Lazy-load matplotlib to avoid slow imports during training."""
+    global MATPLOTLIB_AVAILABLE
+    if MATPLOTLIB_AVAILABLE is None:
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.patches as patches
+            MATPLOTLIB_AVAILABLE = True
+            return plt, patches
+        except ImportError:
+            MATPLOTLIB_AVAILABLE = False
+            return None, None
+    elif MATPLOTLIB_AVAILABLE:
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
+        return plt, patches
+    else:
+        return None, None
 
 
 class SemanticGrouper:
@@ -386,6 +402,11 @@ def visualize_semantic_groups(
         image = np.array(image)
     else:
         image = np.array(image)
+    
+    plt, patches = _get_matplotlib()
+    if plt is None or patches is None:
+        print("Matplotlib not available. Skipping visualization.")
+        return
     
     fig, ax = plt.subplots(1, 1, figsize=(12, 8))
     ax.imshow(image)

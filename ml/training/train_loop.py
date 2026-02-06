@@ -1106,7 +1106,7 @@ class ProductionTrainLoop:
     def _load_checkpoint(self, checkpoint_path: str, model_only: bool = False) -> None:
         """Load checkpoint and resume training. If model_only=True, load only model + epoch (and best/history); use current optimizer/scheduler (e.g. new LRs)."""
         try:
-            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
             state = checkpoint['model_state_dict']
             result = self.model.load_state_dict(state, strict=False)
             if result.missing_keys or result.unexpected_keys:
@@ -1140,9 +1140,19 @@ class ProductionTrainLoop:
                     f"Resumed model only from checkpoint: epoch {self.current_epoch}. "
                     "Optimizer/scheduler use current config (new LRs, schedule)."
                 )
+        except EOFError as e:
+            self.logger.error(f"Checkpoint {checkpoint_path} is corrupted (EOFError). Starting training from scratch.")
+            self.current_epoch = 0
+            self.best_val_loss = float('inf')
+            self.best_val_map = 0.0
+            return
         except Exception as e:
             self.logger.error(f"Failed to load checkpoint {checkpoint_path}: {e}")
-            raise
+            self.logger.warning("Starting training from scratch due to checkpoint load failure.")
+            self.current_epoch = 0
+            self.best_val_loss = float('inf')
+            self.best_val_map = 0.0
+            return
     
     def _run_sanity_check(self) -> None:
         """Run 1 train step + 1 val batch to fail fast on data/loss/backward issues (~30–60s)."""
