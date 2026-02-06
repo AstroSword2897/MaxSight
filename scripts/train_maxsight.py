@@ -311,7 +311,12 @@ def main():
             condition_mode=args.condition_mode,
             apply_lighting_augmentation=True,
         )
-        logger.info(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
+        n_train = len(train_loader.dataset) if hasattr(train_loader, "dataset") and train_loader.dataset is not None else 0
+        n_val = len(val_loader.dataset) if hasattr(val_loader, "dataset") and val_loader.dataset is not None else 0
+        bs = getattr(train_loader, "batch_size", args.batch_size)
+        logger.info(
+            f"Train samples: {n_train}, Val samples: {n_val}, Batch size: {bs} → Train batches: {len(train_loader)}, Val batches: {len(val_loader)}"
+        )
     else:
         # Legacy: data_dir/train and data_dir/val as directory per split (each with annotation or images)
         train_dir = data_dir / "train"

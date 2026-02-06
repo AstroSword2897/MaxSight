@@ -364,6 +364,7 @@ class GradNormMultiHeadLoss(nn.Module):
         self.initialized = False
         self.shared_params = shared_params
         self.iteration = 0
+        self._nan_warned_heads: set = set()  # debounce nan/inf warnings per head
     
     def set_shared_params(self, shared_params: List[nn.Parameter]):
         """Set shared parameters for gradient norm computation."""
@@ -631,6 +632,18 @@ class GradNormMultiHeadLoss(nn.Module):
                 loss = torch.tensor(float(loss), device=device, requires_grad=True)
             head_losses[name] = loss
         
+        # Replace nan/inf head losses with 0 *before* GradNorm so we never backward through nan
+        for name in list(head_losses.keys()):
+            l = head_losses[name]
+            if torch.is_tensor(l) and (torch.isnan(l) | torch.isinf(l)).any().item():
+                if name not in self._nan_warned_heads:
+                    logger.warning(
+                        "GradNorm: head %r produced nan/inf loss, using 0 for this step (check data or loss for this head)",
+                        name,
+                    )
+                    self._nan_warned_heads.add(name)
+                head_losses[name] = torch.tensor(0.0, device=device, requires_grad=True)
+        
         gradnorm_metrics = {}
         if model is not None and self.iteration % self.update_interval == 0:
             try:
@@ -638,17 +651,6 @@ class GradNormMultiHeadLoss(nn.Module):
                 gradnorm_metrics = self.update_task_weights(head_losses, gradient_norms)
             except Exception as e:
                 logger.warning(f"GradNorm update failed: {e}")
-        
-        # Replace nan/inf head losses with 0 so validation (and training) get a finite total
-        device = list(head_losses.values())[0].device
-        for name in list(head_losses.keys()):
-            l = head_losses[name]
-            if torch.is_tensor(l) and (torch.isnan(l) | torch.isinf(l)).any().item():
-                logger.warning(
-                    "GradNorm: head %r produced nan/inf loss, using 0 for this step (check data or loss for this head)",
-                    name,
-                )
-                head_losses[name] = torch.tensor(0.0, device=device, requires_grad=True)
         
         total_loss = torch.tensor(0.0, device=device)
         for i, head_name in enumerate(self.head_names):

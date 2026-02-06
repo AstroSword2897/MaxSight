@@ -1259,9 +1259,12 @@ class ProductionTrainLoop:
         self.logger.info(f"EMA: {self.ema is not None}")
         self.logger.info(f"Scheduler: {self.scheduler_type}")
         self.logger.info(f"Epochs: {self.num_epochs}")
-        self.logger.info(f"Train batches: {len(self.train_loader)}")
+        n_train = len(self.train_loader.dataset) if hasattr(self.train_loader, 'dataset') and hasattr(self.train_loader.dataset, '__len__') else 0
+        bs = getattr(self.train_loader, 'batch_size', None)
+        self.logger.info(f"Train samples: {n_train}, Batch size: {bs}, Train batches: {len(self.train_loader)}")
         if self.val_loader:
-            self.logger.info(f"Val batches: {len(self.val_loader)}")
+            n_val = len(self.val_loader.dataset) if hasattr(self.val_loader, 'dataset') and hasattr(self.val_loader.dataset, '__len__') else 0
+            self.logger.info(f"Val samples: {n_val}, Val batches: {len(self.val_loader)}")
         
         start_time = time.time()
         

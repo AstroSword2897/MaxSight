@@ -125,13 +125,15 @@ class DistanceZoneLoss(nn.Module):
         tgt_flat = targets.reshape(-1).long()
         valid = (tgt_flat >= 0) & (tgt_flat < self.num_zones)
         if valid.sum() == 0:
-            return pred_flat.sum() * 0.0  # zero loss, keep device/dtype
+            return torch.zeros((), device=predictions.device, dtype=predictions.dtype)
         ce_loss = F.cross_entropy(
             pred_flat[valid],
             tgt_flat[valid],
             weight=self.class_weights,
             reduction='mean'
         )
+        if torch.isnan(ce_loss).any() or torch.isinf(ce_loss).any():
+            return torch.zeros((), device=predictions.device, dtype=predictions.dtype)
         return ce_loss
 
 
@@ -160,7 +162,7 @@ class UrgencyLoss(nn.Module):
         targets = targets.long()
         valid = (targets >= 0) & (targets < self.num_levels)
         if valid.sum() == 0:
-            return predictions.sum() * 0.0  # zero loss, keep device/dtype
+            return torch.zeros((), device=predictions.device, dtype=predictions.dtype)
         pred_valid = predictions[valid]
         tgt_valid = targets[valid]
         ce_loss = F.cross_entropy(
@@ -173,6 +175,8 @@ class UrgencyLoss(nn.Module):
         p_t = p.gather(1, tgt_valid.unsqueeze(-1)).squeeze(-1)
         focal_weight = self.alpha * (1 - p_t).clamp(min=1e-6) ** self.gamma
         loss = (focal_weight * ce_loss).mean()
+        if torch.isnan(loss).any() or torch.isinf(loss).any():
+            return torch.zeros((), device=predictions.device, dtype=predictions.dtype)
         return loss
 
 
