@@ -1,8 +1,6 @@
-"""
-Unified loss interface for therapy heads.
+"""Unified loss interface for therapy heads.
 
-Provides a base class for head-specific losses and implementations for each head type.
-"""
+Provides a base class for head-specific losses and implementations for each head type."""
 
 import torch
 import torch.nn as nn
@@ -12,12 +10,10 @@ from abc import ABC, abstractmethod
 
 
 class HeadLoss(nn.Module, ABC):
-    """
-    Base class for head-specific losses.
+    """Base class for head-specific losses.
     
     All head losses should inherit from this class and implement the forward method
-    that returns a dictionary with at least a 'loss' key.
-    """
+    that returns a dictionary with at least a 'loss' key."""
     
     @abstractmethod
     def forward(
@@ -25,16 +21,7 @@ class HeadLoss(nn.Module, ABC):
         predictions: Dict[str, torch.Tensor], 
         targets: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        """
-        Compute loss for head predictions.
-        
-        Arguments:
-            predictions: Dictionary of model predictions
-            targets: Dictionary of target values
-        
-        Returns:
-            Dictionary with at least 'loss' key and optional component losses
-        """
+        """Compute loss for head predictions...."""
         raise NotImplementedError
 
 
@@ -124,12 +111,7 @@ class FatigueLoss(HeadLoss):
 
 
 class MotionLoss(HeadLoss):
-    """
-    Loss for motion head with smoothness regularization.
-    
-    Uses Charbonnier loss (robust to outliers) and edge-weighted smoothness
-    (classic optical flow trick: less smoothness penalty at image edges).
-    """
+    """Loss for motion head with smoothness regularization...."""
     
     def __init__(
         self,
@@ -153,13 +135,7 @@ class MotionLoss(HeadLoss):
         predictions: Dict[str, torch.Tensor],
         targets: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        """
-        Compute motion loss with edge-weighted smoothness.
-        
-        # FUTURE ENHANCEMENT: Add proper edge detection from image gradients if image provided.
-        # This would improve contrast loss accuracy by using actual image edges rather than learned edge maps.
-        For now, uses uniform smoothness weighting.
-        """
+        """Compute motion loss with edge-weighted smoothness...."""
         pred_flow = predictions.get('flow')
         target_flow = targets.get('flow')
         
@@ -206,12 +182,10 @@ class MotionLoss(HeadLoss):
 
 
 class ROIPriorityLoss(HeadLoss):
-    """
-    Loss for ROI priority head with ranking loss.
+    """Loss for ROI priority head with ranking loss.
     
     VECTORIZED: Replaces O(N²) Python loop with efficient tensor operations.
-    Scales to large ROI counts without performance degradation.
-    """
+    Scales to large ROI counts without performance degradation."""
     
     def __init__(self, ranking_margin: float = 0.1, max_rois: int = 100):
         super().__init__()
@@ -224,11 +198,9 @@ class ROIPriorityLoss(HeadLoss):
         predictions: Dict[str, torch.Tensor],
         targets: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        """
-        Compute ROI priority loss with vectorized ranking.
+        """Compute ROI priority loss with vectorized ranking.
         
-        Vectorized pairwise ranking loss: O(N²) operations but fully parallelized.
-        """
+        Vectorized pairwise ranking loss: O(N²) operations but fully parallelized."""
         pred_scores = predictions.get('roi_scores')
         target_scores = targets.get('roi_scores')
         target_rankings = targets.get('roi_rankings')
@@ -291,21 +263,7 @@ class ROIPriorityLoss(HeadLoss):
 
 
 class DepthLoss(HeadLoss):
-    """
-    Uncertainty-weighted depth loss (Kendall & Gal formulation).
-    
-    CORRECT FORMULATION:
-    L = |d - d_gt| * exp(-u) + u
-    
-    This is a SINGLE unified term, not separate components.
-    The uncertainty term is directly coupled to the error term.
-    
-    This ensures:
-    - Uncertainty learns meaningful values (not just noise)
-    - Depth errors in uncertain regions are downweighted
-    - Uncertainty acts as learned confidence measure
-    - Proper calibration pressure (uncertainty tied to error)
-    """
+    """Uncertainty-weighted depth loss (Kendall & Gal formulation)...."""
     
     def __init__(self, zone_weight: float = 0.5):
         super().__init__()
@@ -317,19 +275,7 @@ class DepthLoss(HeadLoss):
         predictions: Dict[str, torch.Tensor],
         targets: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        """
-        Compute uncertainty-weighted depth loss.
-        
-        Arguments:
-            predictions: Must contain 'depth_map' and 'uncertainty'
-            targets: Must contain 'depth_map' and optionally 'distance_zones'
-        
-        Returns:
-            Dictionary with:
-                - 'loss': Total loss
-                - 'depth_loss': Uncertainty-weighted depth loss (unified term)
-                - 'zone_loss': Zone classification loss
-        """
+        """Compute uncertainty-weighted depth loss...."""
         # Get device and dtype from predictions for safety
         first_tensor = next(iter(predictions.values()))
         device = first_tensor.device
@@ -415,19 +361,7 @@ HEAD_LOSS_REGISTRY = {
 
 
 def create_head_loss(head_type: str, **kwargs) -> HeadLoss:
-    """
-    Create a head loss by type name.
-    
-    Arguments:
-        head_type: Type of head loss ('contrast', 'fatigue', 'motion', etc.)
-        **kwargs: Arguments to pass to loss constructor
-    
-    Returns:
-        HeadLoss instance
-    
-    Raises:
-        ValueError: If head_type is not in registry
-    """
+    """Create a head loss by type name...."""
     if head_type not in HEAD_LOSS_REGISTRY:
         available = ', '.join(HEAD_LOSS_REGISTRY.keys())
         raise ValueError(

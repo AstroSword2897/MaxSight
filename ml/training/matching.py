@@ -1,11 +1,8 @@
-"""
-Hungarian Matching for Multi-Object Detection
+"""Hungarian Matching for Multi-Object Detection
 
 Matches predicted boxes to ground truth using optimal bipartite matching.
 
-Based on DETR's approach with combined classification + bbox + GIoU costs.
-
-"""
+Based on DETR's approach with combined classification + bbox + GIoU costs."""
 
 
 import torch
@@ -17,12 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 def compute_giou_cost(pred_boxes: torch.Tensor, gt_boxes: torch.Tensor) -> torch.Tensor:
-    """
-    Compute GIoU-based cost (1 - GIoU) between prediction and ground truth boxes.
+    """Compute GIoU-based cost (1 - GIoU) between prediction and ground truth boxes.
     Lower cost = better match.
     
-    Boxes are in normalized (x, y, w, h) format.
-    """
+    Boxes are in normalized (x, y, w, h) format."""
     # Convert center format to corners for easier computation
     p_x1 = pred_boxes[:, 0]
     p_y1 = pred_boxes[:, 1]
@@ -88,17 +83,13 @@ def compute_matching_cost(
     lambda_bbox: float = 5.0,
     lambda_giou: float = 2.0
 ) -> torch.Tensor:
-    """
-    Build cost matrix for Hungarian algorithm.
+    """Build cost matrix for Hungarian algorithm.
     
     Each cell [i,j] represents cost of assigning prediction i to ground truth j.
-    Combines three components: classification, bounding box, and GIoU.
-    """
+    Combines three components: classification, bounding box, and GIoU."""
     num_pred = pred_boxes.shape[0]
     num_gt = gt_boxes.shape[0]
     
-    # CRITICAL: Clone and convert to float32 to avoid precision issues and inplace operation errors
-    # Cloning ensures we don't modify the original tensors which may be part of the computation graph
     pred_boxes = pred_boxes.clone().float()
     pred_logits = pred_logits.clone().float()
     gt_boxes = gt_boxes.clone().float()
@@ -166,17 +157,7 @@ def match_predictions_to_gt(
     lambda_giou: float = 2.0,
     use_hungarian: bool = True  # Default to Hungarian for optimal matching
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    Find best assignment between predictions and ground truth.
-    
-        Arguments:
-        use_hungarian: If True, use proper Hungarian algorithm (globally optimal but slower).
-                      If False, use greedy matching (faster, usually sufficient).
-    
-    Returns:
-        indices: [2, num_matched] tensor with (pred_idx, gt_idx) pairs
-        costs: [num_matched] tensor with cost for each match
-    """
+    """Find best assignment between predictions and ground truth...."""
     # Handle empty predictions or ground truth
     if pred_boxes.shape[0] == 0 or gt_boxes.shape[0] == 0:
         return (
@@ -292,19 +273,7 @@ def match_batch(
     lambda_bbox: float = 5.0,
     lambda_giou: float = 2.0
 ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
-    """
-    Match predictions to ground truth for a full batch.
-    
-        Arguments:
-        pred_boxes: [batch, num_pred, 4] in (x, y, w, h) format
-        pred_logits: [batch, num_pred, num_classes]
-        gt_boxes: [batch, num_gt, 4] in (x, y, w, h) format
-        gt_labels: [batch, num_gt]
-    
-    Returns:
-        indices_list: List of [2, num_matched_i] tensors per sample
-        costs_list: List of [num_matched_i] tensors per sample
-    """
+    """Match predictions to ground truth for a full batch...."""
     batch_size = pred_boxes.shape[0]
     indices_list = []
     costs_list = []
@@ -376,17 +345,7 @@ def build_matched_pred_targets(
     outputs: Dict[str, Any],
     targets: Dict[str, Any],
 ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
-    """
-    Use Hungarian matching to align per-location predictions to per-object targets.
-    Returns (aligned_pred, aligned_target) dicts with keys expected by loss heads:
-    objectness, classification, box, distance, urgency (urgency left as-is from batch).
-
-    - objectness: pred [B, N], target [B, N] with 1 at matched locations, 0 elsewhere
-    - classification: pred [total_matched, C], target [total_matched]
-    - box: pred [total_matched, 4], target [total_matched, 4]
-    - distance: pred [total_matched, 3], target [total_matched]
-    - urgency: pred [B, 4], target [B] (unchanged)
-    """
+    """Use Hungarian matching to align per-location predictions to per-object targets...."""
     import torch
     B = outputs["boxes"].size(0)
     N = outputs["boxes"].size(1)
@@ -416,7 +375,6 @@ def build_matched_pred_targets(
         gt_labels_valid = gt_labels[i][valid_gt]
         num_gt_valid = gt_labels_valid.size(0)
         N_i = pred_boxes.size(1)
-        # linear_sum_assignment(cost [num_pred, num_gt]) returns (row_ind=pred_idx, col_ind=gt_idx)
         if idx[0].max().item() < N_i and idx[1].max().item() < num_gt_valid:
             pred_idx, gt_idx = idx[0], idx[1]
         elif idx[1].max().item() < N_i and idx[0].max().item() < num_gt_valid:

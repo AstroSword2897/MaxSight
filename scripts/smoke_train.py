@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-Meant to overfit as a boundary
-Smoke Training: Proof of Life (1-2 days)
-
-Goal: Verify gradients, loss flow, and stability.
-NOT "real" training - this is about proof of life.
-
-- Tiny COCO subset (50-100 images)
-- 1-2 epochs only
-- Overfit on purpose
-- Watch: loss decreasing, no NaNs, GPU memory stable, throughput reasonable
-"""
+"""Meant to overfit as a boundary..."""
 
 import torch
 import torch.nn as nn
@@ -41,22 +30,7 @@ def get_device(
     num_parameters: int = 0,
     param_threshold: int = 10000
 ) -> torch.device:
-    """
-    Get the appropriate device for training based on model size.
-    
-    RULES:
-    - Models < 10k parameters: Use CPU (smoke tests, small experiments)
-    - Models >= 10k parameters: Require cloud GPU (CUDA) for training
-    
-    Args:
-        force_cuda: Force CUDA even if not available
-        force_cpu: Force CPU even if GPU available
-        num_parameters: Number of model parameters
-        param_threshold: Threshold for requiring GPU (default: 10k)
-    
-    Returns:
-        torch.device
-    """
+    """Get the appropriate device for training based on model size...."""
     # Explicit overrides take precedence
     if force_cpu:
         return torch.device("cpu")
@@ -86,10 +60,8 @@ def get_device(
 
 
 def create_synthetic_batch(batch_size: int = 2, device: Optional[torch.device] = None):
-    """
-    Create synthetic training batch.
-    Note: We'll create targets AFTER seeing model outputs to match shapes exactly.
-    """
+    """Create synthetic training batch.
+    Note: We'll create targets AFTER seeing model outputs to match shapes exactly."""
     if device is None:
         # Default to CPU for batch creation (device will be set later)
         device = torch.device("cpu")
@@ -117,10 +89,8 @@ def create_loss_functions():
 
 
 def compute_losses(predictions: Dict, targets: Dict, loss_fns: Dict) -> Tuple[Dict[str, Any], torch.Tensor]:
-    """
-    Compute losses for all heads - simplified for smoke test.
-    Focus: Can gradients flow? Not accuracy.
-    """
+    """Compute losses for all heads - simplified for smoke test.
+    Focus: Can gradients flow? Not accuracy."""
     losses = {}
     total_loss = torch.tensor(0.0, device=list(predictions.values())[0].device if predictions else 'cpu')
     

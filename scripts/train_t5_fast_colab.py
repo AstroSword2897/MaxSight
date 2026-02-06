@@ -1,22 +1,5 @@
 #!/usr/bin/env python3
-"""
-T5 Fast Training Script for Colab (~4 hour runs)
-
-Data scientist approach: stratified subset for fast iteration (5 warmup + 50 epochs in ~4.3h),
-full validation for honest metrics, FP32 for precision, checkpoints every epoch for resume.
-
-Use this for:
-- Quick T5 iteration on a subset of data (8% of COCO train = ~9k samples)
-- Testing T5 training pipeline end-to-end
-- Accumulating progress across Colab sessions via resume (checkpoints every epoch)
-
-Estimated time on A100 (40GB): ~4.3 hours for 55 epochs (4.7 min/epoch)
-- Training: ~3.2 min/epoch (9k samples, batch 8, FP32)
-- Validation: ~1.0 min/epoch (5k samples, full val set)
-- Checkpoint: ~0.5 min/epoch (save to Drive)
-
-For final training on full data, use train_maxsight.py with --epochs 150+.
-"""
+"""T5 Fast Training Script for Colab (~4 hour runs)..."""
 
 import argparse
 import sys
@@ -89,11 +72,9 @@ def create_loss_fn(num_classes: int, use_gradnorm: bool = True):
 
 
 def subset_dataset_stratified(dataset, fraction: float, seed: int):
-    """
-    Create a stratified subset of the dataset (best-effort).
+    """Create a stratified subset of the dataset (best-effort).
     
-    For now: random subset (TODO: add stratification by class if dataset has labels accessible).
-    """
+    For now: random subset (TODO: add stratification by class if dataset has labels accessible)."""
     total = len(dataset)
     subset_size = max(1, int(total * fraction))
     

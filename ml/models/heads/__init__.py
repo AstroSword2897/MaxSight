@@ -1,8 +1,6 @@
-"""
-Therapy Heads for MaxSight
+"""Therapy Heads for MaxSight
 
-This module provides specialized heads for therapy tasks and adaptive assistance.
-"""
+This module provides specialized heads for therapy tasks and adaptive assistance."""
 
 from .contrast_head import ContrastMapHead
 from .depth_head import DepthHead
@@ -23,19 +21,7 @@ HEAD_REGISTRY = {
 
 
 def create_head(head_type: str, **kwargs):
-    """
-    Create a head by type name.
-    
-    Arguments:
-        head_type: Type of head ('contrast', 'depth', 'fatigue', 'motion', 'roi_priority', 'uncertainty')
-        **kwargs: Arguments to pass to head constructor
-    
-    Returns:
-        Head module instance
-    
-    Raises:
-        ValueError: If head_type is not in registry
-    """
+    """Create a head by type name...."""
     if head_type not in HEAD_REGISTRY:
         available = ', '.join(HEAD_REGISTRY.keys())
         raise ValueError(

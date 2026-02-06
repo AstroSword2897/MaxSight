@@ -1,21 +1,4 @@
-"""
-Production-grade training loop for MaxSight CNN - IMPROVED VERSION
-
-This version fixes all identified issues:
-- Safe mixed precision handling
-- Fixed gradient accumulation edge cases
-- EMA with bias correction
-- Official PyTorch schedulers
-- Safe backbone freezing
-- Loss dict with .get() defaults
-- Integrated DetectionMetrics for mAP
-- Resume capability
-- Batch validation
-- Comprehensive logging (production-grade)
-- Proper error handling and exception management
-
-Author: Production-grade improvements based on detailed analysis
-"""
+"""Production-grade training loop for MaxSight CNN - IMPROVED VERSION..."""
 
 import torch
 import torch.nn as nn
@@ -91,19 +74,7 @@ def move_targets_to_device(targets: Dict[str, torch.Tensor], device: str) -> Dic
 
 
 def parse_batch(batch: Any) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    """
-    Parse batch from dataloader with validation.
-    Supports tuple (images, targets) or dict format.
-    
-        Arguments:
-        batch: Batch from DataLoader (tuple or dict)
-    
-    Returns:
-        Tuple of (images tensor, targets dict)
-    
-    Raises:
-        ValueError: If batch format is invalid or images are malformed
-    """
+    """Parse batch from dataloader with validation...."""
     if isinstance(batch, (list, tuple)):
         images = batch[0]
         targets = batch[1] if len(batch) > 1 else {}
@@ -127,22 +98,18 @@ def parse_batch(batch: Any) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
 
 
 class EMA:
-    """
-    Exponential Moving Average with bias correction.
+    """Exponential Moving Average with bias correction.
     
     Maintains shadow copies of model parameters with exponential moving average.
-    Provides bias correction for early training steps.
-    """
+    Provides bias correction for early training steps."""
     
     def __init__(self, model: nn.Module, decay: float = 0.9999, total_steps: int = 10000):
-        """
-        Initialize EMA.
+        """Initialize EMA.
         
         Arguments:
             model: Model to track
             decay: EMA decay factor
-            total_steps: Total training steps for bias correction
-        """
+            total_steps: Total training steps for bias correction"""
         self.decay = decay
         self.total_steps = total_steps
         self.global_step = 0
@@ -233,22 +200,7 @@ def _validate_training_config(
 
 
 class ProductionTrainLoop:
-    """
-    Production-grade training loop with all improvements.
-    
-    Features:
-    - Safe mixed precision (proper fallback handling)
-    - Fixed gradient accumulation (no double-update)
-    - EMA with bias correction
-    - Official PyTorch schedulers
-    - Safe backbone freezing (isinstance checks)
-    - Loss dict with .get() defaults
-    - Integrated DetectionMetrics for mAP
-    - Resume capability
-    - Batch validation
-    - Comprehensive logging (production-grade)
-    - Proper error handling and exception management
-    """
+    """Production-grade training loop with all improvements...."""
     
     def __init__(
         self,
@@ -277,7 +229,7 @@ class ProductionTrainLoop:
         num_classes: int = 80,  # For DetectionMetrics
         checkpoint_interval: int = 0,  # Save an extra snapshot every N epochs (0 = only last/best)
         resume_from: Optional[str] = None,
-        resume_model_only: bool = False,  # If True, load only model + epoch from checkpoint; use current optimizer/scheduler (e.g. new LRs, MLX-style)
+        resume_model_only: bool = False,
         seed: int = 42,
         logger: Optional[logging.Logger] = None,
         early_stopping_patience: int = 10,
@@ -287,35 +239,7 @@ class ProductionTrainLoop:
         gradnorm_alpha: float = 1.5,  # GradNorm restoring force
         gradnorm_update_interval: int = 100  # Update task weights every N iterations
     ):
-        """
-        Initialize production training loop.
-        
-        Arguments:
-            model: Model to train
-            train_loader: Training data loader
-            val_loader: Validation data loader (optional)
-            loss_fn: Loss function (optional, uses default if None)
-            device: Device to train on ('cuda', 'cpu', 'mps')
-            learning_rate: Initial learning rate
-            weight_decay: Weight decay for optimizer
-            num_epochs: Number of training epochs
-            use_mixed_precision: Use mixed precision training
-            gradient_clip_norm: Gradient clipping norm
-            gradient_accumulation_steps: Steps to accumulate gradients
-            log_interval: Logging interval (batches)
-            checkpoint_dir: Directory to save checkpoints
-            save_best_only: Only save best model
-            freeze_backbone: Freeze backbone parameters
-            freeze_backbone_epochs: Epochs to freeze backbone
-            freeze_bn_stats: Freeze BatchNorm stats when freezing backbone
-            ema_decay: EMA decay factor
-            scheduler_type: LR scheduler type
-            warmup_epochs: Warmup epochs
-            num_classes: Number of classes for metrics
-            resume_from: Path to checkpoint to resume from
-            seed: Random seed
-            logger: Optional logger instance
-        """
+        """Initialize production training loop...."""
         self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -610,10 +534,8 @@ class ProductionTrainLoop:
     def _validate_t5_batch(
         self, images: torch.Tensor, targets: Dict[str, torch.Tensor]
     ) -> bool:
-        """
-        Validate T5-specific batch requirements (Fix #6).
-        Returns False if batch should be skipped.
-        """
+        """Validate T5-specific batch requirements (Fix #6).
+        Returns False if batch should be skipped."""
         if images.dim() == 5:
             B, T, C, H, W = images.shape
             if T < 2:
@@ -651,20 +573,7 @@ class ProductionTrainLoop:
         targets: Dict[str, torch.Tensor],
         is_training: bool = True,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        """
-        Compute multi-head loss with safe .get() defaults.
-        
-        Supports GradNorm integration for balanced multi-task learning.
-        Fix #2: Only use GradNorm during training; validation uses standard loss.
-        
-        Arguments:
-            outputs: Model outputs dictionary
-            targets: Target labels dictionary
-            is_training: If True use GradNorm; if False use standard loss (validation)
-        
-        Returns:
-            Tuple of (total_loss, loss_dict)
-        """
+        """Compute multi-head loss with safe .get() defaults...."""
         if self.use_gradnorm and self.gradnorm_loss is not None and is_training:
             total_loss, loss_dict = self.gradnorm_loss(outputs, targets, model=self.model)
             if 'total_loss' not in loss_dict:
@@ -707,7 +616,6 @@ class ProductionTrainLoop:
         total_loss = loss_dict.get('total_loss', torch.tensor(0.0, device=self.device))
         if not torch.is_tensor(total_loss):
             total_loss = torch.tensor(total_loss, device=self.device)
-        # If no head produced a loss with grad (e.g. all shapes mismatched), add a tiny auxiliary so backward() works
         if not total_loss.requires_grad and outputs:
             for v in outputs.values():
                 if torch.is_tensor(v) and v.requires_grad and v.numel() > 0:
@@ -887,7 +795,6 @@ class ProductionTrainLoop:
             
             accum_steps += 1
             
-            # Gradient accumulation: only step when we've accumulated enough OR it's the last batch
             is_last_batch = (batch_idx + 1) == len(self.train_loader)
             should_step = (accum_steps % self.gradient_accumulation_steps == 0) or is_last_batch
             
@@ -929,16 +836,7 @@ class ProductionTrainLoop:
         return {'loss': avg_loss, 'all_losses': epoch_losses}
     
     def validate(self, epoch: int, use_ema: bool = True) -> Dict[str, float]:
-        """
-        Validate model with DetectionMetrics integration.
-        
-        Arguments:
-            epoch: Current epoch number
-            use_ema: If True, always use EMA weights for validation (default: True)
-        
-        Returns:
-            Dictionary of validation metrics
-        """
+        """Validate model with DetectionMetrics integration...."""
         self.model.eval()
         total_loss = 0.0
         num_batches = 0
@@ -975,63 +873,61 @@ class ProductionTrainLoop:
                         )
                         continue
                     
-                    # Update DetectionMetrics if we have detection outputs
-                    if 'boxes' in outputs and 'labels' in targets:
-                        # Extract predictions (assuming format matches DetectionMetrics)
-                        pred_boxes = outputs.get('boxes', torch.empty(0, 4, device=self.device))
-                        pred_labels = outputs.get('classifications', torch.empty(0, dtype=torch.long, device=self.device))
-                        pred_scores = outputs.get('scores', torch.ones(pred_labels.shape[0], device=self.device))
-                        
-                        gt_boxes = targets.get('boxes', torch.empty(0, 4, device=self.device))
-                        gt_labels = targets.get('labels', torch.empty(0, dtype=torch.long, device=self.device))
-                        
-                        # Convert to proper format if needed
-                        if pred_boxes.dim() == 3:
-                            pred_boxes = pred_boxes.reshape(-1, 4)
-                        if pred_labels.dim() > 1:
-                            pred_labels = pred_labels.argmax(dim=-1)
-                        
-                        # Comprehensive safety checks for all tensors
-                        # Check prediction shapes
-                        pred_valid = (
-                            pred_boxes.dim() == 2 and pred_boxes.shape[1] == 4 and
-                            pred_labels.dim() == 1 and
-                            pred_scores.dim() == 1 and
-                            pred_boxes.shape[0] == pred_labels.shape[0] == pred_scores.shape[0]
-                        )
-                        
-                        # Check ground truth shapes
-                        gt_valid = (
-                            len(gt_boxes) > 0 and
-                            (isinstance(gt_boxes, torch.Tensor) and gt_boxes.dim() == 2 and gt_boxes.shape[1] == 4) or
-                            (isinstance(gt_boxes, list) and len(gt_boxes) > 0)
-                        )
-                        
-                        # Check ground truth labels if tensor
-                        if isinstance(gt_labels, torch.Tensor):
-                            gt_labels_valid = (
-                                gt_labels.dim() == 1 and
-                                len(gt_labels) > 0 and
-                                (isinstance(gt_boxes, torch.Tensor) and gt_labels.shape[0] == gt_boxes.shape[0] or
-                                 isinstance(gt_boxes, list) and gt_labels.shape[0] == len(gt_boxes))
-                            )
-                        else:
-                            gt_labels_valid = len(gt_labels) > 0
-                        
-                        # Only update metrics when all shapes align correctly
-                        if pred_valid and gt_valid and gt_labels_valid:
-                            try:
-                                self.detection_metrics.update(
-                                    pred_boxes=pred_boxes,
-                                    pred_labels=pred_labels,
-                                    pred_scores=pred_scores,
-                                    gt_boxes=gt_boxes,
-                                    gt_labels=gt_labels,
-                                    iou_threshold=0.5
+                    # Update DetectionMetrics using post-processed detections
+                    if 'boxes' in outputs and 'classifications' in outputs and 'boxes' in targets:
+                        try:
+                            batch_size = images.shape[0]
+                            for b in range(batch_size):
+                                gt_boxes_b = targets['boxes'][b]
+                                gt_labels_b = targets['labels'][b]
+                                num_objects = int(targets.get('num_objects', torch.tensor([gt_boxes_b.shape[0]]))[b].item())
+                                
+                                if num_objects == 0:
+                                    continue
+                                
+                                gt_boxes_valid = gt_boxes_b[:num_objects].to(self.device)
+                                gt_labels_valid = gt_labels_b[:num_objects].to(self.device)
+                                
+                                if len(gt_boxes_valid) == 0:
+                                    continue
+                                
+                                detections_b = self.model.get_detections(
+                                    {k: v[b:b+1] for k, v in outputs.items() if isinstance(v, torch.Tensor)},
+                                    confidence_threshold=0.3
                                 )
-                            except Exception as e:
-                                self.logger.warning(f"Failed to update detection metrics: {e}")
-                                continue
+                                
+                                if detections_b and len(detections_b) > 0 and len(detections_b[0]) > 0:
+                                    detections_list = detections_b[0]
+                                    
+                                    pred_boxes_list = []
+                                    pred_labels_list = []
+                                    pred_scores_list = []
+                                    
+                                    for det in detections_list:
+                                        if 'box' in det:
+                                            box = det['box']
+                                            if isinstance(box, (list, tuple)) and len(box) == 4:
+                                                pred_boxes_list.append(box)
+                                                pred_labels_list.append(det.get('class', det.get('class_id', 0)))
+                                                pred_scores_list.append(det.get('confidence', 0.5))
+                                    
+                                    if pred_boxes_list:
+                                        pred_boxes = torch.tensor(pred_boxes_list, device=self.device, dtype=torch.float32)
+                                        pred_labels = torch.tensor(pred_labels_list, device=self.device, dtype=torch.long)
+                                        pred_scores = torch.tensor(pred_scores_list, device=self.device, dtype=torch.float32)
+                                        
+                                        if gt_boxes_valid.dim() == 2 and gt_boxes_valid.shape[1] == 4:
+                                            self.detection_metrics.update(
+                                                pred_boxes=pred_boxes,
+                                                pred_labels=pred_labels,
+                                                pred_scores=pred_scores,
+                                                gt_boxes=gt_boxes_valid,
+                                                gt_labels=gt_labels_valid,
+                                                iou_threshold=0.5
+                                            )
+                        except Exception as e:
+                            self.logger.debug(f"Detection metrics update skipped for batch {batch_idx}: {e}")
+                            continue
                 except Exception as e:
                     self.logger.error(f"Validation failed at batch {batch_idx}: {e}")
                     continue
@@ -1085,10 +981,8 @@ class ProductionTrainLoop:
     
     def _save_checkpoint(self, epoch: int, is_best: bool = False, extra_path: Optional[Path] = None) -> None:
         """Save checkpoint with comprehensive state for resume on same or different GPU/machine. If extra_path is set, also save a copy there (e.g. checkpoint_epoch_N.pt)."""
-        # Capture current optimizer LR/weight decay (may have been adjusted by StabilityManager)
         lr_current = self.optimizer.param_groups[0]['lr'] if self.optimizer.param_groups else self.learning_rate
         wd_current = self.optimizer.param_groups[0].get('weight_decay', 0.0) if self.optimizer.param_groups else self.weight_decay
-        # Capture data paths from datasets when available (for resume on different machine)
         data_paths: Dict[str, Optional[str]] = {}
         try:
             for name, loader in [('train', self.train_loader), ('val', self.val_loader)]:
@@ -1405,7 +1299,6 @@ class ProductionTrainLoop:
                 
                 # Step scheduler (per-epoch for most, per-batch for OneCycleLR/SequentialLR)
                 # NOTE: OneCycleLR and SequentialLR step per-batch in train_epoch()
-                # All other schedulers (CosineAnnealingLR, CosineAnnealingWarmRestarts) step per-epoch here
                 if not isinstance(self.scheduler, (OneCycleLR, SequentialLR)):
                     self.scheduler.step()
                     self.logger.debug(f"Scheduler stepped (per-epoch). New LR: {self.optimizer.param_groups[0]['lr']:.6f}")
@@ -1484,6 +1377,13 @@ class ProductionTrainLoop:
             self.logger.error(f"Training failed: {e}", exc_info=True)
             self._save_checkpoint(self.current_epoch, is_best=False)
             raise
+        
+        if self.checkpoint_interval > 0 and (self.current_epoch + 1) % self.checkpoint_interval != 0:
+            self._save_checkpoint(
+                self.current_epoch,
+                is_best=False,
+                extra_path=self.checkpoint_dir / f"checkpoint_epoch_{self.current_epoch + 1}.pt",
+            )
         
         elapsed_time = time.time() - start_time
         

@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""
-Benchmark Before Scaling (1 day)
-
-Measure now:
-- Stage A latency (target <150ms)
-- Memory per tier
-- Parameter counts
-- Mobile export size
-
-This tells you:
-- Which tiers are actually viable
-- Where pruning / distillation will matter
-- Whether mobile is realistic before long training
-"""
+"""Benchmark Before Scaling (1 day)..."""
 
 import torch
 import torch.nn as nn

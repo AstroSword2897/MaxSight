@@ -1,9 +1,7 @@
-"""
-Fake-Graph Test for Scene Graph Consistency
+"""Fake-Graph Test for Scene Graph Consistency
 
 CRITICAL: This single test eliminates an entire class of bugs.
-If this fails, STOP THE PIPELINE - graph structure is broken.
-"""
+If this fails, STOP THE PIPELINE - graph structure is broken."""
 
 import torch
 import sys
@@ -15,15 +13,7 @@ from ml.models.scene_graph.scene_graph_encoder import SceneGraphEncoder, SceneRe
 
 
 def test_scene_graph_consistency():
-    """
-    Test that edge_index and edge_attr are consistent.
-    
-    This test verifies:
-    1. Edge identity is explicit (src, dst), not inferred
-    2. Relations are grouped by edge correctly
-    3. edge_index matches edge_attr count
-    4. No silent corruption from reordering/pruning
-    """
+    """Test that edge_index and edge_attr are consistent...."""
     encoder = SceneGraphEncoder(
         object_embed_dim=256,
         relation_embed_dim=128,
@@ -80,11 +70,9 @@ def test_scene_graph_consistency():
 
 
 def test_scene_graph_with_pruning():
-    """
-    Test that graph survives pruning (relations removed, edges preserved).
+    """Test that graph survives pruning (relations removed, edges preserved).
     
-    This verifies that explicit edge identity prevents corruption from pruning.
-    """
+    This verifies that explicit edge identity prevents corruption from pruning."""
     encoder = SceneGraphEncoder()
     
     num_nodes = 5

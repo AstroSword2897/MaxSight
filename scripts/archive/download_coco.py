@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Helper script to download COCO dataset with multiple fallback methods.
-"""
+"""Helper script to download COCO dataset with multiple fallback methods."""
 
 import sys
 from pathlib import Path

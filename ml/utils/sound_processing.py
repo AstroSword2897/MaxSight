@@ -1,9 +1,7 @@
-"""
-Sound Processing Utilities for MaxSight
+"""Sound Processing Utilities for MaxSight
 Enhanced sound classification, directional detection, and prioritization.
 
-Sprint 3 Day 26: Advanced Sound Features
-"""
+Sprint 3 Day 26: Advanced Sound Features"""
 
 from typing import Dict, List, Optional, Tuple
 import torch
@@ -41,11 +39,9 @@ class SoundDirection(Enum):
 
 
 class SoundProcessor:
-    """
-    Enhanced sound processing with classification refinement, directional detection, and prioritization.
+    """Enhanced sound processing with classification refinement, directional detection, and prioritization.
     
-    Sprint 3 Day 26: Advanced Sound Features
-    """
+    Sprint 3 Day 26: Advanced Sound Features"""
     
     # Sound urgency mapping (0-3: safe, caution, warning, danger)
     SOUND_URGENCY_MAP = {
@@ -91,14 +87,7 @@ class SoundProcessor:
         directional_sensitivity: float = 0.2,
         enable_temporal_smoothing: bool = True
     ):
-        """
-        Initialize sound processor.
-        
-        Arguments:
-            overlap_threshold: Threshold for detecting overlapping sounds (0-1)
-            directional_sensitivity: Sensitivity for directional detection (0-1, lower = more sensitive)
-            enable_temporal_smoothing: Enable temporal smoothing for stability
-        """
+        """Initialize sound processor...."""
         self.overlap_threshold = overlap_threshold
         self.directional_sensitivity = directional_sensitivity
         self.enable_temporal_smoothing = enable_temporal_smoothing
@@ -111,23 +100,7 @@ class SoundProcessor:
         raw_predictions: Optional[torch.Tensor] = None,
         confidence_threshold: float = 0.5
     ) -> List[Dict]:
-        """
-        Refine sound classification with better handling of overlapping sounds.
-        
-        WHY THIS MATTERS:
-        Real-world environments often have multiple sounds simultaneously. This method:
-        1. Detects overlapping sounds (e.g., alarm + speech)
-        2. Filters low-confidence predictions
-        3. Handles temporal context (sounds that persist across frames)
-        
-        Arguments:
-            audio_features: [B, 128] MFCC features
-            raw_predictions: Optional [B, num_classes] raw model predictions
-            confidence_threshold: Minimum confidence for sound detection
-        
-        Returns:
-            List of detected sounds with class, confidence, and metadata
-        """
+        """Refine sound classification with better handling of overlapping sounds."""
         detections = []
         
         # If raw predictions provided, use them
@@ -192,22 +165,7 @@ class SoundProcessor:
         audio_features: torch.Tensor,
         stereo_channels: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
     ) -> SoundDirection:
-        """
-        Detect sound direction (left/right/front/back).
-        
-        WHY THIS MATTERS:
-        Directional audio helps users locate sound sources, which is critical for:
-        - Safety (knowing where alarms/vehicles are)
-        - Navigation (knowing where people/doors are)
-        - Spatial awareness (understanding environment layout)
-        
-        Arguments:
-            audio_features: [B, 128] MFCC features
-            stereo_channels: Optional (left_channel, right_channel) for stereo analysis
-        
-        Returns:
-            Detected sound direction
-        """
+        """Detect sound direction (left/right/front/back)."""
         if stereo_channels is not None:
             left, right = stereo_channels
             
@@ -236,23 +194,7 @@ class SoundProcessor:
         sound_detections: List[Dict],
         visual_context: Optional[Dict] = None
     ) -> List[Dict]:
-        """
-        Prioritize sounds based on urgency, context, and user needs.
-        
-        WHY THIS MATTERS:
-        Not all sounds are equally important. This method:
-        1. Assigns urgency based on sound type
-        2. Adjusts priority based on visual context (e.g., vehicle sound + car detected = higher priority)
-        3. Filters background noise
-        4. Ensures urgent sounds interrupt low-priority
-        
-        Arguments:
-            sound_detections: List of sound detection dictionaries
-            visual_context: Optional visual context (detections, scene, etc.)
-        
-        Returns:
-            Prioritized list of sounds with priority scores
-        """
+        """Prioritize sounds based on urgency, context, and user needs."""
         prioritized = []
         
         for det in sound_detections:
@@ -306,16 +248,7 @@ class SoundProcessor:
         sound_detection: Dict,
         include_direction: bool = True
     ) -> str:
-        """
-        Generate natural language description of sound.
-        
-        Arguments:
-            sound_detection: Sound detection dictionary
-            include_direction: Include directional information
-        
-        Returns:
-            Natural language description
-        """
+        """Generate natural language description of sound...."""
         sound_class = sound_detection.get('class')
         if not isinstance(sound_class, SoundClass):
             return "Unknown sound"

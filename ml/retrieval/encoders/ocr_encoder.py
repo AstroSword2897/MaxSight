@@ -1,8 +1,6 @@
-"""
-OCR Encoder for Multi-Vector Retrieval
+"""OCR Encoder for Multi-Vector Retrieval
 
-Encodes OCR text snippets using sentence-transformers.
-"""
+Encodes OCR text snippets using sentence-transformers."""
 
 import torch
 import torch.nn as nn
@@ -15,11 +13,9 @@ except ImportError:
 
 
 class OCREncoder(nn.Module):
-    """
-    OCR encoder for text embeddings.
+    """OCR encoder for text embeddings.
     
-    Uses sentence-transformers to embed OCR text snippets.
-    """
+    Uses sentence-transformers to embed OCR text snippets."""
     
     def __init__(
         self,
@@ -58,17 +54,7 @@ class OCREncoder(nn.Module):
         text_snippets: List[List[str]],  # [B, N_texts] list of text strings
         text_confidences: Optional[torch.Tensor] = None  # [B, N_texts]
     ) -> Tuple[torch.Tensor, List[List[str]]]:
-        """
-        Encode OCR text snippets.
-        
-        Args:
-            text_snippets: List of text snippets per image [B, N_texts]
-            text_confidences: Optional confidence scores [B, N_texts]
-        
-        Returns:
-            text_embeddings: Text embeddings [B, max_texts, embed_dim]
-            valid_texts: Valid text snippets [B, max_texts]
-        """
+        """Encode OCR text snippets...."""
         B = len(text_snippets)
         device = next(self.parameters()).device if list(self.parameters()) else torch.device('cpu')
         
@@ -85,7 +71,6 @@ class OCREncoder(nn.Module):
             if self.use_sentence_transformers and self.text_encoder is not None:
                 # Use sentence-transformers (only if it's a SentenceTransformer)
                 if hasattr(self.text_encoder, 'encode'):
-                    # Type checker doesn't know about SentenceTransformer.encode, but runtime check is safe
                     embeddings = self.text_encoder.encode(  # type: ignore
                         texts,
                         convert_to_tensor=True,

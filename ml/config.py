@@ -1,7 +1,5 @@
-"""
-MaxSight Configuration and Dependency Management
-Centralized configuration with versioning and dependency tracking.
-"""
+"""MaxSight Configuration and Dependency Management
+Centralized configuration with versioning and dependency tracking."""
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any

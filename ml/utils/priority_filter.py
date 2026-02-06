@@ -1,7 +1,5 @@
-"""
-Per-frame priority budget filter for MaxSight.
-Caps alerts per frame to avoid user overload in crowded scenes.
-"""
+"""Per-frame priority budget filter for MaxSight.
+Caps alerts per frame to avoid user overload in crowded scenes."""
 from typing import List, Dict, Any
 import logging
 
@@ -33,10 +31,8 @@ class PriorityBudgetFilter:
         self.max_alerts_per_frame = max_alerts_per_frame
 
     def filter_alerts(self, detections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Return top max_alerts_per_frame detections by priority score.
-        Handles empty list and lists shorter than N.
-        """
+        """Return top max_alerts_per_frame detections by priority score.
+        Handles empty list and lists shorter than N."""
         if not detections:
             return []
         if len(detections) <= self.max_alerts_per_frame:

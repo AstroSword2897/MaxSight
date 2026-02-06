@@ -1,19 +1,4 @@
-"""
-Personalization Head for MaxSight 3.0 (v2)
-
-Design goals:
-- True user-specific embeddings (scales to real deployments)
-- Stable online adaptation (gated, not destructive)
-- Logit-first design (loss-friendly)
-- Clear separation of persistent vs contextual preferences
-- Crisp-controlled attention & alerts (temperature scaling for distribution sharpness)
-
-Key improvements over v1:
-- Proper nn.Embedding table for users (not single Parameter)
-- Contextual gating instead of overwriting embeddings
-- Logits returned (softmax only applied when needed)
-- Ready for offline + online learning
-"""
+"""Personalization Head for MaxSight 3.0 (v2)..."""
 
 import torch
 import torch.nn as nn
@@ -22,15 +7,7 @@ from typing import Dict, Optional
 
 
 class PersonalizationHead(nn.Module):
-    """
-    Personalization head for user-specific adaptation (v2).
-    
-    Learns:
-    - Attention adjustment (what user focuses on)
-    - Description verbosity preferences
-    - Alert priority preferences
-    - Stable online learning from user interactions
-    """
+    """Personalization head for user-specific adaptation (v2)...."""
     
     def __init__(
         self,
@@ -104,17 +81,7 @@ class PersonalizationHead(nn.Module):
         user_id: torch.LongTensor,            # [B]
         interaction_features: Optional[torch.Tensor] = None  # [B, interaction_dim]
     ) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass for personalization (v2).
-        
-        Args:
-            scene_features: [B, input_dim] scene features
-            user_id: [B] user IDs (required)
-            interaction_features: [B, interaction_dim] optional interaction features for contextual adaptation
-        
-        Returns:
-            Dictionary with personalized outputs (logits + normalized)
-        """
+        """Forward pass for personalization (v2)...."""
         B = scene_features.size(0)
         
         # -------------------------------------------------

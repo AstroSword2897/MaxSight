@@ -1,7 +1,5 @@
-"""
-Dataset Image Testing Script
-Processes images from datasets through the MaxSight simulator and runs validation tests.
-"""
+"""Dataset Image Testing Script
+Processes images from datasets through the MaxSight simulator and runs validation tests."""
 
 import torch
 import numpy as np
@@ -31,9 +29,7 @@ from app.ui.haptic_feedback import HapticFeedback
 
 
 class DatasetImageTester:
-    """
-    Tests dataset images through the complete MaxSight pipeline.
-    """
+    """Tests dataset images through the complete MaxSight pipeline."""
     
     def __init__(self, device: Optional[str] = None):
         """Initialize the tester with all MaxSight components."""
@@ -85,16 +81,7 @@ class DatasetImageTester:
         dataset_dirs: List[Path],
         max_images: int = 50
     ) -> List[Path]:
-        """
-        Find images in dataset directories.
-        
-        Arguments:
-            dataset_dirs: List of dataset directory paths
-            max_images: Maximum number of images to process
-        
-        Returns:
-            List of image file paths
-        """
+        """Find images in dataset directories...."""
         image_paths = []
         image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'}
         
@@ -126,15 +113,7 @@ class DatasetImageTester:
         return image_paths
     
     def process_image(self, image_path: Path) -> Dict[str, Any]:
-        """
-        Process a single image through the complete MaxSight pipeline.
-        
-        Arguments:
-            image_path: Path to image file
-        
-        Returns:
-            Dictionary with processing results and metrics
-        """
+        """Process a single image through the complete MaxSight pipeline...."""
         start_time = time.perf_counter()
         
         try:
@@ -330,16 +309,7 @@ class DatasetImageTester:
         image_paths: List[Path],
         conditions: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        """
-        Run tests on multiple images.
-        
-        Arguments:
-            image_paths: List of image paths to test
-            conditions: Optional list of visual conditions to test
-        
-        Returns:
-            Test summary dictionary
-        """
+        """Run tests on multiple images...."""
         # Convert conditions to List[Optional[str]]
         if conditions is not None:
             test_conditions: List[Optional[str]] = list(conditions)  # List[str] -> List[Optional[str]]

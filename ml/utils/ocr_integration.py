@@ -1,123 +1,4 @@
-"""
-OCR Integration Module for MaxSight
-Sprint 1 Day 5: OCR Integration & Text Reading
-
-PROJECT PHILOSOPHY & APPROACH:
-=============================
-This module implements "Reads Environment" capability - detecting and reading text from the
-environment. This directly addresses the problem statement's requirement for text reading
-support, enabling users to read signs, labels, and documents.
-
-WHY OCR INTEGRATION MATTERS:
-Text is everywhere in the environment - signs, labels, documents, menus. Users with vision
-impairments need this text read aloud. This module provides that capability by:
-1. Detecting text regions in images
-2. Extracting text using OCR
-3. Providing text-to-speech for reading aloud
-
-This supports "Clear Multimodal Communication" by making textual information accessible
-through audio, enabling users to access information that would otherwise be inaccessible.
-
-HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-The problem asks: "What are ways that those who cannot see... be able to interact with the
-world like those can?" OCR integration answers by providing access to textual information
-through audio, enabling users to read signs, labels, and documents independently.
-
-RELATIONSHIP TO BARRIER REMOVAL METHODS:
-1. ENVIRONMENTAL STRUCTURING: Makes textual information accessible and understandable
-2. CLEAR MULTIMODAL COMMUNICATION: Converts visual text to audio
-3. SKILL DEVELOPMENT: Supports reading skills through practice
-
-TECHNICAL DESIGN DECISIONS:
-- Cross-platform: iOS Vision framework for production, pytesseract for development
-- Adaptive preprocessing: Improves OCR accuracy in low-contrast images
-- Confidence scoring: Combines region detection and OCR confidence for reliability
-- DBSCAN clustering: Efficient pixel clustering for large images
-- Line/block grouping: Prevents splitting connected text
-
-This module provides:
-- Text region detection (using model's text_head)
-- OCR text extraction (iOS Vision framework integration)
-- Text-to-speech pipeline for reading aloud
-
-iOS VISION FRAMEWORK INTEGRATION PLAN:
-=====================================
-
-Phase 1: Model-Based Text Region Detection (Current - Python)
-- Uses MaxSightCNN text_head to detect text regions
-- Provides bounding boxes and confidence scores
-- Efficient for real-time processing
-
-Phase 2: iOS Vision Framework Integration (Production)
-- Replace pytesseract with VNRecognizeTextRequest
-- Use Vision framework for OCR on detected regions
-- Leverage iOS Neural Engine for hardware acceleration
-
-Implementation Steps for iOS:
-
-1. Swift/iOS Integration:
-   ```swift
-   import Vision
-   
-   func recognizeText(in image: CIImage, regions: [CGRect]) -> [VNRecognizedTextObservation] {
-       let request = VNRecognizeTextRequest { request, error in
-           // Handle results
-       }
-       request.recognitionLevel = .accurate
-       request.usesLanguageCorrection = true
-       
-       let handler = VNImageRequestHandler(ciImage: image, options: [:])
-       try? handler.perform([request])
-       
-       return request.results as? [VNRecognizedTextObservation] ?? []
-   }
-   ```
-
-2. Bridge Python Model Outputs to iOS:
-   - Export text_head outputs (text_scores, boxes) from .pte model
-   - Convert to CGRect regions in Swift
-   - Pass regions to Vision framework for OCR
-
-3. Data Flow:
-   ```
-   Camera Frame → MaxSightCNN → text_head → text_regions (CGRect[])
-   → VNRecognizeTextRequest → recognized_text → TTS → Audio Output
-   ```
-
-4. Performance Optimization:
-   - Use Vision framework's on-device processing (Neural Engine)
-   - Batch process multiple regions in single request
-   - Cache results for static text (signs, labels)
-
-5. Fallback Strategy:
-   - If Vision framework fails, use model's text_head confidence
-   - Provide bounding box coordinates for manual review
-   - Log failures for model improvement
-
-6. Integration Points:
-   - MaxSightCNN.forward() → text_regions output
-   - OCRIntegration.process_image_for_ocr() → iOS Vision wrapper
-   - DescriptionGenerator → includes text in scene descriptions
-   - CrossModalScheduler → prioritizes text reading alerts
-
-7. Testing:
-   - Unit tests: Mock Vision framework responses
-   - Integration tests: Real device testing with various text types
-   - Performance tests: Measure latency on iPhone Neural Engine
-
-Benefits of iOS Vision Framework:
-- Hardware acceleration via Neural Engine
-- High accuracy (Apple's trained models)
-- Language support (50+ languages)
-- Real-time performance (<100ms for typical text)
-- Privacy (on-device processing)
-
-Migration Path:
-1. Keep Python implementation for development/testing
-2. Implement iOS wrapper in Swift
-3. A/B test Python vs iOS for accuracy
-4. Switch to iOS in production once validated
-"""
+"""OCR Integration Module for MaxSight..."""
 
 import torch
 import torch.nn.functional as F
@@ -128,21 +9,13 @@ from PIL import Image
 
 
 class OCRIntegration:
-    """
-    OCR integration for MaxSight - reads text from detected regions.
+    """OCR integration for MaxSight - reads text from detected regions.
     
     For iOS: Uses Vision framework VNRecognizeTextRequest
-    For Python: Uses fallback text extraction methods
-    """
+    For Python: Uses fallback text extraction methods"""
     
     def __init__(self, text_threshold: float = 0.5, confidence_threshold: float = 0.3):
-        """
-        Initialize OCR integration.
-        
-        Arguments:
-            text_threshold: Threshold for text region detection from model
-            confidence_threshold: Minimum confidence for OCR text recognition
-        """
+        """Initialize OCR integration...."""
         self.text_threshold = text_threshold
         self.confidence_threshold = confidence_threshold
     
@@ -152,17 +25,7 @@ class OCRIntegration:
         boxes: torch.Tensor,
         image_size: Tuple[int, int] = (224, 224)
     ) -> List[Dict]:
-        """
-        Detect text regions from model's text_head output.
-        
-        Arguments:
-            text_scores: Text probability scores [N] or [H, W]
-            boxes: Bounding boxes [N, 4] in center format (cx, cy, w, h)
-            image_size: Image dimensions (height, width)
-        
-        Returns:
-            List of text region dicts with 'box', 'confidence', 'region_id'
-        """
+        """Detect text regions from model's text_head output...."""
         text_regions = []
         
         # Handle different input shapes
@@ -216,30 +79,7 @@ class OCRIntegration:
         cluster_distance: int = 10,
         use_dbscan: bool = True
     ) -> List[Tuple[int, int, int, int]]:
-        """
-        Cluster text pixels into regions using DBSCAN (improved) or simple distance-based method.
-        
-        WHY DBSCAN:
-        DBSCAN is more efficient (O(N log N) vs O(N²)) and handles irregularly shaped regions
-        better than simple distance-based clustering. For large images with many text pixels,
-        this provides significant performance improvement while maintaining accuracy.
-        
-        HOW IT SUPPORTS THE PROBLEM STATEMENT:
-        Efficient text region detection enables real-time text reading, supporting the "Reads
-        Environment" feature. Users need text detected quickly for practical use, not just
-        accurate detection.
-        
-        Arguments:
-            x_coords: X coordinates of text pixels
-            y_coords: Y coordinates of text pixels
-            h: Image height
-            w: Image width
-            cluster_distance: Maximum distance for clustering
-            use_dbscan: Use DBSCAN for better performance (requires scikit-learn)
-        
-        Returns:
-            List of (x_min, y_min, x_max, y_max) bounding boxes
-        """
+        """Cluster text pixels into regions using DBSCAN (improved) or simple distance-based method...."""
         if len(x_coords) == 0:
             return []
         
@@ -288,8 +128,6 @@ class OCRIntegration:
             
             return regions
         
-        # Optimized distance-based clustering (fallback) using cKDTree for O(N log N) performance
-        # Vectorized approach: use scipy.spatial.cKDTree if available, otherwise simple O(N²) fallback
         try:
             from scipy.spatial import cKDTree  # type: ignore
             
@@ -379,23 +217,7 @@ class OCRIntegration:
         region_box: List[float],
         use_vision_framework: bool = False
     ) -> Tuple[Optional[str], float]:
-        """
-        Extract text from a specific image region with confidence score.
-        
-        WHY CONFIDENCE SCORING:
-        Combining region detection confidence with OCR engine confidence provides a more
-        meaningful measure of text readability. This enables filtering unreliable text
-        extractions, supporting "Practical Usability" by ensuring only reliable information
-        is presented to users.
-        
-        Arguments:
-            image: PIL Image
-            region_box: Bounding box [cx, cy, w, h] in normalized coordinates
-            use_vision_framework: If True, use iOS Vision framework (requires iOS)
-        
-        Returns:
-            Tuple of (extracted text, confidence score 0-1)
-        """
+        """Extract text from a specific image region with confidence score...."""
         # Crop region from image
         # PIL Image.size is (width, height), not (height, width)
         w, h = image.size
@@ -428,18 +250,7 @@ class OCRIntegration:
             return self._extract_text_fallback(region_image)
     
     def _extract_text_vision_framework(self, image: Image.Image) -> Tuple[Optional[str], float]:
-        """
-        Extract text using iOS Vision framework.
-        This is a placeholder - actual implementation in iOS app.
-        
-        WHY VISION FRAMEWORK:
-        iOS Vision framework provides high-quality OCR with confidence scores, making it ideal
-        for production use. This interface enables Python tests to simulate iOS Vision output
-        for cross-platform unit testing.
-        
-        Returns:
-            Tuple of (extracted text, confidence score 0-1)
-        """
+        """Extract text using iOS Vision framework...."""
         # In iOS app, this would be:
         # let request = VNRecognizeTextRequest { request, error in
         #     guard let observations = request.results else { return }
@@ -456,22 +267,7 @@ class OCRIntegration:
         image: Image.Image,
         use_adaptive_threshold: bool = True
     ) -> Tuple[Optional[str], float]:
-        """
-        Fallback text extraction for Python (development/testing).
-        Uses pytesseract if available, otherwise returns placeholder.
-        
-        WHY ADAPTIVE PREPROCESSING:
-        Adaptive thresholding and CLAHE improve OCR accuracy in low-contrast images, which
-        are common in real-world scenarios (poor lighting, reflections, etc.). This directly
-        supports "Practical Usability" by ensuring text extraction works in varied conditions.
-        
-        Arguments:
-            image: PIL Image to extract text from
-            use_adaptive_threshold: Use adaptive thresholding for better OCR
-        
-        Returns:
-            Tuple of (extracted text, confidence score)
-        """
+        """Fallback text extraction for Python (development/testing)...."""
         try:
             import pytesseract  # type: ignore
             
@@ -550,18 +346,7 @@ class OCRIntegration:
         boxes: torch.Tensor,
         max_regions: int = 10
     ) -> List[Dict]:
-        """
-        Complete OCR pipeline: detect regions and extract text.
-        
-        Arguments:
-            image: PIL Image
-            text_scores: Text detection scores from model
-            boxes: Bounding boxes from model
-            max_regions: Maximum number of text regions to process
-        
-        Returns:
-            List of dicts with 'box', 'text', 'confidence', 'region_id'
-        """
+        """Complete OCR pipeline: detect regions and extract text...."""
         # Detect text regions
         text_regions = self.detect_text_regions_from_model(text_scores, boxes)
         
@@ -604,21 +389,7 @@ class OCRIntegration:
 
 
 def create_text_description(text_results: List[Dict], verbosity: str = 'normal') -> str:
-    """
-    Create natural language description of detected text with line/block grouping.
-    
-    WHY LINE/BLOCK GROUPING:
-    Connected text (lines, paragraphs) should be described together, not split into
-    individual words. This provides more natural descriptions and supports better
-    understanding of text context.
-    
-        Arguments:
-        text_results: List of OCR results from process_image_for_ocr
-        verbosity: 'brief', 'normal', or 'detailed'
-    
-    Returns:
-        Natural language description
-    """
+    """Create natural language description of detected text with line/block grouping...."""
     if not text_results:
         return "No text detected"
     
@@ -646,20 +417,7 @@ def create_text_description(text_results: List[Dict], verbosity: str = 'normal')
 
 
 def _group_text_by_proximity(text_results: List[Dict], proximity_threshold: float = 0.1) -> List[Dict]:
-    """
-    Group text regions by spatial proximity (line/block grouping).
-    
-    WHY THIS FUNCTION:
-    Prevents splitting connected text (lines, paragraphs) into multiple regions. This
-    provides more natural text descriptions and better context understanding.
-    
-        Arguments:
-        text_results: List of OCR results
-        proximity_threshold: Maximum distance for grouping (normalized)
-    
-    Returns:
-        List of grouped text results
-    """
+    """Group text regions by spatial proximity (line/block grouping)."""
     if not text_results:
         return []
     
@@ -711,20 +469,7 @@ def _group_text_by_proximity(text_results: List[Dict], proximity_threshold: floa
 
 
 def read_text_aloud(text: str) -> None:
-    """
-    Read text aloud using TTS (text-to-speech).
-    
-    WHY TTS INTEGRATION:
-    Text-to-speech enables users to hear text content, supporting "Clear Multimodal
-    Communication" by making textual information accessible through audio. This is critical
-    for users with vision impairments who cannot read text visually.
-    
-    NOTE: In iOS app, this would use AVSpeechSynthesizer. This Python version is for
-    testing/development purposes.
-    
-        Arguments:
-        text: Text to read aloud
-    """
+    """Read text aloud using TTS (text-to-speech)...."""
     try:
         import pyttsx3  # type: ignore
         engine = pyttsx3.init()

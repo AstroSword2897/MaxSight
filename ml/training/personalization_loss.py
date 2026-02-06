@@ -1,6 +1,4 @@
-"""
-Contrastive loss for personalization (metric learning).
-"""
+"""Contrastive loss for personalization (metric learning)."""
 import torch
 import torch.nn.functional as F
 from typing import Tuple
@@ -12,20 +10,7 @@ def compute_contrastive_loss(
     positive_mask: torch.Tensor,  # [B, K] binary
     temperature: float = 0.1
 ) -> torch.Tensor:
-    """
-    Corrected InfoNCE contrastive loss for personalization.
-    
-    FIXED: Properly handles multiple positives per batch.
-    
-    Args:
-        user_emb: Normalized user embeddings [B, 256]
-        object_emb: Normalized object embeddings [B, K, 256]
-        positive_mask: Binary mask indicating user's personal items [B, K]
-        temperature: Temperature for softmax
-    
-    Returns:
-        Contrastive loss scalar
-    """
+    """Corrected InfoNCE contrastive loss for personalization...."""
     B, K = object_emb.shape[:2]
     
     # Compute similarities: [B, K]
@@ -34,7 +19,6 @@ def compute_contrastive_loss(
         object_emb.transpose(1, 2)  # [B, 256, K]
     ).squeeze(1) / temperature  # [B, K]
     
-    # FIXED: Use binary cross-entropy with logits (handles multiple positives correctly)
     # This treats each object independently as positive/negative
     labels = positive_mask.float()  # [B, K]
     loss = F.binary_cross_entropy_with_logits(similarity, labels, reduction='mean')

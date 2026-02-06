@@ -1,42 +1,4 @@
-"""
-Eye/Face Micro-Model
-
-STUB - NOT INTEGRATED: This component is a stub implementation and not currently integrated into the forward pass.
-See README.md for integration status. Future integration planned.
-
-Tiny CNN for eye tracking and fatigue detection:
-- Blink probability
-- Fixation vs saccade patterns
-- Pupil-size proxy
-
-PROJECT PHILOSOPHY & APPROACH:
-=============================
-This module implements eye/face tracking for fatigue detection and gaze analysis. It's a critical
-component for understanding user state and adapting assistance levels accordingly.
-
-WHY EYE TRACKING MATTERS:
-Eye tracking provides valuable information about user state:
-- Blink rate: Indicates fatigue or attention levels
-- Fixation vs saccade: Shows whether user is focused or scanning
-- Pupil size: Proxy for cognitive load or lighting conditions
-
-This information enables adaptive assistance - reducing detail when user is fatigued, increasing
-support when attention is low, etc.
-
-HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-The problem emphasizes "Routine Workflow" and "Skill Development" - understanding user state
-enables the system to adapt assistance appropriately, supporting both immediate needs and
-long-term skill development.
-
-TECHNICAL DESIGN DECISIONS:
-- Small input size (64x64): Fast inference for real-time use
-- Normalized inputs [0,1]: Ensures conv layers receive meaningful activations
-- Dropout in FC heads: Prevents degenerate outputs with small batches
-- Proper initialization: Ensures meaningful outputs from the start
-
-Phase 1: Core ML Backbone & Preprocessing
-See docs/therapy_system_implementation_plan.md for implementation details.
-"""
+"""Eye/Face Micro-Model..."""
 
 import torch
 import torch.nn as nn
@@ -47,18 +9,7 @@ from PIL import Image
 
 
 class EyeImagePreprocessor:
-    """
-    Preprocessor for eye/face images before feeding to EyeModel.
-    
-    WHY THIS CLASS EXISTS:
-    Eye model requires specific preprocessing:
-    1. Normalize to [0,1] range - ensures conv layers receive meaningful activations
-    2. Resize/crop to [64, 64] - model expects fixed input size
-    3. Optional contrast adjustment - improves detection in varying lighting
-    
-    Without proper preprocessing, conv layers may output meaningless activations, leading to
-    wrong blink/fixation/pupil predictions.
-    """
+    """Preprocessor for eye/face images before feeding to EyeModel."""
     
     def __init__(
         self,
@@ -66,14 +17,7 @@ class EyeImagePreprocessor:
         normalize: bool = True,
         contrast_adjust: bool = True
     ):
-        """
-        Initialize eye image preprocessor.
-        
-        Arguments:
-            target_size: Target image size (height, width) - must be (64, 64) for EyeModel
-            normalize: Normalize to [0,1] range (required for meaningful conv activations)
-            contrast_adjust: Apply contrast adjustment for better detection
-        """
+        """Initialize eye image preprocessor...."""
         self.target_size = target_size
         self.normalize = normalize
         self.contrast_adjust = contrast_adjust
@@ -91,28 +35,19 @@ class EyeImagePreprocessor:
         self.transform = transforms.Compose(transform_list)
     
     def _adjust_contrast(self, image: Image.Image) -> Image.Image:
-        """
-        Adjust contrast for better eye detection.
-        
-        WHY CONTRAST ADJUSTMENT:
-        Eye images often have low contrast, especially in varying lighting conditions.
-        Contrast adjustment ensures conv layers can detect meaningful features (pupil, iris,
-        eyelid edges) for accurate blink/fixation/pupil predictions.
-        """
+        """Adjust contrast for better eye detection...."""
         from PIL import ImageEnhance
         enhancer = ImageEnhance.Contrast(image)
         return enhancer.enhance(1.2)  # 20% contrast boost
     
     def __call__(self, image: Image.Image) -> torch.Tensor:
-        """
-        Preprocess eye/face image.
+        """Preprocess eye/face image.
         
         Arguments:
             image: PIL Image of face/eye region
         
         Returns:
-            Preprocessed tensor [3, 64, 64] in [0,1] range
-        """
+            Preprocessed tensor [3, 64, 64] in [0,1] range"""
         result = self.transform(image)
         # Ensure result is a tensor (transform should return tensor due to ToTensor())
         if not isinstance(result, torch.Tensor):
@@ -127,20 +62,7 @@ class EyeImagePreprocessor:
         tensor: torch.Tensor,
         ensure_normalized: bool = True
     ) -> torch.Tensor:
-        """
-        Preprocess tensor directly (for batch processing).
-        
-        WHY THIS FUNCTION:
-        Sometimes we have tensors already (from video frames). This function ensures they're
-        properly normalized and resized before feeding to the model.
-        
-        Arguments:
-            tensor: Input tensor [B, C, H, W] or [C, H, W]
-            ensure_normalized: Ensure values are in [0,1] range
-        
-        Returns:
-            Preprocessed tensor [B, 3, 64, 64] or [3, 64, 64] in [0,1] range
-        """
+        """Preprocess tensor directly (for batch processing)."""
         # Ensure batch dimension
         if tensor.dim() == 3:
             tensor = tensor.unsqueeze(0)
@@ -177,46 +99,14 @@ class EyeImagePreprocessor:
 
 
 class EyeModel(nn.Module):
-    """
-    Tiny CNN for eye/face tracking and fatigue detection.
-    
-    WHY THIS CLASS EXISTS:
-    This model provides eye tracking capabilities for understanding user state (fatigue, attention,
-    cognitive load). This information enables adaptive assistance - the system can adjust
-    verbosity, frequency, and detail levels based on user state.
-    
-    Architecture:
-    Conv -> ReLU -> Conv -> ReLU -> FC -> outputs:
-    - Blink probability (0–1)
-    - Fixation vs saccade pattern (softmax over 2 classes)
-    - Pupil-size proxy (0–1)
-    
-    Input: [B, 3, 64, 64] - Face/eye region (64x64 for speed)
-    Output: Dict with blink_prob, fixation_pattern, pupil_size
-    
-    CRITICAL REQUIREMENTS:
-    1. Input must be normalized to [0,1] range - otherwise conv layers output meaningless activations
-    2. Input must be exactly [B, 3, 64, 64] - model assumes this shape
-    3. Training labels for fixation must match softmax format (binary 0/1 is fine)
-    4. Dropout prevents degenerate FC outputs with small batches
-    """
+    """Tiny CNN for eye/face tracking and fatigue detection."""
     
     def __init__(
         self,
         input_size: Tuple[int, int] = (64, 64),
         dropout: float = 0.15
     ):
-        """
-        Initialize eye model.
-        
-        WHY THESE PARAMETERS:
-        - input_size: Must be (64, 64) - model architecture assumes this
-        - dropout: Prevents degenerate FC outputs with small batches or poor initialization
-        
-        Arguments:
-            input_size: Input image size (height, width) - must be (64, 64)
-            dropout: Dropout probability for FC heads (0.15 = 15% dropout)
-        """
+        """Initialize eye model...."""
         super().__init__()
         if input_size != (64, 64):
             raise ValueError(f"EyeModel requires input_size=(64, 64), got {input_size}")
@@ -232,7 +122,6 @@ class EyeModel(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1)
         
         # Output heads with dropout to prevent degenerate outputs
-        # WHY DROPOUT: With only 32 features into FC heads, small batches or poor initialization
         #              can lead to NaN or constant outputs. Dropout prevents this.
         self.blink_head = nn.Sequential(
             nn.Linear(32, 16),
@@ -264,13 +153,7 @@ class EyeModel(nn.Module):
         self._initialize_weights()
     
     def _initialize_weights(self):
-        """
-        Initialize weights to prevent degenerate outputs.
-        
-        WHY PROPER INITIALIZATION:
-        With only 32 features into FC heads, poor initialization can lead to NaN or constant
-        outputs. Proper initialization ensures heads produce meaningful outputs from the start.
-        """
+        """Initialize weights to prevent degenerate outputs...."""
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -285,23 +168,7 @@ class EyeModel(nn.Module):
                     nn.init.constant_(m.bias, 0)
     
     def forward(self, face_region: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass through eye model.
-        
-        CRITICAL INPUT REQUIREMENTS:
-        1. Input must be normalized to [0,1] range
-        2. Input shape must be [B, 3, 64, 64]
-        3. Use EyeImagePreprocessor to ensure proper preprocessing
-        
-        Arguments:
-            face_region: Face/eye region [B, 3, 64, 64] in [0,1] range
-        
-        Returns:
-            Dictionary with:
-                - 'blink_prob': [B, 1] - Blink probability [0, 1]
-                - 'fixation': [B, 2] - [fixation_prob, saccade_prob] (softmax probabilities)
-                - 'pupil_size': [B, 1] - Pupil size proxy [0, 1]
-        """
+        """Forward pass through eye model...."""
         # Validate input shape
         if face_region.dim() != 4:
             raise ValueError(f"Expected 4D tensor [B, 3, 64, 64], got {face_region.shape}")
@@ -365,16 +232,7 @@ class EyeModel(nn.Module):
         }
     
     def get_fixation_label_format(self) -> str:
-        """
-        Get expected label format for fixation head.
-        
-        WHY THIS FUNCTION:
-        Clarifies that fixation head uses softmax, so labels should be binary (0/1) for
-        fixation vs saccade. If continuous probabilities are needed, use Sigmoid instead.
-        
-        Returns:
-            Description of expected label format
-        """
+        """Get expected label format for fixation head."""
         return (
             "Fixation head uses Softmax, so labels should be binary (0/1): "
             "[0, 1] for fixation, [1, 0] for saccade. "

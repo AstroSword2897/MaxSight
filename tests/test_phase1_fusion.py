@@ -1,12 +1,10 @@
-"""
-Comprehensive Tests for Phase 1: Multi-Modal Sensor Fusion
+"""Comprehensive Tests for Phase 1: Multi-Modal Sensor Fusion
 
 Tests all Phase 1 components:
 - Enhanced Audio Encoder
 - Spatial Sound Mapping
 - Haptic Feedback Embedding
-- Multi-Modal Transformer Fusion
-"""
+- Multi-Modal Transformer Fusion"""
 
 import torch
 import torch.nn as nn

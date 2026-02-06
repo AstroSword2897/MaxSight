@@ -17,20 +17,7 @@ def benchmark_inference(
     input_shapes: Optional[Dict[int, tuple]] = None,
     save_path: Optional[str] = None
 ) -> Dict[str, float]:
-    """
-    Benchmark model inference latency.
-    
-        Arguments:
-        model: Model to benchmark
-        input_size: Input tensor shape (batch, channels, height, width)
-        device: Device to run on (default: model's device)
-        num_warmup: Number of warmup runs
-        num_runs: Number of timing runs
-        batch_sizes: List of batch sizes to test (default: [1, 4, 8])
-    
-    Returns:
-        Dictionary with latency stats (mean, median, min, max, std) in milliseconds
-    """
+    """Benchmark model inference latency...."""
     if device is None:
         device = next(model.parameters()).device
     if isinstance(device, str):

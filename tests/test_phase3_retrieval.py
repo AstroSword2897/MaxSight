@@ -1,12 +1,4 @@
-"""
-Comprehensive Tests for Phase 3: Multi-Vector Retrieval System
-
-Tests all Phase 3 components:
-- Retrieval Encoders (Global, Region, Patch, Depth, OCR, Audio, Scene Graph)
-- Attention-Based Fusion
-- FAISS Indexing
-- Two-Stage Retrieval
-"""
+"""Comprehensive Tests for Phase 3: Multi-Vector Retrieval System..."""
 
 import torch
 import torch.nn as nn

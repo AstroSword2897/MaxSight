@@ -1,8 +1,6 @@
-"""
-Schema Validator, Downgrade Policy, and Stress Tests
+"""Schema Validator, Downgrade Policy, and Stress Tests
 
-Validates outputs against schema v1.1, enforces safety rules, and runs stress tests.
-"""
+Validates outputs against schema v1.1, enforces safety rules, and runs stress tests."""
 
 import json
 import time
@@ -14,30 +12,24 @@ logger = logging.getLogger(__name__)
 
 
 class SchemaValidator:
-    """
-    Validates outputs against accessibility output schema v1.1.
-    Enforces safety rules and semantic clarity.
-    """
+    """Validates outputs against accessibility output schema v1.1.
+    Enforces safety rules and semantic clarity."""
     
     def __init__(self, strict: bool = True):
-        """
-        Initialize validator.
+        """Initialize validator.
         
         Arguments:
-            strict: If True, enforce all rules strictly. If False, allow warnings.
-        """
+            strict: If True, enforce all rules strictly. If False, allow warnings."""
         self.strict = strict
     
     def validate(self, outputs: Dict[str, Any]) -> Tuple[bool, List[str]]:
-        """
-        Validate outputs against schema v1.1.
+        """Validate outputs against schema v1.1.
         
         Arguments:
             outputs: Output dictionary to validate
         
         Returns:
-            Tuple of (is_valid, list_of_errors)
-        """
+            Tuple of (is_valid, list_of_errors)"""
         errors = []
         
         # Check required fields
@@ -230,34 +222,21 @@ class SchemaValidator:
 
 
 class SchemaDowngrader:
-    """
-    Downgrades outputs to safe state when validation fails or heads are missing.
+    """Downgrades outputs to safe state when validation fails or heads are missing.
     
-    Implements graceful degradation policy.
-    """
+    Implements graceful degradation policy."""
     
     def __init__(self, min_confidence: float = 0.5, max_uncertainty: float = 0.7):
-        """
-        Initialize downgrader.
+        """Initialize downgrader.
         
         Arguments:
             min_confidence: Minimum confidence for safe outputs
-            max_uncertainty: Maximum uncertainty for safe outputs
-        """
+            max_uncertainty: Maximum uncertainty for safe outputs"""
         self.min_confidence = min_confidence
         self.max_uncertainty = max_uncertainty
     
     def downgrade(self, outputs: Dict[str, Any], reason: str = "validation_failed") -> Dict[str, Any]:
-        """
-        Downgrade outputs to safe state.
-        
-        Arguments:
-            outputs: Output dictionary to downgrade
-            reason: Reason for downgrade
-        
-        Returns:
-            Downgraded outputs dictionary
-        """
+        """Downgrade outputs to safe state...."""
         downgraded = outputs.copy()
         
         # Ensure output_validity exists and is safe
@@ -295,16 +274,7 @@ class SchemaDowngrader:
         outputs: Dict[str, Any],
         missing_heads: List[str]
     ) -> Dict[str, Any]:
-        """
-        Downgrade outputs when heads are missing.
-        
-        Arguments:
-            outputs: Output dictionary
-            missing_heads: List of missing head names
-        
-        Returns:
-            Downgraded outputs dictionary
-        """
+        """Downgrade outputs when heads are missing...."""
         downgraded = outputs.copy()
         
         # Update output_validity
@@ -336,17 +306,7 @@ def validate_and_downgrade(
     strict: bool = True,
     auto_downgrade: bool = True
 ) -> Tuple[Dict[str, Any], bool, List[str]]:
-    """
-    Convenience function to validate and optionally downgrade outputs.
-    
-    Arguments:
-        outputs: Output dictionary to validate
-        strict: Whether to enforce strict validation
-        auto_downgrade: Whether to automatically downgrade on failure
-    
-    Returns:
-        Tuple of (outputs, is_valid, errors)
-    """
+    """Convenience function to validate and optionally downgrade outputs...."""
     validator = SchemaValidator(strict=strict)
     is_valid, errors = validator.validate(outputs)
     

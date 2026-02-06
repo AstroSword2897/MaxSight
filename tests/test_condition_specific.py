@@ -1,7 +1,6 @@
 """Test model robustness with condition-specific impairment simulations.
 
-Tests all 13 vision conditions to ensure model remains functional under various impairments.
-"""
+Tests all 13 vision conditions to ensure model remains functional under various impairments."""
 
 import torch
 import torch.nn as nn
@@ -26,19 +25,13 @@ from ml.utils.preprocessing import (
 
 
 def test_condition_robustness():
-    """
-    Test model performance with all 13 vision condition impairment simulations.
-    
-    Tests ensure model remains functional (<10% degradation) under various visual impairments.
-    Uses both direct impairment functions and ImagePreprocessor for comprehensive coverage.
-    """
+    """Test model performance with all 13 vision condition impairment simulations...."""
     print("Condition-Specific Robustness Testing - All 13 Conditions")
     
     model = create_model()
     model.eval()
     device = next(model.parameters()).device
     
-    # Create test image (PIL format for ImagePreprocessor, tensor for direct functions)
     dummy_image_np = np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8)
     dummy_image_pil = Image.fromarray(dummy_image_np)
     dummy_image_tensor = torch.randn(1, 3, 224, 224).to(device)
@@ -80,7 +73,6 @@ def test_condition_robustness():
         print(f"\n{len(results) + 2}. {condition_name}")
         
         try:
-            # Method 1: Use ImagePreprocessor (more realistic, includes full preprocessing pipeline)
             preprocessor = ImagePreprocessor(condition_mode=condition_mode)
             processed_tensor = preprocessor(dummy_image_pil)
             if processed_tensor.dim() == 3:
@@ -161,8 +153,7 @@ def test_condition_robustness():
     
     print(f"\nStatus: {'ALL TESTS PASSED' if passed == total else 'SOME TESTS FAILED'}")
     
-    # Assertion - require majority of conditions to pass (model runs without error and degradation within threshold)
-    min_pass_rate = 0.50  # At least half must pass; baseline is random input so detection counts vary
+    min_pass_rate = 0.50
     actual_pass_rate = passed / total if total > 0 else 0.0
     assert actual_pass_rate >= min_pass_rate, \
         f"Expected at least {min_pass_rate*100:.0f}% conditions to pass, but only {passed}/{total} passed ({actual_pass_rate*100:.1f}%)"

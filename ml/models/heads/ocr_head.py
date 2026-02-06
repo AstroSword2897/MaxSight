@@ -1,9 +1,4 @@
-"""
-Transformer-Based OCR Head for MaxSight 3.0
-
-Transformer encoder for text detection and decoder for text recognition.
-Supports per-region decoding, optional context embeddings, and scene-text integration.
-"""
+"""Transformer-Based OCR Head for MaxSight 3.0..."""
 
 import torch
 import torch.nn as nn
@@ -12,15 +7,7 @@ from typing import Dict, Optional
 
 
 class TransformerOCRHead(nn.Module):
-    """
-    Transformer-based OCR head.
-
-    Features:
-    - Transformer encoder: Text region features -> embeddings
-    - Transformer decoder: autoregressive text recognition per region
-    - Optional context embeddings for scene objects
-    - Text bounding box prediction
-    """
+    """Transformer-based OCR head...."""
 
     def __init__(
         self,
@@ -87,30 +74,7 @@ class TransformerOCRHead(nn.Module):
         motion_stability: Optional[torch.Tensor] = None,  # [B, 1] - FIXED: Motion stability gate
         cognitive_budget: Optional[float] = None  # FIXED: Cognitive budget gate
     ) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass through OCR head.
-        
-        FIXED: OCR now has gating layers to prevent unsafe execution:
-        - Text-likelihood gate from backbone
-        - Motion stability gate (don't OCR while moving fast)
-        - Cognitive budget gate
-
-        Args:
-            features: Text region features [B, N_regions, input_dim]
-            context_embeddings: Optional object context [B, N_objects, embed_dim]
-            target_text: Optional target text for teacher forcing [B, N_regions, seq_len]
-            text_likelihood: Optional text likelihood scores [B, N_regions] - gates execution
-            motion_stability: Optional motion stability [B, 1] - gates execution if < threshold
-            cognitive_budget: Optional cognitive budget remaining - gates execution if < threshold
-
-        Returns:
-            Dictionary with:
-                - 'text_logits': [B, N_regions, max_length, vocab_size]
-                - 'text_boxes': [B, N_regions, 4]
-                - 'text_scores': [B, N_regions]
-                - 'encoded_features': [B, N_regions, embed_dim]
-                - 'gated': [B, N_regions] - whether each region was processed
-        """
+        """Forward pass through OCR head...."""
         B, N_regions, _ = features.shape
 
         # FIXED: OCR Gating - don't run unconditionally

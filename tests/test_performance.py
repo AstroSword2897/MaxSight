@@ -1,7 +1,5 @@
-"""
-Performance Benchmark Tests for MaxSight Model
-Tests latency, throughput, and memory usage for production deployment.
-"""
+"""Performance Benchmark Tests for MaxSight Model
+Tests latency, throughput, and memory usage for production deployment."""
 
 import torch
 import time

@@ -1,13 +1,4 @@
-"""
-Inference Engine - State Machine + Circuit Breaker
-The spine of MaxSight's inference system with medical-grade reliability.
-
-This module implements:
-1. State machine (INIT → WARMUP → STABLE → DEGRADED → HALTED)
-2. Circuit breaker triggers (uncertainty, latency, fallbacks, sensor desync)
-3. Self-degradation logic (reduce tier, raise thresholds, suppress outputs)
-4. Safe session halt for patient safety
-"""
+"""Inference Engine - State Machine + Circuit Breaker..."""
 
 import torch
 import time
@@ -100,10 +91,8 @@ class CircuitBreakerConfig:
 
 
 class ThermalThrottleDetector:
-    """
-    Detect sustained latency degradation (e.g. thermal throttling).
-    Uses a sliding window: if current avg latency > baseline * 2.0, return True.
-    """
+    """Detect sustained latency degradation (e.g. thermal throttling).
+    Uses a sliding window: if current avg latency > baseline * 2.0, return True."""
 
     def __init__(self, window_size_seconds: float = 30.0):
         self.window_size = window_size_seconds
@@ -137,16 +126,7 @@ class ThermalThrottleDetector:
 
 
 class InferenceEngine:
-    """
-    Spine of MaxSight inference with state machine and circuit breaker.
-    
-    Provides:
-    - Controlled execution with state transitions
-    - Automatic degradation under stress
-    - Safe halt for patient safety
-    - Deterministic preprocessing
-    - Unified inference entrypoint
-    """
+    """Spine of MaxSight inference with state machine and circuit breaker...."""
     
     def __init__(
         self,
@@ -156,16 +136,7 @@ class InferenceEngine:
         circuit_breaker_config: Optional[CircuitBreakerConfig] = None,
         checkpoint_path: Optional[str] = None,
     ):
-        """
-        Initialize inference engine.
-
-        Args:
-            device: Device to run on ('cpu', 'cuda', 'mps')
-            condition_mode: Visual condition mode
-            output_mode: Output mode (patient/clinician/dev)
-            circuit_breaker_config: Circuit breaker configuration
-            checkpoint_path: Optional path to trained checkpoint; if set, load state_dict in initialize()
-        """
+        """Initialize inference engine...."""
         self.output_mode = output_mode
         self.condition_mode = condition_mode
         self.circuit_breaker_config = circuit_breaker_config or CircuitBreakerConfig()
@@ -241,16 +212,7 @@ class InferenceEngine:
         image: torch.Tensor,
         audio_features: Optional[torch.Tensor] = None
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """
-        Run inference with state machine and circuit breaker.
-        
-        Args:
-            image: Preprocessed image tensor [1, 3, H, W]
-            audio_features: Optional audio features
-        
-        Returns:
-            (outputs dict, metadata dict)
-        """
+        """Run inference with state machine and circuit breaker...."""
         if self.state == InferenceState.HALTED:
             logger.error("Inference engine is halted")
             return self._get_safe_fallback(), {'halted': True}
@@ -260,7 +222,6 @@ class InferenceEngine:
         assert self.model is not None  # Narrow type after initialize()
         
         # Run inference with timing
-        # CRITICAL: Synchronize GPU before timing (CUDA or MPS) for accurate latency measurements
         device = next(self.model.parameters()).device
         if device.type == 'cuda':
             torch.cuda.synchronize()

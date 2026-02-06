@@ -1,13 +1,4 @@
-"""
-Production-Ready Multi-Vector Retrieval Heads for MaxSight 3.0
-
-CRITICAL IMPROVEMENTS:
-- Common embedding space (all projections to same dimension)
-- Batch consistency guarantees
-- Region boxes preserved
-- Normalized output format
-- Scene graph validation
-"""
+"""Production-Ready Multi-Vector Retrieval Heads for MaxSight 3.0..."""
 
 import torch
 import torch.nn as nn
@@ -22,16 +13,7 @@ from ml.retrieval.encoders.scene_graph_encoder import SceneGraphRetrievalEncoder
 
 
 class MultiVectorRetrievalHeads(nn.Module):
-    """
-    Production-ready multi-vector retrieval heads.
-    
-    CRITICAL FEATURES:
-    - Common embedding space (all modalities → 256D)
-    - Batch consistency (fixed max regions/patches)
-    - Region boxes preserved
-    - Normalized output format
-    - Scene graph validation
-    """
+    """Production-ready multi-vector retrieval heads...."""
     
     def __init__(
         self,
@@ -79,21 +61,7 @@ class MultiVectorRetrievalHeads(nn.Module):
         text_snippets: Optional[List[List[str]]] = None,  # Variable length per image
         scene_graph: Optional[Dict] = None
     ) -> Dict[str, torch.Tensor]:
-        """
-        Extract all embedding types in common space.
-        
-        Returns normalized format:
-        {
-            'global': [B, common_embed_dim],
-            'region': [B, max_regions, common_embed_dim],
-            'region_boxes': [B, max_regions, 4],
-            'patch': [B, max_patches, common_embed_dim],
-            'depth': [B, H*W, common_embed_dim] or [B, common_embed_dim] (pooled),
-            'ocr': [B, max_texts, common_embed_dim] (padded if needed),
-            'audio': [B, common_embed_dim] or [B, A, common_embed_dim],
-            'scene_graph': [B, common_embed_dim]
-        }
-        """
+        """Extract all embedding types in common space...."""
         B = images.shape[0]
         device = images.device
         embeddings = {}

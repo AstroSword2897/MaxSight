@@ -1,7 +1,5 @@
-"""
-Tiered alert cooldown for MaxSight.
-Prevents repeated alerts for the same object across frames.
-"""
+"""Tiered alert cooldown for MaxSight.
+Prevents repeated alerts for the same object across frames."""
 from typing import List, Dict, Any, Optional
 import hashlib
 
@@ -23,9 +21,7 @@ def _object_id(det: Dict[str, Any]) -> str:
 
 
 class AlertCooldownFilter:
-    """
-    Filter out detections that were alerted in the last cooldown_frames frames.
-    """
+    """Filter out detections that were alerted in the last cooldown_frames frames."""
 
     def __init__(self, cooldown_frames: int = 5):
         self.cooldown_frames = cooldown_frames
@@ -36,10 +32,8 @@ class AlertCooldownFilter:
         detections: List[Dict[str, Any]],
         frame_id: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        Return only detections that are not in cooldown.
-        frame_id: current frame index; if None, use internal counter.
-        """
+        """Return only detections that are not in cooldown.
+        frame_id: current frame index; if None, use internal counter."""
         if not hasattr(self, "_frame_counter"):
             self._frame_counter = 0
         if frame_id is not None:

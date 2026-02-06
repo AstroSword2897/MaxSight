@@ -1,7 +1,5 @@
-"""
-Unit tests for integration constraints.
-Ensures architectural constraints are enforced.
-"""
+"""Unit tests for integration constraints.
+Ensures architectural constraints are enforced."""
 import torch
 import torch.nn.functional as F
 import pytest

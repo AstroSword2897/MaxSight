@@ -1,15 +1,4 @@
-"""Ultra-Optimized Hybrid CNN + Vision Transformer Backbone for MaxSight 3.0
-
-Production-grade implementation with state-of-the-art optimizations:
-- Bidirectional cross-attention with Flash Attention
-- Improved gradient flow with differentiable gating
-- Multi-head efficient pooling
-- Feature caching support
-- Learnable residual scaling
-- xformers integration when available
-- Full torch.compile support
-- Mixed precision throughout
-"""
+"""Ultra-Optimized Hybrid CNN + Vision Transformer Backbone for MaxSight 3.0..."""
 
 import torch
 import torch.nn as nn
@@ -28,12 +17,10 @@ except ImportError:
 
 
 def create_sinusoidal_pos_embedding(num_positions: int, embed_dim: int) -> torch.Tensor:
-    """
-    Create sinusoidal positional embeddings (non-learned alternative).
+    """Create sinusoidal positional embeddings (non-learned alternative).
     
     Formula: PE(pos, 2i) = sin(pos / 10000^(2i/d_model))
-             PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))
-    """
+             PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))"""
     position = torch.arange(num_positions).unsqueeze(1).float()
     div_term = torch.exp(torch.arange(0, embed_dim, 2).float() * 
                         -(math.log(10000.0) / embed_dim))
@@ -46,15 +33,7 @@ def create_sinusoidal_pos_embedding(num_positions: int, embed_dim: int) -> torch
 
 
 class TransformerBlock(nn.Module):
-    """
-    Single Transformer encoder block with pre-norm architecture.
-    
-    Architecture:
-    - Pre-norm: LayerNorm before attention/FFN (more stable training)
-    - Multi-head self-attention
-    - Feed-forward network with GELU activation
-    - Residual connections
-    """
+    """Single Transformer encoder block with pre-norm architecture...."""
     
     def __init__(
         self,
@@ -93,15 +72,13 @@ class TransformerBlock(nn.Module):
         self.dropout = nn.Dropout(dropout)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through transformer block.
+        """Forward pass through transformer block.
         
         Args:
             x: Input tokens [B, N, embed_dim]
         
         Returns:
-            Output tokens [B, N, embed_dim]
-        """
+            Output tokens [B, N, embed_dim]"""
         # Pre-norm attention with residual
         x_norm = self.norm1(x)
         attn_out, attn_weights = self.attention(x_norm, x_norm, x_norm)
@@ -116,23 +93,7 @@ class TransformerBlock(nn.Module):
 
 
 class VisionTransformerBackbone(nn.Module):
-    """
-    Complete Vision Transformer backbone.
-    
-    Architecture:
-    1. Patch embedding: Divide image into patches
-    2. CLS token: Learnable classification token
-    3. Positional embedding: Learned or sinusoidal
-    4. Transformer blocks: Stack of self-attention layers
-    5. Output: CLS token (global) + patch tokens (spatial)
-    
-    Hyperparameters (ViT-Base):
-    - embed_dim: 768
-    - num_layers: 12
-    - num_heads: 12
-    - mlp_ratio: 4.0
-    - patch_size: 16
-    """
+    """Complete Vision Transformer backbone...."""
     
     def __init__(
         self,
@@ -236,17 +197,7 @@ class VisionTransformerBackbone(nn.Module):
         x: torch.Tensor,
         return_patch_tokens: bool = True
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        """
-        Forward pass through Vision Transformer.
-        
-        Args:
-            x: Input images [B, C, H, W]
-            return_patch_tokens: Whether to return patch tokens
-        
-        Returns:
-            cls_token: Global scene representation [B, embed_dim]
-            patch_tokens: Spatial features [B, num_patches, embed_dim] (if return_patch_tokens)
-        """
+        """Forward pass through Vision Transformer...."""
         B, C, H, W = x.shape
         
         # Validate input size
@@ -257,7 +208,6 @@ class VisionTransformerBackbone(nn.Module):
         # [B, C, H, W] -> [B, embed_dim, H/patch_size, W/patch_size]
         x = self.patch_embed(x)
         
-        # Flatten spatial dimensions: [B, embed_dim, H', W'] -> [B, embed_dim, N_patches]
         # Then transpose: [B, N_patches, embed_dim]
         x = x.flatten(2).transpose(1, 2)  # [B, num_patches, embed_dim]
         
@@ -290,16 +240,7 @@ class VisionTransformerBackbone(nn.Module):
         x: torch.Tensor,
         n: int = 4
     ) -> list:
-        """
-        Get intermediate layer outputs for feature extraction.
-        
-        Args:
-            x: Input images [B, C, H, W]
-            n: Number of layers to return (evenly spaced)
-        
-        Returns:
-            List of intermediate outputs
-        """
+        """Get intermediate layer outputs for feature extraction...."""
         B, C, H, W = x.shape
         
         # Patch embedding and CLS token
@@ -337,12 +278,10 @@ class MultiHeadEfficientPooling(nn.Module):
         self.proj = nn.Linear(dim, dim, bias=False)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
+        """Args:
             x: [B, N, D]
         Returns:
-            pooled: [B, D]
-        """
+            pooled: [B, D]"""
         B, N, D = x.shape
         
         # Mean as query, all patches as keys/values
@@ -482,12 +421,7 @@ class EfficientCrossModalAttention(nn.Module):
 
 
 class FeatureCache:
-    """
-    Feature cache for repeated forward passes.
-    
-    FIXED: Uses frame ID/timestamp hash instead of mean-based hash to prevent collisions.
-    Caching is experimental and disabled by default in safety-critical paths.
-    """
+    """Feature cache for repeated forward passes...."""
     
     def __init__(self, max_size: int = 8, use_frame_id: bool = True):
         self.cache = {}
@@ -512,16 +446,7 @@ class FeatureCache:
         self.frame_counter = 0
     
     def _make_cache_key(self, x: torch.Tensor, frame_id: Optional[int] = None) -> str:
-        """
-        FIXED: Use frame ID/timestamp instead of mean hash to prevent collisions.
-        
-        Args:
-            x: Input tensor
-            frame_id: Optional frame identifier (timestamp or sequence number)
-        
-        Returns:
-            Cache key string
-        """
+        """FIXED: Use frame ID/timestamp instead of mean hash to prevent collisions...."""
         if self.use_frame_id and frame_id is not None:
             # Use frame ID for deterministic, collision-free caching
             return f"frame_{frame_id}"
@@ -536,16 +461,7 @@ class FeatureCache:
 
 
 class HybridCNNViTBackbone(nn.Module):
-    """
-    Ultra-optimized Hybrid CNN + ViT backbone.
-    
-    Performance gains over baseline:
-    - 50-60% memory reduction
-    - 3-4x faster with Flash Attention
-    - Better gradient flow
-    - Feature caching support
-    - Full torch.compile compatibility
-    """
+    """Ultra-optimized Hybrid CNN + ViT backbone...."""
 
     def __init__(
         self,
@@ -556,7 +472,7 @@ class HybridCNNViTBackbone(nn.Module):
         vit_depth: int = 12,
         vit_num_heads: int = 12,
         fused_dim: int = 512,
-        fusion_method: str = 'weighted',  # FIXED: Default to weighted (stable), cross_attention for research
+        fusion_method: str = 'weighted',
         use_cross_layer_connections: bool = True,
         use_bidirectional_attention: bool = True,
         dropout: float = 0.1,
@@ -587,7 +503,6 @@ class HybridCNNViTBackbone(nn.Module):
         self.fpn_levels = fpn_levels
         self.enable_feature_cache = enable_feature_cache
         
-        # FIXED: Constrain cross-layer alpha with sigmoid to prevent runaway amplification
         if cross_layer_alpha is None:
             # Learnable parameter, will be constrained with sigmoid
             self.cross_layer_alpha_raw = nn.Parameter(torch.tensor(0.1))
@@ -746,12 +661,10 @@ class HybridCNNViTBackbone(nn.Module):
             nn.init.zeros_(m.bias)
 
     def extract_cnn_features(self, x: torch.Tensor, frame_id: Optional[int] = None) -> List[torch.Tensor]:
-        """
-        Extract CNN features with optional caching.
+        """Extract CNN features with optional caching.
         
         FIXED: Uses frame_id for cache key instead of mean hash.
-        Caching is experimental and disabled by default in safety-critical paths.
-        """
+        Caching is experimental and disabled by default in safety-critical paths."""
         
         if self.enable_feature_cache and not self.training:
             # FIXED: Use frame_id-based cache key instead of mean hash
@@ -803,7 +716,6 @@ class HybridCNNViTBackbone(nn.Module):
         vit_projected = self.vit_to_cnn_proj(vit_spatial)
         
         enhanced_cnn = []
-        # FIXED: Constrain cross-layer alpha with sigmoid to prevent runaway amplification
         if hasattr(self, 'cross_layer_alpha_raw'):
             alpha = torch.sigmoid(self.cross_layer_alpha_raw)
         else:

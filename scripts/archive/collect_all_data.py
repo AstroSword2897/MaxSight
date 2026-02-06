@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
-"""
-Comprehensive Data Collection Runner
-
-Runs all data collection scripts:
-1. Loss function data collection
-2. Inference dataset statistics
-3. Model completeness verification
-4. Generates comprehensive report
-
-Usage:
-    python scripts/collect_all_data.py \
-        --checkpoint checkpoints/model.pth \
-        --data-dir datasets/coco \
-        --output-dir collected_data
-"""
+"""Comprehensive Data Collection Runner..."""
 
 import argparse
 import sys
@@ -30,12 +16,10 @@ from scripts.collect_inference_data import collect_inference_data
 
 
 def verify_model_completeness() -> Dict[str, Any]:
-    """
-    Verify model completeness and document stubs.
+    """Verify model completeness and document stubs.
     
     Returns:
-        Dictionary with completeness status
-    """
+        Dictionary with completeness status"""
     print("\n" + "="*60)
     print("Model Completeness Verification")
     print("="*60)

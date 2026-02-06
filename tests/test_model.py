@@ -1,7 +1,5 @@
-"""
-Unit Tests for MaxSight CNN Model
-Sprint 1 Validation
-"""
+"""Unit Tests for MaxSight CNN Model
+Sprint 1 Validation"""
 
 import sys
 from pathlib import Path

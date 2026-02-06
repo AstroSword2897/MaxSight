@@ -1,8 +1,6 @@
-"""
-Attention-Based Fusion for Multi-Vector Retrieval
+"""Attention-Based Fusion for Multi-Vector Retrieval
 
-Query-adaptive attention fusion of multiple embedding types.
-"""
+Query-adaptive attention fusion of multiple embedding types."""
 
 import torch
 import torch.nn as nn
@@ -11,11 +9,9 @@ from typing import Dict, Optional, List
 
 
 class AttentionFusion(nn.Module):
-    """
-    Query-adaptive attention fusion.
+    """Query-adaptive attention fusion.
     
-    Learns attention weights per embedding type dynamically based on query.
-    """
+    Learns attention weights per embedding type dynamically based on query."""
     
     def __init__(
         self,
@@ -55,16 +51,7 @@ class AttentionFusion(nn.Module):
         embeddings: Dict[str, torch.Tensor],
         query_embedding: Optional[torch.Tensor] = None  # [B, fused_dim]
     ) -> torch.Tensor:
-        """
-        Fuse multiple embeddings using attention.
-        
-        Args:
-            embeddings: Dictionary of embeddings {name: tensor}
-            query_embedding: Optional query embedding for adaptive fusion
-        
-        Returns:
-            Fused embedding [B, fused_dim]
-        """
+        """Fuse multiple embeddings using attention...."""
         B = next(iter(embeddings.values())).shape[0]
         device = next(iter(embeddings.values())).device
         

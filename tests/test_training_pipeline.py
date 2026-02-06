@@ -1,7 +1,5 @@
-"""
-Training Pipeline Tests for MaxSight Model
-Tests training infrastructure with dummy/synthetic data.
-"""
+"""Training Pipeline Tests for MaxSight Model
+Tests training infrastructure with dummy/synthetic data."""
 
 import torch
 import torch.nn as nn

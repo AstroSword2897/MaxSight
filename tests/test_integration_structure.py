@@ -1,12 +1,4 @@
-"""
-Structural Tests for Integration Features
-
-These tests verify the code structure and integration points without requiring
-PyTorch to be installed. They check that:
-1. Imports work correctly
-2. Integration code exists
-3. Code structure is correct
-"""
+"""Structural Tests for Integration Features..."""
 
 import sys
 import ast

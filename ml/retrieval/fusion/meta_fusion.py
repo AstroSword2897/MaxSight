@@ -1,9 +1,4 @@
-"""
-Meta-Learning Fusion Weights for Phase 6: Personalization & Active Guidance
-
-Adapts fusion weights based on user preferences and task performance.
-Uses MAML (Model-Agnostic Meta-Learning) for fast adaptation.
-"""
+"""Meta-Learning Fusion Weights for Phase 6: Personalization & Active Guidance..."""
 
 import torch
 import torch.nn as nn
@@ -22,12 +17,10 @@ class UserProfile:
 
 
 class MetaFusionWeights(nn.Module):
-    """
-    Meta-learning fusion weights that adapt to user preferences.
+    """Meta-learning fusion weights that adapt to user preferences.
     
     Uses gradient-based meta-learning to quickly adapt fusion weights
-    based on user feedback and task performance.
-    """
+    based on user feedback and task performance."""
     
     def __init__(
         self,
@@ -45,7 +38,6 @@ class MetaFusionWeights(nn.Module):
         self.base_weights = nn.Parameter(torch.ones(num_modalities) / num_modalities)
         
         # Meta-learner: predicts adaptation from user profile
-        # Input: num_modalities (3) + task_type (1) + urgency (1) + confidence (1) + user_embed (1) = 7
         self.meta_learner = nn.Sequential(
             nn.Linear(num_modalities + 4, hidden_dim),  # modalities + task_type + urgency + confidence + user_embed
             nn.ReLU(),
@@ -66,20 +58,7 @@ class MetaFusionWeights(nn.Module):
         urgency: Optional[float] = None,
         confidence: Optional[float] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Compute personalized fusion weights.
-        
-        Args:
-            modality_embeddings: Dict mapping modality name to embedding tensor
-            user_id: Optional user ID tensor [B]
-            task_type: Optional task type ('navigation', 'reading', 'therapy', etc.)
-            urgency: Optional urgency score [0, 1]
-            confidence: Optional confidence score [0, 1]
-        
-        Returns:
-            fused_embedding: [B, embed_dim] - Fused embedding
-            fusion_weights: [B, num_modalities] - Fusion weights used
-        """
+        """Compute personalized fusion weights...."""
         B = next(iter(modality_embeddings.values())).shape[0]
         device = next(iter(modality_embeddings.values())).device
         
@@ -163,17 +142,7 @@ class MetaFusionWeights(nn.Module):
         task_performance: Dict[str, float],
         num_steps: int = 5
     ) -> torch.Tensor:
-        """
-        Adapt fusion weights to a specific user using meta-learning.
-        
-        Args:
-            user_profile: User preference profile
-            task_performance: Dict mapping task to performance score
-            num_steps: Number of adaptation steps
-        
-        Returns:
-            Adapted fusion weights
-        """
+        """Adapt fusion weights to a specific user using meta-learning...."""
         # Create user-specific adaptation
         # This is a simplified version - full MAML would require inner loop optimization
         
@@ -192,14 +161,12 @@ class MetaFusionWeights(nn.Module):
 
 
 class ActiveSceneExploration(nn.Module):
-    """
-    Active scene exploration for Phase 6.
+    """Active scene exploration for Phase 6.
     
     Determines which regions of the scene to explore next based on:
     - Current uncertainty
     - User preferences
-    - Task requirements
-    """
+    - Task requirements"""
     
     def __init__(self, embed_dim: int = 256):
         super().__init__()
@@ -222,13 +189,7 @@ class ActiveSceneExploration(nn.Module):
         urgency: Optional[torch.Tensor] = None,  # [B]
         user_preference: Optional[float] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Determine which regions to explore next.
-        
-        Returns:
-            exploration_scores: [B, N_regions] - Scores for each region
-            selected_regions: [B, K] - Indices of top-K regions to explore
-        """
+        """Determine which regions to explore next...."""
         B, N, D = region_embeddings.shape
         device = region_embeddings.device
         
@@ -271,14 +232,7 @@ class ActiveSceneExploration(nn.Module):
 
 
 class PredictiveNavigationGuidance(nn.Module):
-    """
-    Predictive navigation guidance for Phase 6.
-    
-    Predicts optimal navigation paths and provides guidance based on:
-    - Scene understanding
-    - User preferences
-    - Historical navigation patterns
-    """
+    """Predictive navigation guidance for Phase 6...."""
     
     def __init__(self, embed_dim: int = 256, hidden_dim: int = 128):
         super().__init__()
@@ -307,16 +261,7 @@ class PredictiveNavigationGuidance(nn.Module):
         goal_embedding: torch.Tensor,  # [B, embed_dim]
         scene_context: Optional[torch.Tensor] = None  # [B, embed_dim]
     ) -> Dict[str, torch.Tensor]:
-        """
-        Predict navigation path and generate guidance.
-        
-        Returns:
-            Dictionary with:
-            - direction: [B, 2] - (dx, dy) direction vector
-            - distance: [B, 1] - Estimated distance to goal
-            - confidence: [B, 1] - Confidence in prediction
-            - guidance_priority: [B, 1] - Priority for guidance output
-        """
+        """Predict navigation path and generate guidance...."""
         B = current_embedding.shape[0]
         device = current_embedding.device
         

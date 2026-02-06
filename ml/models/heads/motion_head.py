@@ -1,14 +1,4 @@
-"""
-Motion/Flow Head for MaxSight Therapy System
-
-Scaled-up MotionHead to be computationally dominant in multi-task architecture.
-Features:
-- Multi-scale coarse-to-fine processing
-- Temporal stacking with 3D convolutions
-- Multi-stage refinement (2-3 stages)
-- Larger kernels and channel depth
-- Optional multi-resolution supervision
-"""
+"""Motion/Flow Head for MaxSight Therapy System..."""
 
 import torch
 import torch.nn as nn
@@ -17,16 +7,7 @@ from typing import Dict, Optional, Union, List
 
 
 class MotionHead(nn.Module):
-    """
-    Scaled-up motion/flow head for therapy tasks and temporal understanding.
-
-    Computationally dominant branch with:
-    - Deep coarse network (4+ layers, 256 channels)
-    - Multi-scale processing (coarse H/2 → fine H)
-    - Temporal stacking (3D convs for T frames)
-    - Multi-stage refinement (2-3 stages)
-    - Larger kernels (5x5, 7x7) for receptive field
-    """
+    """Scaled-up motion/flow head for therapy tasks and temporal understanding...."""
 
     def __init__(
         self,
@@ -51,7 +32,6 @@ class MotionHead(nn.Module):
 
         # CRITICAL: Unified coarse network that always accepts hidden_channels input
         # This eliminates layer skipping and manual channel projections
-        # If temporal stacking is used, project input to hidden_channels via temporal_proj
         # Otherwise, project in_channels to hidden_channels via input_proj
         
         # coarse_net always takes hidden_channels as input
@@ -156,17 +136,7 @@ class MotionHead(nn.Module):
         return_features: bool = False,
         return_multi_scale: bool = False
     ) -> Union[torch.Tensor, Dict[str, Union[torch.Tensor, None]]]:
-        """
-        Forward pass to generate motion flow with scaled-up computation.
-
-        Args:
-            temporal_features: [B, C, H, W] or [B, T, C, H, W] for temporal stacking
-            return_features: If True, returns intermediate features
-            return_multi_scale: If True, returns flows at multiple resolutions
-
-        Returns:
-            Motion flow [B, 2, H, W], optionally a dict with multi-scale outputs
-        """
+        """Forward pass to generate motion flow with scaled-up computation...."""
         # CRITICAL: Unified processing - no layer skipping, no hacks
         # Process input to always produce [B, hidden_channels, H, W] for coarse_net
         
@@ -283,16 +253,7 @@ class MotionHead(nn.Module):
         flow: torch.Tensor,
         image: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        """
-        Edge-aware smoothness loss.
-
-        Args:
-            flow: Predicted flow [B, 2, H, W]
-            image: Optional [B, C, H, W] image for edge weighting
-
-        Returns:
-            Smoothness loss scalar
-        """
+        """Edge-aware smoothness loss...."""
         # Flow gradients
         flow_grad_x = torch.abs(flow[:, :, :, :-1] - flow[:, :, :, 1:])
         flow_grad_y = torch.abs(flow[:, :, :-1, :] - flow[:, :, 1:, :])
@@ -311,10 +272,8 @@ class MotionHead(nn.Module):
 
 
 class ChannelSpatialAttention(nn.Module):
-    """
-    CBAM-style attention for refinement stages.
-    Channel attention + Spatial attention.
-    """
+    """CBAM-style attention for refinement stages.
+    Channel attention + Spatial attention."""
     def __init__(self, channels: int, reduction: int = 16):
         super().__init__()
         # Channel attention

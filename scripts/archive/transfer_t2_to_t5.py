@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""
-Transfer T2_HYBRID_VIT → T5_TEMPORAL
+"""Transfer T2_HYBRID_VIT → T5_TEMPORAL
 
 Implements the tier transfer plan with:
 - Selective weight copying
 - Gradual unfreezing
 - Parameter-grouped learning rates
-- Loss unlock schedule
-"""
+- Loss unlock schedule"""
 
 import argparse
 import sys

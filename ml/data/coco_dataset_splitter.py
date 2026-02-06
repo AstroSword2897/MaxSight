@@ -1,9 +1,7 @@
-"""
-COCO Dataset Splitter for MaxSight
+"""COCO Dataset Splitter for MaxSight
 
 Creates train/test/validation splits from COCO dataset.
-Handles both COCO 2017 format and custom MaxSight annotations.
-"""
+Handles both COCO 2017 format and custom MaxSight annotations."""
 
 import json
 import random
@@ -22,24 +20,7 @@ def split_coco_dataset(
     seed: int = 42,
     min_objects_per_image: int = 1
 ) -> Tuple[Path, Path, Path]:
-    """
-    Split COCO dataset into train/val/test splits.
-    
-    Arguments:
-        coco_annotation_file: Path to COCO annotation JSON file
-        output_dir: Directory to save split annotation files
-        train_split: Fraction for training (default: 0.7)
-        val_split: Fraction for validation (default: 0.15)
-        test_split: Fraction for testing (default: 0.15)
-        seed: Random seed for reproducibility
-        min_objects_per_image: Minimum objects required per image
-    
-    Returns:
-        Tuple of (train_file, val_file, test_file) paths
-    
-    Raises:
-        ValueError: If splits don't sum to 1.0 or if COCO file is invalid
-    """
+    """Split COCO dataset into train/val/test splits...."""
     # Validate splits
     if abs(train_split + val_split + test_split - 1.0) > 1e-6:
         raise ValueError(f"Splits must sum to 1.0, got {train_split + val_split + test_split}")
@@ -78,7 +59,6 @@ def split_coco_dataset(
     
     print(f"Found {len(valid_image_ids)} valid images (with >= {min_objects_per_image} objects)")
     
-    # Shuffle for random split (use np.random.permutation for better reproducibility)
     valid_image_ids = list(np.random.permutation(valid_image_ids))
     
     # Calculate split indices
@@ -148,28 +128,7 @@ def create_maxsight_splits_from_coco(
     num_samples: Optional[int] = None,
     min_objects_per_image: int = 1
 ) -> Tuple[Path, Path, Path]:
-    """
-    Create MaxSight-format train/val/test splits from COCO dataset.
-    
-    Converts COCO annotations to MaxSight format with environmental categories,
-    urgency scores, distance zones, and scene descriptions.
-    
-    Arguments:
-        coco_annotation_file: Path to COCO annotation JSON file
-        image_dir: Directory containing COCO images (optional, but required for proper paths)
-        output_dir: Directory to save split annotation files
-        train_split: Fraction for training (if using ratios, default: 0.7)
-        val_split: Fraction for validation (if using ratios, default: 0.15)
-        test_split: Fraction for testing (if using ratios, default: 0.15)
-        train_samples: Absolute number of training samples (if using counts)
-        val_samples: Absolute number of validation samples (if using counts)
-        seed: Random seed for reproducibility
-        num_samples: Optional limit on total samples (for faster iteration)
-        min_objects_per_image: Minimum objects required per image (default: 1)
-    
-    Returns:
-        Tuple of (train_file, val_file, test_file) paths
-    """
+    """Create MaxSight-format train/val/test splits from COCO dataset...."""
     from ml.data.generate_annotations import (
         map_coco_to_environmental,
         assign_urgency_score,
@@ -298,7 +257,6 @@ def create_maxsight_splits_from_coco(
         
         maxsight_annotations.append(maxsight_ann)
     
-    # Shuffle for random split (use np.random.permutation for better reproducibility)
     maxsight_annotations = list(np.random.permutation(maxsight_annotations))
     
     # Calculate split indices

@@ -1,9 +1,4 @@
-"""
-Tests for therapy modules: SessionManager, TaskGenerator, TherapyTaskIntegrator, TherapyStateHead.
-
-Ensures therapy methods work end-to-end for session tracking, task generation,
-scene-based therapy tasks, and the therapy state model head.
-"""
+"""Tests for therapy modules: SessionManager, TaskGenerator, TherapyTaskIntegrator, TherapyStateHead...."""
 
 import sys
 from pathlib import Path

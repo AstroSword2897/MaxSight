@@ -1,13 +1,4 @@
-"""
-Continuous Monitoring and Readiness Dashboard
-
-Implements:
-- Prediction logging and tracking
-- Performance drift detection
-- Real-time metrics monitoring
-- Readiness assessment dashboard
-- Automated alerts
-"""
+"""Continuous Monitoring and Readiness Dashboard..."""
 
 import torch
 import numpy as np
@@ -107,9 +98,7 @@ class ChecklistItem:
 # ==================== Monitoring System ====================
 
 class PredictionMonitor:
-    """
-    Real-time prediction monitoring and logging.
-    """
+    """Real-time prediction monitoring and logging."""
     
     def __init__(self, 
                  window_size: int = 1000,
@@ -266,10 +255,8 @@ class PredictionMonitor:
 
 
 class ReadinessMonitor(PredictionMonitor):
-    """
-    Alias used by MaxSightCNN for performance monitoring.
-    Accepts alert_threshold dict for compatibility with the model constructor.
-    """
+    """Alias used by MaxSightCNN for performance monitoring.
+    Accepts alert_threshold dict for compatibility with the model constructor."""
     def __init__(
         self,
         window_size: int = 100,
@@ -289,10 +276,8 @@ class ReadinessMonitor(PredictionMonitor):
 # ==================== Readiness Dashboard ====================
 
 class ReadinessDashboard:
-    """
-    Real-World Readiness Assessment Dashboard.
-    Provides comprehensive status of deployment readiness.
-    """
+    """Real-World Readiness Assessment Dashboard.
+    Provides comprehensive status of deployment readiness."""
     
     def __init__(self):
         self.checklist: List[ChecklistItem] = []
@@ -305,9 +290,7 @@ class ReadinessDashboard:
                         stress_test_results: Dict,
                         benchmark_results: Dict,
                         monitoring_metrics: Dict) -> Dict:
-        """
-        Perform comprehensive readiness assessment.
-        """
+        """Perform comprehensive readiness assessment."""
         self.checklist.clear()
         self.last_assessment = datetime.now()
         
@@ -658,10 +641,8 @@ def create_monitoring_pipeline(model: torch.nn.Module) -> Dict:
 # ==================== Health Check System ====================
 
 class HealthChecker:
-    """
-    Health check system for MaxSight Tier 1 heads and system reliability.
-    Run daily to catch issues before they impact users.
-    """
+    """Health check system for MaxSight Tier 1 heads and system reliability.
+    Run daily to catch issues before they impact users."""
     
     # Critical thresholds for Tier 1 heads
     TIER1_DETECTION_RATE_THRESHOLD = 0.85

@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""
-Setup training data pipeline for MaxSight.
+"""Setup training data pipeline for MaxSight.
 
-Creates train/val/test splits from COCO and sets up data loaders.
-"""
+Creates train/val/test splits from COCO and sets up data loaders."""
 
 import argparse
 import sys

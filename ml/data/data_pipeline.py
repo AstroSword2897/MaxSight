@@ -1,9 +1,4 @@
-"""
-Data pipeline for MaxSight training.
-
-Creates data loaders with proper batching, augmentation, and condition-specific transforms.
-Supports multi-modal data (images, audio) and various visual conditions.
-"""
+"""Data pipeline for MaxSight training...."""
 
 import torch
 from torch.utils.data import DataLoader, WeightedRandomSampler
@@ -17,11 +12,9 @@ from ml.utils.preprocessing import ImagePreprocessor
 
 
 def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
-    """
-    Custom collate function for MaxSight batches.
+    """Custom collate function for MaxSight batches.
     
-    Handles variable-length sequences (objects, audio) and pads appropriately.
-    """
+    Handles variable-length sequences (objects, audio) and pads appropriately."""
     # Separate images and targets
     images = torch.stack([item['images'] for item in batch])
     
@@ -118,29 +111,7 @@ def create_data_loaders(
     use_weighted_sampling: bool = False,
     class_weights: Optional[Dict[int, float]] = None
 ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
-    """
-    Create train/val/test data loaders for MaxSight training.
-    
-    Arguments:
-        train_annotation_file: Path to training annotations (JSON)
-        val_annotation_file: Path to validation annotations (JSON)
-        test_annotation_file: Optional path to test annotations
-        image_dir: Directory containing images (default: auto-detect from annotations)
-        audio_dir: Optional directory containing audio clips
-        batch_size: Batch size for training
-        num_workers: Number of data loading workers
-        pin_memory: Whether to pin memory for faster GPU transfer
-        condition_mode: Visual condition to simulate ('glaucoma', 'amd', 'cataracts', etc.)
-        apply_lighting_augmentation: Whether to apply lighting augmentation
-        max_objects: Maximum objects per image (for padding)
-        shuffle_train: Whether to shuffle training data
-        drop_last: Whether to drop last incomplete batch
-        use_weighted_sampling: Whether to use weighted sampling for class imbalance
-        class_weights: Optional dictionary mapping class_idx -> weight
-    
-    Returns:
-        Tuple of (train_loader, val_loader, test_loader)
-    """
+    """Create train/val/test data loaders for MaxSight training...."""
     # Auto-detect image directory if not provided
     if image_dir is None:
         # Try common locations
@@ -257,12 +228,10 @@ def create_data_loaders(
 
 
 def compute_class_weights(annotation_file: Path) -> Dict[int, float]:
-    """
-    Compute class weights from annotations for handling class imbalance.
+    """Compute class weights from annotations for handling class imbalance.
     
     Returns:
-        Dictionary mapping class_idx -> weight (inverse frequency)
-    """
+        Dictionary mapping class_idx -> weight (inverse frequency)"""
     with open(annotation_file, 'r') as f:
         data = json.load(f)
     
@@ -297,12 +266,10 @@ def compute_class_weights(annotation_file: Path) -> Dict[int, float]:
 
 
 def get_data_info(loader: DataLoader) -> Dict[str, Any]:
-    """
-    Get information about a data loader (dataset size, batch count, etc.).
+    """Get information about a data loader (dataset size, batch count, etc.).
     
     Returns:
-        Dictionary with dataset statistics
-    """
+        Dictionary with dataset statistics"""
     dataset = loader.dataset
     batch_size = loader.batch_size
     

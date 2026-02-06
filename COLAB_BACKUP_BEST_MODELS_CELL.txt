@@ -1,0 +1,30 @@
+# Run this FIRST to save all current best models to a backup folder. No repo needed.
+# Paste into a Colab cell and run (after mounting Drive).
+
+from pathlib import Path
+import shutil
+from datetime import datetime
+
+BASE = Path("/content/drive/MyDrive/MaxSight")
+# Backup folder: all best_model.pt files copied here as best_model_<condition>.pt
+BACKUP_DIR = Path("/content/drive/MyDrive/MaxSight/best_models_backup")
+
+if not BASE.exists():
+    print("Base not found:", BASE, "- mount Drive first.")
+else:
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    copied = []
+    for d in sorted(BASE.iterdir()):
+        if not d.is_dir() or not d.name.startswith("checkpoints_"):
+            continue
+        cond = d.name.replace("checkpoints_", "")
+        best = d / "best_model.pt"
+        if best.exists():
+            dest = BACKUP_DIR / f"best_model_{cond}.pt"
+            shutil.copy2(best, dest)
+            copied.append(cond)
+            print("Backed up:", cond, "->", dest.name)
+    if copied:
+        print("\nDone. Backed up", len(copied), "models to:", BACKUP_DIR.resolve())
+    else:
+        print("No best_model.pt files found under", BASE)

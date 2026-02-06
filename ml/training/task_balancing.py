@@ -1,21 +1,4 @@
-"""
-Task Balancing for Multi-Head Training
-
-CRITICAL: Without proper task balancing, 20 heads will engage in gradient warfare:
-- Detection accuracy will decay
-- Depth will oscillate
-- Rare heads will overfit silently
-
-This module implements:
-1. GradNorm: Gradient normalization for balanced multi-task learning
-2. PCGrad: Projected Conflicting Gradients (alternative)
-3. Per-head loss monitoring and adaptive weighting
-4. Head-level kill switches for runtime control
-
-Reference:
-- GradNorm: Chen et al., "GradNorm: Gradient Normalization for Adaptive Loss Balancing"
-- PCGrad: Yu et al., "Gradient Surgery for Multi-Task Learning"
-"""
+"""Task Balancing for Multi-Head Training..."""
 
 import torch
 import torch.nn as nn
@@ -28,17 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class GradNormBalancer(nn.Module):
-    """
-    GradNorm: Gradient normalization for adaptive loss balancing.
-    
-    Automatically balances gradients across multiple tasks by:
-    1. Computing per-task gradient norms
-    2. Normalizing gradients to equalize learning rates
-    3. Adaptively adjusting task weights
-    
-    This prevents gradient warfare where dominant tasks (detection) 
-    overwhelm rare tasks (fatigue, personalization).
-    """
+    """GradNorm: Gradient normalization for adaptive loss balancing...."""
     
     def __init__(
         self,
@@ -46,14 +19,7 @@ class GradNormBalancer(nn.Module):
         alpha: float = 1.5,  # Restoring force hyperparameter
         initial_task_weights: Optional[List[float]] = None
     ):
-        """
-        Initialize GradNorm balancer.
-        
-        Arguments:
-            num_tasks: Number of tasks/heads to balance
-            alpha: Restoring force (higher = stronger balancing)
-            initial_task_weights: Initial weights for each task (optional)
-        """
+        """Initialize GradNorm balancer...."""
         super().__init__()
         self.num_tasks = num_tasks
         self.alpha = alpha
@@ -74,17 +40,7 @@ class GradNormBalancer(nn.Module):
         shared_params: List[nn.Parameter],
         task_losses: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Compute gradient norms for each task.
-        
-        Arguments:
-            model: The model being trained
-            shared_params: Shared parameters (backbone, FPN)
-            task_losses: List of loss values for each task
-        
-        Returns:
-            Tuple of (weighted_losses, gradient_norms)
-        """
+        """Compute gradient norms for each task...."""
         # Compute weighted losses
         weighted_losses = [
             self.task_weights[i] * loss 
@@ -113,17 +69,7 @@ class GradNormBalancer(nn.Module):
         gradient_norms: torch.Tensor,
         iteration: int
     ) -> Dict[str, float]:
-        """
-        Update task weights using GradNorm algorithm.
-        
-        Arguments:
-            task_losses: Current loss values for each task
-            gradient_norms: Gradient norms for each task
-            iteration: Current training iteration
-        
-        Returns:
-            Dictionary with updated weights and metrics
-        """
+        """Update task weights using GradNorm algorithm...."""
         # Initialize reference losses on first iteration
         if not self.initialized:
             self.initial_losses = torch.stack([loss.detach() for loss in task_losses])
@@ -170,14 +116,7 @@ class GradNormBalancer(nn.Module):
 
 
 class PCGradBalancer:
-    """
-    PCGrad: Projected Conflicting Gradients for multi-task learning.
-    
-    Resolves gradient conflicts by projecting conflicting gradients
-    onto each other's normal plane.
-    
-    Alternative to GradNorm - sometimes more stable.
-    """
+    """PCGrad: Projected Conflicting Gradients for multi-task learning...."""
     
     def __init__(self):
         """Initialize PCGrad balancer."""
@@ -187,15 +126,7 @@ class PCGradBalancer:
         self,
         gradients: List[torch.Tensor]
     ) -> List[torch.Tensor]:
-        """
-        Project conflicting gradients to resolve conflicts.
-        
-        Arguments:
-            gradients: List of gradient tensors for each task
-        
-        Returns:
-            List of projected gradients
-        """
+        """Project conflicting gradients to resolve conflicts...."""
         projected_grads = []
         
         for i, grad_i in enumerate(gradients):
@@ -217,33 +148,22 @@ class PCGradBalancer:
 
 
 class PerHeadLossMonitor:
-    """
-    Monitor per-head loss magnitudes over time.
-    
-    Critical for detecting gradient warfare:
-    - Losses that decay too fast (dominant tasks)
-    - Losses that oscillate (conflicting gradients)
-    - Losses that plateau (underfitting)
-    """
+    """Monitor per-head loss magnitudes over time...."""
     
     def __init__(self, window_size: int = 100):
-        """
-        Initialize loss monitor.
+        """Initialize loss monitor.
         
         Arguments:
-            window_size: Number of iterations to track
-        """
+            window_size: Number of iterations to track"""
         self.window_size = window_size
         self.loss_history: Dict[str, List[float]] = defaultdict(list)
         self.iteration = 0
     
     def update(self, head_losses: Dict[str, torch.Tensor]):
-        """
-        Update loss history.
+        """Update loss history.
         
         Arguments:
-            head_losses: Dictionary mapping head names to loss values
-        """
+            head_losses: Dictionary mapping head names to loss values"""
         self.iteration += 1
         
         for head_name, loss in head_losses.items():
@@ -257,12 +177,10 @@ class PerHeadLossMonitor:
                 self.loss_history[head_name].pop(0)
     
     def detect_issues(self) -> Dict[str, List[str]]:
-        """
-        Detect potential gradient warfare issues.
+        """Detect potential gradient warfare issues.
         
         Returns:
-            Dictionary mapping issue types to affected heads
-        """
+            Dictionary mapping issue types to affected heads"""
         issues = {
             'dominant': [],  # Loss decaying too fast
             'oscillating': [],  # Loss oscillating
@@ -323,17 +241,7 @@ class PerHeadLossMonitor:
 
 
 class GradNormMultiHeadLoss(nn.Module):
-    """
-    Multi-head loss combiner with GradNorm for adaptive task balancing.
-    
-    Automatically balances gradients across all heads by:
-    1. Computing per-head gradient norms on shared parameters
-    2. Normalizing gradients to equalize learning rates
-    3. Adaptively adjusting head weights
-    
-    This prevents gradient warfare where dominant heads (detection) 
-    overwhelm rare heads (fatigue, personalization).
-    """
+    """Multi-head loss combiner with GradNorm for adaptive task balancing...."""
     
     def __init__(
         self,
@@ -370,7 +278,6 @@ class GradNormMultiHeadLoss(nn.Module):
         """Set shared parameters for gradient norm computation."""
         self.shared_params = shared_params
     
-    # Map loss head names to model output keys and batch target keys (for aligned tensor extraction)
     OUTPUT_KEY_MAP = {
         'objectness': 'objectness',
         'classification': 'classifications',
@@ -514,7 +421,6 @@ class GradNormMultiHeadLoss(nn.Module):
             model.zero_grad()
             if weighted_loss.dtype == torch.float16:
                 weighted_loss = weighted_loss.clone().float()
-            # retain_graph=True so the graph stays for the train loop's total_loss.backward()
             try:
                 weighted_loss.backward(retain_graph=True)
             except RuntimeError as e:
@@ -552,8 +458,7 @@ class GradNormMultiHeadLoss(nn.Module):
         gradient_norms: torch.Tensor
     ) -> Dict[str, float]:
         """Update task weights using GradNorm algorithm.
-        On MPS, GradNorm math runs on CPU to avoid unsupported ops; weights are then copied back.
-        """
+        On MPS, GradNorm math runs on CPU to avoid unsupported ops; weights are then copied back."""
         orig_device = self.task_weights.device
         use_cpu_fallback = orig_device.type == 'mps'
         if use_cpu_fallback:
@@ -618,7 +523,6 @@ class GradNormMultiHeadLoss(nn.Module):
         self.iteration += 1
         
         head_loss_dicts = self.compute_head_losses(outputs, targets)
-        # Extract losses, ensuring all have requires_grad=True for GradNorm compatibility
         device = next((t.device for t in outputs.values() if torch.is_tensor(t)), torch.device('cpu'))
         head_losses = {}
         for name, loss_dict in head_loss_dicts.items():
@@ -632,7 +536,6 @@ class GradNormMultiHeadLoss(nn.Module):
                 loss = torch.tensor(float(loss), device=device, requires_grad=True)
             head_losses[name] = loss
         
-        # Replace nan/inf head losses with 0 *before* GradNorm so we never backward through nan
         for name in list(head_losses.keys()):
             l = head_losses[name]
             if torch.is_tensor(l) and (torch.isnan(l) | torch.isinf(l)).any().item():
@@ -669,12 +572,7 @@ class GradNormMultiHeadLoss(nn.Module):
 
 
 class GradNormStressIntegrator:
-    """
-    Integrates GradNormMultiHeadLoss with MaxSight Stress Test Suite.
-    
-    Tracks per-head metrics, detects gradient warfare, and triggers alerts.
-    Provides seamless integration with training loops and stress testing.
-    """
+    """Integrates GradNormMultiHeadLoss with MaxSight Stress Test Suite...."""
     
     def __init__(
         self,
@@ -684,17 +582,7 @@ class GradNormStressIntegrator:
         auto_dampen: bool = False,
         damp_factor: float = 0.9
     ):
-        """
-        Initialize GradNorm stress integrator.
-        
-        Arguments:
-            loss_module: Instance of GradNormMultiHeadLoss
-            monitor_window: Number of iterations for loss history
-            alert_thresholds: Dict with thresholds for alerts
-                Example: {'dominant': 0.5, 'oscillating': 0.3, 'plateaued': 1e-6}
-            auto_dampen: Whether to automatically reduce weights for problematic heads
-            damp_factor: Factor to multiply weights by when dampening (default 0.9 = 10% reduction)
-        """
+        """Initialize GradNorm stress integrator...."""
         self.loss_module = loss_module
         self.monitor = PerHeadLossMonitor(window_size=monitor_window)
         self.alert_thresholds = alert_thresholds or {
@@ -713,25 +601,7 @@ class GradNormStressIntegrator:
         targets: Dict[str, torch.Tensor],
         model: Optional[nn.Module] = None
     ) -> Tuple[torch.Tensor, Dict[str, Any]]:
-        """
-        Compute total loss, update task weights, monitor head trends, and return metrics.
-        
-        This is the main entry point for training loops. It wraps GradNormMultiHeadLoss
-        and adds stress monitoring, issue detection, and optional auto-dampening.
-        
-        Arguments:
-            outputs: Model outputs dictionary
-            targets: Target labels dictionary
-            model: Model instance (required for GradNorm)
-        
-        Returns:
-            Tuple of (total_loss, metrics_dict)
-            metrics_dict includes:
-                - All standard GradNorm metrics (task_weights, gradient_norms, etc.)
-                - head_issues: Dict of detected issues by type
-                - alert_history: List of recent alerts
-                - monitor_summary: Per-head loss statistics
-        """
+        """Compute total loss, update task weights, monitor head trends, and return metrics...."""
         self.iteration += 1
         
         # Compute loss and update task weights via GradNorm
@@ -798,15 +668,7 @@ class GradNormStressIntegrator:
         return total_loss, metrics
     
     def _handle_issues(self, issues: Dict[str, List[str]]):
-        """
-        Automatically dampen task weights for heads flagged as problematic.
-        
-        This is an optional safety mechanism that reduces the influence of
-        misbehaving heads to prevent gradient warfare.
-        
-        Arguments:
-            issues: Dictionary mapping issue types to affected head names
-        """
+        """Automatically dampen task weights for heads flagged as problematic...."""
         for issue_type, heads in issues.items():
             for head_name in heads:
                 if head_name in self.loss_module.head_names:
@@ -823,29 +685,17 @@ class GradNormStressIntegrator:
                         )
     
     def get_alerts(self, max_alerts: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get recent alerts.
+        """Get recent alerts.
         
         Arguments:
             max_alerts: Maximum number of alerts to return
         
         Returns:
-            List of alert dictionaries
-        """
+            List of alert dictionaries"""
         return self.alert_history[-max_alerts:]
     
     def get_metrics_summary(self) -> Dict[str, Any]:
-        """
-        Get comprehensive metrics summary for stress testing.
-        
-        Returns:
-            Dictionary with:
-                - current_iteration
-                - head_loss_summary: Per-head statistics
-                - detected_issues: Current issues
-                - task_weights: Current task weights
-                - recent_alerts: Recent alerts
-        """
+        """Get comprehensive metrics summary for stress testing...."""
         return {
             'current_iteration': self.iteration,
             'head_loss_summary': self.monitor.get_summary(),

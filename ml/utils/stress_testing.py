@@ -1,14 +1,4 @@
-"""
-Stress Testing and Edge Case Evaluation
-
-Implements:
-- Stress test dataset generation
-- Edge case scenarios
-- Robustness evaluation
-- Performance degradation measurement
-- Inference benchmarking
-- Fallback system for uncertain predictions
-"""
+"""Stress Testing and Edge Case Evaluation..."""
 
 import torch
 import torch.nn as nn
@@ -271,9 +261,7 @@ def generate_edge_case_transforms() -> Dict[str, Callable]:
 # ==================== Stress Test Evaluation ====================
 
 class StressTestEvaluator:
-    """
-    Evaluate model robustness under stress conditions.
-    """
+    """Evaluate model robustness under stress conditions."""
     
     def __init__(self, 
                  model: nn.Module,
@@ -554,9 +542,7 @@ class FallbackConfig:
 
 
 class PredictionFallbackSystem:
-    """
-    Handle uncertain predictions with fallback strategies.
-    """
+    """Handle uncertain predictions with fallback strategies."""
     
     def __init__(self, 
                  model: nn.Module,
@@ -572,15 +558,7 @@ class PredictionFallbackSystem:
     def predict_with_fallback(self,
                              image: torch.Tensor,
                              return_confidence: bool = True) -> Dict:
-        """
-        Make prediction with fallback handling.
-        
-        Returns dict with:
-        - prediction: class index or None
-        - confidence: prediction confidence
-        - used_fallback: whether fallback was triggered
-        - fallback_reason: reason for fallback if any
-        """
+        """Make prediction with fallback handling...."""
         self.total_predictions += 1
         self.model.eval()
         

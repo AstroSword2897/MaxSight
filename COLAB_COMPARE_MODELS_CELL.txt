@@ -1,0 +1,69 @@
+# Paste this entire block into a Colab cell and run it.
+# Change BASE to your checkpoints parent folder if needed (e.g. Drive path).
+
+import json
+from pathlib import Path
+
+BASE = Path("/content/drive/MyDrive/MaxSight")  # parent of checkpoints_cataracts, checkpoints_amd, etc.
+
+def get_best_metrics(ckpt_dir):
+    for name, path in [
+        ("resume_info", ckpt_dir / "resume_info.json"),
+        ("history", ckpt_dir / "training_history.json"),
+    ]:
+        if not path.exists():
+            continue
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            if name == "resume_info":
+                return {
+                    "best_val_loss": data.get("best_val_loss"),
+                    "best_val_map": data.get("best_val_map"),
+                    "epoch": data.get("epoch"),
+                    "total_epochs": data.get("total_epochs"),
+                }
+            # history
+            val_loss = data.get("val_loss", [])
+            val_map = data.get("val_map", [])
+            if val_loss:
+                return {
+                    "best_val_loss": min(float(x) for x in val_loss),
+                    "best_val_map": max(float(x) for x in val_map) if val_map else 0.0,
+                    "epoch": len(val_loss) - 1,
+                    "total_epochs": len(val_loss),
+                }
+        except Exception:
+            continue
+    return None
+
+if not BASE.exists():
+    print(f"Base not found: {BASE}")
+    print("Mount Drive (Runtime -> Mount drive) and set BASE to your MaxSight folder.")
+else:
+    rows = []
+    for d in sorted(BASE.iterdir()):
+        if not d.is_dir() or not d.name.startswith("checkpoints_"):
+            continue
+        cond = d.name.replace("checkpoints_", "")
+        m = get_best_metrics(d)
+        rows.append({
+            "condition": cond,
+            "best_val_loss": m.get("best_val_loss") if m else None,
+            "best_val_map": m.get("best_val_map") if m else None,
+            "epoch": m.get("epoch") if m else None,
+            "total_epochs": m.get("total_epochs") if m else None,
+        })
+    if not rows:
+        print("No checkpoints_* folders found under", BASE)
+    else:
+        rows.sort(key=lambda r: (r["best_val_loss"] if r["best_val_loss"] is not None else float("inf"), -(r["best_val_map"] or 0)))
+        print(f"\n{'Condition':<25} {'Best val loss':>14} {'Best val mAP':>14} {'Epoch':>8}")
+        print("-" * 65)
+        for r in rows:
+            loss_s = f"{r['best_val_loss']:.4f}" if r["best_val_loss"] is not None else "—"
+            map_s = f"{r['best_val_map']:.4f}" if r["best_val_map"] is not None else "—"
+            e, t = r["epoch"], r["total_epochs"]
+            ep_s = f"{e+1}/{t}" if e is not None and t is not None else "—"
+            print(f"{r['condition']:<25} {loss_s:>14} {map_s:>14} {ep_s:>8}")
+        print("\nLower val loss = better. Sorted by best val loss.")

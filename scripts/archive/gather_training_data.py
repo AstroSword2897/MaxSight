@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-Gather all data required for MaxSight training and AutoML.
-
-Runs in order: download COCO (optional), extract zips, create train/val/test splits.
-Use this once to satisfy data requirements for train_maxsight.py and tune_hyperparameters.py.
-Works on x86_64 and arm64 (Apple Silicon); extraction and splits are platform-agnostic.
-"""
+"""Gather all data required for MaxSight training and AutoML...."""
 
 import argparse
 import subprocess
@@ -111,7 +105,6 @@ def main() -> int:
         if not extract_script.exists():
             print("  Warning: scripts/extract_coco.py not found")
         else:
-            # extract_coco.py uses hardcoded datasets/coco_raw; we need to support custom dir
             from ml.data.download_datasets import verify_coco_dataset
             data_dir.mkdir(parents=True, exist_ok=True)
             # Run extract in project root; extract_coco expects datasets/coco_raw

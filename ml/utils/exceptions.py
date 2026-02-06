@@ -1,8 +1,6 @@
-"""
-Custom exceptions for MaxSight system.
+"""Custom exceptions for MaxSight system.
 
-Provides structured error handling with clear error messages and recovery guidance.
-"""
+Provides structured error handling with clear error messages and recovery guidance."""
 
 
 class MaxSightError(Exception):

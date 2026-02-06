@@ -1,11 +1,4 @@
-"""
-Task Generator
-
-Generates adaptive therapy tasks based on user profile and performance.
-
-Phase 3: Task Generator & Session Manager
-See docs/therapy_system_implementation_plan.md for implementation details.
-"""
+"""Task Generator..."""
 
 from typing import Dict, List, Optional, Any
 from enum import Enum
@@ -22,23 +15,7 @@ class TaskType(Enum):
 
 
 class TaskGenerator:
-    """
-    Generates adaptive therapy tasks.
-    
-    STUB - NOT INTEGRATED: This component is a placeholder implementation and not currently integrated into the main training pipeline.
-    See README.md for integration status. Contains TODO comments for future implementation.
-    
-    Reads:
-    - user profile
-    - recent failures
-    - uncertainty levels
-    - fatigue score
-    
-    Chooses tasks with appropriate difficulty. Adjusts:
-    - task timer
-    - highlight strength
-    - speed of moving target
-    """
+    """Generates adaptive therapy tasks...."""
     
     def __init__(self, user_profile: Optional[Dict[str, Any]] = None):
         self.user_profile = user_profile or {}
@@ -51,22 +28,7 @@ class TaskGenerator:
         fatigue_score: float,
         recent_performance: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """
-        Generate next therapy task.
-        
-        Arguments:
-            uncertainty: Current uncertainty score [0, 1]
-            fatigue_score: Current fatigue score [0, 1]
-            recent_performance: List of recent task results
-        
-        Returns:
-            Task configuration dictionary with:
-                - 'task_type': TaskType
-                - 'difficulty': float [0, 1]
-                - 'duration': int (seconds)
-                - 'highlight_strength': float [0, 1]
-                - 'target_speed': float (pixels/second)
-        """
+        """Generate next therapy task...."""
         # TODO: Implement adaptive task generation logic
         # For now, return default task
         

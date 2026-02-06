@@ -1,15 +1,4 @@
-"""
-Simulation Harness
-
-End-to-end simulation for testing therapy system.
-
-Phase 5: End-to-End Integration
-See docs/therapy_system_implementation_plan.md for implementation details.
-
-NOTE: This is a simplified simulator. For production use, see:
-- tools/simulation/web_simulator.py (MaxSightSession) for multi-user web interface
-- tools/simulation/comprehensive_simulator.py for full-featured simulation
-"""
+"""Simulation Harness..."""
 
 from typing import Dict, List, Optional, Any
 import numpy as np
@@ -20,27 +9,14 @@ logger = logging.getLogger(__name__)
 
 
 class TherapySimulator:
-    """
-    End-to-end simulation harness for therapy system.
-    
-    Built with Pygame or recorded sessions:
-    - Run model
-    - Display overlays
-    - Accept simulated taps
-    - Log outputs
-    
-    NOTE: This is a basic implementation. For production use, integrate with
-    MaxSightSession from web_simulator.py or use ComprehensiveSimulator.
-    """
+    """End-to-end simulation harness for therapy system...."""
     
     def __init__(self, config: Optional[Dict[str, Any]] = None, model=None):
-        """
-        Initialize simulator.
+        """Initialize simulator.
         
         Arguments:
             config: Optional configuration dictionary
-            model: Optional MaxSightCNN model instance (if None, will need to be set later)
-        """
+            model: Optional MaxSightCNN model instance (if None, will need to be set later)"""
         self.config = config or {}
         self.model = model
         self.is_running = False
@@ -49,13 +25,7 @@ class TherapySimulator:
         self.processing_times = []  # Track processing times for summary
     
     def start_simulation(self, video_source: Optional[str] = None):
-        """
-        Start simulation.
-        
-        Arguments:
-            video_source: Optional video file path or camera index
-            NOTE: Video source handling not implemented - use ComprehensiveSimulator for video support
-        """
+        """Start simulation...."""
         self.is_running = True
         self.frame_count = 0
         self.logs = []
@@ -68,21 +38,7 @@ class TherapySimulator:
             )
     
     def process_frame(self, frame: np.ndarray) -> Dict[str, Any]:
-        """
-        Process a single frame.
-        
-        Arguments:
-            frame: Input frame [H, W, 3] as numpy array
-        
-        Returns:
-            Processing results dictionary with:
-                - frame_number: Frame index
-                - timestamp: Timestamp in seconds
-                - model_output: Model outputs (if model available)
-                - overlays: List of overlay data
-                - user_input: User input data (if any)
-                - processing_time_ms: Processing time in milliseconds
-        """
+        """Process a single frame...."""
         if not self.is_running:
             logger.warning("Simulation not started. Call start_simulation() first.")
             return {}
@@ -144,15 +100,7 @@ class TherapySimulator:
         return result
     
     def stop_simulation(self) -> Dict[str, Any]:
-        """
-        Stop simulation and return summary.
-        
-        Returns:
-            Simulation summary with:
-                - total_frames: Total frames processed
-                - logs: All frame logs
-                - summary: Summary statistics
-        """
+        """Stop simulation and return summary...."""
         self.is_running = False
         
         return {
@@ -162,17 +110,7 @@ class TherapySimulator:
         }
     
     def _generate_summary(self) -> Dict[str, Any]:
-        """
-        Generate simulation summary with statistics.
-        
-        Returns:
-            Summary dictionary with:
-                - frames_processed: Number of frames processed
-                - avg_processing_time_ms: Average processing time
-                - min_processing_time_ms: Minimum processing time
-                - max_processing_time_ms: Maximum processing time
-                - errors: List of errors encountered
-        """
+        """Generate simulation summary with statistics...."""
         errors = []
         for log in self.logs:
             if 'error' in log.get('model_output', {}):
@@ -199,12 +137,10 @@ class TherapySimulator:
         }
     
     def save_logs(self, filepath: str):
-        """
-        Save simulation logs to file.
+        """Save simulation logs to file.
         
         Arguments:
-            filepath: Path to save JSON log file
-        """
+            filepath: Path to save JSON log file"""
         import json
         with open(filepath, 'w') as f:
             json.dump({

@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""
-Export MaxSight model for Xcode integration.
-
-Usage:
-    python scripts/export_for_xcode.py [checkpoint_path] [output_dir]
-
-Examples:
-    python scripts/export_for_xcode.py checkpoints/final_model.pt maxsight_ios_bundle
-    python scripts/export_for_xcode.py  # Uses defaults: checkpoints/final_model.pt, maxsight_ios_bundle
-"""
+"""Export MaxSight model for Xcode integration...."""
 import sys
 from pathlib import Path
 import torch

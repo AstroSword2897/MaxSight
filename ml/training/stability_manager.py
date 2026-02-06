@@ -1,12 +1,4 @@
-"""
-Adaptive Training Stability Manager for MaxSight
-
-Auto-adjusts hyperparameters during training to:
-- Prevent overfitting
-- Stabilize loss trajectories
-- Balance multi-task learning
-- Ensure high accuracy with full T5 architecture
-"""
+"""Adaptive Training Stability Manager for MaxSight..."""
 
 import logging
 import math
@@ -38,21 +30,7 @@ class StabilityMetrics:
 
 
 class StabilityManager:
-    """
-    Monitors training stability and auto-adjusts hyperparameters.
-    
-    Detects:
-    - Loss spikes (sudden increase > threshold)
-    - NaN/Inf losses
-    - Overfitting (train << val)
-    - Task imbalance (GradNorm weights)
-    
-    Auto-adjusts:
-    - Learning rate (reduce on spike)
-    - Weight decay (increase on overfit)
-    - GradNorm task weights (rebalance)
-    - Gradient clipping (tighten on instability)
-    """
+    """Monitors training stability and auto-adjusts hyperparameters...."""
     
     def __init__(
         self,
@@ -71,22 +49,7 @@ class StabilityManager:
         # Logging
         log_every: int = 1,
     ):
-        """
-        Initialize stability manager.
-        
-        Args:
-            optimizer: Training optimizer
-            scheduler: LR scheduler (optional)
-            gradnorm_loss: GradNorm loss module (for task weight adjustment)
-            spike_threshold: Loss increase fraction to trigger adjustment
-            overfit_threshold: Train/val gap fraction to trigger regularization
-            task_imbalance_threshold: Max/min task weight ratio to trigger rebalance
-            lr_reduce_factor: Factor to multiply LR by on spike
-            wd_increase_factor: Factor to multiply weight decay on overfit
-            max_wd: Maximum weight decay
-            min_lr: Minimum learning rate
-            log_every: Log stability metrics every N epochs
-        """
+        """Initialize stability manager...."""
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.gradnorm_loss = gradnorm_loss
@@ -118,19 +81,7 @@ class StabilityManager:
         train_metrics: Optional[Dict[str, float]] = None,
         val_metrics: Optional[Dict[str, float]] = None,
     ) -> StabilityMetrics:
-        """
-        Check stability and auto-adjust hyperparameters.
-        
-        Args:
-            epoch: Current epoch
-            train_loss: Training loss
-            val_loss: Validation loss
-            train_metrics: Optional training metrics (mAP, etc.)
-            val_metrics: Optional validation metrics
-        
-        Returns:
-            StabilityMetrics with diagnostics
-        """
+        """Check stability and auto-adjust hyperparameters...."""
         # Get current LR and weight decay (guard empty param_groups)
         if not self.optimizer.param_groups:
             logger.warning("StabilityManager: optimizer has no param_groups, skipping check")

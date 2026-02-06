@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Download Open Images V6 using FiftyOne (recommended method).
-"""
+"""Download Open Images V6 using FiftyOne (recommended method)."""
 
 import sys
 from pathlib import Path

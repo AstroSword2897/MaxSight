@@ -1,7 +1,5 @@
-"""
-Priority queue with backpressure for MaxSight Web Simulator.
-Prevents memory growth and ensures fresh alerts take priority.
-"""
+"""Priority queue with backpressure for MaxSight Web Simulator.
+Prevents memory growth and ensures fresh alerts take priority."""
 from queue import Queue, Full
 from typing import Any, Tuple, Optional
 from enum import IntEnum
@@ -17,20 +15,16 @@ class MessagePriority(IntEnum):
 
 
 class PriorityQueue:
-    """
-    Bounded priority queue with backpressure.
+    """Bounded priority queue with backpressure.
     
     On overflow:
     - Drops low-priority messages first
     - Keeps only the latest high-urgency alert
-    - Prevents memory growth
-    """
+    - Prevents memory growth"""
     
     def __init__(self, maxsize: int = 10):
-        """
-        Args:
-            maxsize: Maximum queue size (0 = unbounded, not recommended)
-        """
+        """Args:
+            maxsize: Maximum queue size (0 = unbounded, not recommended)"""
         self.maxsize = maxsize
         self.queue: Queue = Queue(maxsize=maxsize)
         self.lock = Lock()
@@ -38,20 +32,7 @@ class PriorityQueue:
         self._last_critical: Optional[Tuple[int, Any]] = None  # (priority, message)
     
     def put(self, item: Tuple[Any, int], block: bool = True, timeout: Optional[float] = None) -> bool:
-        """
-        Put item in queue with priority.
-        
-        Args:
-            item: Tuple of (message, priority)
-            block: Whether to block if queue is full
-            timeout: Timeout for blocking put
-        
-        Returns:
-            True if item was added, False if dropped
-        
-        Raises:
-            Full: If queue is full and block=False
-        """
+        """Put item in queue with priority...."""
         message, priority = item
         priority_value = priority if isinstance(priority, int) else priority.value
         
@@ -108,12 +89,10 @@ class PriorityQueue:
         return False
     
     def get(self, block: bool = True, timeout: Optional[float] = None) -> Tuple[int, Any]:
-        """
-        Get item from queue (highest priority first).
+        """Get item from queue (highest priority first).
         
         Returns:
-            Tuple of (priority, message)
-        """
+            Tuple of (priority, message)"""
         return self.queue.get(block=block, timeout=timeout)
     
     def get_dropped_count(self) -> int:

@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""
-Download all inference datasets for MaxSight evaluation.
+"""Download all inference datasets for MaxSight evaluation.
 
 Downloads:
 - Open Images V6 (validation set for inference)
 - BDD100K (validation set for inference)
-- ADE20K (validation set for inference)
-"""
+- ADE20K (validation set for inference)"""
 
 import sys
 import argparse
@@ -25,17 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 
 def download_file(url: str, dest: Path, resume: bool = True) -> bool:
-    """
-    Download a file with progress bar and resume capability.
-    
-    Args:
-        url: URL to download from
-        dest: Destination file path
-        resume: Whether to resume partial downloads
-    
-    Returns:
-        True if successful, False otherwise
-    """
+    """Download a file with progress bar and resume capability...."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     
     # Check if file already exists
@@ -105,13 +93,7 @@ def extract_zip(zip_path: Path, extract_to: Path) -> bool:
 
 
 def download_open_images_v6(data_dir: Path) -> bool:
-    """
-    Download Open Images V6 validation set.
-    
-    Note: Full dataset is 9M images (~500GB). We download validation set only (~2GB).
-    
-    Uses FiftyOne if available (easiest method), otherwise provides manual instructions.
-    """
+    """Download Open Images V6 validation set...."""
     print("\n" + "="*70)
     print("Downloading Open Images V6 (Validation Set)")
     print("="*70)
@@ -149,7 +131,6 @@ def download_open_images_v6(data_dir: Path) -> bool:
         print("  Reorganizing files to expected structure...")
         
         # FiftyOne stores images in its own structure, we need to reorganize
-        # The dataset should have images, we need to move them to validation/ subdirectory
         fo_dataset_dir = data_dir.parent / "open-images-v6-validation"
         if not fo_dataset_dir.exists():
             # Try alternative location
@@ -229,11 +210,9 @@ def download_open_images_v6(data_dir: Path) -> bool:
 
 
 def download_bdd100k(data_dir: Path) -> bool:
-    """
-    Download BDD100K validation set.
+    """Download BDD100K validation set.
     
-    Note: Requires registration at bdd-data.berkeley.edu
-    """
+    Note: Requires registration at bdd-data.berkeley.edu"""
     print("\n" + "="*70)
     print("Downloading BDD100K (Validation Set)")
     print("="*70)
@@ -244,7 +223,6 @@ def download_bdd100k(data_dir: Path) -> bool:
     images_dir.mkdir(parents=True, exist_ok=True)
     labels_dir.mkdir(parents=True, exist_ok=True)
     
-    # BDD100K download URLs - Direct download from ETH Zurich (no registration needed!)
     # Data is available at: https://dl.cv.ethz.ch/bdd100k/data/
     print("\n  BDD100K Download:")
     print("  Data available at: https://dl.cv.ethz.ch/bdd100k/data/")
@@ -373,11 +351,9 @@ def download_bdd100k(data_dir: Path) -> bool:
 
 
 def download_ade20k(data_dir: Path) -> bool:
-    """
-    Download ADE20K validation set.
+    """Download ADE20K validation set.
     
-    ADE20K is available from MIT Vision Group.
-    """
+    ADE20K is available from MIT Vision Group."""
     print("\n" + "="*70)
     print("Downloading ADE20K (Validation Set)")
     print("="*70)
@@ -404,7 +380,6 @@ def download_ade20k(data_dir: Path) -> bool:
         temp_extract = data_dir / "temp_extract"
         if extract_zip(zip_path, temp_extract):
             # Move to correct structure
-            # ADE20K structure: ADEChallengeData2016/images/validation/ and annotations/validation/
             ade_data = temp_extract / "ADEChallengeData2016"
             if ade_data.exists():
                 # Move images

@@ -1,11 +1,9 @@
-"""
-Batched Scene Graph + GNN Encoder for MaxSight 3.0
+"""Batched Scene Graph + GNN Encoder for MaxSight 3.0
 
 - Efficient GPU computation
 - Supports multiple scene graphs per batch
 - Trainable spatial and semantic relation scoring
-- Edge-aware GNN
-"""
+- Edge-aware GNN"""
 
 import torch
 import torch.nn as nn
@@ -153,21 +151,7 @@ class SceneGraphEncoder(nn.Module):
         object_classes: List[str],
         batch_offsets: Optional[torch.Tensor] = None
     ) -> tuple:
-        """
-        Extract both spatial and semantic relations, returning them with edge_index and edge_attr.
-        
-        Args:
-            boxes: Bounding boxes [N, 4] or [B, K, 4]
-            object_embeddings: Object embeddings [N, embed_dim] or [B, K, embed_dim]
-            object_classes: List of class names [N] or List[List[str]] for batched
-            batch_offsets: Optional batch offsets for batched input
-        
-        Returns:
-            Tuple of (relations, edge_index, edge_attr):
-                - relations: List[SceneRelation]
-                - edge_index: [2, E] tensor
-                - edge_attr: [E, relation_embed_dim] tensor
-        """
+        """Extract both spatial and semantic relations, returning them with edge_index and edge_attr...."""
         # Extract spatial and semantic relations
         if boxes.dim() == 3:
             # Batched input - flatten for processing
@@ -221,7 +205,6 @@ class SceneGraphEncoder(nn.Module):
         object_embeddings: torch.Tensor,
         object_classes: List[str]
     ) -> Dict[str, object]:
-        # Handle batched input: [B, K, 4] boxes, [B, K, C] embeddings, List[List[str]] classes
         if boxes.dim() == 3:
             # Batched input - process each scene separately
             batch_size = boxes.shape[0]
@@ -289,7 +272,6 @@ if TORCH_GEOMETRIC_AVAILABLE:
         def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: Optional[torch.Tensor] = None):
             num_nodes = x.size(0)
             edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)
-            # After self-loops we have num_edges + num_nodes edges; pad edge_attr with zeros for self-loops
             if edge_attr is not None and edge_attr.size(0) < edge_index.size(1):
                 self_loop_attr = torch.zeros(num_nodes, edge_attr.size(1), device=edge_attr.device, dtype=edge_attr.dtype)
                 edge_attr = torch.cat([edge_attr, self_loop_attr], dim=0)

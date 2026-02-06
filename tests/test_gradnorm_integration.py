@@ -1,8 +1,6 @@
-"""
-Test GradNorm Integration in Training Loop
+"""Test GradNorm Integration in Training Loop
 
-Tests that GradNorm can be properly integrated and used in the training loop.
-"""
+Tests that GradNorm can be properly integrated and used in the training loop."""
 
 import torch
 import torch.nn as nn

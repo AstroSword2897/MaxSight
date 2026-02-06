@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""
-Full production rehearsal: run stress scenarios (rain, glare, tilt, combined)
-through the simulator and verify pipeline_breakdown, priority filter, cooldown, and latency.
-Use for M3 Pro or cloud GPU validation before deployment.
-
-Usage:
-  python scripts/full_production_rehearsal.py [--device cpu|mps|cuda] [--num-frames N] [--log-dir DIR]
-"""
+"""Full production rehearsal: run stress scenarios (rain, glare, tilt, combined)..."""
 import argparse
 import json
 import sys

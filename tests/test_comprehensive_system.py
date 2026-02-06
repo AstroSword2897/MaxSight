@@ -1,7 +1,5 @@
-"""
-Comprehensive System Tests - Maximum Data & Classes
-Tests the complete MaxSight system with 347 classes for user guidance
-"""
+"""Comprehensive System Tests - Maximum Data & Classes
+Tests the complete MaxSight system with 347 classes for user guidance"""
 
 import torch
 import sys
@@ -43,7 +41,6 @@ def test_model_creation():
     total_params = sum(p.numel() for p in model.parameters())
     int8_size_mb = total_params / 1024 / 1024
     
-    # Model size check - allow larger models for comprehensive class system (250M params = ~240MB INT8)
     assert int8_size_mb < 300, f"Model size {int8_size_mb:.1f} MB exceeds target of 300 MB"
 
 

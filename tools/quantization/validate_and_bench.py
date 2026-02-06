@@ -1,8 +1,6 @@
-"""
-Production validation and benchmarking for quantized MaxSight models.
+"""Production validation and benchmarking for quantized MaxSight models.
 
-Compares FP32 vs INT8 across all heads with detailed metrics.
-"""
+Compares FP32 vs INT8 across all heads with detailed metrics."""
 
 import torch
 import torch.nn as nn
@@ -19,10 +17,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
 class QuantizationValidator:
-    """
-    Comprehensive validator for quantized models with per-head metrics.
-    Integrated with MaxSight output format.
-    """
+    """Comprehensive validator for quantized models with per-head metrics.
+    Integrated with MaxSight output format."""
     
     def __init__(
         self,
@@ -82,10 +78,8 @@ class QuantizationValidator:
         int8_logits: torch.Tensor,
         targets: Optional[torch.Tensor] = None
     ) -> Dict[str, float]:
-        """
-        Validate classification head with accuracy metrics.
-        MaxSight format: [B, num_locations, num_classes]
-        """
+        """Validate classification head with accuracy metrics.
+        MaxSight format: [B, num_locations, num_classes]"""
         # Shape validation
         if fp32_logits.shape != int8_logits.shape:
             raise ValueError(f"Shape mismatch: FP32 {fp32_logits.shape} vs INT8 {int8_logits.shape}")
@@ -122,10 +116,8 @@ class QuantizationValidator:
         int8_bbox: torch.Tensor,
         targets_bbox: Optional[torch.Tensor] = None
     ) -> Dict[str, Any]:
-        """
-        Validate bounding box head (regression).
-        MaxSight format: [B, num_locations, 4] (cx, cy, w, h normalized)
-        """
+        """Validate bounding box head (regression).
+        MaxSight format: [B, num_locations, 4] (cx, cy, w, h normalized)"""
         # Shape validation
         if fp32_bbox.shape != int8_bbox.shape:
             return {'_bbox_error': f"Shape mismatch: FP32 {fp32_bbox.shape} vs INT8 {int8_bbox.shape}"}
@@ -196,10 +188,8 @@ class QuantizationValidator:
         fp32_embed: torch.Tensor,
         int8_embed: torch.Tensor
     ) -> Dict[str, float]:
-        """
-        Validate embedding head with cosine similarity.
-        MaxSight format: [B, embedding_dim] (scene_embedding)
-        """
+        """Validate embedding head with cosine similarity.
+        MaxSight format: [B, embedding_dim] (scene_embedding)"""
         # Shape validation
         if fp32_embed.shape != int8_embed.shape:
             raise ValueError(f"Shape mismatch: FP32 {fp32_embed.shape} vs INT8 {int8_embed.shape}")
@@ -230,10 +220,8 @@ class QuantizationValidator:
         int8_urgency: torch.Tensor,
         targets: Optional[torch.Tensor] = None
     ) -> Dict[str, float]:
-        """
-        Validate urgency classification head.
-        MaxSight format: [B, num_urgency_levels] (typically 4)
-        """
+        """Validate urgency classification head.
+        MaxSight format: [B, num_urgency_levels] (typically 4)"""
         # Shape validation
         if fp32_urgency.shape != int8_urgency.shape:
             raise ValueError(f"Shape mismatch: FP32 {fp32_urgency.shape} vs INT8 {int8_urgency.shape}")
@@ -269,10 +257,8 @@ class QuantizationValidator:
         fp32_obj: torch.Tensor,
         int8_obj: torch.Tensor
     ) -> Dict[str, float]:
-        """
-        Validate objectness head.
-        MaxSight format: [B, num_locations]
-        """
+        """Validate objectness head.
+        MaxSight format: [B, num_locations]"""
         # Shape validation
         if fp32_obj.shape != int8_obj.shape:
             raise ValueError(f"Shape mismatch: FP32 {fp32_obj.shape} vs INT8 {int8_obj.shape}")
@@ -287,10 +273,8 @@ class QuantizationValidator:
         }
     
     def run_full_validation(self) -> Dict[str, Any]:
-        """
-        Run comprehensive validation across all MaxSight heads.
-        Returns detailed metrics dictionary.
-        """
+        """Run comprehensive validation across all MaxSight heads.
+        Returns detailed metrics dictionary."""
         print("Running Full Quantization Validation")
         
         from collections import defaultdict
@@ -455,9 +439,7 @@ class ModelBenchmark:
         warmup_runs: int = 10,
         num_runs: int = 100
     ) -> Dict[str, float]:
-        """
-        Benchmark model inference latency.
-        """
+        """Benchmark model inference latency."""
         model = model.eval().to(device)
         test_inputs = [x.to(device) for x in test_inputs]
         
@@ -507,9 +489,7 @@ class ModelBenchmark:
         test_inputs: List[torch.Tensor],
         device: str = 'cpu'
     ) -> Dict[str, Any]:
-        """
-        Compare FP32 vs INT8 model performance.
-        """
+        """Compare FP32 vs INT8 model performance."""
         print("\nBenchmarking FP32 model...")
         fp32_bench = ModelBenchmark.benchmark_latency(model_fp32, test_inputs, device)
         

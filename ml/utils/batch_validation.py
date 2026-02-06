@@ -1,9 +1,7 @@
-"""
-Batch Validation Utilities
+"""Batch Validation Utilities
 
 Comprehensive validation for training batches to prevent Hungarian matching failures.
-Checks for NaN/Inf, invalid box dimensions, and other data integrity issues.
-"""
+Checks for NaN/Inf, invalid box dimensions, and other data integrity issues."""
 
 import torch
 import logging
@@ -13,16 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def validate_boxes(boxes: torch.Tensor, name: str = "boxes") -> Tuple[bool, str]:
-    """
-    Validate bounding boxes for training.
-    
-    Arguments:
-        boxes: Tensor of shape [..., 4] with (cx, cy, w, h) format
-        name: Name for logging
-    
-    Returns:
-        (is_valid, error_message)
-    """
+    """Validate bounding boxes for training...."""
     # Check for NaN/Inf
     if torch.isnan(boxes).any():
         return False, f"{name} contains NaN values"
@@ -60,17 +49,7 @@ def validate_boxes(boxes: torch.Tensor, name: str = "boxes") -> Tuple[bool, str]
 
 
 def validate_labels(labels: torch.Tensor, num_classes: int, name: str = "labels") -> Tuple[bool, str]:
-    """
-    Validate class labels.
-    
-    Arguments:
-        labels: Tensor of class indices
-        num_classes: Number of valid classes
-        name: Name for logging
-    
-    Returns:
-        (is_valid, error_message)
-    """
+    """Validate class labels...."""
     # Check for NaN/Inf
     if torch.isnan(labels).any():
         return False, f"{name} contains NaN values"
@@ -91,17 +70,7 @@ def validate_batch(
     num_classes: int = 91,
     check_targets: bool = True
 ) -> Tuple[bool, str]:
-    """
-    Comprehensive batch validation before training.
-    
-    Arguments:
-        batch: Batch dictionary with 'images', 'labels', 'boxes', etc.
-        num_classes: Number of classes for label validation
-        check_targets: Whether to validate target tensors
-    
-    Returns:
-        (is_valid, error_message)
-    """
+    """Comprehensive batch validation before training...."""
     # Validate images
     if 'images' in batch:
         images = batch['images']
@@ -135,16 +104,7 @@ def validate_batch(
 
 
 def sanitize_boxes(boxes: torch.Tensor, min_size: float = 1e-4) -> torch.Tensor:
-    """
-    Sanitize boxes to ensure valid dimensions.
-    
-    Arguments:
-        boxes: Tensor of shape [..., 4] with (cx, cy, w, h) format
-        min_size: Minimum width/height
-    
-    Returns:
-        Sanitized boxes tensor
-    """
+    """Sanitize boxes to ensure valid dimensions...."""
     boxes = boxes.clone()
     
     # Replace NaN/Inf with defaults
@@ -170,17 +130,7 @@ def validate_and_sanitize_batch(
     num_classes: int = 91,
     auto_fix: bool = True
 ) -> Tuple[Dict[str, Any], bool, str]:
-    """
-    Validate and optionally sanitize a batch.
-    
-    Arguments:
-        batch: Input batch
-        num_classes: Number of classes
-        auto_fix: Whether to automatically fix issues
-    
-    Returns:
-        (sanitized_batch, is_valid, message)
-    """
+    """Validate and optionally sanitize a batch...."""
     # Only validate actual objects (not padding) if num_objects is available
     if 'num_objects' in batch and 'boxes' in batch:
         batch_size = batch['boxes'].shape[0]

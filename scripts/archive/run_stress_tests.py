@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""
-Run MaxSight Stress Test Suite
+"""Run MaxSight Stress Test Suite
 
-Executes comprehensive stress tests to validate system stability and safety.
-"""
+Executes comprehensive stress tests to validate system stability and safety."""
 
 import sys
 import argparse
@@ -46,7 +44,6 @@ def main():
     if args.checkpoint:
         logger.info(f"Loading model from {args.checkpoint}")
         # FUTURE ENHANCEMENT: Load actual trained model for stress testing.
-        # Currently uses synthetic model. Replace with: model = torch.load('checkpoints/model.pt')
         model = None  # Placeholder
     else:
         logger.warning("No checkpoint provided, using dummy model")

@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""
-Setup script for COCO dataset train/test/validation splits.
+"""Setup script for COCO dataset train/test/validation splits.
 
-Creates properly split COCO datasets for MaxSight training and evaluation.
-"""
+Creates properly split COCO datasets for MaxSight training and evaluation."""
 
 import argparse
 from pathlib import Path

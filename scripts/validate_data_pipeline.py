@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-Phase 3: Data Pipeline and Augmentation Validation.
-
-- Load dataset via ml/data/data_pipeline.py with custom collate; verify variable-length audio padding.
-- Sample 100 batches/samples; check no NaN/Inf (safe values; augmentations should use clamping).
-- Compute class weights via compute_class_weights(); ensure rare classes (e.g. urgency "danger") have higher weights.
-
-Success: No invalid values; augmentations preserve annotation structure.
-"""
+"""Phase 3: Data Pipeline and Augmentation Validation...."""
 
 import argparse
 import sys

@@ -1,8 +1,6 @@
-"""
-Temporal Processing Modules for MaxSight 3.0
+"""Temporal Processing Modules for MaxSight 3.0
 
-Includes ConvLSTM for motion tracking and TimeSformer for long-range temporal dependencies.
-"""
+Includes ConvLSTM for motion tracking and TimeSformer for long-range temporal dependencies."""
 
 import torch
 import torch.nn as nn
@@ -10,11 +8,9 @@ from typing import Tuple, Optional
 
 
 class ConvLSTMCell(nn.Module):
-    """
-    Single ConvLSTM cell.
+    """Single ConvLSTM cell.
     
-    Processes spatial-temporal information using convolutional operations.
-    """
+    Processes spatial-temporal information using convolutional operations."""
     
     def __init__(self, input_dim: int, hidden_dim: int, kernel_size: int = 3):
         super().__init__()
@@ -35,16 +31,7 @@ class ConvLSTMCell(nn.Module):
         x: torch.Tensor,  # [B, C, H, W]
         hidden: Tuple[torch.Tensor, torch.Tensor]  # (h, c)
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Forward pass through ConvLSTM cell.
-        
-        Args:
-            x: Input features [B, C, H, W]
-            hidden: Previous hidden state (h, c)
-        
-        Returns:
-            New hidden state (h_new, c_new)
-        """
+        """Forward pass through ConvLSTM cell...."""
         h_prev, c_prev = hidden
         
         # Concatenate input and hidden state
@@ -72,11 +59,9 @@ class ConvLSTMCell(nn.Module):
 
 
 class ConvLSTM(nn.Module):
-    """
-    Multi-layer ConvLSTM for motion tracking.
+    """Multi-layer ConvLSTM for motion tracking.
     
-    Tracks motion across multiple frames for people, vehicles, and obstacles.
-    """
+    Tracks motion across multiple frames for people, vehicles, and obstacles."""
     
     def __init__(
         self,
@@ -105,17 +90,7 @@ class ConvLSTM(nn.Module):
         x: torch.Tensor,  # [B, T, C, H, W] - sequence of frames
         hidden_state: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        """
-        Forward pass through ConvLSTM.
-        
-        Args:
-            x: Input sequence [B, T, C, H, W]
-            hidden_state: Optional initial hidden state
-        
-        Returns:
-            output: Output sequence [B, T, hidden_dim, H, W]
-            hidden: Final hidden state (h, c)
-        """
+        """Forward pass through ConvLSTM...."""
         B, T, C, H, W = x.shape
         
         # Initialize hidden state if not provided

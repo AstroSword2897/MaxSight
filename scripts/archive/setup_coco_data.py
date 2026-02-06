@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-"""
-Setup COCO dataset - Extract zips and verify structure.
-Handles both coco_raw and coco directories.
-"""
+"""Setup COCO dataset - Extract zips and verify structure.
+Handles both coco_raw and coco directories."""
 
 import sys
 import zipfile

@@ -1,18 +1,4 @@
-"""
-Sound Event Classification Head for MaxSight 3.0 (v2)
-
-Key principles:
-- Logits-first (training-safe)
-- Temporal reasoning is explicit
-- Direction, priority, urgency are class-aware
-
-Production-grade improvements:
-- Logits-first everywhere (no softmax in forward)
-- Explicit temporal pooling via learned attention pooling
-- Direction & priority conditioned on class-aware embedding
-- Urgency computed from expected risk, not raw class probs
-- CNN → Transformer-style temporal encoder (lighter than full transformer)
-"""
+"""Sound Event Classification Head for MaxSight 3.0 (v2)..."""
 
 import torch
 import torch.nn as nn
@@ -21,15 +7,7 @@ from typing import Dict
 
 
 class SoundEventHead(nn.Module):
-    """
-    Sound event classification head (v2).
-    
-    Features:
-    - Spectrogram CNN (time preserved)
-    - Temporal attention with learned pooling
-    - Logits-first design (training-safe)
-    - Class-aware direction, priority, urgency
-    """
+    """Sound event classification head (v2)...."""
     
     def __init__(
         self,
@@ -92,20 +70,7 @@ class SoundEventHead(nn.Module):
         )
     
     def forward(self, spectrogram: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass through sound event head.
-        
-        Args:
-            spectrogram: [B, T, F] spectrogram features
-        
-        Returns:
-            Dictionary with:
-                - 'sound_logits': [B, num_classes] - Raw logits
-                - 'sound_probs': [B, num_classes] - Softmax probabilities
-                - 'direction_logits': [B, num_directions] - Raw direction logits
-                - 'priority': [B, 1] - Priority score [0, 1]
-                - 'urgency': [B, 1] - Expected urgency (uncertainty-aware)
-        """
+        """Forward pass through sound event head...."""
         B, T, freq_bins = spectrogram.shape
         
         # -------------------------------------------------

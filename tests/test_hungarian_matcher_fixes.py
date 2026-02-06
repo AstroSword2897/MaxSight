@@ -1,12 +1,10 @@
-"""
-Test Hungarian Matcher Robustness
+"""Test Hungarian Matcher Robustness
 
 Verifies that the matcher handles edge cases without crashing:
 - NaN/Inf in boxes
 - Zero-width/height boxes
 - Empty ground truth
-- Invalid cost matrices
-"""
+- Invalid cost matrices"""
 
 import torch
 import pytest

@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""
-Cleanup script for Colab/Cloud training artifacts.
+"""Cleanup script for Colab/Cloud training artifacts.
 
 Deletes old checkpoints, logs, and temporary files to free up space.
-Safe to run - will ask for confirmation before deleting.
-"""
+Safe to run - will ask for confirmation before deleting."""
 
 import argparse
 import shutil
@@ -57,18 +55,7 @@ def cleanup_checkpoints(
     keep_recent: int = 0,
     dry_run: bool = True
 ) -> Tuple[int, float]:
-    """Clean up checkpoint files.
-    
-    Args:
-        checkpoint_dir: Directory containing checkpoints
-        keep_best: Keep best_model.pt if it exists
-        keep_last: Keep last_checkpoint.pt if it exists
-        keep_recent: Keep N most recent checkpoints
-        dry_run: If True, only show what would be deleted
-    
-    Returns:
-        Tuple of (files_deleted, space_freed_mb)
-    """
+    """Clean up checkpoint files...."""
     checkpoint_dir = Path(checkpoint_dir)
     if not checkpoint_dir.exists():
         print(f"❌ Checkpoint directory {checkpoint_dir} does not exist")

@@ -1,9 +1,7 @@
-"""
-Fusion MLP Training Script for Multi-Vector Retrieval
+"""Fusion MLP Training Script for Multi-Vector Retrieval
 
 Trains a fusion MLP that combines multiple embedding types.
-Based on provided script with enhancements.
-"""
+Based on provided script with enhancements."""
 
 import torch
 import torch.nn as nn

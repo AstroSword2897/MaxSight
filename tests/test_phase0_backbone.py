@@ -1,15 +1,4 @@
-"""
-Comprehensive Tests for Phase 0: Advanced Backbone & Architecture
-
-Tests all Phase 0 components:
-- Vision Transformer Backbone
-- Hybrid CNN + ViT Backbone
-- Dynamic Convolution
-- CBAM & SE Attention
-- Cross-Modal Attention
-- Cross-Task Attention
-- Advanced Temporal Modules
-"""
+"""Comprehensive Tests for Phase 0: Advanced Backbone & Architecture..."""
 
 import torch
 import torch.nn as nn

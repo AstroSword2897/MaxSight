@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""
-Direct download script for Open Images V6 validation set.
+"""Direct download script for Open Images V6 validation set.
 
-Uses the CVDF GitHub repository downloader for reliable downloads.
-"""
+Uses the CVDF GitHub repository downloader for reliable downloads."""
 
 import sys
 import subprocess
@@ -15,9 +13,7 @@ sys.path.insert(0, str(ROOT))
 
 
 def download_with_cvdf_repo(data_dir: Path) -> bool:
-    """
-    Download Open Images V6 using CVDF repository downloader.
-    """
+    """Download Open Images V6 using CVDF repository downloader."""
     print("\n" + "="*70)
     print("Downloading Open Images V6 using CVDF Repository")
     print("="*70)

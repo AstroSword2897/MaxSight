@@ -1,8 +1,6 @@
-"""
-Stage 1: Fast Approximate Nearest Neighbor Search
+"""Stage 1: Fast Approximate Nearest Neighbor Search
 
-Fast ANN search on fused embeddings for candidate retrieval.
-"""
+Fast ANN search on fused embeddings for candidate retrieval."""
 
 import numpy as np
 import faiss
@@ -11,12 +9,10 @@ import time
 
 
 class Stage1ANN:
-    """
-    Stage 1 ANN search for fast candidate retrieval.
+    """Stage 1 ANN search for fast candidate retrieval.
     
     Uses FAISS index for approximate nearest neighbor search.
-    Target latency: <20ms for HNSW, <50ms for IVF-PQ
-    """
+    Target latency: <20ms for HNSW, <50ms for IVF-PQ"""
     
     def __init__(
         self,
@@ -34,18 +30,7 @@ class Stage1ANN:
         k: int = 200,
         ef_search: Optional[int] = None  # For HNSW
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Search for top-K candidates.
-        
-        Args:
-            query: Query embedding [embed_dim] or [B, embed_dim]
-            k: Number of candidates to retrieve
-            ef_search: EF parameter for HNSW (higher = more accurate, slower)
-        
-        Returns:
-            distances: Distances to candidates [B, k]
-            indices: Candidate indices [B, k]
-        """
+        """Search for top-K candidates...."""
         if self.index is None:
             raise ValueError("Index not initialized. Provide index or index_path.")
         
@@ -71,17 +56,7 @@ class Stage1ANN:
         queries: np.ndarray,  # [B, embed_dim]
         k: int = 200
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Batch search for multiple queries.
-        
-        Args:
-            queries: Query embeddings [B, embed_dim]
-            k: Number of candidates per query
-        
-        Returns:
-            distances: Distances [B, k]
-            indices: Indices [B, k]
-        """
+        """Batch search for multiple queries...."""
         return self.search(queries, k)
 
 

@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""
-Full AutoML: Optuna-based hyperparameter tuning for MaxSight training.
-
-Runs full AutoML (multiple trials over learning_rate, weight_decay, batch_size,
-gradient_clip_norm) using ProductionTrainLoop; minimizes validation loss.
-Best hyperparameters are written to checkpoint_dir/best_hyperparameters.json and
-can be used to update production training:
-
-  python scripts/AutoMLType.py --data-dir ... --checkpoint-dir ./checkpoints_tuning --n-trials 20
-  python scripts/train_maxsight.py --data-dir ... --hyperparameters ./checkpoints_tuning/best_hyperparameters.json --epochs 100
-
-This updates hyperparameters for the full training run with the tuned values.
-"""
+"""Full AutoML: Optuna-based hyperparameter tuning for MaxSight training...."""
 
 import argparse
 import json
@@ -132,7 +120,6 @@ def main() -> int:
     if use_annotation_based:
         train_ann = Path(args.train_annotation).resolve()
         val_ann = Path(args.val_annotation).resolve()
-        # If not found, try under data-dir (e.g. Colab: data-dir on Drive with cleaned_splits inside)
         if not train_ann.exists():
             for candidate in [data_dir / "cleaned_splits" / train_ann.name, data_dir / train_ann.name]:
                 if candidate.exists():
@@ -252,7 +239,7 @@ def main() -> int:
             gradient_clip_norm=gradient_clip_norm,
             resume_from=None,
             use_gradnorm=args.use_gradnorm,
-            checkpoint_interval=0,  # Only save best/last, no intermediate checkpoints (saves storage)
+            checkpoint_interval=0,
         )
 
         try:

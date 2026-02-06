@@ -60,7 +60,6 @@ class MaxSightDataset(Dataset):
         
         # Detect format: COCO has 'images'/'annotations', custom format is simpler
         if 'images' in data and 'annotations' in data:
-            # COCO format: parse standard structure with separate images/annotations/categories sections
             image_map = {img['id']: img for img in data['images']}
             category_map = {cat['id']: cat['name'] for cat in data.get('categories', [])}
             
@@ -240,7 +239,7 @@ class MaxSightDataset(Dataset):
         result = {
             'images': image_tensor,  # [3, H, W] preprocessed image
             'labels': labels,  # [max_objects] class labels (padded)
-            'boxes': boxes,  # [max_objects, 4] bounding boxes in center format (cx, cy, w, h)
+            'boxes': boxes,
             'urgency': torch.tensor(urgency, dtype=torch.long),  # Scene urgency (0-3)
             'distance': distance, 
             'num_objects': torch.tensor(num_objs, dtype=torch.long),  # Valid object count

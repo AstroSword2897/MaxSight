@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""
-Test training pipeline with small sample.
+"""Test training pipeline with small sample.
 
-Tests data loaders, model creation, and a few training steps.
-"""
+Tests data loaders, model creation, and a few training steps."""
 
 import sys
 from pathlib import Path

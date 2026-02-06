@@ -1,11 +1,4 @@
-"""
-MaxSight Stress Testing Infrastructure
-
-Production-grade stress tests to catch failure modes before users do.
-Tests stability, degradation, coupling, and recovery.
-
-Based on the MaxSight Stress Testing Playbook.
-"""
+"""MaxSight Stress Testing Infrastructure..."""
 
 import torch
 import torch.nn as nn
@@ -66,11 +59,9 @@ class StressTestConfig:
 
 
 class HeadIsolationStressTest:
-    """
-    Test 1: Head Isolation Stress Tests
+    """Test 1: Head Isolation Stress Tests
     
-    Detect gradient interference and silent head collapse.
-    """
+    Detect gradient interference and silent head collapse."""
     
     def __init__(self, config: StressTestConfig):
         self.config = config
@@ -83,16 +74,7 @@ class HeadIsolationStressTest:
         device: str = 'cuda',
         epochs_per_variant: int = 5
     ) -> Dict[str, StressTestResult]:
-        """
-        Run head isolation stress test.
-        
-        Trains five variants from the same checkpoint:
-        A: Detection only
-        B: Detection + Depth
-        C: Detection + Accessibility
-        D: Detection + Navigation
-        E: All heads
-        """
+        """Run head isolation stress test...."""
         results = {}
         
         # Save initial checkpoint
@@ -147,7 +129,6 @@ class HeadIsolationStressTest:
                 outputs = model(images)
                 
                 # Track gradient norms per head
-                # FUTURE ENHANCEMENT: Extract per-head losses and gradient norms for detailed analysis.
                 # This would enable per-head gradient monitoring and debugging.
                 
                 num_batches += 1
@@ -203,11 +184,9 @@ class HeadIsolationStressTest:
 
 
 class LossScalingStressTest:
-    """
-    Test 2: Loss Surface Stress (Exploding / Vanishing)
+    """Test 2: Loss Surface Stress (Exploding / Vanishing)
     
-    Ensure no loss term dominates training.
-    """
+    Ensure no loss term dominates training."""
     
     def __init__(self, config: StressTestConfig):
         self.config = config
@@ -220,9 +199,7 @@ class LossScalingStressTest:
         device: str = 'cuda',
         head_name: str = 'depth'
     ) -> Dict[str, StressTestResult]:
-        """
-        Test loss scaling by artificially scaling each loss independently.
-        """
+        """Test loss scaling by artificially scaling each loss independently."""
         results = {}
         
         for scale_factor in self.config.loss_scaling_factors:
@@ -309,11 +286,9 @@ class LossScalingStressTest:
 
 
 class InputCorruptionStressTest:
-    """
-    Test 3: Input Corruption Stress (Real-World Reality Check)
+    """Test 3: Input Corruption Stress (Real-World Reality Check)
     
-    Simulate bad cameras, motion blur, low light, occlusion.
-    """
+    Simulate bad cameras, motion blur, low light, occlusion."""
     
     def __init__(self, config: StressTestConfig):
         self.config = config
@@ -442,11 +417,9 @@ class InputCorruptionStressTest:
 
 
 class TemporalStressTest:
-    """
-    Test 4: Temporal Stress (Video Drift)
+    """Test 4: Temporal Stress (Video Drift)
     
-    Test stability across time.
-    """
+    Test stability across time."""
     
     def __init__(self, config: StressTestConfig):
         self.config = config
@@ -519,11 +492,9 @@ class TemporalStressTest:
 
 
 class HeadDropoutStressTest:
-    """
-    Test 6: Head Dropout Stress (Runtime Failures)
+    """Test 6: Head Dropout Stress (Runtime Failures)
     
-    Ensure graceful degradation.
-    """
+    Ensure graceful degradation."""
     
     def __init__(self, config: StressTestConfig):
         self.config = config
@@ -602,11 +573,9 @@ class HeadDropoutStressTest:
 
 
 class StressTestSuite:
-    """
-    Complete stress test suite.
+    """Complete stress test suite.
     
-    Runs all stress tests and generates a dashboard report.
-    """
+    Runs all stress tests and generates a dashboard report."""
     
     def __init__(self, config: Optional[StressTestConfig] = None):
         self.config = config or StressTestConfig()
@@ -630,7 +599,6 @@ class StressTestSuite:
         logger.info("Running Head Isolation Stress Tests...")
         isolation_test = HeadIsolationStressTest(self.config)
         # Note: This is expensive, might want to skip in quick tests
-        # isolation_results = isolation_test.run(model, train_loader, val_loader, device)
         # all_results['head_isolation'] = isolation_results
         
         # Test 2: Loss Scaling

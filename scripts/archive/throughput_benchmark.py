@@ -1,9 +1,7 @@
-"""
-Throughput Benchmark for MaxSight 3.0
+"""Throughput Benchmark for MaxSight 3.0
 
 Measures throughput for different forward pass scenarios
-to understand performance characteristics before training.
-"""
+to understand performance characteristics before training."""
 
 import torch
 import time

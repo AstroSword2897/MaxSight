@@ -1,7 +1,5 @@
-"""
-Structured logging for MaxSight Web Simulator.
-Component-based logging with consistent format.
-"""
+"""Structured logging for MaxSight Web Simulator.
+Component-based logging with consistent format."""
 import logging
 import json
 from typing import Any, Dict, Optional
@@ -106,15 +104,13 @@ class ComponentLogger:
 
 
 def setup_structured_logging(log_level: str = None) -> logging.Logger:
-    """
-    Setup structured logging for the simulator.
+    """Setup structured logging for the simulator.
     
     Args:
         log_level: Logging level (uses config if None)
     
     Returns:
-        Configured logger
-    """
+        Configured logger"""
     if log_level is None:
         log_level = config.log_level
     
@@ -136,15 +132,13 @@ def setup_structured_logging(log_level: str = None) -> logging.Logger:
 
 
 def get_component_logger(component: str) -> ComponentLogger:
-    """
-    Get logger for a specific component.
+    """Get logger for a specific component.
     
     Args:
         component: Component name (e.g., 'session', 'api', 'core')
     
     Returns:
-        ComponentLogger instance
-    """
+        ComponentLogger instance"""
     base_logger = logging.getLogger('maxsight_simulator')
     return ComponentLogger(component, base_logger)
 

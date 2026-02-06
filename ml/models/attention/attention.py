@@ -1,11 +1,4 @@
-"""
-MaxSight 3.0 Attention Modules - Consolidated Production Version
-
-All attention modules in one file:
-- CBAM/SE (optimized with safety checks)
-- Cross-Modal Attention (vision/audio/haptic fusion)
-- Cross-Task Attention (detection/OCR/description linking)
-"""
+"""MaxSight 3.0 Attention Modules - Consolidated Production Version..."""
 
 import torch
 import torch.nn as nn

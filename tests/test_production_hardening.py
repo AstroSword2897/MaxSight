@@ -1,8 +1,6 @@
-"""
-Production hardening tests: pipeline latency, priority filter, temporal smoother,
+"""Production hardening tests: pipeline latency, priority filter, temporal smoother,
 safety bias, thermal throttling, alert cooldown.
-Run with: pytest tests/test_production_hardening.py -v
-"""
+Run with: pytest tests/test_production_hardening.py -v"""
 import pytest
 import sys
 import time

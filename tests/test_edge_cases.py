@@ -1,7 +1,5 @@
-"""
-Edge Case Tests for MaxSight Model
-Tests extreme conditions, combined impairments, and unusual scenarios.
-"""
+"""Edge Case Tests for MaxSight Model
+Tests extreme conditions, combined impairments, and unusual scenarios."""
 
 import torch
 import numpy as np

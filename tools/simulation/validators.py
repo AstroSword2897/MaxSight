@@ -1,7 +1,5 @@
-"""
-Input validation for MaxSight Web Simulator.
-Validates all user inputs before processing.
-"""
+"""Input validation for MaxSight Web Simulator.
+Validates all user inputs before processing."""
 from typing import Any, Dict, Optional
 from PIL import Image
 from io import BytesIO
@@ -11,8 +9,7 @@ from .config import config
 
 
 def validate_session_id(session_id: Optional[str]) -> str:
-    """
-    Validate session ID format.
+    """Validate session ID format.
     
     Args:
         session_id: Session ID to validate
@@ -21,8 +18,7 @@ def validate_session_id(session_id: Optional[str]) -> str:
         Validated session ID
     
     Raises:
-        ValidationError: If session ID is invalid
-    """
+        ValidationError: If session ID is invalid"""
     if not session_id:
         raise ValidationError("Session ID is required")
     
@@ -40,18 +36,7 @@ def validate_session_id(session_id: Optional[str]) -> str:
 
 
 def validate_condition(condition: str) -> str:
-    """
-    Validate visual condition.
-    
-    Args:
-        condition: Condition name to validate
-    
-    Returns:
-        Validated condition name
-    
-    Raises:
-        ValidationError: If condition is invalid
-    """
+    """Validate visual condition...."""
     valid_conditions = [
         'normal', 'myopia', 'hyperopia', 'astigmatism', 'cataracts',
         'glaucoma', 'amd', 'diabetic_retinopathy', 'retinitis_pigmentosa',
@@ -68,8 +53,7 @@ def validate_condition(condition: str) -> str:
 
 
 def validate_scenario(scenario: str) -> str:
-    """
-    Validate scenario name.
+    """Validate scenario name.
     
     Args:
         scenario: Scenario name to validate
@@ -78,8 +62,7 @@ def validate_scenario(scenario: str) -> str:
         Validated scenario name
     
     Raises:
-        ValidationError: If scenario is invalid
-    """
+        ValidationError: If scenario is invalid"""
     valid_scenarios = [
         'general', 'navigation', 'text_reading', 'therapy', 'safety', 'accessibility'
     ]
@@ -94,8 +77,7 @@ def validate_scenario(scenario: str) -> str:
 
 
 def validate_output_mode(mode: str) -> str:
-    """
-    Validate output mode.
+    """Validate output mode.
     
     Args:
         mode: Output mode to validate
@@ -104,8 +86,7 @@ def validate_output_mode(mode: str) -> str:
         Validated output mode
     
     Raises:
-        ValidationError: If mode is invalid
-    """
+        ValidationError: If mode is invalid"""
     valid_modes = ['patient', 'clinician', 'dev']
     
     if not mode:
@@ -118,20 +99,7 @@ def validate_output_mode(mode: str) -> str:
 
 
 def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Image:
-    """
-    Validate and load image file.
-    
-    Args:
-        image_bytes: Image file bytes
-        max_size_mb: Maximum size in MB (uses config if None)
-    
-    Returns:
-        PIL Image object
-    
-    Raises:
-        InvalidImageError: If image format is invalid
-        ImageTooLargeError: If image is too large
-    """
+    """Validate and load image file...."""
     if max_size_mb is None:
         max_size_mb = config.max_image_size_mb
     
@@ -210,18 +178,7 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
 
 
 def validate_image_data(image_data: str) -> Image.Image:
-    """
-    Validate base64 encoded image data.
-    
-    Args:
-        image_data: Base64 encoded image string (may include data URI prefix)
-    
-    Returns:
-        PIL Image object
-    
-    Raises:
-        InvalidImageError: If image data is invalid
-    """
+    """Validate base64 encoded image data...."""
     try:
         # Remove data URI prefix if present
         if ',' in image_data:
@@ -239,8 +196,7 @@ def validate_image_data(image_data: str) -> Image.Image:
 
 
 def validate_init_request(data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Validate /api/init request data.
+    """Validate /api/init request data.
     
     Args:
         data: Request JSON data
@@ -249,8 +205,7 @@ def validate_init_request(data: Dict[str, Any]) -> Dict[str, Any]:
         Validated and normalized data
     
     Raises:
-        ValidationError: If validation fails
-    """
+        ValidationError: If validation fails"""
     if not isinstance(data, dict):
         raise ValidationError("Request body must be a JSON object")
     

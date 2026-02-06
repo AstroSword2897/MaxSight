@@ -1,16 +1,4 @@
-"""
-Patch Extractor for Multi-Vector Retrieval
-
-Fully differentiable, GPU-efficient patch clustering using attention pooling.
-Extracts ViT patch tokens and clusters them into region groups.
-
-FIXED ISSUES:
-- ✅ Fully differentiable (no CPU KMeans in forward pass)
-- ✅ GPU-efficient (all operations on GPU)
-- ✅ Vectorized (no batch loops)
-- ✅ Proper error handling (no hard-coded fallbacks)
-- ✅ Memory efficient (optional gradient checkpointing)
-"""
+"""Patch Extractor for Multi-Vector Retrieval..."""
 
 import torch
 import torch.nn as nn
@@ -24,21 +12,7 @@ except ImportError:
 
 
 class PatchExtractor(nn.Module):
-    """
-    Fully differentiable patch extractor with attention-based clustering.
-    
-    Architecture:
-    - Extract patch tokens from ViT before pooling
-    - Cluster tokens using learnable attention pooling (fully differentiable)
-    - Optional: Soft KMeans for differentiable clustering
-    - L2 normalized outputs for retrieval
-    
-    Key improvements:
-    - All operations on GPU (no CPU transfers)
-    - Fully differentiable (gradients flow to ViT)
-    - Vectorized (no batch loops)
-    - Memory efficient with optional gradient checkpointing
-    """
+    """Fully differentiable patch extractor with attention-based clustering...."""
     
     def __init__(
         self,
@@ -88,15 +62,7 @@ class PatchExtractor(nn.Module):
         self,
         patch_tokens: torch.Tensor
     ) -> torch.Tensor:
-        """
-        Attention-based pooling (fully differentiable, GPU-efficient).
-        
-        Args:
-            patch_tokens: [B, N_patches, embed_dim]
-        
-        Returns:
-            Clustered embeddings: [B, num_clusters, embed_dim]
-        """
+        """Attention-based pooling (fully differentiable, GPU-efficient)...."""
         B = patch_tokens.shape[0]
         
         # Project patches for better clustering
@@ -118,17 +84,7 @@ class PatchExtractor(nn.Module):
         self,
         patch_tokens: torch.Tensor
     ) -> torch.Tensor:
-        """
-        Soft KMeans clustering (fully differentiable alternative to hard KMeans).
-        
-        Uses soft assignment with temperature scaling for differentiability.
-        
-        Args:
-            patch_tokens: [B, N_patches, embed_dim]
-        
-        Returns:
-            Clustered embeddings: [B, num_clusters, embed_dim]
-        """
+        """Soft KMeans clustering (fully differentiable alternative to hard KMeans)...."""
         B, N_patches, _ = patch_tokens.shape
         
         # Project patches
@@ -164,19 +120,7 @@ class PatchExtractor(nn.Module):
         images: torch.Tensor,
         vit_patch_tokens: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        """
-        Extract and cluster patch tokens (fully differentiable, GPU-efficient).
-        
-        Args:
-            images: Input images [B, 3, H, W]
-            vit_patch_tokens: Optional pre-computed patch tokens [B, N_patches, embed_dim]
-        
-        Returns:
-            Clustered patch embeddings [B, num_clusters, embed_dim] (L2 normalized)
-        
-        Raises:
-            ValueError: If neither vit_backbone nor vit_patch_tokens provided
-        """
+        """Extract and cluster patch tokens (fully differentiable, GPU-efficient)...."""
         B = images.shape[0]
         device = images.device
         
@@ -249,12 +193,10 @@ class PatchExtractor(nn.Module):
         images: torch.Tensor,
         vit_patch_tokens: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        """
-        Get attention weights for visualization/debugging.
+        """Get attention weights for visualization/debugging.
         
         Returns:
-            Attention weights [B, num_clusters, N_patches]
-        """
+            Attention weights [B, num_clusters, N_patches]"""
         if vit_patch_tokens is None and self.vit_backbone is not None:
             _, vit_patch_tokens = self.vit_backbone(images, return_patch_tokens=True)
         

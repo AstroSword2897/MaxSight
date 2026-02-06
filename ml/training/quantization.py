@@ -1,15 +1,4 @@
-"""Enhanced model quantization for mobile deployment (int8) - Production Ready.
-
-This module provides ExecuTorch-ready quantization for MaxSight CNN.
-Integrates into Week 1 pipeline: Train → Quantize → Validate → Export to .pte
-
-Key features:
-- MaxSight CNN-specific module fusion
-- Per-channel weight quantization for ARM/iOS (qnnpack)
-- Comprehensive validation with multiple metrics
-- Production-ready error handling
-- Week 1 → Week 2 pipeline integration
-"""
+"""Enhanced model quantization for mobile deployment (int8) - Production Ready...."""
 
 import torch
 import torch.nn as nn
@@ -21,22 +10,7 @@ from copy import deepcopy
 
 
 def _fuse_maxsight_modules(model: nn.Module) -> nn.Module:
-    """
-    Fuse Conv+BN+ReLU patterns in MaxSight CNN architecture.
-    
-    Automatically detects and fuses Sequential modules with Conv+BN+ReLU patterns.
-    Works with:
-    - SimplifiedFPN lateral_convs and fpn_convs
-    - detection_fusion, detection_head
-    - cls_head, box_head, obj_head, text_head
-    - ResNet backbone layers (if applicable)
-    
-        Arguments:
-        model: MaxSightCNN model to fuse
-    
-    Returns:
-        Model with fused modules
-    """
+    """Fuse Conv+BN+ReLU patterns in MaxSight CNN architecture...."""
     fuse_list = []
     
     # Helper to check if a Sequential has Conv+BN+ReLU pattern
@@ -91,44 +65,7 @@ def quantize_model_int8(
     backend: str = 'qnnpack',  # Default to ARM for iOS deployment
     fuse_modules: bool = True
 ) -> nn.Module:
-    """
-    Quantize model to int8 using PyTorch's quantization API.
-    
-    Production-ready quantization for MaxSight CNN with:
-    - MaxSight-specific module fusion
-    - Per-channel weight quantization for ARM/iOS (qnnpack)
-    - Robust error handling
-    - ExecuTorch-ready output
-    
-        Arguments:
-        model: Model to quantize (MaxSightCNN)
-        calibration_data: DataLoader for calibration (optional, uses dummy data if None)
-        num_calibration_batches: Number of batches to use for calibration
-        backend: Quantization backend ('qnnpack' for ARM/iOS, 'fbgemm' for x86)
-        fuse_modules: Whether to fuse common module patterns (Conv+BN+ReLU)
-    
-    Returns:
-        Quantized model ready for ExecuTorch export
-    
-    Usage:
-        # Week 1 pipeline integration
-        model_fp32 = create_model()
-        model_fp32.load_state_dict(torch.load('checkpoint.pth'))
-        
-        # Quantize for iOS deployment
-        model_int8 = quantize_model_int8(
-            model_fp32,
-            calibration_data=val_loader,
-            backend='qnnpack',  # ARM backend for iPhone
-            num_calibration_batches=20
-        )
-        
-        # Validate accuracy
-        validation = validate_quantized_model(model_fp32, model_int8, test_images)
-        
-        # Export to ExecuTorch (Week 2)
-        # ... export to .pte format
-    """
+    """Quantize model to int8 using PyTorch's quantization API...."""
     # Create a copy to avoid modifying original model
     model = deepcopy(model)
     model.eval()
@@ -211,18 +148,7 @@ def compare_model_sizes(
     save_models: bool = False,
     output_dir: Optional[Path] = None
 ) -> Dict[str, Any]:
-    """
-    Compare model sizes (FP32 vs INT8) with optional disk size measurement.
-    
-        Arguments:
-        model_fp32: Original FP32 model
-        model_int8: Quantized INT8 model
-        save_models: Whether to save models and measure actual disk size
-        output_dir: Directory to save models (if save_models=True)
-    
-    Returns:
-        Dictionary with size information
-    """
+    """Compare model sizes (FP32 vs INT8) with optional disk size measurement...."""
     # Count parameters
     total_params = sum(p.numel() for p in model_fp32.parameters())
     trainable_params = sum(p.numel() for p in model_fp32.parameters() if p.requires_grad)
@@ -279,19 +205,7 @@ def validate_quantized_model(
     tolerance: float = 0.01,
     metrics: Optional[List[str]] = None
 ) -> Dict[str, Any]:
-    """
-    Validate quantized model by comparing outputs with FP32 model.
-    
-        Arguments:
-        model_fp32: Original FP32 model
-        model_int8: Quantized INT8 model
-        test_inputs: Test input tensor(s) - can be single tensor or list
-        tolerance: Maximum allowed difference (relative)
-        metrics: Additional metrics to compute ['mse', 'mae', 'cosine']
-    
-    Returns:
-        Dictionary with validation results
-    """
+    """Validate quantized model by comparing outputs with FP32 model...."""
     model_fp32.eval()
     model_int8.eval()
     
@@ -486,52 +400,7 @@ def quantize_and_validate(
     backend: str = 'qnnpack',
     output_dir: Optional[Path] = None
 ) -> Dict[str, Any]:
-    """
-    Complete Week 1 pipeline: Quantize → Validate → Size Check.
-    
-    One-command quantization pipeline for MaxSight CNN that:
-    1. Quantizes FP32 model to INT8
-    2. Validates accuracy (must be <1% loss)
-    3. Compares model sizes
-    4. Saves results
-    
-        Arguments:
-        model_fp32: Trained FP32 model (from checkpoint)
-        calibration_data: DataLoader for quantization calibration
-        test_data: DataLoader for validation (uses calibration_data if None)
-        num_calibration_batches: Number of batches for calibration
-        backend: 'qnnpack' (ARM/iOS) or 'fbgemm' (x86)
-        output_dir: Directory to save quantized model and results
-    
-    Returns:
-        Dictionary with quantization results:
-        {
-            'model_int8': quantized model,
-            'size_info': size comparison dict,
-            'validation': accuracy validation dict,
-            'ready_for_export': bool (True if passes all checks)
-        }
-    
-    Usage (Week 1 Pipeline):
-        # After training completes
-        checkpoint = torch.load('checkpoints/best_model.pth')
-        model_fp32.load_state_dict(checkpoint['model_state_dict'])
-        
-        # Quantize for iOS deployment
-        results = quantize_and_validate(
-            model_fp32=model_fp32,
-            calibration_data=val_loader,  # Use validation set for calibration
-            test_data=val_loader,  # Validate on same set
-            backend='qnnpack',  # ARM backend for iPhone
-            output_dir=Path('quantized_models')
-        )
-        
-        if results['ready_for_export']:
-            print("Model ready for ExecuTorch export (Week 2)")
-            # Next: Export to .pte format
-        else:
-            print("Quantization failed validation - check accuracy loss")
-    """
+    """Complete Week 1 pipeline: Quantize → Validate → Size Check...."""
     print("\nWeek 1: Model Quantization Pipeline")
     
     # Step 1: Quantize

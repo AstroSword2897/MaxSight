@@ -48,11 +48,7 @@ class DetectionMetrics:
     def __init__(self, num_classes: int, iou_thresholds: Optional[List[float]] = None,
                  device: Optional[torch.device] = None, image_size: Tuple[int, int] = (640, 640),
                  store_predictions: bool = True):
-        """
-        Arguments:
-            store_predictions: If False, only store TP/FP/FN counts (memory efficient).
-                              If True, store full prediction details for AP computation (default: True).
-        """
+        """Arguments:..."""
         self.num_classes = num_classes
         self.iou_thresholds = iou_thresholds or [0.5]
         self.device = device or torch.device('cpu')

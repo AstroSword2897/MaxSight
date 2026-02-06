@@ -1,21 +1,5 @@
 #!/usr/bin/env python3
-"""
-Loss Data Collection Script for MaxSight Training
-
-Collects comprehensive loss function data during training:
-- Per-head losses (objectness, classification, box, etc.)
-- Loss weights and task balancing metrics
-- Gradient norms per head
-- Loss trends over time
-- Task weight evolution (GradNorm)
-- Loss distribution statistics
-
-Usage:
-    python scripts/collect_loss_data.py \
-        --checkpoint checkpoints/model.pth \
-        --output loss_data.json \
-        --num-samples 1000
-"""
+"""Loss Data Collection Script for MaxSight Training..."""
 
 import argparse
 import json
@@ -45,9 +29,7 @@ from ml.training.train_loop import ProductionTrainLoop
 
 
 class LossDataCollector:
-    """
-    Collect comprehensive loss function data during training.
-    """
+    """Collect comprehensive loss function data during training."""
     
     def __init__(
         self,
@@ -57,16 +39,7 @@ class LossDataCollector:
         collect_gradients: bool = False,
         collect_task_weights: bool = True
     ):
-        """
-        Initialize loss data collector.
-        
-        Args:
-            model: Model to collect losses from
-            loss_fn: Loss function (optional, will create default if None)
-            device: Device to run on
-            collect_gradients: Whether to collect gradient norms
-            collect_task_weights: Whether to collect task weights (GradNorm)
-        """
+        """Initialize loss data collector...."""
         self.model = model.to(device)
         self.device = device
         self.collect_gradients = collect_gradients
@@ -107,17 +80,7 @@ class LossDataCollector:
         targets: Dict[str, torch.Tensor],
         compute_gradients: bool = False
     ) -> Dict[str, Any]:
-        """
-        Collect loss data for a single training step.
-        
-        Args:
-            outputs: Model outputs
-            targets: Ground truth targets
-            compute_gradients: Whether to compute gradients (for gradient norms)
-        
-        Returns:
-            Dictionary with collected loss data
-        """
+        """Collect loss data for a single training step...."""
         self.iteration += 1
         
         # Compute losses
@@ -185,12 +148,10 @@ class LossDataCollector:
         return gradient_norms
     
     def compute_statistics(self) -> Dict[str, Dict[str, float]]:
-        """
-        Compute statistics for collected loss data.
+        """Compute statistics for collected loss data.
         
         Returns:
-            Dictionary mapping head names to statistics (mean, std, min, max, etc.)
-        """
+            Dictionary mapping head names to statistics (mean, std, min, max, etc.)"""
         stats = {}
         
         for head_name, losses in self.loss_history.items():
@@ -300,19 +261,7 @@ def collect_loss_data(
     collect_gradients: bool = False,
     collect_task_weights: bool = True
 ):
-    """
-    Collect loss data from model training/inference.
-    
-    Args:
-        checkpoint_path: Path to model checkpoint (optional)
-        data_dir: Dataset directory
-        num_samples: Number of samples to process
-        batch_size: Batch size for processing
-        device: Device to use
-        output_path: Output JSON file path
-        collect_gradients: Whether to collect gradient norms
-        collect_task_weights: Whether to collect task weights
-    """
+    """Collect loss data from model training/inference...."""
     print("="*60)
     print("Loss Data Collection")
     print("="*60)

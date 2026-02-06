@@ -1,23 +1,5 @@
 #!/usr/bin/env python3
-"""
-MaxSight Accessibility Dataset (Production Version)
-
-High-quality dataset system for therapy-focused visual accessibility features.
-
-Features:
-- Contrast sensitivity
-- Glare risk
-- Object findability
-- Navigation difficulty
-- Optional uncertainty weighting
-
-Production improvements:
-- No label corruption (synthetic labels separate from real labels)
-- Medically-grounded augmentations
-- Pre-computed augmentations (fast training)
-- Clean dataset structure
-- Therapy-oriented label schema
-"""
+"""MaxSight Accessibility Dataset (Production Version)..."""
 
 import json
 import random
@@ -37,20 +19,7 @@ import torchvision.transforms as T
 # ============================================================================
 
 class AccessibilityDataset(Dataset):
-    """
-    Pure dataset loader for accessibility features.
-    
-    Production design:
-    - Augmentations happen ONLY in synthetic generation, NOT on-the-fly
-    - Real labels remain untouched
-    - Fast __getitem__ (no augmentation overhead)
-    - Clean separation of real vs synthetic data
-    
-        Arguments:
-        image_dir: Directory containing images
-        label_file: Path to JSON label file
-        target_size: Target image size (height, width)
-    """
+    """Pure dataset loader for accessibility features...."""
     
     def __init__(
         self,
@@ -88,15 +57,7 @@ class AccessibilityDataset(Dataset):
         return len(self.image_files)
     
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        """
-        Get dataset item.
-        
-        Returns:
-            Dictionary with:
-                - 'image': torch.Tensor [3, H, W] - Normalized image tensor
-                - 'image_path': str - Path to image file
-                - 'labels': Dict - Accessibility labels
-        """
+        """Get dataset item...."""
         path = self.image_files[idx]
         
         # Load and resize image
@@ -134,32 +95,11 @@ class AccessibilityDataset(Dataset):
 # ============================================================================
 
 class SyntheticImpairmentEngine:
-    """
-    Engine for generating synthetic impairments more realistically.
-    
-    Medically-grounded augmentations:
-    - Contrast loss (simulates cataracts, visual acuity reduction)
-    - Veiling glare (simulates lens flare, bright light sensitivity)
-    - Peripheral blur (simulates visual field loss, glaucoma)
-    - Depth flattening (simulates depth perception issues)
-    - Halo effects (simulates post-cataract surgery, lens artifacts)
-    """
+    """Engine for generating synthetic impairments more realistically...."""
     
     @staticmethod
     def apply_contrast_loss(img: Image.Image, level: float) -> Image.Image:
-        """
-        Apply contrast loss (medically-grounded).
-        
-        Simulates reduced contrast sensitivity (cataracts, visual acuity issues).
-        Uses mean-preserving contrast reduction (not linear scaling).
-        
-        Arguments:
-            img: PIL Image
-            level: Contrast level [0, 1] where 1.0 = full contrast, 0.0 = no contrast
-        
-        Returns:
-            Contrast-reduced PIL Image
-        """
+        """Apply contrast loss (medically-grounded)...."""
         arr = np.array(img).astype(np.float32)
         mean = arr.mean(axis=(0, 1), keepdims=True)
         
@@ -172,19 +112,7 @@ class SyntheticImpairmentEngine:
     
     @staticmethod
     def apply_glare(img: Image.Image, intensity: float) -> Image.Image:
-        """
-        Apply veiling glare (medically-grounded).
-        
-        Simulates lens flare, bright light sensitivity, veiling glare.
-        Uses Gaussian-based glare mask (not random).
-        
-        Arguments:
-            img: PIL Image
-            intensity: Glare intensity [0, 1]
-        
-        Returns:
-            Image with veiling glare
-        """
+        """Apply veiling glare (medically-grounded)...."""
         arr = np.array(img).astype(np.float32)
         h, w = arr.shape[:2]
         
@@ -209,19 +137,7 @@ class SyntheticImpairmentEngine:
     
     @staticmethod
     def apply_peripheral_blur(img: Image.Image, amount: float) -> Image.Image:
-        """
-        Apply peripheral blur (medically-grounded).
-        
-        Simulates visual field loss, glaucoma, peripheral vision issues.
-        Blur increases from center to periphery (not isotropic).
-        
-        Arguments:
-            img: PIL Image
-            amount: Blur amount (sigma for Gaussian) [0, 10]
-        
-        Returns:
-            Image with peripheral blur
-        """
+        """Apply peripheral blur (medically-grounded)...."""
         arr = np.array(img).astype(np.float32)
         
         # Apply Gaussian blur (handles both grayscale and RGB)
@@ -250,19 +166,7 @@ class SyntheticImpairmentEngine:
     
     @staticmethod
     def apply_depth_flattening(img: Image.Image, strength: float) -> Image.Image:
-        """
-        Apply depth flattening (medically-grounded).
-        
-        Simulates reduced depth perception, stereopsis issues.
-        Reduces contrast in depth cues.
-        
-        Arguments:
-            img: PIL Image
-            strength: Flattening strength [0, 1]
-        
-        Returns:
-            Image with reduced depth cues
-        """
+        """Apply depth flattening (medically-grounded)...."""
         arr = np.array(img).astype(np.float32)
         
         # Reduce local contrast (depth cues rely on contrast)
@@ -275,19 +179,7 @@ class SyntheticImpairmentEngine:
     
     @staticmethod
     def apply_halo_effect(img: Image.Image, intensity: float) -> Image.Image:
-        """
-        Apply halo effect (medically-grounded).
-        
-        Simulates post-cataract surgery halos, lens artifacts.
-        Creates bright rings around high-contrast edges.
-        
-        Arguments:
-            img: PIL Image
-            intensity: Halo intensity [0, 1]
-        
-        Returns:
-            Image with halo effects
-        """
+        """Apply halo effect (medically-grounded)...."""
         arr = np.array(img).astype(np.float32)
         
         # Detect edges (high contrast regions)
@@ -306,18 +198,7 @@ class SyntheticImpairmentEngine:
     
     @staticmethod
     def apply_low_resolution(img: Image.Image, acuity_drop: float) -> Image.Image:
-        """
-        Apply low resolution (visual acuity drop).
-        
-        Simulates reduced visual acuity, low-resolution vision.
-        
-        Arguments:
-            img: PIL Image
-            acuity_drop: Acuity reduction factor [0, 1] where 1.0 = severe reduction
-        
-        Returns:
-            Lower resolution image
-        """
+        """Apply low resolution (visual acuity drop)...."""
         if acuity_drop <= 0:
             return img
         
@@ -333,15 +214,13 @@ class SyntheticImpairmentEngine:
     
     @staticmethod
     def _radial_mask(shape: Tuple[int, int]) -> np.ndarray:
-        """
-        Create radial mask (center = 1.0, edges = 0.0).
+        """Create radial mask (center = 1.0, edges = 0.0).
         
         Arguments:
             shape: (height, width)
         
         Returns:
-            Radial mask [H, W] with values [0, 1]
-        """
+            Radial mask [H, W] with values [0, 1]"""
         h, w = shape
         y, x = np.ogrid[-h/2:h/2, -w/2:w/2]
         r = np.sqrt(x*x + y*y)
@@ -366,25 +245,7 @@ def generate_synthetic_dataset(
     n_per_image: int = 8,
     augmentation_types: Optional[List[str]] = None
 ) -> Dict[str, int]:
-    """
-    Generate synthetic dataset with pre-computed augmentations.
-    
-    Production design:
-    - Pre-computes all augmentations (fast training)
-    - Maintains label distribution (stratified)
-    - Separate from real labels (no corruption)
-    - Medically-grounded augmentations
-    
-        Arguments:
-        source: Source image directory
-        output: Output directory for synthetic images
-        n_per_image: Number of augmentations per source image
-        augmentation_types: List of augmentation types to use
-                          (default: ['contrast', 'glare', 'peripheral_blur'])
-    
-    Returns:
-        Dictionary with generation statistics
-    """
+    """Generate synthetic dataset with pre-computed augmentations...."""
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     
@@ -506,12 +367,10 @@ def generate_synthetic_dataset(
 # ============================================================================
 
 def create_label_template(path: Path):
-    """
-    Create labeling template for user annotation.
+    """Create labeling template for user annotation.
     
         Arguments:
-        path: Path to save template JSON file
-    """
+        path: Path to save template JSON file"""
     template = {
         "example_image_id": {
             "contrast_sensitivity": 0.0,  # 0-1: How well can user detect contrast?
@@ -542,19 +401,7 @@ def combine_datasets(
     synthetic_labels: Path,
     output_dir: Path
 ) -> Dict[str, Any]:
-    """
-    Combine real and synthetic datasets into unified structure.
-    
-        Arguments:
-        real_dir: Directory with real images
-        real_labels: Path to real labels JSON
-        synthetic_dir: Directory with synthetic images
-        synthetic_labels: Path to synthetic labels JSON
-        output_dir: Output directory for combined dataset
-    
-    Returns:
-        Statistics dictionary
-    """
+    """Combine real and synthetic datasets into unified structure...."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -613,20 +460,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="MaxSight Accessibility Dataset Generator (Production Version)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Generate synthetic dataset
-  python create_accessibility_dataset.py generate --source datasets/raw --output datasets/synthetic --n_per_image 8
-  
-  # Create labeling template
-  python create_accessibility_dataset.py template --output datasets/annotations/template.json
-  
-  # Combine real and synthetic datasets
-  python create_accessibility_dataset.py combine \\
-      --real_dir datasets/real --real_labels datasets/real/annotations.json \\
-      --synthetic_dir datasets/synthetic --synthetic_labels datasets/synthetic/annotations.json \\
-      --output datasets/combined
-        """
+        epilog="""Examples:..."""
     )
     
     subparsers = parser.add_subparsers(dest='command', help='Command to run')

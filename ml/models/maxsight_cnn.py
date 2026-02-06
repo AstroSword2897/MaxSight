@@ -259,62 +259,7 @@ class SimplifiedFPN(nn.Module):
 
 
 class MaxSightCNN(nn.Module):
-    """
-    Object detection model with condition-specific adaptations. Multi-task: detection + urgency + distance.
-    
-    PROJECT PHILOSOPHY & APPROACH:
-    =============================
-    This is the core ML model that powers MaxSight's "Environmental Reading" capability. It's not just
-    an object detector - it's a multi-task system designed specifically for accessibility.
-    
-    WHY MULTI-TASK ARCHITECTURE:
-    Standard object detectors answer "what" and "where." MaxSight needs more:
-    - WHAT: Object class (door, stairs, vehicle)
-    - WHERE: Bounding box position (for direction cues)
-    - HOW FAR: Distance zone (near/medium/far for navigation)
-    - HOW URGENT: Urgency level (safe/caution/warning/danger for safety)
-    - HOW FINDABLE: Object findability (for users with low vision)
-    - SCENE CONTEXT: Scene embedding (for natural language descriptions)
-    
-    This multi-task approach directly supports the problem statement's requirement for "Environmental
-    Structuring" - we need rich, structured information about the environment, not just object labels.
-    
-    HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-    The problem asks: "What are ways that those who cannot see... be able to interact with the world
-    like those who can?" This model answers by providing the same rich environmental information that
-    sighted people process automatically:
-    - Object recognition (what's there)
-    - Spatial awareness (where it is, how far)
-    - Safety assessment (is it dangerous?)
-    - Context understanding (what's the overall scene?)
-    
-    RELATIONSHIP TO BARRIER REMOVAL METHODS:
-    1. ENVIRONMENTAL STRUCTURING: Provides structured information (objects, positions, distances)
-    2. CLEAR MULTIMODAL COMMUNICATION: Outputs feed into TTS, visual overlays, haptics
-    3. SKILL DEVELOPMENT: Condition-specific adaptations support vision therapy
-    4. ROUTINE WORKFLOW: Adapts to user's vision condition and needs
-    
-    CONDITION-SPECIFIC ADAPTATIONS:
-    Different vision conditions require different processing:
-    - Glaucoma (peripheral loss): Emphasizes peripheral regions
-    - AMD (central loss): Emphasizes central regions
-    - Cataracts (blur): Contrast enhancement
-    - Color blindness: Color detection and announcement
-    - Retinitis pigmentosa (night blindness): Brightness enhancement
-    
-    These adaptations ensure the model provides useful information regardless of the user's specific
-    vision condition, supporting the project's goal of addressing "Different Degree Levels" of
-    visual impairments.
-    
-    TECHNICAL DESIGN DECISIONS:
-    1. ResNet50 + FPN: Provides multi-scale features for detecting objects of all sizes
-    2. Audio fusion: Enables sound-aware environmental understanding (alarms, vehicles)
-    3. Multi-head architecture: Separate heads for different tasks (detection, urgency, distance)
-    4. Accessibility features: Contrast sensitivity, glare risk, navigation difficulty
-    
-    These design decisions ensure the model provides the rich, structured information needed for
-    effective environmental awareness and navigation support.
-    """
+    """Object detection model with condition-specific adaptations. Multi-task: detection + urgency + distance."""
     
     def __init__(
         self,
@@ -328,23 +273,9 @@ class MaxSightCNN(nn.Module):
         enable_accessibility_features: bool = True,
         tier_config: Optional['TierConfig'] = None
     ):
-        """
-        Initialize MaxSightCNN model.
-        
-        WHY THESE PARAMETERS:
-        - num_classes: 48 environmental classes (doors, stairs, vehicles, etc.) - supports "Reads Environment"
-        - num_urgency_levels: 4 levels (safe/caution/warning/danger) - supports safety awareness
-        - num_distance_zones: 3 zones (near/medium/far) - supports navigation and spatial awareness
-        - use_audio: Audio-visual fusion - supports "Listens and Alerts" feature
-        - condition_mode: Condition-specific adaptations - supports different vision conditions
-        - enable_accessibility_features: Contrast, glare, findability - supports fine-grained visual assistance
-        
-        These parameters ensure the model provides the comprehensive information needed for effective
-        accessibility support, not just basic object detection.
-        """
+        """Initialize MaxSightCNN model...."""
         super().__init__()
         
-        # Initialize urgency mapping in __init__ for thread safety (fixes race condition)
         self._urgency_map = {
             # Level 3: Danger - immediate hazards
             'danger': {
@@ -455,13 +386,10 @@ class MaxSightCNN(nn.Module):
             nn.Dropout(0.3),
             nn.Linear(256, 128)
         )
-        # OPTIMIZED: Updated to match EnhancedAudioEncoder output (256) + scene_context (256)
         scene_input_dim = 256 + 256  # Visual features (256) + audio features (256) = 512 total
         # This 512-dim vector represents the whole scene context
         
         # Combine features from multiple scales (P3, P4, P5) for better detection
-        # P3 catches small objects, P4 medium, P5 large - combining them helps with all sizes
-        # CRITICAL: Remove inplace=True for MPS compatibility (causes backward pass issues)
         self.detection_fusion = nn.Sequential(
             nn.Conv2d(fpn_channels * 3, fpn_channels, 1, bias=False),  # Fuse 3 scales
             nn.BatchNorm2d(fpn_channels),
@@ -470,7 +398,6 @@ class MaxSightCNN(nn.Module):
         
         # Process the fused features to extract detection information
         # Three layers deep to learn complex patterns
-        # CRITICAL: Remove inplace=True for MPS compatibility (causes backward pass issues)
         self.detection_head = nn.Sequential(
             nn.Conv2d(fpn_channels, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
@@ -489,7 +416,6 @@ class MaxSightCNN(nn.Module):
         
         # Class head: what object is this? (person, car, door, etc.)
         # Output is logits (not probabilities) - we'll apply softmax later
-        # CRITICAL: Remove inplace=True for MPS compatibility (causes backward pass issues)
         self.cls_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1, bias=False),  # 3x3 for spatial context
             nn.BatchNorm2d(256),
@@ -499,7 +425,6 @@ class MaxSightCNN(nn.Module):
         
         # Box head: where is it? (bounding box coordinates)
         # Outputs normalized coordinates [0, 1] - easier to train
-        # CRITICAL: Remove inplace=True for MPS compatibility (causes backward pass issues)
         self.box_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
@@ -510,7 +435,6 @@ class MaxSightCNN(nn.Module):
         # Objectness head: is there actually an object here? (confidence score)
         # This is like "is there something here at all?" before we care what it is
         # Helps filter out background noise
-        # CRITICAL: Remove inplace=True for MPS compatibility (causes backward pass issues)
         self.obj_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
@@ -521,7 +445,6 @@ class MaxSightCNN(nn.Module):
         # Text head: is this text? (for OCR later)
         # Smaller head because text detection is simpler than object detection
         # We'll use this to know where to run OCR
-        # CRITICAL: Remove inplace=True for MPS compatibility (causes backward pass issues)
         self.text_head = nn.Sequential(
             nn.Conv2d(256, 128, 3, padding=1, bias=False),  # Fewer channels - text is simpler
             nn.BatchNorm2d(128),
@@ -635,7 +558,6 @@ class MaxSightCNN(nn.Module):
         
         # Scene graph encoder
         from ml.models.scene_graph.scene_graph_encoder import SceneGraphEncoder
-        # MPS WORKAROUND: Auto-detect MPS and enable mps_stable mode for local Apple Silicon training
         # Set to False for cloud GPU training (allows edge learning)
         device_type = "mps" if torch.backends.mps.is_available() else "cpu"
         mps_stable = (device_type == "mps")  # Auto-detect MPS and enable workaround
@@ -651,7 +573,6 @@ class MaxSightCNN(nn.Module):
         from ml.models.heads.scene_description_head import SceneDescriptionHead
         from ml.retrieval.encoders.global_encoder import GlobalEncoder
         
-        # Try to use CLIP, fallback to DINOv2 if transformers not available or PyTorch version incompatible
         try:
             self.global_encoder = GlobalEncoder(
                 embed_dim=512,
@@ -668,7 +589,6 @@ class MaxSightCNN(nn.Module):
             )
         
         # QUALITY: Retrieval system integration (Tier 4+, Advisory Only, Async)
-        # Retrieval enhances scene descriptions but NEVER affects Tier 1 safety decisions
         # CRITICAL: Retrieval is ASYNC/NON-BLOCKING - never delays inference
         self.enable_retrieval = (tier_config.use_retrieval if hasattr(tier_config, 'use_retrieval') else False)
         self.retrieval_system = None
@@ -830,7 +750,6 @@ class MaxSightCNN(nn.Module):
                 use_edge_aware=True
             )
             
-            # 2. Motion Head - Tracks movement for temporal understanding & hazard prediction
             self.motion_head = MotionHead(
                 in_channels=128,
                 hidden_channels=256,
@@ -864,7 +783,6 @@ class MaxSightCNN(nn.Module):
                 embed_dim=256
             )
             
-            # 6. Therapy State Tracker - Unified therapy progress (fatigue + depth + contrast)
             self.therapy_state_head = TherapyStateHead(
                 eye_dim=4,
                 motion_dim=256,
@@ -885,7 +803,6 @@ class MaxSightCNN(nn.Module):
                 nn.Linear(128, 4)  # no_glare, low, medium, high
             )
             
-            # 8. Findability Score (simple version for baseline - contrast_head provides advanced)
             self.findability_head = nn.Sequential(
                 nn.Conv2d(256, 128, 3, padding=1, bias=False),
                 nn.BatchNorm2d(128),
@@ -964,17 +881,7 @@ class MaxSightCNN(nn.Module):
                         nn.init.constant_(layer.bias, 0)
     
     def _forward_stage_a_backbone(self, images: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor, torch.Tensor]:
-        """
-        Stage A backbone: ALWAYS ResNet50 + FPN (safety guarantee).
-        
-        CRITICAL: This method is HARD-CODED to use ResNet50+FPN only.
-        Hybrid backbone is NEVER used here - it's only available in Stage B.
-        
-        Returns:
-            fpn_features: List of FPN features [p2, p3, p4, p5]
-            fused_features: Fused features for detection heads
-            scene_context: Scene-level context features
-        """
+        """Stage A backbone: ALWAYS ResNet50 + FPN (safety guarantee)...."""
         # ResNet50 forward (ALWAYS - no tier-dependent switching)
         x = self.conv1(images)
         x = self.bn1(x)
@@ -1023,24 +930,7 @@ class MaxSightCNN(nn.Module):
         B_orig: Optional[int] = None,
         T: Optional[int] = None
     ) -> Tuple[torch.Tensor, Optional[Dict]]:
-        """
-        Stage B backbone: Can use Hybrid CNN-ViT and Temporal (tier-dependent).
-        
-        CRITICAL: This runs AFTER Stage A completes.
-        - Hybrid backbone (T2+): Uses RAW IMAGES (not Stage A features)
-        - Temporal processing (T5+): Uses Stage A features as input
-        
-        Args:
-            images: Raw input images [B, 3, H, W] - for Hybrid backbone
-            stage_a_features: Stage A fused features [B, C, H, W] - for temporal processing
-            temporal_mode: Whether temporal processing is enabled
-            B_orig: Original batch size (if temporal)
-            T: Number of frames (if temporal)
-        
-        Returns:
-            stage_b_features: Enhanced features for Stage B heads
-            temporal_outputs: Temporal processing results (if temporal enabled)
-        """
+        """Stage B backbone: Can use Hybrid CNN-ViT and Temporal (tier-dependent)...."""
         # Start with Stage A features (will be enhanced if tier allows)
         stage_b_features = stage_a_features
         temporal_outputs = None
@@ -1146,30 +1036,7 @@ class MaxSightCNN(nn.Module):
         use_temporal: bool = False,
         frame_id: Optional[int] = None  # For feature caching
     ) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass with enforced Stage A/Stage B separation.
-        
-        ARCHITECTURE (ENFORCED):
-        =======================
-        Stage A: ALWAYS ResNet50+FPN, <150ms target, safety-critical heads
-        Stage B: Hybrid+Temporal if tier allows, opportunistic context heads
-        
-        WHY THIS DESIGN:
-        - Stage A safety guarantee: ResNet50+FPN is fast and predictable
-        - Stage B enhancement: Hybrid/Temporal only when time permits
-        - Decouples safety from enhancement
-        
-        Arguments:
-            images: [B, 3, 224, 224] or [B, T, 3, 224, 224] for video
-            audio_features: [B, 128] optional
-            user_id: [B] optional user IDs for personalization
-            prev_temporal_state: Optional temporal state (for Stage B only)
-            use_temporal: Whether to use temporal processing (Stage B only)
-            frame_id: Optional frame ID for feature caching
-        
-        Returns:
-            Dictionary with all predictions, organized by stage
-        """
+        """Forward pass with enforced Stage A/Stage B separation...."""
         # ============================================================
         # 1. INPUT LAYER: Preprocessing & Normalization
         # ============================================================
@@ -1200,7 +1067,6 @@ class MaxSightCNN(nn.Module):
         p3_resized = F.interpolate(p3, size=p4.shape[2:], mode='bilinear', align_corners=False).contiguous()
         p5_resized = F.interpolate(p5, size=p4.shape[2:], mode='bilinear', align_corners=False).contiguous()
         
-        # Enhanced audio processing with spatial attention (AFTER fused_features is created)
         # TIER 4: Cross-modal attention if enabled
         sound_outputs = None
         audio_attention_map = None
@@ -1245,7 +1111,6 @@ class MaxSightCNN(nn.Module):
             audio_emb = torch.zeros(batch_size, 256, device=scene_context.device)
             combined_context = torch.cat([scene_context, audio_emb], dim=1)  # [B, 512]
         
-        # OPTIMIZED: Apply condition-specific enhancements (cache condition checks, reduce .contiguous() calls)
         # OPTIMIZED: Cache condition mode checks (computed once per forward pass)
         condition_blur = self.condition_mode in ['cataracts', 'refractive_errors', 'myopia', 'hyperopia', 'astigmatism', 'presbyopia']
         condition_spotty = self.condition_mode == 'diabetic_retinopathy'
@@ -1285,7 +1150,6 @@ class MaxSightCNN(nn.Module):
         assert det_feats.is_contiguous(), "det_feats not contiguous before heads"
         
         # TIER 1 HEADS: Safety-Critical (Never Disabled)
-        # CRITICAL: MPS backward pass fix - ensure det_feats is contiguous and clone if needed
         # MPS requires explicit contiguous tensors for backward pass
         det_feats_contig = det_feats.contiguous()
         if not det_feats_contig.is_contiguous():
@@ -1304,17 +1168,14 @@ class MaxSightCNN(nn.Module):
         obj_logits = obj_logits.contiguous()
         text_logits = text_logits.contiguous()
         
-        # OPTIMIZED: Reshape from [B, C, H, W] to [B, H*W, C] (batch permute operations, single contiguous call)
         # This flattens spatial dimensions so each location is a separate prediction
         H, W = det_feats.shape[2:]  # Get spatial dimensions
         
-        # OPTIMIZED: Batch all permute operations first (reduces intermediate allocations)
         cls_logits = cls_logits.permute(0, 2, 3, 1)  # [B, H, W, C]
         box_preds = box_preds.permute(0, 2, 3, 1)    # [B, H, W, 4]
         obj_logits = obj_logits.permute(0, 2, 3, 1)  # [B, H, W]
         text_logits = text_logits.permute(0, 2, 3, 1)  # [B, H, W]
         
-        # OPTIMIZED: Single contiguous call for all (MPS compatibility, reduces memory fragmentation)
         cls_logits = cls_logits.contiguous().reshape(batch_size, H*W, self.num_classes)
         box_preds = box_preds.contiguous().reshape(batch_size, H*W, 4)
         obj_logits = obj_logits.contiguous().reshape(batch_size, H*W)
@@ -1326,7 +1187,6 @@ class MaxSightCNN(nn.Module):
         box_preds = torch.sigmoid(box_preds)  # Boxes are normalized to [0, 1]
         
         # CRITICAL: Sanitize box predictions to prevent NaN/Inf and zero-width boxes
-        # Use non-inplace operations to avoid breaking GradNorm's multiple backward passes
         nan_inf_mask = torch.isnan(box_preds) | torch.isinf(box_preds)
         if nan_inf_mask.any():
             default_box = torch.tensor([0.5, 0.5, 0.1, 0.1], device=box_preds.device, dtype=box_preds.dtype)
@@ -1365,8 +1225,6 @@ class MaxSightCNN(nn.Module):
         # Bigger boxes usually mean closer objects, but context helps too
         # (e.g., a small car in the distance vs a large car up close)
         # 
-        # OPTIMIZED: Efficient batched computation (avoid unnecessary intermediate reshapes)
-        # [B, context_dim] -> [B, H*W, context_dim] by repeating context for each spatial location
         expanded_context = combined_context.unsqueeze(1).expand(batch_size, H*W, -1)  # [B, H*W, context_dim]
         
         # OPTIMIZED: Concatenate without intermediate reshape (more efficient)
@@ -1411,7 +1269,6 @@ class MaxSightCNN(nn.Module):
         normalized_centers = normalized_centers.flip(-1).unsqueeze(2)  # [B, K, 1, 2] for grid_sample
         
         # Sample depth at box centers (BATCHED)
-        # CRITICAL: MPS doesn't support grid_sample backward - use CPU fallback or alternative
         if torch.backends.mps.is_available() and self.training:
             # For MPS training, use bilinear interpolation manually or move to CPU
             # Workaround: Use nearest neighbor indexing for MPS compatibility
@@ -1495,7 +1352,7 @@ class MaxSightCNN(nn.Module):
         uncertainty_score = None
         if self.enable_accessibility_features:
             shared_scene_emb = self.shared_scene_embedding(combined_context)
-            uncertainty_outputs = self.uncertainty_head(shared_scene_emb)  # Dict with 'uncertainty_score', 'global_confidence', 'confidence_logit'
+            uncertainty_outputs = self.uncertainty_head(shared_scene_emb)
             uncertainty_score = uncertainty_outputs['uncertainty_score']  # [B, 1]
             stage_a_outputs['uncertainty'] = uncertainty_score
             stage_a_outputs['global_confidence'] = uncertainty_outputs['global_confidence']
@@ -1615,7 +1472,7 @@ class MaxSightCNN(nn.Module):
                 alert_outputs = self.predictive_alert_head(
                     scene_features=combined_context,
                     motion_features=motion_magnitude.mean(dim=[2, 3]) if motion_magnitude is not None else None
-                )  # Dict with 'hazard_probs', 'time_to_hazard', 'recommended_action'
+                )
                 
                 # 6. Therapy State - Unified therapy tracking (fatigue + depth + contrast)
                 therapy_outputs = self.therapy_state_head(
@@ -1692,7 +1549,6 @@ class MaxSightCNN(nn.Module):
         batch_indices = torch.arange(batch_size, device=det_feats.device).unsqueeze(1).expand(-1, top_k_scene)
         
         # Gather features: [B, K, C] - fully vectorized, no loops
-        # CRITICAL FIX (Issue 3): Remove redundant pooling - FPN already did spatial pooling
         # Indexing det_feats[..., y, x] already gives us the feature at that location
         # No need to pool a 1x1 feature again - this was wasteful
         object_embeddings = det_feats[batch_indices, :, y_indices, x_indices]  # [B, K, C]
@@ -1850,7 +1706,6 @@ class MaxSightCNN(nn.Module):
             # OPTIMIZED: Gather features vectorized
             region_embs_tensor = det_feats[batch_indices_regions, :, y_indices_regions, x_indices_regions]  # [B, num_regions, C]
             
-            # OPTIMIZED: Apply pooling vectorized (if needed, but features are already spatial)
             # For consistency, apply global pooling (vectorized)
             region_embs_tensor = F.adaptive_avg_pool2d(
                 region_embs_tensor.unsqueeze(-1).unsqueeze(-1).contiguous().reshape(batch_size_for_regions * num_regions, region_embs_tensor.shape[2], 1, 1),
@@ -2006,11 +1861,9 @@ class MaxSightCNN(nn.Module):
     @staticmethod
     @lru_cache(maxsize=32)
     def _get_center_mask_cached(H: int, W: int, device_type: str) -> torch.Tensor:
-        """
-        Create a mask that is 1 in the center, 0 at edges (cached version).
+        """Create a mask that is 1 in the center, 0 at edges (cached version).
         Uses LRU cache with size limit to prevent memory leaks.
-        Note: Returns CPU tensor - caller must move to device.
-        """
+        Note: Returns CPU tensor - caller must move to device."""
         # Create device from type (ignore index for cache key to reduce cache size)
         device = torch.device(device_type)
         
@@ -2026,12 +1879,7 @@ class MaxSightCNN(nn.Module):
         return mask
     
     def _get_center_mask(self, H: int, W: int, device: torch.device) -> torch.Tensor:
-        """
-        Create a mask that is 1 in the center, 0 at edges
-        
-        Used for conditions like AMD (needs center) or glaucoma (needs periphery).
-        Uses LRU cache with size limit to prevent memory leaks.
-        """
+        """Create a mask that is 1 in the center, 0 at edges..."""
         device_type = device.type  # Use only device type for cache key (not index)
         
         # Get cached mask (or compute if not cached) - returns CPU tensor
@@ -2047,41 +1895,7 @@ class MaxSightCNN(nn.Module):
         nms_threshold: float = 0.5,
         max_detections: int = 20
     ) -> List[List[Dict]]:
-        """
-        Post-process model outputs to get final detections with NMS.
-        
-        Optimized version using torchvision NMS for better performance.
-        
-        Arguments:
-            outputs: Model forward pass outputs dictionary containing:
-                - 'classifications': [B, H*W, num_classes] class probabilities
-                - 'objectness': [B, H*W] objectness scores
-                - 'boxes': [B, H*W, 4] boxes in center format [cx, cy, w, h]
-                - 'text_regions': [B, H*W] text detection scores
-                - 'distance_zones': [B, H*W, 3] distance zone logits
-                - 'urgency_scores': [B, 4] urgency level logits (optional, falls back to _get_urgency)
-            confidence_threshold: Minimum objectness score to consider
-            nms_threshold: IoU threshold for non-maximum suppression
-            max_detections: Maximum number of detections per image
-        
-        Returns:
-            List of detection dictionaries per image:
-            [
-                [
-                    {
-                        'class': int,
-                        'class_name': str,
-                        'confidence': float,
-                        'box': [cx, cy, w, h],
-                        'distance': str ('near', 'medium', 'far'),
-                        'urgency': int (0-3),
-                        'is_text': bool
-                    },
-                    ...
-                ],
-                ...
-            ]
-        """
+        """Post-process model outputs to get final detections with NMS...."""
         if 'classifications' not in outputs or 'objectness' not in outputs:
             raise ValueError("Missing required outputs: 'classifications' and 'objectness'")
         
@@ -2161,7 +1975,6 @@ class MaxSightCNN(nn.Module):
                 # Box area (normalized) for safety bias: box is [cx, cy, w, h]
                 box_t = filtered_boxes[idx]
                 box_area = float((box_t[2] * box_t[3]).item()) if box_t.dim() > 0 else 0.01
-                # Get urgency: use image-level if available, otherwise class-based with safety bias
                 if image_urgency is not None:
                     urgency_val = image_urgency  # Use image-level urgency
                 else:
@@ -2197,19 +2010,7 @@ class MaxSightCNN(nn.Module):
         return detections
     
     def _nms(self, boxes: torch.Tensor, scores: torch.Tensor, threshold: float) -> List[int]:
-        """
-        Non-Maximum Suppression - removes duplicate detections of the same object.
-        
-        Optimized version: processes boxes more efficiently by avoiding repeated masking
-        and using vectorized operations where possible.
-        
-        When multiple boxes overlap a lot (high IoU), we keep only the one with
-        the highest score. This prevents the same object from being detected multiple times.
-        
-        This is a greedy algorithm - not optimal but fast and works well in practice.
-        For very large numbers of boxes (100+), consider using torchvision.ops.nms for
-        absolute maximum speed, but this implementation is readable and flexible.
-        """
+        """Non-Maximum Suppression - removes duplicate detections of the same object...."""
         if len(boxes) == 0:
             return []  # Edge case - no boxes to process
         
@@ -2263,14 +2064,7 @@ class MaxSightCNN(nn.Module):
         return keep
     
     def _center_to_corners(self, boxes: torch.Tensor) -> torch.Tensor:
-        """
-        Convert boxes from center format to corner format
-        
-        Center format: (center_x, center_y, width, height)
-        Corner format: (x1, y1, x2, y2) - top-left and bottom-right corners
-        
-        Corner format is easier for IoU calculations.
-        """
+        """Convert boxes from center format to corner format..."""
         x_center, y_center, w, h = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
         x1 = x_center - w / 2  # Left edge
         y1 = y_center - h / 2  # Top edge
@@ -2279,16 +2073,7 @@ class MaxSightCNN(nn.Module):
         return torch.stack([x1, y1, x2, y2], dim=1)
     
     def _compute_iou(self, box1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
-        """
-        Compute IoU between box1 (center format) and all boxes2 (center format)
-        
-        Arguments:
-            box1: [1, 4] or [N, 4] tensor in center format (x, y, w, h)
-            boxes2: [M, 4] tensor in center format (x, y, w, h)
-        
-        Returns:
-            [1, M] or [N, M] IoU scores
-        """
+        """Compute IoU between box1 (center format) and all boxes2 (center format)..."""
         # Convert center format to corners
         box1_corners = self._center_to_corners(box1)
         boxes2_corners = self._center_to_corners(boxes2)
@@ -2296,15 +2081,7 @@ class MaxSightCNN(nn.Module):
         return self._compute_iou_corners(box1_corners, boxes2_corners)
     
     def _compute_iou_corners(self, box1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
-        """
-        Compute Intersection over Union (IoU) between box1 and all boxes2
-        
-        IoU measures how much two boxes overlap. 1.0 = identical, 0.0 = no overlap.
-        Used to decide if two detections are actually the same object.
-        
-        This is vectorized - computes IoU between box1 and all boxes2 at once.
-        Much faster than looping.
-        """
+        """Compute Intersection over Union (IoU) between box1 and all boxes2..."""
         # Make sure box1 is 2D - handle edge case where it's 1D
         if box1.dim() == 1:
             box1 = box1.unsqueeze(0)  # [4] -> [1, 4]
@@ -2316,10 +2093,8 @@ class MaxSightCNN(nn.Module):
         
         # Find the intersection rectangle
         # Two boxes overlap if their intersection exists
-        # Top-left corner: max of the two top-left corners (rightmost left, bottommost top)
         inter_x1 = torch.max(box1[..., 0], boxes2[..., 0])  # x1 coordinates
         inter_y1 = torch.max(box1[..., 1], boxes2[..., 1])  # y1 coordinates
-        # Bottom-right corner: min of the two bottom-right corners (leftmost right, topmost bottom)
         inter_x2 = torch.min(box1[..., 2], boxes2[..., 2])  # x2 coordinates
         inter_y2 = torch.min(box1[..., 3], boxes2[..., 3])  # y2 coordinates
         
@@ -2339,7 +2114,6 @@ class MaxSightCNN(nn.Module):
         union_area = box1_area + boxes2_area - inter_area
         
         # IoU = intersection / union (add tiny epsilon to avoid division by zero)
-        # 1e-6 is standard - small enough to not affect results, big enough to prevent NaN
         iou = inter_area / (union_area + 1e-6)
         
         # Clean up dimensions if needed
@@ -2355,16 +2129,7 @@ class MaxSightCNN(nn.Module):
         box_size: Optional[float] = None,
         confidence: Optional[float] = None,
     ) -> int:
-        """
-        Map object class to urgency level for user safety prioritization.
-        Safety bias: hazard classes and large/close objects get boosted urgency.
-        
-        Urgency levels:
-        - 0: safe (low priority)
-        - 1: caution (moderate attention needed)
-        - 2: warning (high attention needed)
-        - 3: danger (immediate attention required)
-        """
+        """Map object class to urgency level for user safety prioritization...."""
         # Urgency map is now initialized in __init__ for thread safety
         class_lower = class_name.lower()  # Case-insensitive matching
         
@@ -2410,15 +2175,7 @@ class MaxSightCNN(nn.Module):
         return base_urgency
     
     def _calculate_priority(self, class_name: str, urgency: int, confidence: float) -> int:
-        """
-        Calculate priority score (0-100) for a detection.
-        
-        Priority levels:
-        - 90-100: Immediate hazard (vehicle, drop-off, stove flame)
-        - 70-89: Important navigation elements (stairs, doors, signs)
-        - 40-69: Useful objects (chairs, handles, pathways)
-        - 0-39: Non-essential (plants, posters, sky)
-        """
+        """Calculate priority score (0-100) for a detection...."""
         # Base priority from urgency
         base_priority = {
             0: 20,   # safe -> low priority
@@ -2453,15 +2210,7 @@ class MaxSightCNN(nn.Module):
         return max(0, min(100, priority))
     
     def apply_tier_config(self, tier_config: 'TierConfig'):
-        """
-        Apply tier configuration at runtime (for dynamic tier switching).
-        
-        This method enables/disables components based on the new tier config.
-        Note: Some components cannot be disabled if already instantiated.
-        
-        Args:
-            tier_config: New tier configuration to apply
-        """
+        """Apply tier configuration at runtime (for dynamic tier switching)...."""
         self.tier_config = tier_config
         
         # Enable/disable components based on config
@@ -2508,19 +2257,7 @@ def create_model(
     fpn_channels: int = 256,
     tier_config: Optional['TierConfig'] = None
 ) -> MaxSightCNN:
-    """
-    Convenience function to create a MaxSight model with capability tier support.
-    
-    Args:
-        num_classes: Number of object classes
-        condition_mode: Visual condition adaptation mode
-        use_audio: Enable audio fusion
-        fpn_channels: FPN output channels
-        tier_config: TierConfig instance (defaults to T0_BASELINE_CNN if not provided)
-    
-    Returns:
-        MaxSightCNN instance configured for the specified tier
-    """
+    """Convenience function to create a MaxSight model with capability tier support...."""
     # Create tier config if not provided
     if tier_config is None:
         tier_config = TierConfig.for_tier(CapabilityTier.T0_BASELINE_CNN)
@@ -2537,34 +2274,14 @@ def create_model(
 
 
 def build_model(**kwargs) -> MaxSightCNN:
-    """
-    Build function for compatibility with quantization and export scripts.
-    
-    This is an alias for create_model() that matches the expected interface
-    for tools like qat_finetune.py and validate_and_bench.py.
-    
-        Arguments:
-        **kwargs: Arguments passed to create_model()
-    
-    Returns:
-        MaxSightCNN instance
-    """
+    """Build function for compatibility with quantization and export scripts...."""
     return create_model(**kwargs)
 
 
 # ============================================================================
 # CAPABILITY TIERS (T0-T5) - Model Complexity Management
 # ============================================================================
-"""
-Model Capability Tiers
-Defines capability tiers (T0-T5) with kill switches for controlled complexity.
-
-This section implements:
-1. Tiered architecture (baseline → advanced features)
-2. Runtime kill switches for each tier
-3. Automatic tier selection based on mode and performance
-4. Patient mode maximum tier enforcement (T3)
-"""
+"""Model Capability Tiers..."""
 
 from enum import Enum
 from dataclasses import dataclass
@@ -2582,15 +2299,7 @@ class CapabilityTier(Enum):
 
 @dataclass
 class TierConfig:
-    """
-    Configuration for a capability tier.
-    
-    CRITICAL ARCHITECTURAL CONSTRAINTS:
-    - Stage A: ALWAYS ResNet50+FPN (use_hybrid_backbone=False in Stage A)
-    - Stage B: Can use Hybrid (use_hybrid_backbone=True in Stage B only)
-    - Temporal: ONLY in Stage B (use_temporal_modeling=True in Stage B only)
-    - Retrieval: Async/non-blocking (use_retrieval=True, advisory only)
-    """
+    """Configuration for a capability tier...."""
     tier: CapabilityTier
     enabled: bool = True
     
@@ -2612,7 +2321,6 @@ class TierConfig:
     def for_tier(cls, tier: CapabilityTier) -> 'TierConfig':
         """Create config for a specific tier."""
         # CRITICAL FIX (Issue 6): Realistic latency numbers based on actual architecture
-        # Previous numbers were too optimistic - temporal + cross-modal + hybrid exceeds 200ms
         if tier == CapabilityTier.T0_BASELINE_CNN:
             return cls(
                 tier=tier,
@@ -2680,15 +2388,7 @@ class TierConfig:
 
 
 class TierManager:
-    """
-    Manages capability tier selection and kill switches.
-    
-    Rules:
-    - Patient mode: maximum T3
-    - Clinician mode: maximum T4
-    - Dev mode: maximum T5
-    - Automatic downgrade on performance issues
-    """
+    """Manages capability tier selection and kill switches...."""
     
     # Mode-based tier limits
     MODE_TIER_LIMITS = {
@@ -2698,13 +2398,11 @@ class TierManager:
     }
     
     def __init__(self, mode: str = 'patient', initial_tier: Optional[CapabilityTier] = None):
-        """
-        Initialize tier manager.
+        """Initialize tier manager.
         
         Args:
             mode: Output mode (patient/clinician/dev)
-            initial_tier: Initial tier (defaults to T0)
-        """
+            initial_tier: Initial tier (defaults to T0)"""
         self.mode = mode.lower()
         self.max_tier = self.MODE_TIER_LIMITS.get(self.mode, CapabilityTier.T3_CROSS_TASK)
         
@@ -2729,12 +2427,10 @@ class TierManager:
         return self.current_tier.value < self.max_tier.value
     
     def upgrade_tier(self) -> bool:
-        """
-        Upgrade to next tier if allowed.
+        """Upgrade to next tier if allowed.
         
         Returns:
-            True if upgraded, False otherwise
-        """
+            True if upgraded, False otherwise"""
         if not self.can_upgrade():
             return False
         
@@ -2746,12 +2442,10 @@ class TierManager:
         return True
     
     def degrade_tier(self) -> bool:
-        """
-        Degrade to previous tier.
+        """Degrade to previous tier.
         
         Returns:
-            True if degraded, False if already at T0
-        """
+            True if degraded, False if already at T0"""
         if self.current_tier.value == 0:
             return False
         

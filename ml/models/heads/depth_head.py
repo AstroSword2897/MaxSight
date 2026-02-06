@@ -1,20 +1,4 @@
-"""
-Depth/Focus Head
-
-Outputs depth map and near/mid/far classification.
-
-IMPORTANT DESIGN DECISIONS:
-- Depth is normalized [0, 1], not metric. This is a modeling assumption.
-  If you need metric depth, scale in post-processing or use softplus activation.
-- Uncertainty is used in loss to weight depth errors (uncertainty-weighted loss).
-- Zone classification uses depth features for consistency.
-- GroupNorm instead of BatchNorm for robustness to small batches.
-- Separate branches for depth and uncertainty (they need different signals).
-- Multi-scale features from FPN can be passed for better depth estimation.
-
-Phase 2: Therapy Heads
-See docs/therapy_system_implementation_plan.md for implementation details.
-"""
+"""Depth/Focus Head..."""
 
 import torch
 import torch.nn as nn
@@ -23,27 +7,7 @@ from typing import Dict, Tuple, Optional
 
 
 class DepthHead(nn.Module):
-    """
-    Depth/focus head for therapy tasks.
-    
-    DESIGN PHILOSOPHY:
-    - Depth and uncertainty are separate but related tasks
-    - Zone classification should be grounded in depth (not independent)
-    - Multi-scale features improve depth smoothness
-    - Normalized depth [0, 1] is a modeling assumption (documented)
-    
-    Inputs: fused FPN + temporal features [B, C, H, W]
-    Optional: multi-scale FPN features for skip connections
-    
-    Output:
-    - depth_map [B, H, W] - Normalized depth [0, 1] (NOT metric)
-    - uncertainty [B, H, W] - Depth uncertainty [0, 1]
-    - zones [B, 3] - Zone logits (near/mid/far) derived from depth
-    
-    Losses:
-    - Uncertainty-weighted photometric loss
-    - Zone classification loss (grounded in depth)
-    """
+    """Depth/focus head for therapy tasks."""
     
     def __init__(
         self, 
@@ -137,20 +101,7 @@ class DepthHead(nn.Module):
         fpn_features: Optional[Dict[str, torch.Tensor]] = None,
         motion_features: Optional[torch.Tensor] = None  # FIXED: Motion as temporal anchor
     ) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass.
-        
-        Arguments:
-            features: Fused FPN features [B, C, H, W]
-            fpn_features: Optional dict with 'p3', 'p4' for multi-scale skip connections
-            motion_features: Optional motion features [B, motion_dim, H, W] - FIXED: Motion as temporal anchor
-        
-        Returns:
-            Dictionary with:
-                - 'depth_map': [B, H, W] - Normalized depth [0, 1] (NOT metric)
-                - 'uncertainty': [B, H, W] - Depth uncertainty [0, 1]
-                - 'zones': [B, 3] - Zone logits (not softmaxed)
-        """
+        """Forward pass...."""
         B, C, H, W = features.shape
         
         # FIXED: Motion-conditioned feature extraction

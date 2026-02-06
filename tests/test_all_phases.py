@@ -1,8 +1,6 @@
-"""
-Master Test Runner for All Phases (0-5)
+"""Master Test Runner for All Phases (0-5)
 
-Runs comprehensive tests for all Phase 0-5 components.
-"""
+Runs comprehensive tests for all Phase 0-5 components."""
 
 import pytest
 import sys

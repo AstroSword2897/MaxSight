@@ -1,9 +1,7 @@
-"""
-Comprehensive Forward Pass Analysis for MaxSight 3.0
+"""Comprehensive Forward Pass Analysis for MaxSight 3.0
 
 Analyzes all possible forward pass scenarios and measures throughput
-to understand computational flow before integration and training.
-"""
+to understand computational flow before integration and training."""
 
 import torch
 import torch.nn as nn

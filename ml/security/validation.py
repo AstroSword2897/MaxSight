@@ -1,8 +1,6 @@
-"""
-Input Validation Utilities for MaxSight
+"""Input Validation Utilities for MaxSight
 
-Provides validation for Base64, file uploads, and other user inputs.
-"""
+Provides validation for Base64, file uploads, and other user inputs."""
 
 import base64
 import binascii
@@ -11,15 +9,13 @@ from ml.security.magic import validate_image_magic
 
 
 def is_valid_b64(s: str) -> bool:
-    """
-    Validate Base64 string format.
+    """Validate Base64 string format.
     
     Args:
         s: String to validate
     
     Returns:
-        True if valid Base64, False otherwise
-    """
+        True if valid Base64, False otherwise"""
     try:
         base64.b64decode(s, validate=True)
         return True
@@ -28,19 +24,7 @@ def is_valid_b64(s: str) -> bool:
 
 
 def decode_and_validate_image(base64_str: str, max_size_mb: int = 10, allowed_types: tuple = ('jpg', 'png', 'gif', 'bmp', 'webp', 'tiff')) -> tuple[bool, Optional[bytes], Optional[str]]:
-    """
-    Decode Base64 image and validate format and size.
-    
-    Args:
-        base64_str: Base64-encoded image string
-        max_size_mb: Maximum file size in MB
-        allowed_types: Tuple of allowed image types
-    
-    Returns:
-        Tuple of (is_valid, decoded_bytes, error_message)
-        If valid: (True, bytes, None)
-        If invalid: (False, None, error_message)
-    """
+    """Decode Base64 image and validate format and size...."""
     # Validate Base64 format
     if not is_valid_b64(base64_str):
         return False, None, "Invalid Base64 format"

@@ -17,7 +17,6 @@ class ContrastMapHead(nn.Module):
         
         # Contrast estimation network
         # WHY THIS ARCHITECTURE:
-        # - 3 conv layers: Sufficient depth to learn contrast patterns without overfitting
         # - Progressive channel reduction: 256 -> 128 -> 64 -> 1 (efficient computation)
         # - 3x3 kernels: Capture local contrast relationships
         # - 1x1 final layer: Efficiently maps to single contrast value per pixel
@@ -25,7 +24,6 @@ class ContrastMapHead(nn.Module):
         # Edge detection channel (computed from features, used as modulation signal)
         if use_edge_aware:
             # Single 4D edge channel that modulates features during forward pass
-            # This is more efficient than computing edges separately - network learns edge relevance
             # Using GroupNorm instead of BatchNorm for robustness to small batches
             self.edge_conv = nn.Sequential(
                 nn.Conv2d(in_channels, 32, kernel_size=3, padding=1, bias=False),
@@ -48,13 +46,7 @@ class ContrastMapHead(nn.Module):
         self._initialize_weights()
     
     def _initialize_weights(self):
-        """
-        Initialize weights to prevent degenerate outputs.
-        
-        WHY PROPER INITIALIZATION:
-        Poor initialization can lead to constant or NaN outputs, especially with BatchNorm.
-        Proper initialization ensures the head produces meaningful contrast maps from the start.
-        """
+        """Initialize weights to prevent degenerate outputs...."""
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -65,18 +57,7 @@ class ContrastMapHead(nn.Module):
                 nn.init.constant_(m.bias, 0)
     
     def get_edge_map(self, features: torch.Tensor) -> torch.Tensor:
-        """
-        Get edge map computed during forward pass (for visualization/debugging).
-        
-        NOTE: Edges are now computed as part of forward pass via edge_conv.
-        This method is for accessing the edge map separately if needed.
-        
-        Arguments:
-            features: Input features [B, C, H, W]
-        
-        Returns:
-            Edge map [B, 1, H, W] with edge strength
-        """
+        """Get edge map computed during forward pass (for visualization/debugging)...."""
         if not self.use_edge_aware:
             return torch.zeros_like(features[:, :1])
         
@@ -87,20 +68,7 @@ class ContrastMapHead(nn.Module):
         features: torch.Tensor,
         motion_features: Optional[torch.Tensor] = None  # FIXED: Motion as temporal anchor
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        """
-        Forward pass with edge-aware modulation.
-        
-        WHY EDGE MODULATION DURING FORWARD:
-        Instead of computing edges only in loss, we inject edges as a modulation signal
-        during forward pass. This allows the network to learn edge relevance directly,
-        making training more efficient and predictions more accurate.
-        
-        Arguments:
-            features: Input features [B, C, H, W]
-        
-        Returns:
-            Contrast map [B, H, W]
-        """
+        """Forward pass with edge-aware modulation...."""
         # Validate input
         if features.dim() != 4:
             raise ValueError(f"Expected 4D tensor [B, C, H, W], got {features.shape}")
@@ -157,22 +125,7 @@ class ContrastMapHead(nn.Module):
         target_contrast: torch.Tensor,
         edge_map: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
-        """
-        Compute contrast loss using learned edge map.
-        
-        NOTE: Now uses the SAME learned edge map from forward pass, not Sobel.
-        This ensures consistency between training and inference.
-        
-        Arguments:
-            pred_contrast: Predicted contrast map [B, H, W]
-            target_contrast: Ground truth contrast map [B, H, W]
-            edge_map: Learned edge map from forward pass [B, H, W] (optional)
-        
-        Returns:
-            Dictionary with:
-                - 'loss': Total contrast loss
-                - 'l1_loss': Standard L1 loss (for monitoring)
-        """
+        """Compute contrast loss using learned edge map...."""
         # Validate inputs
         if pred_contrast.shape != target_contrast.shape:
             raise ValueError(

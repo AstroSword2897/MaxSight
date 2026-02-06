@@ -11,12 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True) -> Path:
-    """Export to PyTorch JIT format. Most reliable, always available. strict=False for dict outputs.
-    
-        Arguments:
-        device: Device to export from ('cpu', 'cuda', 'mps'). If None, uses model's current device.
-        validate: If True, test exported model with dummy input to verify it works.
-    """
+    """Export to PyTorch JIT format. Most reliable, always available. strict=False for dict outputs...."""
     logger.info(f"Exporting to JIT format: {save_path}")
     
     model.eval()
@@ -66,21 +61,7 @@ def export_to_executorch(
     input_size: tuple = (1, 3, 224, 224),
     validate: bool = True
 ) -> Optional[Path]:
-    """
-    Export to ExecuTorch .pte format for iOS deployment.
-    
-    Optimized for quantized models and handles dict outputs efficiently.
-    Falls back to JIT if ExecuTorch is not installed.
-    
-    Arguments:
-        model: Model to export (FP32 or INT8 quantized)
-        save_path: Output path for .pte file
-        input_size: Input tensor size (B, C, H, W)
-        validate: If True, validate exported model with test input
-    
-    Returns:
-        Path to exported .pte file, or None if export failed
-    """
+    """Export to ExecuTorch .pte format for iOS deployment...."""
     logger.info(f"Exporting to ExecuTorch format: {save_path}")
     
     try:
@@ -222,7 +203,6 @@ def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', in
             # Single tensor output
             output_types = [ct.TensorType(name="output")]
         else:
-            # Default: single output (will fail if model returns dict, but user should use validate=True)
             output_types = [ct.TensorType(name="output")]
         
         # CRITICAL: Explicitly define all input shapes to avoid runtime errors
@@ -346,10 +326,8 @@ def export_model(model: nn.Module, format: str = 'jit', save_dir: str = 'exports
 
 
 def _extract_processing_reference() -> str:
-    """
-    Extract essential processing functions into single reference file.
-    Pulls only the functions iOS needs to port to Swift.
-    """
+    """Extract essential processing functions into single reference file.
+    Pulls only the functions iOS needs to port to Swift."""
     from pathlib import Path
     import re
     import ast
@@ -380,18 +358,7 @@ def _extract_processing_reference() -> str:
         ('ml/utils/ocr_integration.py', '_group_text_by_proximity', False, None),
     ]
     
-    reference_code = '''"""
-MaxSight Processing Reference for iOS
-Essential preprocessing, postprocessing, and scheduling logic.
-
-Port these functions to Swift for iOS implementation.
-This is the minimal set needed to process model inputs/outputs.
-
-Generated automatically from MaxSight repository.
-
-NOTE: Some functions reference config/enums that need to be parameterized
-when porting to Swift. See function comments for details.
-"""
+    reference_code = '''"""MaxSight Processing Reference for iOS..."""
 
 import torch
 import torch.nn.functional as F
@@ -530,24 +497,7 @@ def export_ios_bundle(
     output_dir: str = 'maxsight_ios_bundle',
     input_size: tuple = (1, 3, 224, 224)
 ) -> Path:
-    """
-    Export minimal iOS bundle: PTE + configs + single reference file.
-    
-    Creates exactly 4 files:
-    - maxsight.pte (model)
-    - model_config.json (model settings)
-    - runtime_config.json (runtime toggles)
-    - processing_reference.py (all reference logic in one file)
-    - README_XCODE.md (iOS integration guide)
-    
-    Arguments:
-        model: Model to export
-        output_dir: Output directory
-        input_size: Model input size (B, C, H, W)
-    
-    Returns:
-        Path to bundle directory
-    """
+    """Export minimal iOS bundle: PTE + configs + single reference file...."""
     from pathlib import Path
     import json
     from datetime import datetime

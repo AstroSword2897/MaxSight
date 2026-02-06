@@ -1,13 +1,4 @@
-"""
-Temporal Encoder Module for MaxSight 3.0
-
-Enhanced with ConvLSTM and TimeSformer for advanced temporal processing.
-Handles temporal processing of video sequences:
-- Motion features (ConvLSTM)
-- Long-range temporal dependencies (TimeSformer)
-- Temporal consistency
-- Flicker detection
-"""
+"""Temporal Encoder Module for MaxSight 3.0..."""
 
 import torch
 import torch.nn as nn
@@ -23,20 +14,7 @@ except ImportError:
 
 
 class TemporalEncoder(nn.Module):
-    """
-    Enhanced temporal encoder for video sequence processing.
-    
-    Uses ConvLSTM for motion tracking and TimeSformer for long-range dependencies.
-    Outputs motion features, temporal consistency, and flicker detection.
-    
-    Architecture:
-    - ConvLSTM: Motion tracking for people, vehicles, obstacles
-    - TimeSformer: Long-range temporal dependencies
-    - Output: motion features, temporal consistency, flicker detection
-    
-    Input: [B, C, T, H, W] or [B, T, C, H, W] - Batch of video frames
-    Output: Dict with motion features, consistency, flicker, temporal_context
-    """
+    """Enhanced temporal encoder for video sequence processing...."""
     
     def __init__(
         self,
@@ -103,24 +81,7 @@ class TemporalEncoder(nn.Module):
         feature_frames: torch.Tensor,  # RENAMED: frames -> feature_frames for clarity
         vit_patch_tokens: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass through enhanced temporal encoder.
-        
-        CRITICAL: This expects FEATURE MAPS, not raw RGB frames.
-        Input should be [B, T, C, H, W] where C is feature channels (e.g., 256).
-        
-        Arguments:
-            feature_frames: Feature maps [B, C, T, H, W] or [B, T, C, H, W]
-            vit_patch_tokens: Optional ViT patch tokens [B, T, N_patches, embed_dim]
-        
-        Returns:
-            Dictionary with:
-                - 'motion': [B, 2, H, W] or [B, 2, H//2, W//2] - Motion flow (u, v)
-                - 'motion_features': [B, hidden_dim, H, W] - Full motion features
-                - 'consistency': [B, 1] - Temporal consistency score
-                - 'flicker': [B, 1] - Flicker detection score
-                - 'temporal_context': [B, embed_dim] - Long-range temporal context (if TimeSformer used)
-        """
+        """Forward pass through enhanced temporal encoder...."""
         B = feature_frames.shape[0]
         
         # Handle different input formats
@@ -141,7 +102,6 @@ class TemporalEncoder(nn.Module):
         # ConvLSTM for motion tracking
         motion_features = None  # Initialize for flicker detection
         if self.use_conv_lstm:
-            # Extract features from each frame (simplified - in practice would use CNN features)
             # For now, assume frames_seq is already feature maps
             motion_features, (h, c) = self.conv_lstm(frames_seq)  # [B, T, hidden_dim, H, W]
             
@@ -188,11 +148,9 @@ class TemporalEncoder(nn.Module):
 
 
 class TemporalBuffer:
-    """
-    Buffer for maintaining temporal context across frames.
+    """Buffer for maintaining temporal context across frames.
     
-    Maintains a sliding window of recent frames for temporal processing.
-    """
+    Maintains a sliding window of recent frames for temporal processing."""
     
     def __init__(self, buffer_size: int = 5):
         self.buffer_size = buffer_size
@@ -205,12 +163,10 @@ class TemporalBuffer:
             self.buffer.pop(0)
     
     def get_sequence(self) -> Optional[torch.Tensor]:
-        """
-        Get the current sequence of frames.
+        """Get the current sequence of frames.
         
         Returns:
-            Tensor [T, C, H, W] if buffer is full, None otherwise
-        """
+            Tensor [T, C, H, W] if buffer is full, None otherwise"""
         if len(self.buffer) < self.buffer_size:
             return None
         return torch.stack(self.buffer, dim=0)

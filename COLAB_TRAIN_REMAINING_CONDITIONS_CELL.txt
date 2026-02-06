@@ -1,0 +1,42 @@
+# Train remaining conditions (myopia, presbyopia, etc.)
+# This will resume if checkpoint exists, otherwise start fresh
+# Paste into Colab cell and run
+
+import os
+REPO = "/content/2026-Prototype"
+os.chdir(REPO)
+
+CONDITIONS = [
+    "myopia",
+    "presbyopia",
+    "astigmatism",
+    "hyperopia",
+    "color_blindness",
+    "strabismus",
+    "amblyopia",
+    "cvi",
+    "retinitis_pigmentosa"
+]
+
+DATA = "/content/drive/MyDrive/MaxSight_Training"
+BASE_CKPT = "/content/drive/MyDrive/MaxSight"
+TRAIN_ANN = f"{DATA}/cleaned_splits/maxsight_train.json"
+VAL_ANN = f"{DATA}/cleaned_splits/maxsight_val.json"
+
+for cond in CONDITIONS:
+    ckpt_dir = f"{BASE_CKPT}/checkpoints_{cond}"
+    print(f"\n{'='*60}\nTraining condition: {cond} -> {ckpt_dir}\n{'='*60}\n")
+    !python scripts/train_maxsight.py \
+      --data-dir {DATA} \
+      --image-dir {DATA} \
+      --train-annotation {TRAIN_ANN} \
+      --val-annotation {VAL_ANN} \
+      --batch-size 50 \
+      --epochs 10 \
+      --num-workers 2 \
+      --use-gradnorm \
+      --condition-mode {cond} \
+      --checkpoint-dir {ckpt_dir} \
+      --resume \
+      --checkpoint-interval 5 \
+      --device cuda

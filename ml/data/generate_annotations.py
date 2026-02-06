@@ -10,15 +10,7 @@ from ml.models.maxsight_cnn import COCO_CLASSES, COCO_BASE_CLASSES
 
 
 def map_coco_to_environmental(coco_category_name: str) -> str:
-    """
-    Map COCO category to environmental category in comprehensive class list.
-    
-        Arguments:
-        coco_category_name: COCO category name (e.g., 'person', 'car', 'stop sign')
-    
-    Returns:
-        Environmental category name from comprehensive class list
-    """
+    """Map COCO category to environmental category in comprehensive class list...."""
     normalized = coco_category_name.lower().strip()
     
     # Find exact match in comprehensive class list
@@ -31,19 +23,7 @@ def map_coco_to_environmental(coco_category_name: str) -> str:
 
 
 def assign_urgency_score(category_name: str, box_size: float) -> int:
-    """
-    Assign urgency score based on object category and size.
-    
-    Vehicles and hazards near the camera get high urgency scores, while safe objects get low scores.
-    Optimized with set-based lookups for O(1) category matching.
-    
-        Arguments:
-        category_name: Object category name
-        box_size: Normalized box area (0-1)
-    
-    Returns:
-        Urgency score: 0=safe, 1=caution, 2=warning, 3=danger
-    """
+    """Assign urgency score based on object category and size...."""
     category_lower = category_name.lower()
     
     # Use sets for O(1) lookup instead of O(K) keyword matching
@@ -69,7 +49,6 @@ def assign_urgency_score(category_name: str, box_size: float) -> int:
     elif category_lower in caution_categories:
         return 1 if box_size > 0.1 else 0
     else:
-        # Fallback: check if category contains danger/warning keywords (for compound names)
         if any(kw in category_lower for kw in ['vehicle', 'motor', 'fire', 'hazard', 'emergency']):
             return 3 if box_size > 0.1 else 2
         elif any(kw in category_lower for kw in ['person', 'animal', 'pet']):
@@ -79,34 +58,10 @@ def assign_urgency_score(category_name: str, box_size: float) -> int:
 
 
 def estimate_distance_zone(box_size: float, image_size: Tuple[int, int] = (224, 224)) -> int:
-    """
-    Estimate distance zone from bounding box size.
-    
-    Purpose: Estimates distance zone (0=near, 1=medium, 2=far) from normalized box area.
-             Larger boxes indicate closer objects, smaller boxes indicate farther objects.
-    
-    Complexity: O(1) - simple calculation
-    Relationship: Used during annotation generation to assign distance zones to objects.
-    
-        Arguments:
-        box_size: Normalized box area (width * height, 0-1)
-        image_size: Image dimensions (not used, but kept for consistency)
-    
-    Returns:
-        Distance zone: 0=near, 1=medium, 2=far
-    """
-    # Distance estimation based on normalized box area (larger boxes = closer objects)
-    # Purpose: Estimate distance zone from bounding box size using heuristic: larger boxes indicate
-    #          objects closer to camera, smaller boxes indicate objects farther away. This is a
-    #          simple but effective heuristic for accessibility applications where precise distance
-    #          isn't critical, but relative proximity is important for navigation guidance.
+    """Estimate distance zone from bounding box size...."""
     # Complexity: O(1) - three simple comparisons (if/elif/else)
-    # Relationship: Core distance estimation logic - used during annotation generation to assign
-    #              distance zones (0=near, 1=medium, 2=far) to objects for spatial awareness features
     if box_size > 0.1:  # Large box = near (close to camera, occupies >10% of image)
-        # Purpose: Identify objects very close to camera - these require immediate attention
         # Complexity: O(1) - simple return
-        # Relationship: Near zone assignment - critical for obstacle avoidance and immediate navigation
         return 0  # Near
     elif box_size > 0.05:
         return 1  # Medium
@@ -115,15 +70,12 @@ def estimate_distance_zone(box_size: float, image_size: Tuple[int, int] = (224, 
 
 
 def generate_scene_description(objects: List[Dict]) -> str:
-    """
-    Generate scene description from detected objects with urgency and distance context.
+    """Generate scene description from detected objects with urgency and distance context.
     
-    Enhanced to include urgency information and prioritize important objects.
-    """
+    Enhanced to include urgency information and prioritize important objects."""
     if not objects:
         return "Empty scene"
     
-    # Sort objects by urgency (descending) to prioritize important objects in description
     sorted_objects = sorted(objects, key=lambda x: x.get('urgency', 0), reverse=True)
     
     # Get top 5 most urgent objects for description
@@ -168,28 +120,7 @@ def generate_annotations_from_coco(
     val_split: float = 0.15,
     test_split: float = 0.15
 ) -> Tuple[Path, Path, Path]:
-    """
-    Generate MaxSight annotations from COCO dataset.
-    
-    Purpose: Converts COCO annotations to MaxSight format with environmental categories,
-             urgency scores, distance zones, and scene descriptions. Creates train/val/test splits.
-    
-    Complexity: O(N) where N=number of COCO annotations - processes all annotations
-    Relationship: Preprocessing step before training - generates annotation files that
-                 MaxSightDataset loads.
-    
-        Arguments:
-        coco_annotation_file: Path to COCO annotation JSON file
-        image_dir: Directory containing COCO images
-        output_file: Base path for output annotation files (will create train/val/test versions)
-        num_samples: Total number of samples to generate (default 6000)
-        train_split: Fraction of samples for training (default 0.7)
-        val_split: Fraction of samples for validation (default 0.15)
-        test_split: Fraction of samples for testing (default 0.15)
-    
-    Returns:
-        Tuple of (train_annotation_file, val_annotation_file, test_annotation_file) paths
-    """
+    """Generate MaxSight annotations from COCO dataset...."""
     print(f"Loading COCO annotations from {coco_annotation_file}...")
     
     with open(coco_annotation_file, 'r') as f:

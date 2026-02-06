@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""
-Analyze Function Flow: MaxSightCNN Forward Pass
+"""Analyze Function Flow: MaxSightCNN Forward Pass
 
 Traces the complete execution path from input to output,
-identifying all function calls, data transformations, and decision points.
-"""
+identifying all function calls, data transformations, and decision points."""
 
 import torch
 import sys

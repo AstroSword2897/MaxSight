@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""
-Therapy System Effectiveness Test
-
-Tests the therapy system with realistic scenarios to ensure it:
-1. Adapts difficulty based on performance
-2. Provides appropriate rest when fatigued
-3. Tracks skill improvement over time
-4. Generates meaningful therapy tasks from scene descriptions
-5. Integrates properly with MaxSight's detection capabilities
-"""
+"""Therapy System Effectiveness Test..."""
 
 import sys
 from pathlib import Path
@@ -31,17 +22,7 @@ from ml.therapy.therapy_integration import (
 
 
 def simulate_user_performance(difficulty: float, user_skill: float, fatigue: float) -> Dict:
-    """
-    Simulate user performing a task with given difficulty and skill level.
-    
-    Args:
-        difficulty: Task difficulty [0, 1]
-        user_skill: User's current skill level [0, 1]
-        fatigue: User's fatigue level [0, 1]
-    
-    Returns:
-        Task result with success/failure and metrics
-    """
+    """Simulate user performing a task with given difficulty and skill level...."""
     # Success probability: higher skill and lower difficulty = more success
     # Base formula: if skill >= difficulty, high success probability
     skill_advantage = user_skill - difficulty
@@ -78,17 +59,7 @@ def run_therapy_session_simulation(
     initial_skill: float = 0.5,
     skill_improvement_rate: float = 0.02
 ) -> Dict:
-    """
-    Simulate a complete therapy session.
-    
-    Args:
-        session_duration: Number of tasks in session
-        initial_skill: User's starting skill level [0, 1]
-        skill_improvement_rate: How much skill improves per successful task
-    
-    Returns:
-        Session results and metrics
-    """
+    """Simulate a complete therapy session...."""
     print("\n" + "="*70)
     print("THERAPY SESSION SIMULATION")
     print("="*70)

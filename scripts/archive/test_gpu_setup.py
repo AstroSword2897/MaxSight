@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-"""
-Quick test script to verify GPU setup for MaxSight training.
-Run this after setting up cloud GPU to ensure everything works.
-"""
+"""Quick test script to verify GPU setup for MaxSight training.
+Run this after setting up cloud GPU to ensure everything works."""
 
 import sys
 from pathlib import Path

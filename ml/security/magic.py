@@ -1,8 +1,6 @@
-"""
-File Magic Number Detection for Input Validation
+"""File Magic Number Detection for Input Validation
 
-Detects file types by checking magic numbers (file signatures) to prevent malicious file uploads.
-"""
+Detects file types by checking magic numbers (file signatures) to prevent malicious file uploads."""
 
 from typing import Optional
 
@@ -21,15 +19,7 @@ MAGIC_NUMBERS = {
 
 
 def detect_magic(file_bytes: bytes) -> Optional[str]:
-    """
-    Detect file type from magic number.
-    
-    Args:
-        file_bytes: First bytes of the file (at least 12 bytes recommended)
-    
-    Returns:
-        File extension string (e.g., 'jpg', 'png') or None if unknown
-    """
+    """Detect file type from magic number...."""
     if len(file_bytes) < 4:
         return None
     
@@ -47,16 +37,7 @@ def detect_magic(file_bytes: bytes) -> Optional[str]:
 
 
 def validate_image_magic(file_bytes: bytes, allowed_types: tuple = ('jpg', 'png', 'gif', 'bmp', 'webp', 'tiff')) -> bool:
-    """
-    Validate that file bytes match an allowed image type.
-    
-    Args:
-        file_bytes: File bytes to check
-        allowed_types: Tuple of allowed file extensions
-    
-    Returns:
-        True if file type is allowed and matches magic number, False otherwise
-    """
+    """Validate that file bytes match an allowed image type...."""
     detected_type = detect_magic(file_bytes)
     return detected_type is not None and detected_type in allowed_types
 

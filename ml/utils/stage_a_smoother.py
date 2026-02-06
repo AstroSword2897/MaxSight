@@ -1,7 +1,5 @@
-"""
-Stage A temporal smoother for MaxSight.
-EMA smoothing of box and confidence across frames to reduce flicker.
-"""
+"""Stage A temporal smoother for MaxSight.
+EMA smoothing of box and confidence across frames to reduce flicker."""
 from typing import List, Dict, Any, Optional
 import math
 
@@ -32,10 +30,8 @@ def _box_to_list(box: Any) -> List[float]:
 
 
 class StageATemporalSmoother:
-    """
-    EMA smoothing of detections across frames.
-    Tracks objects by id; smooths box and confidence; drops if not seen for max_age frames.
-    """
+    """EMA smoothing of detections across frames.
+    Tracks objects by id; smooths box and confidence; drops if not seen for max_age frames."""
 
     def __init__(self, alpha: float = 0.7, max_age: int = 5):
         self.alpha = alpha
@@ -47,10 +43,8 @@ class StageATemporalSmoother:
     def smooth_detections(
         self, detections: List[Dict[str, Any]], frame_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """
-        Smooth detection boxes and confidence with EMA.
-        Uses frame_id if provided, else internal frame counter.
-        """
+        """Smooth detection boxes and confidence with EMA.
+        Uses frame_id if provided, else internal frame counter."""
         if frame_id is not None:
             self._frame_count = frame_id
         else:

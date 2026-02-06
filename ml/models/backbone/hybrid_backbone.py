@@ -1,12 +1,4 @@
-"""Enhanced Hybrid CNN + Vision Transformer Backbone for MaxSight 3.0
-
-Production-ready implementation with all critical bugs fixed:
-- Proper learnable projections (no torch.eye hacks)
-- Dynamic spatial handling for variable input sizes
-- Actual gradient checkpointing implementation
-- Spatially-aware cross-modal fusion
-- Memory-efficient design
-"""
+"""Enhanced Hybrid CNN + Vision Transformer Backbone for MaxSight 3.0..."""
 
 import torch
 import torch.nn as nn
@@ -28,12 +20,10 @@ class SpatialAttentionPooling(nn.Module):
         self.scale = dim ** -0.5
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
+        """Args:
             x: [B, N, D] sequence of features
         Returns:
-            pooled: [B, D] single feature vector
-        """
+            pooled: [B, D] single feature vector"""
         B, N, D = x.shape
         
         # Use mean as query, all patches as keys/values
@@ -125,15 +115,7 @@ class CrossModalAttention(nn.Module):
 
 
 class HybridCNNViTBackbone(nn.Module):
-    """
-    Production-ready Hybrid CNN + ViT backbone.
-    
-    All critical bugs fixed:
-    - Proper learnable projections instead of torch.eye
-    - Dynamic spatial dimension handling
-    - Functional gradient checkpointing
-    - Spatially-aware cross-modal fusion
-    """
+    """Production-ready Hybrid CNN + ViT backbone...."""
 
     def __init__(
         self,
@@ -144,7 +126,7 @@ class HybridCNNViTBackbone(nn.Module):
         vit_depth: int = 12,
         vit_num_heads: int = 12,
         fused_dim: int = 512,
-        fusion_method: str = 'weighted',  # FIXED: Default to weighted (stable), cross_attention for research
+        fusion_method: str = 'weighted',
         use_cross_layer_connections: bool = True,
         dropout: float = 0.1,
         pretrained_cnn: bool = True,
@@ -168,7 +150,6 @@ class HybridCNNViTBackbone(nn.Module):
         self.use_cross_layer_connections = use_cross_layer_connections
         self.use_gradient_checkpointing = use_gradient_checkpointing
         
-        # FIXED: Constrain cross-layer alpha with sigmoid to prevent runaway amplification
         if isinstance(cross_layer_alpha, float):
             # Fixed value: convert to parameter and constrain
             self.cross_layer_alpha_raw = nn.Parameter(torch.tensor(cross_layer_alpha))
@@ -318,12 +299,10 @@ class HybridCNNViTBackbone(nn.Module):
         cnn_features: List[torch.Tensor],
         vit_patches: torch.Tensor
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        """
-        FIXED: Proper cross-layer information flow.
+        """FIXED: Proper cross-layer information flow.
         - Uses learnable Conv2d projections (no torch.eye)
         - Spatially-aware ViT pooling
-        - Dynamic spatial handling
-        """
+        - Dynamic spatial handling"""
         B = vit_patches.shape[0]
         num_patches = vit_patches.shape[1]
         
@@ -352,7 +331,6 @@ class HybridCNNViTBackbone(nn.Module):
             
             # Add to ViT patches as residual
             cnn_context = cnn_to_vit_resized.flatten(2).transpose(1, 2)  # [B, N, D]
-            # FIXED: Constrain alpha with sigmoid for safety (ensure Tensor for type checker)
             if hasattr(self, 'cross_layer_alpha_raw'):
                 raw = self.cross_layer_alpha_raw
                 alpha = torch.sigmoid(raw if isinstance(raw, torch.Tensor) else torch.tensor(float(raw), device=vit_patches.device, dtype=vit_patches.dtype))
@@ -373,7 +351,6 @@ class HybridCNNViTBackbone(nn.Module):
             )
             
             # Add as residual
-            # FIXED: Constrain alpha with sigmoid for safety (ensure Tensor for type checker)
             raw = self.cross_layer_alpha_raw
             alpha = torch.sigmoid(raw if isinstance(raw, torch.Tensor) else torch.tensor(float(raw), device=cnn_feat.device, dtype=cnn_feat.dtype))
             enhanced_cnn.append(cnn_feat + alpha * vit_to_cnn_resized)
@@ -386,18 +363,7 @@ class HybridCNNViTBackbone(nn.Module):
         vit_patches: Optional[torch.Tensor] = None,
         return_all_features: bool = False
     ) -> Tuple[torch.Tensor, Optional[Dict[str, torch.Tensor]]]:
-        """
-        Forward pass with improved cross-layer interaction.
-        
-        Args:
-            x: [B, 3, H, W] input image
-            vit_patches: Optional [B, N_patches, vit_embed_dim] from ViT (if provided, skips ViT forward)
-            return_all_features: Whether to return intermediate features
-            
-        Returns:
-            fused_features: [B, fused_dim] global features
-            aux_features: Optional dict with intermediate features
-        """
+        """Forward pass with improved cross-layer interaction...."""
         B = x.shape[0]
         
         # === Extract CNN features ===

@@ -1,15 +1,4 @@
-"""
-Global Confidence Aggregator for MaxSight 3.0 (v2)
-
-Confidence is a system-level control signal.
-High uncertainty suppresses verbosity, alerts, and action intensity.
-
-Key improvements:
-- Confidence acts as global gain
-- Supports additive multi-modal evidence
-- Logit-space aggregation (better calibration)
-- Explicit monotonicity (more uncertainty → less action)
-"""
+"""Global Confidence Aggregator for MaxSight 3.0 (v2)..."""
 
 import torch
 import torch.nn as nn
@@ -17,23 +6,7 @@ from typing import Dict, Optional
 
 
 class GlobalConfidenceAggregator(nn.Module):
-    """
-    Global Confidence Aggregator (v2).
-    
-    Confidence is a system-level control signal.
-    High uncertainty suppresses verbosity, alerts, and action intensity.
-    
-    Inputs:
-    - Scene embedding (primary)
-    - Motion residual (optional)
-    - OCR entropy (optional)
-    - Audio entropy (optional)
-    
-    Outputs:
-    - global_confidence [B, 1] (inverse of uncertainty, [0, 1])
-    - confidence_logit [B, 1] (logit space, for training)
-    - uncertainty_score [B, 1] (1 - confidence, for backward compatibility)
-    """
+    """Global Confidence Aggregator (v2)...."""
     
     def __init__(
         self,
@@ -64,21 +37,7 @@ class GlobalConfidenceAggregator(nn.Module):
         ocr_entropy: Optional[torch.Tensor] = None,
         audio_entropy: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass with multi-modal uncertainty aggregation.
-        
-        Args:
-            scene_embedding: Scene embedding [B, scene_dim]
-            motion_residual: Optional motion residual [B, motion_dim] (future)
-            ocr_entropy: Optional OCR entropy [B, 1] (future)
-            audio_entropy: Optional audio entropy [B, 1] (future)
-        
-        Returns:
-            Dictionary with:
-                - 'global_confidence': [B, 1] - Confidence [0, 1]
-                - 'confidence_logit': [B, 1] - Logit space (for training)
-                - 'uncertainty_score': [B, 1] - Uncertainty [0, 1]
-        """
+        """Forward pass with multi-modal uncertainty aggregation...."""
         x = self.backbone(scene_embedding)
         
         # -------------------------------------------------

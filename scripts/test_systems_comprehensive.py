@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-Comprehensive System Test Suite
-
-Tests AutoML, GradNorm, and False Positive detection systems.
-Run this after kernel restart to ensure all systems are working.
-
-This suite uses integrated testing - tests build on each other and share
-fixtures to ensure the entire system works together.
-"""
+"""Comprehensive System Test Suite..."""
 
 import argparse
 import sys
@@ -671,17 +663,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Comprehensive integrated system tests",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Test everything with shared fixtures
-  python test_systems_comprehensive.py --test all --device cuda
-  
-  # Test specific component
-  python test_systems_comprehensive.py --test gradnorm
-  
-  # Test integration pipeline only
-  python test_systems_comprehensive.py --test integration
-        """
+        epilog="""Examples:..."""
     )
     parser.add_argument(
         '--test',

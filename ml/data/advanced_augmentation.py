@@ -1,14 +1,4 @@
-"""
-Advanced Data Augmentation for Real-World Robustness
-
-Implements comprehensive augmentation strategies including:
-- Geometric transforms (rotation, flips, perspective)
-- Photometric transforms (contrast, brightness, color jitter)
-- Noise injection (Gaussian, salt-and-pepper, motion blur)
-- Occlusion simulation (random erasing, cutout)
-- Weather/environmental effects (fog, rain, snow simulation)
-- Camera artifacts (lens distortion, chromatic aberration)
-"""
+"""Advanced Data Augmentation for Real-World Robustness..."""
 
 import torch
 import torch.nn as nn
@@ -67,9 +57,7 @@ class AugmentationConfig:
 
 
 class AdvancedAugmentation:
-    """
-    Comprehensive augmentation pipeline for real-world robustness.
-    """
+    """Comprehensive augmentation pipeline for real-world robustness."""
     
     def __init__(self, config: Optional[AugmentationConfig] = None):
         self.config = config or AugmentationConfig()
@@ -453,10 +441,8 @@ class AdvancedAugmentation:
 
 
 class StressTestAugmentation(AdvancedAugmentation):
-    """
-    Stress-test augmentation for edge case robustness testing.
-    Applies more aggressive transforms to find model weaknesses.
-    """
+    """Stress-test augmentation for edge case robustness testing.
+    Applies more aggressive transforms to find model weaknesses."""
     
     def __init__(self):
         config = AugmentationConfig(
@@ -486,12 +472,10 @@ class MixUp:
         
     def __call__(self, images: torch.Tensor, 
                  labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
-        """
-        Apply MixUp.
+        """Apply MixUp.
         
         Returns:
-            Mixed images, labels_a, labels_b, lambda
-        """
+            Mixed images, labels_a, labels_b, lambda"""
         if self.alpha > 0:
             lam = np.random.beta(self.alpha, self.alpha)
         else:
@@ -549,12 +533,10 @@ class CutMix:
 
 
 def create_augmentation_pipeline(mode: str = 'train') -> AdvancedAugmentation:
-    """
-    Create augmentation pipeline based on mode.
+    """Create augmentation pipeline based on mode.
     
     Args:
-        mode: 'train', 'val', 'test', or 'stress_test'
-    """
+        mode: 'train', 'val', 'test', or 'stress_test'"""
     if mode == 'train':
         return AdvancedAugmentation()
     elif mode == 'stress_test':

@@ -1,8 +1,6 @@
-"""
-Predictive Alert Head for MaxSight 3.0
+"""Predictive Alert Head for MaxSight 3.0
 
-Anticipates hazards and provides predictive navigation guidance.
-"""
+Anticipates hazards and provides predictive navigation guidance."""
 
 import torch
 import torch.nn as nn
@@ -22,17 +20,7 @@ class PredictiveAlert:
 
 
 class PredictiveAlertHead(nn.Module):
-    """
-    Predictive alert head for hazard anticipation.
-    
-    STUB - NOT INTEGRATED: This head is defined but not currently called in the forward pass.
-    See README.md for integration status. Future integration planned.
-    
-    Anticipates:
-    - Motion prediction (approaching vehicles, people)
-    - Environment patterns (frequently used paths)
-    - Recurring hazards (stairs, obstacles)
-    """
+    """Predictive alert head for hazard anticipation...."""
     
     def __init__(
         self,
@@ -88,17 +76,7 @@ class PredictiveAlertHead(nn.Module):
         motion_features: Optional[torch.Tensor] = None,  # [B, motion_dim]
         spatial_memory: Optional[torch.Tensor] = None  # [B, N_objects, 4] (boxes)
     ) -> Dict[str, torch.Tensor]:
-        """
-        Predict hazards and generate alerts.
-        
-        Args:
-            scene_features: Scene features [B, input_dim]
-            motion_features: Optional motion features [B, motion_dim]
-            spatial_memory: Optional spatial memory of objects [B, N_objects, 4]
-        
-        Returns:
-            Dictionary with predictive alerts
-        """
+        """Predict hazards and generate alerts...."""
         B = scene_features.shape[0]
         
         # Default motion features if not provided

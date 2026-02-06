@@ -1,12 +1,4 @@
-"""
-Tier Transfer Learning for MaxSight
-
-Implements T2_HYBRID_VIT → T5_TEMPORAL transfer with:
-- Selective weight copying
-- Gradual unfreezing schedule
-- Parameter-grouped learning rates
-- Loss unlock schedule
-"""
+"""Tier Transfer Learning for MaxSight..."""
 
 import torch
 import torch.nn as nn
@@ -18,15 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class TierTransferManager:
-    """
-    Manages tier-to-tier transfer learning.
-    
-    Handles:
-    - Selective weight copying (spatial only, not coordination)
-    - Freeze/unfreeze schedules
-    - Parameter-grouped learning rates
-    - Loss unlock schedules
-    """
+    """Manages tier-to-tier transfer learning...."""
     
     def __init__(
         self,
@@ -34,14 +18,7 @@ class TierTransferManager:
         target_model: nn.Module,
         transfer_config: Dict[str, Any]
     ):
-        """
-        Initialize transfer manager.
-        
-        Arguments:
-            source_checkpoint: Path to T2 checkpoint
-            target_model: T5 model to transfer into
-            transfer_config: Transfer configuration dict
-        """
+        """Initialize transfer manager...."""
         self.source_checkpoint = Path(source_checkpoint)
         self.target_model = target_model
         self.config = transfer_config
@@ -51,12 +28,10 @@ class TierTransferManager:
             raise FileNotFoundError(f"Source checkpoint not found: {source_checkpoint}")
     
     def validate_source_checkpoint(self) -> bool:
-        """
-        Validate T2 checkpoint meets transfer prerequisites.
+        """Validate T2 checkpoint meets transfer prerequisites.
         
         Returns:
-            True if checkpoint is valid for transfer
-        """
+            True if checkpoint is valid for transfer"""
         logger.info("Validating source checkpoint...")
         
         checkpoint = torch.load(self.source_checkpoint, map_location='cpu')
@@ -87,30 +62,7 @@ class TierTransferManager:
         self,
         strict: bool = False
     ) -> Dict[str, int]:
-        """
-        Transfer compatible weights from T2 to T5.
-        
-        Transfers:
-        - CNN backbone
-        - ViT blocks
-        - SE/CBAM attention
-        - Dynamic Conv
-        - Detection/box/classification heads
-        - Distance/urgency heads
-        
-        Does NOT transfer:
-        - Temporal modules
-        - Cross-task attention
-        - Cross-modal attention
-        - Retrieval modules
-        - New Tier-5 heads
-        
-        Arguments:
-            strict: If True, raise error on missing keys
-            
-        Returns:
-            Dictionary with transfer statistics
-        """
+        """Transfer compatible weights from T2 to T5...."""
         logger.info("Loading source checkpoint...")
         source_ckpt = torch.load(self.source_checkpoint, map_location='cpu')
         source_state = source_ckpt['model_state_dict']
@@ -197,23 +149,7 @@ class TierTransferManager:
         self,
         base_lr: float
     ) -> List[Dict[str, Any]]:
-        """
-        Create parameter groups with different learning rates.
-        
-        LR multipliers:
-        - CNN backbone: ×0.2
-        - ViT backbone: ×0.5
-        - Detection/box heads: ×0.6
-        - Temporal modules: ×1.0
-        - Cross-task/modal: ×1.0
-        - New heads: ×1.3
-        
-        Arguments:
-            base_lr: Base learning rate (e.g., 7.5e-5 for T5)
-            
-        Returns:
-            List of parameter group dicts for optimizer
-        """
+        """Create parameter groups with different learning rates...."""
         param_groups = []
         
         # Group 1: CNN backbone (lowest LR)
@@ -282,22 +218,7 @@ class TierTransferManager:
         return param_groups
     
     def get_freeze_schedule(self, epoch: int) -> Dict[str, bool]:
-        """
-        Get freeze/unfreeze schedule based on epoch (corrected timing).
-        
-        Schedule:
-        - Epochs 0-5: Freeze CNN+ViT, train new T5 heads only
-        - Epochs 5-15: Unfreeze detection + classification
-        - Epochs 15-30: Unfreeze top 40% ViT
-        - Epochs 30-45: Unfreeze full ViT
-        - Epochs 45+: Unfreeze CNN (last)
-        
-        Arguments:
-            epoch: Current training epoch
-            
-        Returns:
-            Dictionary mapping parameter names to freeze status
-        """
+        """Get freeze/unfreeze schedule based on epoch (corrected timing)...."""
         freeze_map = {}
         
         for name, param in self.target_model.named_parameters():
@@ -379,21 +300,7 @@ class TierTransferManager:
         logger.info(f"Epoch {epoch}: {frozen_count}/{total_count} parameters frozen")
     
     def get_loss_unlock_schedule(self, epoch: int) -> Dict[str, bool]:
-        """
-        Get loss unlock schedule based on epoch (aligned with representation readiness).
-        
-        Schedule:
-        - Epochs 0-10: Detection only
-        - Epochs 10-25: + Navigation
-        - Epochs 25-40: + Therapy/urgency
-        - Epochs 40+: All losses
-        
-        Arguments:
-            epoch: Current training epoch
-            
-        Returns:
-            Dictionary mapping loss names to enabled status
-        """
+        """Get loss unlock schedule based on epoch (aligned with representation readiness)...."""
         if epoch < 10:
             # Phase 1: Detection only
             return {
@@ -477,17 +384,7 @@ def create_transfer_optimizer(
     base_lr: float,
     weight_decay: float = 0.05
 ) -> torch.optim.AdamW:
-    """
-    Create optimizer with parameter-grouped learning rates for transfer.
-    
-    Arguments:
-        model: Target model (T5)
-        base_lr: Base learning rate (e.g., 7.5e-5)
-        weight_decay: Weight decay
-        
-    Returns:
-        AdamW optimizer with parameter groups
-    """
+    """Create optimizer with parameter-grouped learning rates for transfer...."""
     transfer_mgr = TierTransferManager(
         source_checkpoint=Path("dummy"),  # Not used for optimizer creation
         target_model=model,

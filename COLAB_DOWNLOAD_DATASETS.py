@@ -1,8 +1,6 @@
-"""
-Single Colab cell to download all inference datasets for MaxSight.
+"""Single Colab cell to download all inference datasets for MaxSight.
 
-Copy-paste this entire cell into Colab and run it.
-"""
+Copy-paste this entire cell into Colab and run it."""
 
 # ============================================================================
 # CELL 1: Download Inference Datasets (Open Images V6, BDD100K, ADE20K)

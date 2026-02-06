@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-MaxSight CNN - Full Production Training Script (v2)
-
-Hard guarantees:
-- Resume-safe
-- Deterministic
-- AMP-safe (CUDA only, MPS fallback)
-- Backup-safe
-- Gradient clipping
-- Worker seeding
-- Fail-fast dataset validation
-"""
+"""MaxSight CNN - Full Production Training Script (v2)..."""
 
 import argparse
 import sys
@@ -251,11 +240,9 @@ def main():
     image_dir = args.image_dir or data_dir
 
     if args.train_annotation and args.val_annotation:
-        # Annotation-based: use create_data_loaders (e.g. after gather_training_data / setup_training_data)
         data_dir_resolved = Path(args.data_dir).resolve()
         train_ann = Path(args.train_annotation).resolve()
         val_ann = Path(args.val_annotation).resolve()
-        # If not found, try under data-dir (e.g. Colab: data-dir on Drive with cleaned_splits inside)
         if not train_ann.exists():
             alt = data_dir_resolved / "cleaned_splits" / train_ann.name
             if alt.exists():
@@ -268,7 +255,6 @@ def main():
                 val_ann = alt
             elif (data_dir_resolved / val_ann.name).exists():
                 val_ann = data_dir_resolved / val_ann.name
-        # Colab: if path is bare (e.g. /maxsight_train.json from empty $SPLITS_DIR), try env then common Drive paths
         def _resolve_bare(path: Path, name: str) -> Path:
             if path.exists():
                 return path
@@ -318,7 +304,6 @@ def main():
             f"Train samples: {n_train}, Val samples: {n_val}, Batch size: {bs} → Train batches: {len(train_loader)}, Val batches: {len(val_loader)}"
         )
     else:
-        # Legacy: data_dir/train and data_dir/val as directory per split (each with annotation or images)
         train_dir = data_dir / "train"
         val_dir = data_dir / "val"
         if not train_dir.exists() or not val_dir.exists():
@@ -435,7 +420,6 @@ def main():
         else:
             raise FileNotFoundError(f"--resume-from: file not found: {args.resume_from}")
     elif args.resume:
-        # Prefer last_checkpoint.pt (saved by train_loop), then best_model.pt, then legacy checkpoint_*.pth
         for name in ("last_checkpoint.pt", "best_model.pt"):
             c = ckpt_dir / name
             if c.exists():

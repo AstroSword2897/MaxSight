@@ -1,14 +1,4 @@
-"""
-Per-Class Metrics and Confusion Matrix Analysis
-
-Comprehensive metrics tracking including:
-- Per-class precision, recall, F1
-- Confusion matrices
-- Per-scenario performance
-- Per-impairment performance
-- Urgency-level accuracy
-- Worst-case identification
-"""
+"""Per-Class Metrics and Confusion Matrix Analysis..."""
 
 import torch
 import numpy as np
@@ -155,10 +145,8 @@ class ConfusionMatrix:
 
 
 class PerClassMetricsTracker:
-    """
-    Comprehensive per-class metrics tracking.
-    Tracks performance across classes, scenarios, impairments, and urgency levels.
-    """
+    """Comprehensive per-class metrics tracking.
+    Tracks performance across classes, scenarios, impairments, and urgency levels."""
     
     def __init__(self, 
                  class_names: List[str],
@@ -205,15 +193,7 @@ class PerClassMetricsTracker:
                targets: torch.Tensor,
                confidences: Optional[torch.Tensor] = None,
                metadata: Optional[List[Dict]] = None):
-        """
-        Update metrics with batch predictions.
-        
-        Args:
-            predictions: Predicted class indices [batch_size]
-            targets: Ground truth class indices [batch_size]
-            confidences: Confidence scores [batch_size]
-            metadata: List of dicts with scenario, impairment, urgency info
-        """
+        """Update metrics with batch predictions...."""
         batch_size = predictions.shape[0]
         
         # Update confusion matrix
@@ -432,17 +412,7 @@ class PerClassMetricsTracker:
 def compute_map_per_class(predictions: List[Dict], 
                           targets: List[Dict],
                           iou_threshold: float = 0.5) -> Dict[str, float]:
-    """
-    Compute mAP per class for object detection.
-    
-    Args:
-        predictions: List of prediction dicts with 'boxes', 'labels', 'scores'
-        targets: List of target dicts with 'boxes', 'labels'
-        iou_threshold: IoU threshold for matching
-        
-    Returns:
-        Dict mapping class names to AP values
-    """
+    """Compute mAP per class for object detection...."""
     # Collect all predictions and targets by class
     class_predictions = defaultdict(list)
     class_targets = defaultdict(lambda: {'boxes': [], 'matched': []})

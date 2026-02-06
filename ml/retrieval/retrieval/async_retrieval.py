@@ -1,9 +1,7 @@
-"""
-Async/Non-Blocking Retrieval for MaxSight 3.0
+"""Async/Non-Blocking Retrieval for MaxSight 3.0
 
 Retrieval system that runs asynchronously to avoid blocking inference.
-Uses threading/queue for non-blocking execution.
-"""
+Uses threading/queue for non-blocking execution."""
 
 import torch
 import numpy as np
@@ -35,11 +33,9 @@ class RetrievalResult:
 
 
 class AsyncRetrievalWorker:
-    """
-    Worker thread for async retrieval.
+    """Worker thread for async retrieval.
     
-    Processes retrieval requests in background without blocking inference.
-    """
+    Processes retrieval requests in background without blocking inference."""
     
     def __init__(
         self,
@@ -237,19 +233,7 @@ class AsyncRetrievalWorker:
         blocking: bool = False,
         timeout_ms: Optional[float] = None
     ) -> Optional[RetrievalResult]:
-        """
-        Submit a retrieval request.
-        
-        Args:
-            query_embeddings: Dictionary of query embeddings
-            callback: Optional callback function(result)
-            request_id: Optional request ID for caching
-            blocking: If True, wait for result (defeats async purpose, but useful for testing)
-            timeout_ms: Timeout in milliseconds (if blocking)
-        
-        Returns:
-            RetrievalResult if blocking=True, None otherwise
-        """
+        """Submit a retrieval request...."""
         # Check cache first
         if request_id:
             cached = self.get_cached_result(request_id)
@@ -291,11 +275,9 @@ class AsyncRetrievalWorker:
 
 
 class AsyncRetrievalSystem:
-    """
-    Async retrieval system wrapper.
+    """Async retrieval system wrapper.
     
-    Provides non-blocking retrieval that doesn't delay inference.
-    """
+    Provides non-blocking retrieval that doesn't delay inference."""
     
     def __init__(
         self,
@@ -330,17 +312,7 @@ class AsyncRetrievalSystem:
         request_id: Optional[str] = None,
         blocking: bool = False
     ) -> Optional[Dict[str, Any]]:
-        """
-        Retrieve similar items (non-blocking by default).
-        
-        Args:
-            query_embeddings: Query embeddings dictionary
-            request_id: Optional request ID for caching
-            blocking: If True, wait for result (defeats async purpose)
-        
-        Returns:
-            Retrieval results if blocking=True and available, None otherwise
-        """
+        """Retrieve similar items (non-blocking by default)...."""
         if not self.enable_async:
             # Synchronous mode
             if self.stage1_ann is None:

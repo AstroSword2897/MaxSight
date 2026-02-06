@@ -1,20 +1,16 @@
-"""
-Security Headers Middleware for Flask/FastAPI
+"""Security Headers Middleware for Flask/FastAPI
 
-Adds security headers to HTTP responses to prevent common web vulnerabilities.
-"""
+Adds security headers to HTTP responses to prevent common web vulnerabilities."""
 
 from typing import Callable
 import os
 
 
 def add_security_headers(response) -> None:
-    """
-    Add security headers to Flask response object.
+    """Add security headers to Flask response object.
     
     Args:
-        response: Flask response object
-    """
+        response: Flask response object"""
     # Prevent MIME type sniffing
     response.headers['X-Content-Type-Options'] = 'nosniff'
     
@@ -35,17 +31,7 @@ def add_security_headers(response) -> None:
 
 
 def security_headers_middleware(app):
-    """
-    Flask middleware to add security headers to all responses.
-    
-    Usage:
-        from ml.middleware.security_headers import security_headers_middleware
-        app = Flask(__name__)
-        security_headers_middleware(app)
-    
-    Args:
-        app: Flask application instance
-    """
+    """Flask middleware to add security headers to all responses...."""
     @app.after_request
     def after_request(response):
         add_security_headers(response)

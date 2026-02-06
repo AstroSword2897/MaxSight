@@ -1,7 +1,5 @@
-"""
-Multi-Head Latency Benchmarking
-Measures latency for each head individually and in combination.
-"""
+"""Multi-Head Latency Benchmarking
+Measures latency for each head individually and in combination."""
 
 import torch
 import time
@@ -12,9 +10,7 @@ import statistics
 
 
 class MultiHeadBenchmark:
-    """
-    Benchmark individual heads and combinations to identify latency bottlenecks.
-    """
+    """Benchmark individual heads and combinations to identify latency bottlenecks."""
     
     def __init__(self, model: torch.nn.Module, device: Optional[torch.device] = None):
         self.model = model
@@ -30,18 +26,7 @@ class MultiHeadBenchmark:
         num_warmup: int = 5,
         num_runs: int = 50
     ) -> Dict[str, float]:
-        """
-        Benchmark a combination of heads.
-        
-        Arguments:
-            head_names: List of head names to benchmark
-            input_tensor: Input tensor
-            num_warmup: Number of warmup runs
-            num_runs: Number of timing runs
-        
-        Returns:
-            Dictionary with latency statistics
-        """
+        """Benchmark a combination of heads...."""
         # Warmup
         with torch.no_grad():
             for _ in range(num_warmup):
@@ -78,15 +63,13 @@ class MultiHeadBenchmark:
         return stats
     
     def benchmark_all_heads(self, input_tensor: torch.Tensor) -> Dict[str, Dict[str, float]]:
-        """
-        Benchmark all head combinations.
+        """Benchmark all head combinations.
         
         Arguments:
             input_tensor: Input tensor
         
         Returns:
-            Dictionary of all benchmark results
-        """
+            Dictionary of all benchmark results"""
         # Core heads (always needed)
         core_heads = ['classification', 'box_regression', 'objectness']
         
@@ -118,15 +101,7 @@ class MultiHeadBenchmark:
         return self.results
     
     def identify_bottlenecks(self, target_latency_ms: float = 500.0) -> Dict[str, Any]:
-        """
-        Identify which head combinations exceed target latency.
-        
-        Arguments:
-            target_latency_ms: Target latency in milliseconds
-        
-        Returns:
-            Dictionary with bottleneck analysis
-        """
+        """Identify which head combinations exceed target latency...."""
         bottlenecks = []
         recommendations = []
         
@@ -171,16 +146,7 @@ class MultiHeadBenchmark:
         target_latency_ms: float = 500.0,
         required_heads: Optional[List[str]] = None
     ) -> List[str]:
-        """
-        Get optimal head configuration that meets latency target.
-        
-        Arguments:
-            target_latency_ms: Target latency
-            required_heads: Heads that must be included
-        
-        Returns:
-            List of recommended head names
-        """
+        """Get optimal head configuration that meets latency target...."""
         if required_heads is None:
             required_heads = ['classification', 'box_regression', 'objectness']
         

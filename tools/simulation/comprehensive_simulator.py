@@ -1,14 +1,4 @@
-"""
-Comprehensive MaxSight Simulator
-End-to-end simulation with real-world data support for testing and visualization.
-
-Features:
-- Real image/video input support
-- Live model inference
-- Visual overlays and feedback
-- Performance metrics
-- Export capabilities
-"""
+"""Comprehensive MaxSight Simulator..."""
 
 import torch
 import torch.cuda  # For torch.cuda.synchronize()
@@ -38,18 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class ComprehensiveSimulator:
-    """
-    Comprehensive simulator for MaxSight system with real-world data support.
-    
-    Supports:
-    - Image files (JPG, PNG)
-    - Video files (MP4, AVI)
-    - Camera input (webcam)
-    - Real-time inference
-    - Visual overlays
-    - Performance metrics
-    - Session logging
-    """
+    """Comprehensive simulator for MaxSight system with real-world data support...."""
     
     def __init__(
         self,
@@ -58,15 +37,7 @@ class ComprehensiveSimulator:
         device: Optional[str] = None,
         verbose: bool = True
     ):
-        """
-        Initialize simulator.
-        
-        Arguments:
-            model_path: Path to saved model checkpoint (optional)
-            condition_mode: Visual condition mode (e.g., 'glaucoma', 'cataracts')
-            device: Device to run on ('cpu', 'cuda', 'mps')
-            verbose: Enable verbose output
-        """
+        """Initialize simulator...."""
         self.verbose = verbose
         self.condition_mode = condition_mode
         
@@ -127,18 +98,7 @@ class ComprehensiveSimulator:
         output_path: Optional[str] = None,
         show_overlay: bool = True
     ) -> Dict[str, Any]:
-        """
-        Process a single image file.
-        
-        Arguments:
-            image_path: Path to image file
-            save_output: Save output visualization
-            output_path: Path to save output (if save_output=True)
-            show_overlay: Show visual overlays
-        
-        Returns:
-            Processing results dictionary
-        """
+        """Process a single image file...."""
         if self.verbose:
             print(f"\nProcessing image: {image_path}")
         
@@ -231,18 +191,7 @@ class ComprehensiveSimulator:
         max_frames: Optional[int] = None,
         save_frames: bool = False
     ) -> Dict[str, Any]:
-        """
-        Process a video file frame by frame.
-        
-        Arguments:
-            video_path: Path to video file
-            output_path: Path to save output video (optional)
-            max_frames: Maximum number of frames to process
-            save_frames: Save individual frame outputs
-        
-        Returns:
-            Video processing results
-        """
+        """Process a video file frame by frame...."""
         if self.verbose:
             print(f"\nProcessing video: {video_path}")
         
@@ -396,18 +345,7 @@ class ComprehensiveSimulator:
         output_dir: Optional[str] = None,
         max_images: Optional[int] = None
     ) -> Dict[str, Any]:
-        """
-        Process all images in a directory.
-        
-        Arguments:
-            directory: Directory containing images
-            pattern: File pattern to match (e.g., "*.jpg", "*.png")
-            output_dir: Directory to save outputs
-            max_images: Maximum number of images to process
-        
-        Returns:
-            Directory processing results
-        """
+        """Process all images in a directory...."""
         if self.verbose:
             print(f"\nProcessing directory: {directory}")
         

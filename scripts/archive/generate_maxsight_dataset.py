@@ -1,27 +1,5 @@
 #!/usr/bin/env python3
-"""
-MaxSight Comprehensive Dataset Generator
-=========================================
-
-Highly variable, production-grade dataset generator that:
-1. Generates COCO-format annotations from existing images or creates synthetic scenes
-2. Applies diverse accessibility-focused augmentations
-3. Links with training, testing, and simulation pipelines
-4. Supports external datasets (COCO, Open Images) or standalone generation
-
-Features:
-- 14 visual impairment simulations (glaucoma, AMD, cataracts, etc.)
-- 6 lighting conditions (bright, normal, dim, dark, mixed, outdoor)
-- 10+ scenario types (indoor, outdoor, transit, retail, medical, etc.)
-- Multi-object scene generation with realistic spatial relationships
-- Automatic urgency and distance estimation
-- Full COCO format output compatible with MaxSightDataset
-
-Usage:
-    python scripts/generate_maxsight_dataset.py --mode full --train-samples 1000 --val-samples 200
-    python scripts/generate_maxsight_dataset.py --mode from-coco --coco-path datasets/coco
-    python scripts/generate_maxsight_dataset.py --mode synthetic --output datasets/synthetic
-"""
+"""MaxSight Comprehensive Dataset Generator..."""
 
 import sys
 import json
@@ -677,19 +655,7 @@ class MaxSightDatasetGenerator:
                         num_val: int = 200, num_test: int = 0,
                         use_existing_images: Optional[Path] = None
                         ) -> Dict[str, Any]:
-        """
-        Generate complete train/val/test dataset.
-        
-        Args:
-            output_dir: Output directory for dataset
-            num_train: Number of training samples
-            num_val: Number of validation samples
-            num_test: Number of test samples (optional held-out set)
-            use_existing_images: Path to existing images to use as base
-        
-        Returns:
-            Statistics dictionary
-        """
+        """Generate complete train/val/test dataset...."""
         output_dir = Path(output_dir)
         train_dir = output_dir / 'train'
         val_dir = output_dir / 'val'
@@ -899,11 +865,9 @@ class MaxSightDatasetGenerator:
     
     def generate_from_coco(self, coco_path: Path, output_dir: Path,
                           num_train: int = 5000, num_val: int = 1000) -> Dict:
-        """
-        Generate MaxSight dataset from COCO dataset.
+        """Generate MaxSight dataset from COCO dataset.
         
-        Applies augmentations and adds accessibility annotations.
-        """
+        Applies augmentations and adds accessibility annotations."""
         from ml.data.generate_annotations import generate_annotations_from_coco
         
         output_dir = Path(output_dir)
@@ -946,20 +910,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='MaxSight Comprehensive Dataset Generator',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Generate full synthetic dataset
-  python generate_maxsight_dataset.py --mode full --train-samples 1000 --val-samples 200
-
-  # Generate from existing test images
-  python generate_maxsight_dataset.py --mode full --use-existing test_images --train-samples 500
-
-  # Convert COCO to MaxSight format
-  python generate_maxsight_dataset.py --mode from-coco --coco-path datasets/coco
-
-  # Quick test generation
-  python generate_maxsight_dataset.py --mode quick --train-samples 50 --val-samples 10
-        """
+        epilog="""Examples:..."""
     )
     
     parser.add_argument('--mode', choices=['full', 'from-coco', 'quick', 'synthetic'],

@@ -1,11 +1,4 @@
-"""
-Inference Dataset Loaders for MaxSight
-
-Supports three datasets optimized for different aspects of assistive vision:
-- Open Images V6: Broad semantic diversity
-- BDD100K: Motion / outdoor / hazard realism
-- ADE20K: Indoor structure & objects
-"""
+"""Inference Dataset Loaders for MaxSight..."""
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -33,11 +26,9 @@ STANDARD_METADATA_KEYS = {
 
 
 def create_imagenet_transform() -> transforms.Compose:
-    """
-    Create ImageNet normalization transform.
+    """Create ImageNet normalization transform.
     
-    This is configurable so it can be replaced for different backbones or modalities.
-    """
+    This is configurable so it can be replaced for different backbones or modalities."""
     return transforms.Compose([
         transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BILINEAR),
         transforms.ToTensor(),
@@ -49,14 +40,12 @@ def create_imagenet_transform() -> transforms.Compose:
 
 
 class OpenImagesV6Dataset(Dataset):
-    """
-    Open Images V6 dataset for MaxSight inference.
+    """Open Images V6 dataset for MaxSight inference.
     
     Covers: Broad semantic diversity
     - 9M images with 600 object classes
     - Diverse scenes, objects, and contexts
-    - Real-world complexity
-    """
+    - Real-world complexity"""
     
     def __init__(
         self,
@@ -67,17 +56,7 @@ class OpenImagesV6Dataset(Dataset):
         max_samples: Optional[int] = None,
         skip_corrupted: bool = True  # FIXED: Skip corrupted images instead of dummy fallback
     ):
-        """
-        Initialize Open Images V6 dataset.
-        
-        Arguments:
-            root: Root directory for Open Images dataset
-            split: 'train', 'validation', or 'test' (default: 'validation')
-            download: Whether to download dataset (requires manual download)
-            transform: Optional custom transform (default: ImageNet normalization)
-            max_samples: Optional limit on number of samples
-            skip_corrupted: Skip corrupted images instead of using dummy fallback
-        """
+        """Initialize Open Images V6 dataset...."""
         self.root = Path(root)
         self.split = split
         self.max_samples = max_samples  # FIXED: Actually assign max_samples
@@ -98,14 +77,11 @@ class OpenImagesV6Dataset(Dataset):
         print(f"Loaded Open Images V6 {split} set: {len(self.image_list)} images")
     
     def _load_image_list(self) -> List[Dict[str, Any]]:
-        """
-        Load list of images from Open Images format.
+        """Load list of images from Open Images format.
         
-        FIXED: Aggregates all labels per image instead of keeping only first.
-        """
+        FIXED: Aggregates all labels per image instead of keeping only first."""
         image_list = []
         
-        # Open Images structure: images are in subdirectories by first 2 chars of image ID
         image_dir = self.root / self.split
         annotation_file = self.root / f'{self.split}-annotations-bbox.csv'
         
@@ -163,11 +139,9 @@ class OpenImagesV6Dataset(Dataset):
         return len(self.image_list)
     
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        """
-        Get a sample from the dataset.
+        """Get a sample from the dataset.
         
-        FIXED: Proper error handling, standard metadata schema.
-        """
+        FIXED: Proper error handling, standard metadata schema."""
         item = self.image_list[idx]
         image_path = item['image_path']
         
@@ -207,14 +181,7 @@ class OpenImagesV6Dataset(Dataset):
 
 
 class BDD100KDataset(Dataset):
-    """
-    BDD100K dataset for MaxSight inference.
-    
-    Covers: Motion / outdoor / hazard realism
-    - 100K images with driving scenarios
-    - Outdoor scenes, vehicles, pedestrians
-    - Real-world hazards and motion
-    """
+    """BDD100K dataset for MaxSight inference...."""
     
     def __init__(
         self,
@@ -224,16 +191,7 @@ class BDD100KDataset(Dataset):
         max_samples: Optional[int] = None,
         skip_corrupted: bool = True  # FIXED: Skip corrupted images
     ):
-        """
-        Initialize BDD100K dataset.
-        
-        Arguments:
-            root: Root directory for BDD100K dataset
-            split: 'train', 'val', or 'test' (default: 'val')
-            transform: Optional custom transform (default: ImageNet normalization)
-            max_samples: Optional limit on number of samples
-            skip_corrupted: Skip corrupted images instead of using dummy fallback
-        """
+        """Initialize BDD100K dataset...."""
         self.root = Path(root)
         self.split = split
         self.max_samples = max_samples  # FIXED: Actually assign max_samples
@@ -292,11 +250,9 @@ class BDD100KDataset(Dataset):
         return len(self.image_list)
     
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        """
-        Get a sample from the dataset.
+        """Get a sample from the dataset.
         
-        FIXED: Proper error handling, standard metadata schema.
-        """
+        FIXED: Proper error handling, standard metadata schema."""
         item = self.image_list[idx]
         image_path = item['image_path']
         
@@ -334,14 +290,7 @@ class BDD100KDataset(Dataset):
 
 
 class ADE20KDataset(Dataset):
-    """
-    ADE20K dataset for MaxSight inference.
-    
-    Covers: Indoor structure & objects
-    - 20K images with 150 object classes
-    - Indoor scenes, furniture, structures
-    - Detailed object segmentation
-    """
+    """ADE20K dataset for MaxSight inference...."""
     
     def __init__(
         self,
@@ -351,16 +300,7 @@ class ADE20KDataset(Dataset):
         max_samples: Optional[int] = None,
         skip_corrupted: bool = True  # FIXED: Skip corrupted images
     ):
-        """
-        Initialize ADE20K dataset.
-        
-        Arguments:
-            root: Root directory for ADE20K dataset
-            split: 'training' or 'validation' (default: 'validation')
-            transform: Optional custom transform (default: ImageNet normalization)
-            max_samples: Optional limit on number of samples
-            skip_corrupted: Skip corrupted images instead of using dummy fallback
-        """
+        """Initialize ADE20K dataset...."""
         self.root = Path(root)
         self.split = split
         self.max_samples = max_samples  # FIXED: Actually assign max_samples
@@ -411,11 +351,9 @@ class ADE20KDataset(Dataset):
         return len(self.image_list)
     
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        """
-        Get a sample from the dataset.
+        """Get a sample from the dataset.
         
-        FIXED: Proper error handling, standard metadata schema.
-        """
+        FIXED: Proper error handling, standard metadata schema."""
         item = self.image_list[idx]
         image_path = item['image_path']
         
@@ -453,12 +391,10 @@ class ADE20KDataset(Dataset):
 
 
 class DetectionPostProcessor:
-    """
-    Post-processor interface for model outputs.
+    """Post-processor interface for model outputs.
     
     FIXED: Abstraction layer instead of model.get_detections().
-    Handles different output formats and batching.
-    """
+    Handles different output formats and batching."""
     
     def __init__(
         self,
@@ -466,14 +402,7 @@ class DetectionPostProcessor:
         max_detections: int = 10,
         nms_threshold: float = 0.5
     ):
-        """
-        Initialize post-processor.
-        
-        Arguments:
-            confidence_threshold: Minimum confidence for detections
-            max_detections: Maximum detections per image
-            nms_threshold: IoU threshold for NMS
-        """
+        """Initialize post-processor...."""
         self.confidence_threshold = confidence_threshold
         self.max_detections = max_detections
         self.nms_threshold = nms_threshold
@@ -484,19 +413,7 @@ class DetectionPostProcessor:
         outputs: Dict[str, torch.Tensor],
         batch_size: int
     ) -> List[List[Dict[str, Any]]]:
-        """
-        Process model outputs to detections.
-        
-        FIXED: Handles different output formats and batching properly.
-        
-        Arguments:
-            model: Model instance (for compatibility with model.get_detections if available)
-            outputs: Model forward pass outputs
-            batch_size: Batch size for proper indexing
-        
-        Returns:
-            List of detections per image: [[det1, det2, ...], [det1, ...], ...]
-        """
+        """Process model outputs to detections...."""
         # Try model.get_detections if available (backward compatibility)
         if hasattr(model, 'get_detections'):
             try:
@@ -575,24 +492,7 @@ def create_inference_dataloader(
     shuffle: bool = False,
     pin_memory: Optional[bool] = None  # FIXED: Make configurable
 ) -> DataLoader:
-    """
-    Create DataLoader for inference datasets.
-    
-    FIXED: Proper pin_memory handling.
-    
-    Arguments:
-        dataset_name: 'open_images_v6', 'bdd100k', or 'ade20k'
-        root: Root directory for dataset
-        split: Dataset split (varies by dataset)
-        batch_size: Batch size (default: 32)
-        num_workers: Number of data loading workers (default: 4)
-        max_samples: Optional limit on number of samples
-        shuffle: Whether to shuffle data (default: False for inference)
-        pin_memory: Whether to pin memory (default: None = auto-detect CUDA)
-    
-    Returns:
-        DataLoader for inference
-    """
+    """Create DataLoader for inference datasets...."""
     if dataset_name.lower() == 'open_images_v6':
         dataset = OpenImagesV6Dataset(
             root=root,
@@ -638,26 +538,7 @@ def run_inference_on_dataset(
     postprocessor: Optional[DetectionPostProcessor] = None,
     skip_corrupted: bool = True
 ) -> Dict[str, Any]:
-    """
-    Run MaxSight inference on inference dataset.
-    
-    FIXED: Global counter for image_idx, proper batching, postprocessor interface.
-    
-    Arguments:
-        model: MaxSightCNN model
-        dataloader: Inference DataLoader
-        device: Device to run inference on
-        verbose: Whether to print progress
-        postprocessor: Optional post-processor (default: creates one)
-        skip_corrupted: Skip corrupted images (default: True)
-    
-    Returns:
-        Dictionary with inference results:
-            - 'predictions': List of predictions per image
-            - 'stats': Statistics dictionary
-            - 'dataset_info': Dataset information
-            - 'corrupted_images': List of skipped corrupted images
-    """
+    """Run MaxSight inference on inference dataset...."""
     model.eval()
     model.to(device)
     

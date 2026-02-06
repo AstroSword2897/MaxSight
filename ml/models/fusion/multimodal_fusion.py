@@ -1,8 +1,6 @@
-"""
-Multi-Modal Fusion for MaxSight 3.0
+"""Multi-Modal Fusion for MaxSight 3.0
 
-Fuses vision, audio, depth, and haptic modalities using transformer-based fusion.
-"""
+Fuses vision, audio, depth, and haptic modalities using transformer-based fusion."""
 
 import torch
 import torch.nn as nn
@@ -12,14 +10,7 @@ import math
 
 
 class EnhancedAudioEncoder(nn.Module):
-    """
-    Enhanced audio encoder with spectrogram CNN and temporal attention.
-    
-    Architecture:
-    - Spectrogram CNN: 2D convolutions on time-frequency representation
-    - Temporal attention: Attention across time steps
-    - Directional processing: Stereo → 3D spatial
-    """
+    """Enhanced audio encoder with spectrogram CNN and temporal attention...."""
     
     def __init__(
         self,
@@ -34,7 +25,6 @@ class EnhancedAudioEncoder(nn.Module):
         self.embed_dim = embed_dim
         
         # Spectrogram CNN (if input is spectrogram)
-        # Assumes input is [B, T, F] where T=time, F=frequency
         self.spectrogram_cnn = nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=(3, 3), padding=1),
             nn.BatchNorm2d(32),
@@ -59,17 +49,7 @@ class EnhancedAudioEncoder(nn.Module):
         audio_features: torch.Tensor,  # [B, T, F] or [B, F] (MFCC)
         stereo_channels: Optional[torch.Tensor] = None  # [B, T, 2] for directional
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        """
-        Forward pass through enhanced audio encoder.
-        
-        Args:
-            audio_features: Audio features [B, T, F] or [B, F]
-            stereo_channels: Optional stereo channels [B, T, 2]
-        
-        Returns:
-            audio_embedding: Audio embedding [B, embed_dim]
-            spatial_attention: Optional spatial attention map [B, H, W]
-        """
+        """Forward pass through enhanced audio encoder...."""
         B = audio_features.shape[0]
         
         # Handle different input formats
@@ -114,11 +94,9 @@ class EnhancedAudioEncoder(nn.Module):
 
 
 class MultimodalFusion(nn.Module):
-    """
-    Multi-modal transformer fusion.
+    """Multi-modal transformer fusion.
     
-    Fuses vision, audio, depth, and haptic modalities using cross-modal attention.
-    """
+    Fuses vision, audio, depth, and haptic modalities using cross-modal attention."""
     
     def __init__(
         self,
@@ -169,18 +147,7 @@ class MultimodalFusion(nn.Module):
         depth_features: Optional[torch.Tensor] = None,  # [B, depth_dim]
         haptic_features: Optional[torch.Tensor] = None   # [B, haptic_dim]
     ) -> torch.Tensor:
-        """
-        Forward pass through multimodal fusion.
-        
-        Args:
-            vision_features: Vision features [B, N_vision, vision_dim]
-            audio_features: Audio features [B, audio_dim]
-            depth_features: Optional depth features [B, depth_dim]
-            haptic_features: Optional haptic features [B, haptic_dim]
-        
-        Returns:
-            Fused multimodal embedding [B, embed_dim]
-        """
+        """Forward pass through multimodal fusion...."""
         B = vision_features.shape[0]
         
         # Project all modalities to common dimension

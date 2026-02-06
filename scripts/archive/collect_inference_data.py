@@ -1,29 +1,5 @@
 #!/usr/bin/env python3
-"""
-Inference Dataset Statistics Collection Script
-
-Collects comprehensive statistics from inference datasets:
-- Dataset size and splits
-- Class distribution
-- Image statistics (size, format, channels)
-- Object counts per image
-- Spatial distribution of objects
-- Dataset metadata
-- Quality metrics
-
-Supports:
-- COCO dataset
-- Open Images V6
-- BDD100K
-- ADE20K
-- Custom datasets
-
-Usage:
-    python scripts/collect_inference_data.py \
-        --dataset coco \
-        --data-dir datasets/coco \
-        --output inference_stats.json
-"""
+"""Inference Dataset Statistics Collection Script..."""
 
 import json
 import sys
@@ -47,23 +23,13 @@ from ml.models.maxsight_cnn import COCO_CLASSES
 
 
 class InferenceDatasetCollector:
-    """
-    Strict, COCO-correct inference dataset statistics collector.
-    
-    Key improvements:
-    - Explicit COCO box format handling (xywh pixels)
-    - Batch-safe tensor handling
-    - True class co-occurrence tracking
-    - Consistent image stats (always W, H)
-    """
+    """Strict, COCO-correct inference dataset statistics collector...."""
     
     def __init__(self, dataset_name: str = 'coco'):
-        """
-        Initialize dataset collector.
+        """Initialize dataset collector.
         
         Args:
-            dataset_name: Name of dataset (currently only 'coco' supported)
-        """
+            dataset_name: Name of dataset (currently only 'coco' supported)"""
         self.dataset_name = dataset_name
         self.stats = {
             'dataset_name': dataset_name,
@@ -85,14 +51,7 @@ class InferenceDatasetCollector:
         boxes: torch.Tensor, 
         labels: torch.Tensor
     ):
-        """
-        Process a single sample with strict COCO format handling.
-        
-        Args:
-            image: [3, H, W] tensor
-            boxes: [N, 4] tensor with COCO format [x, y, w, h] in pixels
-            labels: [N] tensor with class indices
-        """
+        """Process a single sample with strict COCO format handling...."""
         _, H, W = image.shape
         self.stats['image_sizes'].append((W, H))  # Consistent: (W, H)
         
@@ -333,15 +292,7 @@ def collect_inference_data(
     output_path: Path,
     max_samples: Optional[int] = None
 ):
-    """
-    Collect inference dataset statistics.
-    
-    Args:
-        dataset_name: Name of dataset (currently only 'coco' supported)
-        data_dir: Dataset directory
-        output_path: Output JSON file path
-        max_samples: Maximum number of samples to process (None = all)
-    """
+    """Collect inference dataset statistics...."""
     print("="*60)
     print("COCO Inference Dataset Statistics Collection")
     print("="*60)

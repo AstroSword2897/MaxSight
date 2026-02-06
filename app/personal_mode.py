@@ -1,8 +1,6 @@
-"""
-Personal Mode for Phase 6: Active Scene Exploration & Personalization
+"""Personal Mode for Phase 6: Active Scene Exploration & Personalization
 
-Enhances MaxSight with user-specific adaptations and active exploration.
-"""
+Enhances MaxSight with user-specific adaptations and active exploration."""
 
 import torch
 import torch.nn as nn
@@ -27,15 +25,13 @@ class PersonalizationState:
 
 
 class PersonalMode:
-    """
-    Personal mode manager for Phase 6.
+    """Personal mode manager for Phase 6.
     
     Handles:
     - User preference learning
     - Active scene exploration
     - Predictive navigation guidance
-    - Adaptive fusion weights
-    """
+    - Adaptive fusion weights"""
     
     def __init__(
         self,
@@ -118,20 +114,7 @@ class PersonalMode:
         urgency: Optional[float] = None,
         confidence: Optional[float] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Fuse modalities with personalized weights.
-        
-        Args:
-            modality_embeddings: Dict mapping modality to embedding
-            user_id: Optional user ID for personalization
-            task_type: Optional task type
-            urgency: Optional urgency score
-            confidence: Optional confidence score
-        
-        Returns:
-            fused_embedding: Fused embedding
-            fusion_weights: Fusion weights used
-        """
+        """Fuse modalities with personalized weights...."""
         # Convert user_id to tensor if provided
         user_id_tensor = None
         if user_id is not None:
@@ -154,13 +137,11 @@ class PersonalMode:
         user_id: Optional[str] = None,
         urgency: Optional[float] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Determine which regions to explore next.
+        """Determine which regions to explore next.
         
         Returns:
             exploration_scores: Scores for each region
-            selected_regions: Indices of regions to explore
-        """
+            selected_regions: Indices of regions to explore"""
         # Get user preference if available
         user_preference = None
         if user_id:
@@ -186,12 +167,10 @@ class PersonalMode:
         goal_embedding: torch.Tensor,
         scene_context: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
-        """
-        Predict navigation path and generate guidance.
+        """Predict navigation path and generate guidance.
         
         Returns:
-            Dictionary with navigation predictions
-        """
+            Dictionary with navigation predictions"""
         return self.navigation_guidance(
             current_embedding=current_embedding,
             goal_embedding=goal_embedding,
@@ -204,17 +183,7 @@ class PersonalMode:
         user_id: Optional[str] = None,
         task_type: Optional[str] = None
     ) -> Dict[str, torch.Tensor]:
-        """
-        Apply personalization to model outputs.
-        
-        Args:
-            model_outputs: Raw model outputs
-            user_id: Optional user ID
-            task_type: Optional task type
-        
-        Returns:
-            Personalized outputs
-        """
+        """Apply personalization to model outputs...."""
         personalized = model_outputs.copy()
         
         if user_id:

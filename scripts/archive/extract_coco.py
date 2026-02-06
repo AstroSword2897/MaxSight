@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Extract COCO dataset zip files and verify extraction.
-"""
+"""Extract COCO dataset zip files and verify extraction."""
 
 import sys
 import zipfile

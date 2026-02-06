@@ -1,7 +1,5 @@
-"""
-Configuration for MaxSight Web Simulator.
-Centralizes all magic numbers and settings.
-"""
+"""Configuration for MaxSight Web Simulator.
+Centralizes all magic numbers and settings."""
 import os
 from dataclasses import dataclass
 from typing import Optional
@@ -56,9 +54,7 @@ class SimulatorConfig:
     # Default output mode
     default_output_mode: OutputMode = OutputMode.PATIENT
 
-    # Optional: path to trained checkpoint; if set, load state_dict into model after create_model()
-    # Can be set via environment variable MAXSIGHT_CHECKPOINT_PATH or config.model_checkpoint_path
-    model_checkpoint_path: Optional[str] = None
+    model_checkpoint_path: Optional[str] = None  # Default: use glaucoma model if available
     
     # Confidence gating (patient safety)
     min_confidence_for_patient_output: float = 0.5  # Don't show low-confidence results

@@ -1,7 +1,5 @@
-"""
-Degraded mode tracking for MaxSight Web Simulator.
-Explicit failure modes instead of silent degradation.
-"""
+"""Degraded mode tracking for MaxSight Web Simulator.
+Explicit failure modes instead of silent degradation."""
 from enum import Enum
 from typing import Dict, Set, Any
 from dataclasses import dataclass, field

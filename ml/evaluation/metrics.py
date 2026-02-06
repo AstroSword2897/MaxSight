@@ -1,11 +1,9 @@
-"""
-Evaluation Metrics for Phase 9: Evaluation & Metrics
+"""Evaluation Metrics for Phase 9: Evaluation & Metrics
 
 Includes:
 - Multi-modal metrics
 - Accessibility-specific metrics
-- Robustness evaluation
-"""
+- Robustness evaluation"""
 
 import torch
 import numpy as np
@@ -45,14 +43,12 @@ class RobustnessMetrics:
 
 
 class EvaluationMetrics:
-    """
-    Comprehensive evaluation metrics for Phase 9.
+    """Comprehensive evaluation metrics for Phase 9.
     
     Provides:
     - Multi-modal metrics
     - Accessibility-specific metrics
-    - Robustness evaluation
-    """
+    - Robustness evaluation"""
     
     def __init__(self):
         self.reset()
@@ -70,18 +66,7 @@ class EvaluationMetrics:
         ground_truth: Dict[str, torch.Tensor],
         audio_outputs: Optional[Dict[str, torch.Tensor]] = None
     ) -> MultiModalMetrics:
-        """
-        Compute multi-modal evaluation metrics.
-        
-        Args:
-            vision_outputs: Vision-only outputs
-            audio_outputs: Audio-only outputs (optional)
-            fused_outputs: Fused multi-modal outputs
-            ground_truth: Ground truth labels
-        
-        Returns:
-            MultiModalMetrics object
-        """
+        """Compute multi-modal evaluation metrics...."""
         metrics = MultiModalMetrics()
         
         # Vision accuracy
@@ -105,18 +90,7 @@ class EvaluationMetrics:
         response_times: List[float],
         navigation_success: List[bool]
     ) -> AccessibilityMetrics:
-        """
-        Compute accessibility-specific metrics.
-        
-        Args:
-            detections: Model detections
-            ground_truth_detections: Ground truth detections
-            response_times: Response times in ms
-            navigation_success: Navigation success flags
-        
-        Returns:
-            AccessibilityMetrics object
-        """
+        """Compute accessibility-specific metrics...."""
         metrics = AccessibilityMetrics()
         
         # Detection rate
@@ -150,18 +124,7 @@ class EvaluationMetrics:
         occlusion_performance: Dict[str, float],
         noise_performance: Dict[str, float]
     ) -> RobustnessMetrics:
-        """
-        Compute robustness evaluation metrics.
-        
-        Args:
-            baseline_performance: Baseline performance score
-            lighting_performance: Performance across lighting conditions
-            occlusion_performance: Performance with occlusions
-            noise_performance: Performance with noise
-        
-        Returns:
-            RobustnessMetrics object
-        """
+        """Compute robustness evaluation metrics...."""
         metrics = RobustnessMetrics()
         
         # Lighting robustness (performance retention)
@@ -207,12 +170,10 @@ class EvaluationMetrics:
         return 0.0
     
     def generate_report(self) -> Dict[str, Dict]:
-        """
-        Generate comprehensive evaluation report.
+        """Generate comprehensive evaluation report.
         
         Returns:
-            Dictionary with all metrics
-        """
+            Dictionary with all metrics"""
         return {
             'multi_modal': {
                 'vision_accuracy': self.multi_modal.vision_accuracy,

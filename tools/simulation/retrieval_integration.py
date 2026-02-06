@@ -1,8 +1,6 @@
-"""
-Retrieval Integration for Phase 8: Simulator Integration & UI
+"""Retrieval Integration for Phase 8: Simulator Integration & UI
 
-Integrates retrieval system into simulator for enhanced scene understanding.
-"""
+Integrates retrieval system into simulator for enhanced scene understanding."""
 
 import torch
 from typing import Dict, List, Optional, Tuple
@@ -13,14 +11,12 @@ from ml.models.retrieval_heads_production import MultiVectorRetrievalHeads
 
 
 class RetrievalIntegration:
-    """
-    Retrieval integration for simulator (Phase 8).
+    """Retrieval integration for simulator (Phase 8).
     
     Provides:
     - Scene retrieval for similar contexts
     - Knowledge-augmented responses
-    - Historical context access
-    """
+    - Historical context access"""
     
     def __init__(
         self,
@@ -71,16 +67,7 @@ class RetrievalIntegration:
         query_embedding: torch.Tensor,
         top_k: int = 5
     ) -> List[Dict]:
-        """
-        Retrieve similar scenes from index.
-        
-        Args:
-            query_embedding: Query embedding [embed_dim]
-            top_k: Number of results to return
-        
-        Returns:
-            List of similar scene results
-        """
+        """Retrieve similar scenes from index...."""
         if not self.index_loaded or self.stage1 is None:
             return []
         
@@ -104,16 +91,7 @@ class RetrievalIntegration:
         model_outputs: Dict[str, torch.Tensor],
         images: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
-        """
-        Enhance model outputs with retrieval context.
-        
-        Args:
-            model_outputs: Raw model outputs
-            images: Input images
-        
-        Returns:
-            Enhanced outputs with retrieval context
-        """
+        """Enhance model outputs with retrieval context...."""
         enhanced = model_outputs.copy()
         
         if not self.index_loaded:

@@ -1,35 +1,4 @@
-"""
-Path Planning Module for MaxSight
-Uses hazard and distance info to suggest safe navigation paths.
-
-PROJECT PHILOSOPHY & APPROACH:
-=============================
-This module implements "Path Planning" - going beyond obstacle detection to provide actionable
-navigation guidance. This directly addresses "Navigation Assistance" by suggesting safe routes,
-not just identifying obstacles.
-
-WHY PATH PLANNING MATTERS:
-Obstacle detection tells users "what's there" but not "how to navigate around it." Path planning
-provides the "how" - suggesting safe routes that enable independent navigation. This is critical
-for users with vision impairments who cannot visually assess path safety.
-
-HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-The problem asks: "What are ways that those who cannot see... be able to interact with the world
-like those who can?" Path planning answers by providing the spatial navigation guidance that
-sighted people process automatically - "clear path ahead" or "move right to avoid obstacle."
-
-RELATIONSHIP TO BARRIER REMOVAL METHODS:
-1. ENVIRONMENTAL STRUCTURING: Provides structured navigation guidance
-2. CLEAR MULTIMODAL COMMUNICATION: Delivers path suggestions through audio/visual/haptic
-3. SAFETY: Ensures users can navigate safely around hazards
-
-TECHNICAL DESIGN DECISION:
-We use a simple grid-based approach rather than complex pathfinding because:
-- Real-time performance is critical (mobile deployment)
-- Simple heuristics are sufficient for immediate navigation guidance
-- Complex pathfinding would require more computational resources
-- Users need quick, actionable guidance, not perfect paths
-"""
+"""Path Planning Module for MaxSight..."""
 
 import torch
 import numpy as np
@@ -49,17 +18,7 @@ class PathDirection(Enum):
 
 @dataclass
 class PathSuggestion:
-    """
-    A path planning suggestion.
-    
-    WHY THIS STRUCTURE:
-    Path suggestions need to be actionable - users need clear direction, not just information.
-    This structure provides:
-    - direction: Where to go (forward/left/right)
-    - safety_score: How safe the path is (0-1)
-    - distance: How far to travel before reassessment
-    - reasoning: Why this path is suggested (for detailed mode)
-    """
+    """A path planning suggestion."""
     direction: PathDirection
     safety_score: float  # 0-1, higher = safer
     distance: float  # Estimated safe distance (meters or normalized)
@@ -67,37 +26,14 @@ class PathSuggestion:
 
 
 class PathPlanner:
-    """
-    Plans safe navigation paths based on hazards and obstacles.
-    
-    WHY THIS CLASS EXISTS:
-    This class transforms obstacle detection into actionable navigation guidance. It analyzes
-    hazards, distances, and spatial relationships to suggest safe paths, enabling users to
-    navigate independently around obstacles.
-    
-    This directly supports "Navigation Assistance" and "Safety-Oriented Visual Awareness" by
-    providing the spatial guidance that sighted people process automatically.
-    """
+    """Plans safe navigation paths based on hazards and obstacles."""
     
     def __init__(
         self,
         safety_threshold: float = 0.7,
         min_clearance: float = 0.15  # Minimum normalized clearance for safe path
     ):
-        """
-        Initialize path planner.
-        
-        WHY THESE PARAMETERS:
-        - safety_threshold: Minimum safety score for path recommendation (0.7 = 70% safe)
-        - min_clearance: Minimum distance from obstacles for safe path (15% of image = safe zone)
-        
-        These parameters ensure suggested paths are actually safe, not just "less dangerous."
-        Safety is paramount - better to suggest stopping than an unsafe path.
-        
-        Arguments:
-            safety_threshold: Minimum safety score for path recommendation
-            min_clearance: Minimum clearance from obstacles (normalized)
-        """
+        """Initialize path planner...."""
         self.safety_threshold = safety_threshold
         self.min_clearance = min_clearance
     
@@ -106,31 +42,7 @@ class PathPlanner:
         detections: List[Dict],
         target_direction: Optional[str] = None
     ) -> Optional[PathSuggestion]:
-        """
-        Plan safe navigation path based on detected obstacles.
-        
-        WHY THIS FUNCTION:
-        This is the core path planning function that transforms obstacle detection into
-        actionable navigation guidance. It analyzes spatial relationships to suggest safe
-        paths, enabling independent navigation around hazards.
-        
-        HOW IT SUPPORTS THE PROBLEM STATEMENT:
-        The problem asks for ways to help users "interact with the world like those who can."
-        Path planning provides the spatial navigation guidance that sighted people process
-        automatically - analyzing obstacles and suggesting safe routes.
-        
-        RELATIONSHIP TO OTHER COMPONENTS:
-        - Input: Detections from MaxSightCNN (objects, positions, urgency, distances)
-        - Output: Path suggestions for DescriptionGenerator and CrossModalScheduler
-        - Integration: Works with SpatialMemory to consider previously seen obstacles
-        
-        Arguments:
-            detections: List of detection dictionaries with box, urgency, distance
-            target_direction: Optional target direction ('forward', 'left', 'right')
-        
-        Returns:
-            PathSuggestion or None if no safe path found
-        """
+        """Plan safe navigation path based on detected obstacles."""
         if not detections:
             # No obstacles = clear path forward
             return PathSuggestion(
@@ -256,21 +168,7 @@ class PathPlanner:
         obstacles: List[Dict],
         direction: str
     ) -> float:
-        """
-        Calculate safety score for a direction.
-        
-        WHY THIS FUNCTION:
-        Safety scores enable data-driven path selection. This function analyzes obstacle
-        density, urgency, and distance to calculate how safe a direction is, supporting
-        informed path planning decisions.
-        
-        Arguments:
-            obstacles: List of obstacles in the direction
-            direction: Direction name ('left', 'right', 'forward')
-        
-        Returns:
-            Safety score (0-1, higher = safer)
-        """
+        """Calculate safety score for a direction."""
         if not obstacles:
             return 1.0  # No obstacles = completely safe
         
@@ -296,21 +194,7 @@ class PathPlanner:
         detections: List[Dict],
         verbosity: str = 'normal'
     ) -> str:
-        """
-        Generate navigation guidance from path planning.
-        
-        WHY THIS FUNCTION:
-        Provides a simple interface for getting path planning guidance as natural language.
-        This enables integration with DescriptionGenerator to create actionable navigation
-        descriptions that support independent movement.
-        
-        Arguments:
-            detections: List of detections
-            verbosity: 'brief', 'normal', or 'detailed'
-        
-        Returns:
-            Natural language navigation guidance
-        """
+        """Generate navigation guidance from path planning."""
         path = self.plan_path(detections)
         
         if path is None:

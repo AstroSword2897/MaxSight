@@ -1,11 +1,9 @@
-"""
-Overlay Engine
+"""Overlay Engine
 
 Renders visual overlays for therapy guidance.
 
 Phase 4: Overlay Engine & UX Guidance
-See docs/therapy_system_implementation_plan.md for implementation details.
-"""
+See docs/therapy_system_implementation_plan.md for implementation details."""
 
 from typing import Dict, List, Tuple, Optional, Any
 import numpy as np
@@ -18,22 +16,7 @@ from PIL import Image
 
 
 class OverlayEngine:
-    """
-    Renders visual overlays for therapy guidance.
-    
-    Overlay types:
-    - Subtle halo
-    - Edge glow (contrast reinforcement)
-    - Depth "soft fog" for near objects
-    - Motion trace for tracking tasks
-    - Gaze indicator
-    - Gentle arrows for guidance
-    
-    Safety constraints:
-    - Never obscure more than 10% of screen
-    - No bright colors
-    - Overlays must fade after task ends
-    """
+    """Renders visual overlays for therapy guidance...."""
     
     def __init__(self, screen_size: Tuple[int, int] = (224, 224)):
         self.screen_size = screen_size
@@ -46,17 +29,7 @@ class OverlayEngine:
         radius: float,
         intensity: float = 0.3
     ) -> Dict[str, Any]:
-        """
-        Add subtle halo overlay.
-        
-        Arguments:
-            center: (x, y) center position [0, 1]
-            radius: Radius in pixels
-            intensity: Opacity [0, 1]
-        
-        Returns:
-            Overlay configuration
-        """
+        """Add subtle halo overlay...."""
         overlay = {
             'type': 'halo',
             'center': center,
@@ -73,17 +46,7 @@ class OverlayEngine:
         width: float = 2.0,
         intensity: float = 0.4
     ) -> Dict[str, Any]:
-        """
-        Add edge glow for contrast reinforcement.
-        
-        Arguments:
-            edges: List of (x, y) edge points
-            width: Glow width in pixels
-            intensity: Opacity [0, 1]
-        
-        Returns:
-            Overlay configuration
-        """
+        """Add edge glow for contrast reinforcement...."""
         overlay = {
             'type': 'edge_glow',
             'edges': edges,
@@ -99,16 +62,7 @@ class OverlayEngine:
         depth_map: np.ndarray,
         near_threshold: float = 0.3
     ) -> Dict[str, Any]:
-        """
-        Add depth "soft fog" for near objects.
-        
-        Arguments:
-            depth_map: Depth map [H, W] with values [0, 1]
-            near_threshold: Threshold for "near" objects
-        
-        Returns:
-            Overlay configuration
-        """
+        """Add depth "soft fog" for near objects...."""
         overlay = {
             'type': 'depth_fog',
             'depth_map': depth_map,
@@ -124,16 +78,7 @@ class OverlayEngine:
         path: List[Tuple[float, float]],
         width: float = 3.0
     ) -> Dict[str, Any]:
-        """
-        Add motion trace for tracking tasks.
-        
-        Arguments:
-            path: List of (x, y) positions
-            width: Trace width in pixels
-        
-        Returns:
-            Overlay configuration
-        """
+        """Add motion trace for tracking tasks...."""
         overlay = {
             'type': 'motion_trace',
             'path': path,
@@ -149,16 +94,7 @@ class OverlayEngine:
         position: Tuple[float, float],
         size: float = 10.0
     ) -> Dict[str, Any]:
-        """
-        Add gaze position indicator.
-        
-        Arguments:
-            position: (x, y) gaze position [0, 1]
-            size: Indicator size in pixels
-        
-        Returns:
-            Overlay configuration
-        """
+        """Add gaze position indicator...."""
         overlay = {
             'type': 'gaze_indicator',
             'position': position,
@@ -175,17 +111,7 @@ class OverlayEngine:
         end: Tuple[float, float],
         width: float = 5.0
     ) -> Dict[str, Any]:
-        """
-        Add gentle arrow for guidance.
-        
-        Arguments:
-            start: (x, y) start position [0, 1]
-            end: (x, y) end position [0, 1]
-            width: Arrow width in pixels
-        
-        Returns:
-            Overlay configuration
-        """
+        """Add gentle arrow for guidance...."""
         overlay = {
             'type': 'guidance_arrow',
             'start': start,
@@ -204,18 +130,7 @@ class OverlayEngine:
         urgency_scores: Optional[np.ndarray] = None,
         text_regions: Optional[List[Dict[str, Any]]] = None
     ) -> Image.Image:
-        """
-        Create overlay with bounding boxes, labels, and text regions.
-        
-        Arguments:
-            base_image: PIL Image
-            detections: List of detection dictionaries with 'bbox', 'class_name', 'confidence'
-            urgency_scores: Optional urgency scores array
-            text_regions: Optional list of text region dictionaries
-        
-        Returns:
-            PIL Image with overlays
-        """
+        """Create overlay with bounding boxes, labels, and text regions...."""
         if not CV2_AVAILABLE:
             return base_image
         
@@ -279,15 +194,13 @@ class OverlayEngine:
         return Image.fromarray(img_array)
     
     def render_overlays(self, base_image: np.ndarray) -> np.ndarray:
-        """
-        Render all active overlays onto base image.
+        """Render all active overlays onto base image.
         
         Arguments:
             base_image: Base image [H, W, 3]
         
         Returns:
-            Image with overlays [H, W, 3]
-        """
+            Image with overlays [H, W, 3]"""
         if not CV2_AVAILABLE:
             return base_image.copy()
         

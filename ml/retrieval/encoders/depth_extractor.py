@@ -1,8 +1,6 @@
-"""
-Depth Extractor for Multi-Vector Retrieval
+"""Depth Extractor for Multi-Vector Retrieval
 
-Uses MiDaS for monocular depth estimation and encodes depth maps.
-"""
+Uses MiDaS for monocular depth estimation and encodes depth maps."""
 
 import torch
 import torch.nn as nn
@@ -16,14 +14,12 @@ except ImportError:
 
 
 class DepthExtractor(nn.Module):
-    """
-    Depth extractor using MiDaS.
+    """Depth extractor using MiDaS.
     
     Architecture:
     - MiDaS: Monocular depth estimation
     - Depth encoder: CNN to encode depth maps
-    - Output: Depth embeddings
-    """
+    - Output: Depth embeddings"""
     
     def __init__(
         self,
@@ -63,15 +59,13 @@ class DepthExtractor(nn.Module):
                 self.use_midas = False
     
     def forward(self, images: torch.Tensor) -> torch.Tensor:
-        """
-        Extract depth embeddings.
+        """Extract depth embeddings.
         
         Args:
             images: Input images [B, 3, H, W]
         
         Returns:
-            Depth embeddings [B, embed_dim]
-        """
+            Depth embeddings [B, embed_dim]"""
         B = images.shape[0]
         
         # Estimate depth

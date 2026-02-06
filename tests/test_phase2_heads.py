@@ -1,13 +1,4 @@
-"""
-Comprehensive Tests for Phase 2: Advanced Multi-Task Heads
-
-Tests all Phase 2 components:
-- Transformer-Based OCR Head
-- Scene Description Head
-- Sound Event Classification Head
-- Personalization Head
-- Predictive Alert Head
-"""
+"""Comprehensive Tests for Phase 2: Advanced Multi-Task Heads..."""
 
 import torch
 import torch.nn as nn

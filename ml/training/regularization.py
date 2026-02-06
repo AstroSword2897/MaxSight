@@ -1,14 +1,4 @@
-"""
-Regularization, Transfer Learning, and Class Weighting
-
-Implements:
-- Dropout and DropConnect
-- Weight decay (L2 regularization)
-- Label smoothing
-- Transfer learning from pretrained backbones
-- Class weighting for imbalanced data
-- Focal loss for hard examples
-"""
+"""Regularization, Transfer Learning, and Class Weighting..."""
 
 import torch
 import torch.nn as nn
@@ -123,11 +113,9 @@ class LabelSmoothingCrossEntropy(nn.Module):
 
 
 class FocalLoss(nn.Module):
-    """
-    Focal loss for handling class imbalance and hard examples.
+    """Focal loss for handling class imbalance and hard examples.
     
-    FL(p_t) = -alpha_t * (1 - p_t)^gamma * log(p_t)
-    """
+    FL(p_t) = -alpha_t * (1 - p_t)^gamma * log(p_t)"""
     
     def __init__(self, 
                  alpha: Optional[torch.Tensor] = None,
@@ -239,12 +227,10 @@ class TransferLearningConfig:
 
 def load_pretrained_backbone(backbone_name: str = 'resnet50',
                             pretrained: bool = True) -> Tuple[nn.Module, int]:
-    """
-    Load pretrained backbone for transfer learning.
+    """Load pretrained backbone for transfer learning.
     
     Returns:
-        backbone module, output feature dimension
-    """
+        backbone module, output feature dimension"""
     try:
         import torchvision.models as models
     except ImportError:
@@ -305,14 +291,7 @@ def freeze_backbone(model: nn.Module,
 def gradual_unfreeze_step(model: nn.Module,
                          epoch: int,
                          schedule: Dict[int, int]):
-    """
-    Gradually unfreeze backbone layers according to schedule.
-    
-    Args:
-        model: Model with backbone
-        epoch: Current epoch
-        schedule: Dict mapping epoch -> number of layers to unfreeze
-    """
+    """Gradually unfreeze backbone layers according to schedule...."""
     if epoch not in schedule:
         return
         
@@ -338,11 +317,9 @@ def gradual_unfreeze_step(model: nn.Module,
 def add_weight_decay(model: nn.Module,
                     weight_decay: float = 1e-5,
                     skip_list: Tuple[str, ...] = ('bias', 'bn', 'norm')) -> List[Dict]:
-    """
-    Create parameter groups with and without weight decay.
+    """Create parameter groups with and without weight decay.
     
-    Bias and batch norm parameters should not have weight decay.
-    """
+    Bias and batch norm parameters should not have weight decay."""
     decay = []
     no_decay = []
     
@@ -401,9 +378,7 @@ class WeightDecayScheduler:
 # ==================== Regularization Manager ====================
 
 class RegularizationManager:
-    """
-    Central manager for all regularization techniques.
-    """
+    """Central manager for all regularization techniques."""
     
     def __init__(self,
                  model: nn.Module,
@@ -436,7 +411,6 @@ class RegularizationManager:
         
     def _add_dropout(self, model: nn.Module, rate: float):
         """Add dropout layers after each major block."""
-        # This is a simplified version - full implementation would be architecture-specific
         for name, module in model.named_children():
             if isinstance(module, (nn.Linear, nn.Conv2d)):
                 # Could wrap with dropout here
@@ -463,14 +437,7 @@ def compute_class_weights_from_dataset(
     num_classes: int,
     strategy: str = 'inverse_freq'
 ) -> torch.Tensor:
-    """
-    Compute class weights from dataset labels.
-    
-    Args:
-        labels: List of class labels from dataset
-        num_classes: Total number of classes
-        strategy: 'inverse_freq', 'inverse_sqrt', or 'effective_samples'
-    """
+    """Compute class weights from dataset labels...."""
     counts = Counter(labels)
     class_counts = {i: counts.get(i, 0) for i in range(num_classes)}
     

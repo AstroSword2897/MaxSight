@@ -1,13 +1,4 @@
-"""
-Test Plan for Critical Fixes - Thread Safety, Overlay Rendering, OCR Clustering
-
-This test suite validates the critical production blockers that were fixed:
-1. Web Simulator thread safety (queue initialization, async workers)
-2. Overlay rendering (proper image return)
-3. OCR clustering optimization (cKDTree performance)
-
-Run with: pytest tests/test_critical_fixes.py -v
-"""
+"""Test Plan for Critical Fixes - Thread Safety, Overlay Rendering, OCR Clustering..."""
 
 import pytest
 import torch
@@ -23,7 +14,6 @@ import unittest.mock
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Mock Flask and Flask-CORS before importing web_simulator (they're not needed for testing)
 sys.modules['flask'] = unittest.mock.MagicMock()
 sys.modules['flask_cors'] = unittest.mock.MagicMock()
 

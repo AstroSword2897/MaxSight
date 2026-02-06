@@ -1,8 +1,6 @@
-"""
-Region Extractor for Multi-Vector Retrieval
+"""Region Extractor for Multi-Vector Retrieval
 
-Extracts object-level region embeddings using MaxSightCNN/DETR.
-"""
+Extracts object-level region embeddings using MaxSightCNN/DETR."""
 
 import torch
 import torch.nn as nn
@@ -12,11 +10,9 @@ import torchvision.transforms as T
 
 
 class RegionExtractor(nn.Module):
-    """
-    Region extractor for object-level embeddings.
+    """Region extractor for object-level embeddings.
     
-    Uses detection model to extract bounding boxes, then encodes regions.
-    """
+    Uses detection model to extract bounding boxes, then encodes regions."""
     
     def __init__(
         self,
@@ -54,17 +50,7 @@ class RegionExtractor(nn.Module):
         images: torch.Tensor,  # [B, 3, H, W]
         boxes: Optional[torch.Tensor] = None  # [B, N, 4] (x1, y1, x2, y2)
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Extract region embeddings.
-        
-        Args:
-            images: Input images [B, 3, H, W]
-            boxes: Optional bounding boxes [B, N, 4]
-        
-        Returns:
-            region_embeddings: Region embeddings [B, max_regions, embed_dim]
-            region_boxes: Region boxes [B, max_regions, 4]
-        """
+        """Extract region embeddings...."""
         B, C, H, W = images.shape
         
         # Get boxes from detection model if not provided

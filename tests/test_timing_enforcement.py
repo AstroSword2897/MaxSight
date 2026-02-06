@@ -1,8 +1,6 @@
-"""
-Test Two-Stage Inference Timing Enforcement
+"""Test Two-Stage Inference Timing Enforcement
 
-Tests that timing enforcement works correctly in the two-stage inference pipeline.
-"""
+Tests that timing enforcement works correctly in the two-stage inference pipeline."""
 
 import torch
 import torch.nn as nn

@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-Gather all data required for MaxSight training and AutoML.
-
-Runs in order: download COCO (optional), extract zips, create train/val/test splits.
-Use this once to satisfy data requirements for train_maxsight.py and AutoMLType.py.
-Works on x86_64 and arm64 (Apple Silicon); extraction and splits are platform-agnostic.
-"""
+"""Gather all data required for MaxSight training and AutoML...."""
 
 import argparse
 import subprocess

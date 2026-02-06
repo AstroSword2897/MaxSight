@@ -1,8 +1,6 @@
-"""
-Scene Description Head for MaxSight 3.0
+"""Scene Description Head for MaxSight 3.0
 
-Transformer decoder for generating natural language scene descriptions.
-"""
+Transformer decoder for generating natural language scene descriptions."""
 
 import torch
 import torch.nn as nn
@@ -11,14 +9,7 @@ from typing import Dict, Optional, List
 
 
 class SceneDescriptionHead(nn.Module):
-    """
-    Scene description head with transformer decoder.
-    
-    Architecture:
-    - Input: Global + region + OCR embeddings
-    - Transformer decoder: Generates natural language descriptions
-    - Condition-aware: Adjusts verbosity based on vision impairment type
-    """
+    """Scene description head with transformer decoder...."""
     
     def __init__(
         self,
@@ -114,21 +105,7 @@ class SceneDescriptionHead(nn.Module):
         target_text: Optional[torch.Tensor] = None,  # [B, seq_len] for training
         roi_priorities: Optional[torch.Tensor] = None  # [B, N_regions] - FIXED: ROI priority weights
     ) -> Dict[str, torch.Tensor]:
-        """
-        Generate scene description.
-        
-        Args:
-            global_embedding: Global scene embedding [B, global_dim]
-            region_embeddings: Region embeddings [B, N_regions, region_dim]
-            ocr_embeddings: Optional OCR embeddings [B, N_text, ocr_dim]
-            condition_mode: Vision condition mode
-            target_text: Optional target text for training
-        
-        Returns:
-            Dictionary with:
-                - 'description_logits': [B, seq_len, vocab_size]
-                - 'description': Generated text (if inference)
-        """
+        """Generate scene description...."""
         B = global_embedding.shape[0]
         
         # Project inputs

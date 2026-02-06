@@ -1,8 +1,6 @@
-"""
-Performance monitoring utilities for MaxSight.
+"""Performance monitoring utilities for MaxSight.
 
-Provides timing decorators and performance tracking for identifying bottlenecks.
-"""
+Provides timing decorators and performance tracking for identifying bottlenecks."""
 
 import time
 import functools
@@ -17,18 +15,7 @@ _performance_stats: dict[str, list[float]] = defaultdict(list)
 
 
 def timed(threshold: float = 0.1, log_level: int = logging.WARNING):
-    """
-    Decorator to time function execution and log slow operations.
-    
-    Arguments:
-        threshold: Log operations slower than this (seconds)
-        log_level: Logging level for slow operations
-    
-    Example:
-        @timed(threshold=0.1)
-        def process_image(image):
-            ...
-    """
+    """Decorator to time function execution and log slow operations...."""
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -51,12 +38,10 @@ def timed(threshold: float = 0.1, log_level: int = logging.WARNING):
 
 
 def get_performance_stats() -> dict[str, dict[str, float]]:
-    """
-    Get performance statistics for all timed functions.
+    """Get performance statistics for all timed functions.
     
     Returns:
-        Dictionary mapping function names to stats (mean, max, min, count)
-    """
+        Dictionary mapping function names to stats (mean, max, min, count)"""
     stats = {}
     for func_name, times in _performance_stats.items():
         if times:
@@ -76,12 +61,10 @@ def reset_performance_stats() -> None:
 
 
 def log_slow_operations(threshold: float = 0.1) -> None:
-    """
-    Log summary of slow operations.
+    """Log summary of slow operations.
     
     Arguments:
-        threshold: Minimum time to consider "slow"
-    """
+        threshold: Minimum time to consider "slow""""
     stats = get_performance_stats()
     slow_ops = {
         name: s for name, s in stats.items()

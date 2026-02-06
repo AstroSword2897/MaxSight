@@ -1,13 +1,4 @@
-"""
-Comprehensive Tests for Phase 5: Advanced Training Techniques
-
-Tests all Phase 5 components:
-- Self-Supervised Pretraining (MAE, SimCLR)
-- Knowledge Distillation
-- Data Augmentation
-- Continual Learning (EWC)
-- Cross-View Training
-"""
+"""Comprehensive Tests for Phase 5: Advanced Training Techniques..."""
 
 import torch
 import torch.nn as nn
@@ -129,7 +120,6 @@ class TestContinualLearning:
         model = nn.Linear(10, 10)
         ewc = ElasticWeightConsolidation(model, lambda_ewc=0.4)
         
-        # Set dummy Fisher info and optimal params (attribute is 'fisher', not 'fisher_info')
         for name, param in model.named_parameters():
             ewc.fisher[name] = torch.ones_like(param.data)
             ewc.optimal_params[name] = param.data.clone()

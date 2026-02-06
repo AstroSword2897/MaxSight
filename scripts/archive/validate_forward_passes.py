@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-Hard Validation Sprint: Forward-Pass Sanity Check for All Tiers (T0-T5)
-
-Goal: Prove nothing is broken in integration before training.
-Time: 48 hours max
-
-Tests:
-1. Single batch forward pass for each tier
-2. Random + real sample inputs
-3. Log shapes, memory, latency
-4. End-to-end dry run (no training)
-"""
+"""Hard Validation Sprint: Forward-Pass Sanity Check for All Tiers (T0-T5)..."""
 
 import argparse
 import torch
@@ -49,12 +38,7 @@ def get_device(requested: str = None):
 
 
 def create_test_input(batch_size: int = 2, device: torch.device = None) -> Dict[str, torch.Tensor]:
-    """
-    Create test input batch with shapes matching real data.
-    
-    Images: [B, 3, 224, 224] - normalized RGB (will be normalized in preprocessing)
-    Audio: [B, 16000] - 1 second at 16kHz (raw waveform)
-    """
+    """Create test input batch with shapes matching real data...."""
     if device is None:
         device = get_device()
     
@@ -81,12 +65,10 @@ def test_tier_forward_pass(
     batch_size: int = 2,
     num_runs: int = 5
 ) -> Dict[str, any]:
-    """
-    Test forward pass for a single tier.
+    """Test forward pass for a single tier.
     
     Returns:
-        Dictionary with results: success, latency_ms, memory_mb, shapes, errors
-    """
+        Dictionary with results: success, latency_ms, memory_mb, shapes, errors"""
     print(f"\n{'='*60}")
     print(f"Testing Tier: {tier.name}")
     print(f"{'='*60}")

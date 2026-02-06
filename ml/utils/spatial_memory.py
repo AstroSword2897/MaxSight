@@ -1,45 +1,4 @@
-"""
-Spatial Memory System for MaxSight
-Tracks object positions over time to build cognitive maps of the environment.
-
-PROJECT PHILOSOPHY & APPROACH:
-=============================
-This module implements "Visual Memory & Cognitive Mapping" - a critical component for helping users
-build mental models of their environment. This is not just about remembering objects, but about
-supporting the cognitive process of spatial understanding that sighted people develop naturally.
-
-WHY SPATIAL MEMORY MATTERS:
-Sighted people build mental maps of their environment through repeated visual exposure. They remember
-"the door is usually on the left" or "there are stairs ahead." Users with vision impairments need
-this same cognitive support, but cannot build these maps through vision alone.
-
-This module provides that support by:
-1. Remembering object positions over time (30 seconds default)
-2. Identifying stable vs. moving objects (furniture vs. people)
-3. Providing contextual reminders ("Stairs ahead as before")
-4. Supporting the development of spatial awareness
-
-HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-The problem statement emphasizes "Skill Development Across Senses" - this module directly supports
-that by helping users develop spatial cognition through consistent, structured information. It's not
-just about what's detected now, but about building understanding over time.
-
-RELATIONSHIP TO BARRIER REMOVAL METHODS:
-1. ENVIRONMENTAL STRUCTURING: Remembers how the environment is structured ("door usually on left")
-2. SKILL DEVELOPMENT: Helps users build spatial memory skills through consistent tracking
-3. ROUTINE WORKFLOW: Adapts to user patterns by remembering frequently-seen objects
-
-HOW IT CONTRIBUTES TO VISUAL AWARENESS GOALS:
-This directly implements "Visual Memory & Cognitive Mapping" from the comprehensive requirements.
-It transforms MaxSight from a real-time detection tool into a spatial awareness system that helps
-users understand their environment over time, not just in the current moment.
-
-TECHNICAL DESIGN DECISION:
-We track stability (how much objects move) because:
-- Stable objects (furniture, doors) help users build mental maps
-- Moving objects (people, vehicles) need real-time alerts, not memory
-- This distinction supports both navigation (remember layout) and safety (alert to changes)
-"""
+"""Spatial Memory System for MaxSight..."""
 
 import torch
 from typing import Any, Dict, List, Optional, Tuple
@@ -58,18 +17,7 @@ except ImportError:
 
 @dataclass
 class SpatialObject:
-    """
-    Represents an object in spatial memory.
-    
-    WHY WE TRACK THESE ATTRIBUTES:
-    - position: Where the object is (for spatial mapping)
-    - size: How big it is (for distance estimation)
-    - seen_count: How often seen (for stability calculation)
-    - stability: How much it moves (furniture vs. people)
-    
-    These attributes support the cognitive mapping process - users need to know not just what objects
-    exist, but where they are consistently located, which helps build mental models of space.
-    """
+    """Represents an object in spatial memory...."""
     class_name: str
     position: Tuple[float, float]  # (cx, cy) normalized
     size: Tuple[float, float]  # (w, h) normalized
@@ -84,18 +32,8 @@ class SpatialObject:
 
 
 class SpatialMemory:
-    """
-    Maintains spatial memory of objects for cognitive mapping.
-    Tracks object positions over time to help users build mental models.
-    
-    WHY THIS CLASS EXISTS:
-    Real-time object detection tells users "what's there now" but doesn't help them understand
-    "what's usually there" or "what changed." This class bridges that gap by maintaining a short-term
-    memory of the environment, enabling contextual reminders and spatial awareness development.
-    
-    This supports the project's focus on skill development - users don't just get information, they
-    build understanding over time through consistent spatial information.
-    """
+    """Maintains spatial memory of objects for cognitive mapping.
+    Tracks object positions over time to help users build mental models."""
     
     def __init__(
         self,
@@ -103,14 +41,7 @@ class SpatialMemory:
         position_threshold: float = 0.1,  # normalized distance for "same" position
         stability_threshold: float = 0.7  # minimum stability for "stable" objects
     ):
-        """
-        Initialize spatial memory.
-        
-        Arguments:
-            memory_duration: How long to remember objects (seconds)
-            position_threshold: Distance threshold for considering positions the same
-            stability_threshold: Minimum stability score for stable objects
-        """
+        """Initialize spatial memory...."""
         self.memory_duration = memory_duration
         self.position_threshold = position_threshold
         self.stability_threshold = stability_threshold
@@ -134,13 +65,7 @@ class SpatialMemory:
         detections: List[Dict],
         timestamp: Optional[float] = None
     ) -> None:
-        """
-        Update spatial memory with new detections.
-        
-        Arguments:
-            detections: List of detection dictionaries with class_name, box, distance
-            timestamp: Current timestamp (defaults to time.time())
-        """
+        """Update spatial memory with new detections...."""
         with self._lock:
             if timestamp is None:
                 timestamp = time.time()
@@ -281,12 +206,10 @@ class SpatialMemory:
         return None
     
     def _calculate_stability_incremental(self, obj: SpatialObject) -> float:
-        """
-        Calculate stability score using incremental statistics (O(1) instead of O(N)).
+        """Calculate stability score using incremental statistics (O(1) instead of O(N)).
         
         Returns:
-            Stability score 0-1 (1 = very stable, 0 = moving)
-        """
+            Stability score 0-1 (1 = very stable, 0 = moving)"""
         if obj.seen_count < 2:
             return 0.5
         
@@ -310,12 +233,10 @@ class SpatialMemory:
         class_name: str,
         current_position: Tuple[float, float]
     ) -> float:
-        """
-        Calculate stability score based on position history (legacy method).
+        """Calculate stability score based on position history (legacy method).
         
         Returns:
-            Stability score 0-1 (1 = very stable, 0 = moving)
-        """
+            Stability score 0-1 (1 = very stable, 0 = moving)"""
         if class_name not in self.position_history:
             return 0.5
         
@@ -367,12 +288,10 @@ class SpatialMemory:
                     del self.position_history[class_name]
     
     def get_stable_objects(self) -> List[SpatialObject]:
-        """
-        Get objects that are stable (not moving, frequently seen).
+        """Get objects that are stable (not moving, frequently seen).
         
         Returns:
-            List of stable spatial objects
-        """
+            List of stable spatial objects"""
         with self._lock:
             stable = []
             for objects_list in self.objects.values():
@@ -384,15 +303,13 @@ class SpatialMemory:
             return stable
     
     def get_recent_objects(self, time_window: float = 5.0) -> List[SpatialObject]:
-        """
-        Get objects seen within the time window.
+        """Get objects seen within the time window.
         
         Arguments:
             time_window: Time window in seconds
         
         Returns:
-            List of recent spatial objects
-        """
+            List of recent spatial objects"""
         with self._lock:
             current_time = time.time()
             recent = []
@@ -408,38 +325,7 @@ class SpatialMemory:
         self,
         current_detections: List[Dict]
     ) -> Optional[str]:
-        """
-        Generate contextual reminder based on spatial memory.
-        
-        WHY CONTEXTUAL REMINDERS MATTER:
-        This function implements the "Visual Memory & Cognitive Mapping" goal by providing contextual
-        information that helps users understand their environment over time. A sighted person notices
-        "I just passed that door" or "these stairs are always here" - this function provides that same
-        contextual awareness.
-        
-        HOW IT SUPPORTS INDEPENDENT NAVIGATION:
-        Contextual reminders help users:
-        1. Build confidence ("I've been here before, I know what's ahead")
-        2. Understand changes ("Door you just passed is now closed")
-        3. Develop spatial awareness ("Stairs ahead as before" reinforces location memory)
-        
-        This directly supports "Skill Development Across Senses" - users learn spatial relationships
-        through consistent, structured reminders, building the cognitive maps that sighted people
-        develop naturally.
-        
-        RELATIONSHIP TO THERAPY GOALS:
-        For users with vision therapy goals, contextual reminders provide the repetition and
-        reinforcement needed to develop spatial cognition. This is not just convenience - it's
-        therapeutic support for building visual-spatial skills.
-        
-        Implements: "Door you just passed is closed" or "Stairs ahead as before"
-        
-        Arguments:
-            current_detections: Current frame detections
-        
-        Returns:
-            Contextual reminder string or None
-        """
+        """Generate contextual reminder based on spatial memory...."""
         with self._lock:
             if not current_detections:
                 return None
@@ -489,12 +375,10 @@ class SpatialMemory:
             return None
     
     def get_spatial_summary(self) -> Dict[str, Any]:
-        """
-        Get summary of spatial memory state.
+        """Get summary of spatial memory state.
         
         Returns:
-            Dictionary with memory statistics
-        """
+            Dictionary with memory statistics"""
         with self._lock:
             total_objects = sum(len(objs) for objs in self.objects.values())
             stable_count = len(self.get_stable_objects())
@@ -510,10 +394,8 @@ class SpatialMemory:
 
 
 class SpatialMemorySystem(SpatialMemory):
-    """
-    Alias for SpatialMemory used by MaxSightCNN.
-    Accepts image_size for compatibility with the model's constructor.
-    """
+    """Alias for SpatialMemory used by MaxSightCNN.
+    Accepts image_size for compatibility with the model's constructor."""
     def __init__(
         self,
         memory_duration: float = 30.0,

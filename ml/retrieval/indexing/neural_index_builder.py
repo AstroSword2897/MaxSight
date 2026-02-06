@@ -1,8 +1,6 @@
-"""
-Neural Index Builder for Multi-Vector Retrieval
+"""Neural Index Builder for Multi-Vector Retrieval
 
-Builds FAISS indices with learned quantization.
-"""
+Builds FAISS indices with learned quantization."""
 
 import faiss
 import numpy as np
@@ -12,14 +10,12 @@ import torch
 
 
 class NeuralIndexBuilder:
-    """
-    Builds FAISS indices with neural quantization.
+    """Builds FAISS indices with neural quantization.
     
     Supports:
     - HNSW: Fast approximate search
     - IVF-PQ: Product quantization for compression
-    - GPU support with CPU fallback
-    """
+    - GPU support with CPU fallback"""
     
     def __init__(
         self,
@@ -48,16 +44,7 @@ class NeuralIndexBuilder:
         embeddings: np.ndarray,  # [N, embed_dim]
         index_path: Optional[str] = None
     ) -> faiss.Index:
-        """
-        Build FAISS index.
-        
-        Args:
-            embeddings: Embeddings to index [N, embed_dim]
-            index_path: Optional path to save index
-        
-        Returns:
-            FAISS index
-        """
+        """Build FAISS index...."""
         N, D = embeddings.shape
         assert D == self.embed_dim, f"Expected dimension {self.embed_dim}, got {D}"
         
@@ -145,16 +132,14 @@ class NeuralIndexBuilder:
         query: np.ndarray,  # [K, embed_dim] or [embed_dim]
         k: int = 10
     ) -> tuple:
-        """
-        Search index.
+        """Search index.
         
         Args:
             query: Query embeddings
             k: Number of neighbors
         
         Returns:
-            distances, indices
-        """
+            distances, indices"""
         if self.index is None:
             raise ValueError("Index not built. Call build_index() first.")
         

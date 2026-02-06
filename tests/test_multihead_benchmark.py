@@ -1,7 +1,5 @@
-"""
-Multi-Head Latency Benchmark Tests
-Tests latency for different head combinations to identify bottlenecks.
-"""
+"""Multi-Head Latency Benchmark Tests
+Tests latency for different head combinations to identify bottlenecks."""
 
 import torch
 import sys

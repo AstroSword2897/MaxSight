@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-Fix Dataset Splits and Bounding Boxes
-
-This script:
-1. Merges existing train/val/test splits into a unified dataset
-2. Fixes invalid bounding boxes (clips to boundaries, removes negatives)
-3. Regenerates train/val/test splits with ZERO overlap
-4. Generates class distribution report for weighted loss implementation
-
-Usage:
-    python scripts/fix_dataset_splits.py
-"""
+"""Fix Dataset Splits and Bounding Boxes..."""
 
 import json
 import random
@@ -94,12 +83,10 @@ def load_and_merge_splits() -> Tuple[List[Dict], List[Dict], List[Dict]]:
 
 
 def fix_bbox(ann: Dict, image_w: int, image_h: int) -> Optional[Dict]:
-    """
-    Fix bounding box: clip to image boundaries, remove invalid boxes.
+    """Fix bounding box: clip to image boundaries, remove invalid boxes.
     
     Returns:
-        Fixed annotation dict, or None if box is invalid
-    """
+        Fixed annotation dict, or None if box is invalid"""
     bbox = ann.get("bbox", [])
     if len(bbox) != 4:
         return None  # Invalid format
@@ -186,24 +173,7 @@ def split_dataset(images: List[Dict], annotations: List[Dict],
                   train_samples: Optional[int] = None,
                   val_samples: Optional[int] = None,
                   seed: int = 42) -> Dict[str, Tuple[Set[int], List[Dict]]]:
-    """
-    Split dataset into train/val/test with zero overlap.
-    
-    Supports both ratio-based and absolute sample count splitting.
-    
-    Arguments:
-        images: List of image dictionaries
-        annotations: List of annotation dictionaries
-        train_ratio: Fraction for training (if using ratios)
-        val_ratio: Fraction for validation (if using ratios)
-        test_ratio: Fraction for testing (if using ratios)
-        train_samples: Absolute number of training samples (if using counts)
-        val_samples: Absolute number of validation samples (if using counts)
-        seed: Random seed for reproducibility
-    
-    Returns:
-        Dict mapping split name to (image_id_set, annotation_list)
-    """
+    """Split dataset into train/val/test with zero overlap...."""
     random.seed(seed)
     np.random.seed(seed)
     

@@ -1,7 +1,5 @@
-"""
-Error Handling and Fallback Tests
-Tests error propagation and fallback mechanisms with deterministic, adversarial coverage.
-"""
+"""Error Handling and Fallback Tests
+Tests error propagation and fallback mechanisms with deterministic, adversarial coverage."""
 
 import torch
 import sys

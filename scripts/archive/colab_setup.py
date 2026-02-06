@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-"""
-Colab-specific setup script.
-Run this in a Colab notebook cell to set up MaxSight training environment.
-"""
+"""Colab-specific setup script.
+Run this in a Colab notebook cell to set up MaxSight training environment."""
 
 import subprocess
 import sys

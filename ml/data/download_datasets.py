@@ -21,12 +21,10 @@ SOUND_CLASSES = [
 
 
 def verify_coco_dataset(data_dir: Path = Path("datasets/coco"), check_coco_raw: bool = True) -> Dict[str, bool]:
-    """
-    Verify COCO dataset is properly downloaded and structured.
+    """Verify COCO dataset is properly downloaded and structured.
     
     Returns:
-        Dictionary with verification status for each component
-    """
+        Dictionary with verification status for each component"""
     status = {
         'train_images': False,
         'val_images': False,
@@ -95,15 +93,7 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco"), check_coco_raw: 
 
 
 def download_coco_dataset(data_dir: Path = Path("datasets/coco"), auto_download: bool = False):
-    """
-    Download COCO dataset with improved error handling and multiple download methods.
-    
-    Args:
-        data_dir: Directory to save COCO dataset
-        auto_download: If True, attempt automatic download (tries multiple methods)
-    
-    Note: COCO dataset is large (~20GB). Manual download recommended for reliability.
-    """
+    """Download COCO dataset with improved error handling and multiple download methods...."""
     data_dir.mkdir(parents=True, exist_ok=True)
     
     # COCO dataset URLs (official)
@@ -285,11 +275,9 @@ def download_visual_genome(data_dir: Path = Path("datasets/visual_genome")):
 
 
 def download_lvis(data_dir: Path = Path("datasets/lvis")):
-    """
-    Download LVIS dataset - 164K images, 2.2M+ instances, 1203 classes
+    """Download LVIS dataset - 164K images, 2.2M+ instances, 1203 classes
     
-    Long-tail distribution dataset - good for rare object detection
-    """
+    Long-tail distribution dataset - good for rare object detection"""
     print("LVIS Dataset Download Instructions:")
     print("1. Visit: https://www.lvisdataset.org/dataset")
     print("2. Download: LVIS V1.0 Train (100K images, ~20GB)")
@@ -304,15 +292,7 @@ def download_lvis(data_dir: Path = Path("datasets/lvis")):
 
 
 def download_audioset(data_dir: Path = Path("datasets/audioset"), auto_download: bool = False):
-    """
-    Download AudioSet dataset - 2M+ audio clips, 632 classes
-    
-    Args:
-        data_dir: Directory to save AudioSet dataset
-        auto_download: If True, attempt automatic download (requires youtube-dl)
-    
-    Large-scale audio dataset for audio-visual fusion
-    """
+    """Download AudioSet dataset - 2M+ audio clips, 632 classes..."""
     data_dir.mkdir(parents=True, exist_ok=True)
     
     if auto_download:
@@ -348,13 +328,11 @@ def download_audioset(data_dir: Path = Path("datasets/audioset"), auto_download:
 
 
 def create_synthetic_impairments():
-    """
-    Create functions for synthetic impairment simulations.
+    """Create functions for synthetic impairment simulations.
     These will be applied during training data loading.
     
     Returns:
-        Dictionary of impairment functions keyed by condition name
-    """
+        Dictionary of impairment functions keyed by condition name"""
     import numpy as np
     from scipy import ndimage  # type: ignore
     

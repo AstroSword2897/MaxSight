@@ -1,47 +1,4 @@
-"""
-ROI Priority Head for MaxSight Therapy System
-
-Outputs ROI utility scores for prioritization and attention guidance.
-
-PROJECT PHILOSOPHY & APPROACH:
-=============================
-This module implements ROI (Region of Interest) prioritization as part of MaxSight's
-therapy system. Prioritizing regions helps users focus on important objects and
-reduces information overload, especially critical for users with CVI or attention
-difficulties.
-
-WHY ROI PRIORITIZATION MATTERS:
--------------------------------
-ROI prioritization enables:
-
-1. Attention guidance: Directs user attention to important objects
-2. Information filtering: Reduces cognitive load by prioritizing relevant regions
-3. Therapy task generation: Creates exercises that focus on high-priority regions
-4. Adaptive assistance: Adjusts priority based on user needs and context
-
-HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-------------------------------------------
-The problem emphasizes "Clear Multimodal Communication" and "Environmental Structuring" -
-ROI prioritization ensures users receive information about the most important regions
-first, reducing cognitive overload while maintaining useful environmental awareness.
-
-RELATIONSHIP TO BARRIER REMOVAL METHODS:
-----------------------------------------
-1. ENVIRONMENTAL STRUCTURING: Prioritizes regions for clearer understanding
-2. CLEAR MULTIMODAL COMMUNICATION: Reduces information density while maintaining clarity
-3. SKILL DEVELOPMENT: Helps users learn to identify important regions
-4. ADAPTIVE ASSISTANCE: Adjusts priorities based on user needs and context
-
-TECHNICAL DESIGN DECISIONS:
----------------------------
-- Cross-attention: Enables scene-ROI interaction for context-aware prioritization
-- LayerNorm + Dropout: Better generalization and training stability
-- Pairwise ranking loss: Ensures correct priority ordering
-- ROI masking: Supports variable number of regions per image
-
-Phase 2: Therapy Heads
-See docs/therapy_system_implementation_plan.md for implementation details.
-"""
+"""ROI Priority Head for MaxSight Therapy System..."""
 
 import torch
 import torch.nn as nn
@@ -50,32 +7,7 @@ from typing import Tuple, Optional, Dict
 
 
 class ROIPriorityHead(nn.Module):
-    """
-    ROI priority head for therapy tasks and attention guidance.
-    
-    WHY THIS CLASS EXISTS:
-    ----------------------
-    Not all regions in an image are equally important. This head prioritizes regions
-    based on scene context and ROI features, enabling the system to:
-    - Guide user attention to important objects
-    - Reduce information overload by filtering low-priority regions
-    - Generate therapy exercises focused on high-priority regions
-    - Adapt assistance based on region importance
-    
-    Architecture:
-    - Input: Scene embedding [B, scene_dim] + ROI features [B, N, roi_dim]
-    - Cross-attention (optional): Scene-ROI interaction for context-aware prioritization
-    - Scorer: Combines scene and ROI features to generate utility scores
-    - Output: ROI utility scores [B, N] in [0, 1] range (higher = more important)
-    
-    Arguments:
-        scene_dim: Dimension of scene embedding (default: 256)
-        roi_dim: Dimension of ROI features (default: 256)
-        hidden_dim: Hidden layer dimension (default: 128)
-        num_heads: Number of attention heads (default: 4)
-        dropout: Dropout probability (default: 0.1)
-        use_attention: Enable cross-attention for scene-ROI interaction (default: True)
-    """
+    """ROI priority head for therapy tasks and attention guidance."""
     
     def __init__(
         self, 
@@ -86,17 +18,7 @@ class ROIPriorityHead(nn.Module):
         dropout: float = 0.1,
         use_attention: bool = True
     ):
-        """
-        Initialize ROI priority head.
-        
-        Arguments:
-            scene_dim: Dimension of scene embedding
-            roi_dim: Dimension of ROI features
-            hidden_dim: Hidden layer dimension for scorer
-            num_heads: Number of attention heads for cross-attention
-            dropout: Dropout probability for regularization
-            use_attention: Enable cross-attention for context-aware prioritization
-        """
+        """Initialize ROI priority head...."""
         super().__init__()
         self.scene_dim = scene_dim
         self.roi_dim = roi_dim
@@ -146,24 +68,7 @@ class ROIPriorityHead(nn.Module):
         roi_features: torch.Tensor,
         roi_mask: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        """
-        Forward pass to generate ROI utility scores.
-        
-        CRITICAL INPUT REQUIREMENTS:
-        ----------------------------
-        - scene_embedding: Must be [B, scene_dim] from scene embedding
-        - roi_features: Must be [B, N, roi_dim] where N is number of ROIs
-        - roi_mask: Optional [B, N] boolean mask (True = valid ROI)
-        - All inputs must be on same device and have same batch size
-        
-        Arguments:
-            scene_embedding: Scene embedding [B, scene_dim]
-            roi_features: ROI features [B, N, roi_dim]
-            roi_mask: Optional mask for valid ROIs [B, N] (True = valid, False = invalid)
-        
-        Returns:
-            ROI utility scores [B, N] in [0, 1] range (higher = more important)
-        """
+        """Forward pass to generate ROI utility scores...."""
         # Validate inputs
         if scene_embedding.dim() != 2:
             raise ValueError(f"Expected 2D scene_embedding [B, scene_dim], got {scene_embedding.shape}")
@@ -212,7 +117,6 @@ class ROIPriorityHead(nn.Module):
             scores = scores.masked_fill(~roi_mask, 0.0)
         
         # FIXED: Normalize scores per image as attention distribution
-        # ROI priority isn't about absolute importance — it's about relative attention allocation
         scores = scores / (scores.sum(dim=1, keepdim=True) + 1e-6)  # [B, N] normalized
         
         # Validate output
@@ -229,23 +133,7 @@ class ROIPriorityHead(nn.Module):
         rankings: torch.Tensor,
         margin: float = 0.1
     ) -> torch.Tensor:
-        """
-        Compute pairwise ranking loss with proper tie handling.
-        
-        WHY RANKING LOSS:
-        ----------------
-        ROI prioritization is about relative importance, not absolute scores. Ranking
-        loss ensures that ROIs with higher ground truth rankings get higher predicted
-        scores, which is more appropriate than regression loss for this task.
-        
-        Arguments:
-            scores: Predicted scores [B, N]
-            rankings: Ground truth rankings [B, N] (higher = more important)
-            margin: Margin for ranking loss (default: 0.1)
-        
-        Returns:
-            Ranking loss scalar
-        """
+        """Compute pairwise ranking loss with proper tie handling...."""
         # Validate inputs
         if scores.shape != rankings.shape:
             raise ValueError(f"Shape mismatch: scores {scores.shape} vs rankings {rankings.shape}")

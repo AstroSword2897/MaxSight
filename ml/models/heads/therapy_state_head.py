@@ -1,17 +1,4 @@
-"""
-Unified Therapy State Head for MaxSight 3.0
-
-Combines Fatigue/Gaze, Depth/Focus, and Contrast heads into a single modular Stage B head.
-All outputs produced in one dictionary for async/non-blocking Stage B integration.
-
-CRITICAL DESIGN:
-- Single unified head for all therapy state outputs
-- Motion features as temporal anchor for all tasks
-- FPN multi-scale support for depth
-- Edge-aware contrast estimation
-- LSTM for fatigue/gaze temporal continuity
-- All outputs in normalized [0, 1] range for interpretability
-"""
+"""Unified Therapy State Head for MaxSight 3.0..."""
 
 import torch
 import torch.nn as nn
@@ -20,14 +7,7 @@ from typing import Dict, Optional, Tuple
 
 
 class TherapyStateHead(nn.Module):
-    """
-    Unified Therapy State Head:
-    - Fatigue/Gaze: fatigue_score, blink_rate, fixation_stability
-    - Depth/Focus: depth_map, uncertainty, zones (near/mid/far)
-    - Contrast: contrast_map, edge_map (optional)
-    
-    All tasks share motion features as temporal anchor for consistency.
-    """
+    """Unified Therapy State Head:..."""
     
     def __init__(
         self,
@@ -199,28 +179,7 @@ class TherapyStateHead(nn.Module):
         contrast_features: torch.Tensor,  # [B, in_channels_contrast, H, W]
         fpn_features: Optional[Dict[str, torch.Tensor]] = None
     ) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass for all therapy state outputs.
-        
-        Args:
-            eye_features: Eye tracking features [B, eye_dim]
-            motion_features: Motion features [B, motion_dim] (for fatigue) or [B, motion_dim, H, W] (for depth/contrast)
-            depth_features: Depth input features [B, in_channels_depth, H, W]
-            contrast_features: Contrast input features [B, in_channels_contrast, H, W]
-            fpn_features: Optional FPN features for multi-scale depth
-        
-        Returns:
-            Dictionary with all outputs:
-            - 'fatigue_score': [B, 1]
-            - 'blink_rate': [B, 1]
-            - 'fixation_stability': [B, 1]
-            - 'shared_features': [B, hidden_dim//2]
-            - 'depth_map': [B, H, W]
-            - 'uncertainty': [B, H, W]
-            - 'zones': [B, 3]
-            - 'contrast_map': [B, H, W]
-            - 'edge_map': [B, H, W] (optional)
-        """
+        """Forward pass for all therapy state outputs...."""
         B = eye_features.shape[0]
         device = eye_features.device
         

@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-Generate Class Weights for Weighted Loss
-
-This script reads the class distribution report and generates:
-1. Class weights for detection head (inverse frequency weighting)
-2. Class weights for urgency head
-3. Focal Loss alpha values (optional)
-
-Usage:
-    python scripts/generate_class_weights.py
-"""
+"""Generate Class Weights for Weighted Loss..."""
 
 import json
 from pathlib import Path
@@ -22,14 +12,7 @@ OUTPUT_FILE = Path("datasets/cleaned_splits/class_weights.json")
 
 def generate_detection_weights(distribution: dict, total_classes: int, 
                                method: str = 'inverse_sqrt') -> dict:
-    """
-    Generate class weights for detection head.
-    
-    Methods:
-    - 'inverse_sqrt': weight = 1 / sqrt(frequency) - balanced, less aggressive
-    - 'inverse': weight = 1 / frequency - more aggressive
-    - 'focal_alpha': alpha values for Focal Loss (balanced vs rare)
-    """
+    """Generate class weights for detection head...."""
     # Get all class frequencies (0 for missing classes)
     all_classes = sorted(distribution.keys())
     frequencies = [distribution.get(cls, 0) for cls in all_classes]
@@ -62,15 +45,7 @@ def generate_detection_weights(distribution: dict, total_classes: int,
 
 
 def generate_urgency_weights() -> dict:
-    """
-    Generate weights for urgency head.
-    
-    Based on typical distribution:
-    - Level 0 (safe): ~80% - weight 0.5
-    - Level 1 (caution): ~8% - weight 2.0
-    - Level 2 (warning): ~9% - weight 2.0
-    - Level 3 (danger): ~2% - weight 5.0
-    """
+    """Generate weights for urgency head...."""
     return {
         0: 0.5,  # Safe - downweight
         1: 2.0,  # Caution - upweight
@@ -80,14 +55,12 @@ def generate_urgency_weights() -> dict:
 
 
 def generate_distance_weights() -> dict:
-    """
-    Generate weights for distance head.
+    """Generate weights for distance head.
     
     Based on typical distribution:
     - Zone 0 (near): ~9% - weight 2.0
     - Zone 1 (medium): ~39% - weight 1.0
-    - Zone 2 (far): ~52% - weight 0.5
-    """
+    - Zone 2 (far): ~52% - weight 0.5"""
     return {
         0: 2.0,  # Near - upweight
         1: 1.0,  # Medium - balanced
