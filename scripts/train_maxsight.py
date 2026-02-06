@@ -353,7 +353,33 @@ def main():
             worker_init_fn=seed_worker,
             generator=g,
         )
-    
+
+    # Diagnostic: inspect first batch (distance/urgency often missing → NaN loss)
+    logger.info("=== DIAGNOSTIC CHECK (first train batch) ===")
+    try:
+        batch = next(iter(train_loader))
+        images = batch.get("images", batch.get("image"))
+        targets = {k: v for k, v in batch.items() if k not in ("images", "image")}
+        if images is not None and torch.is_tensor(images):
+            logger.info(f"Images shape: {images.shape}")
+        logger.info(f"Target keys: {list(targets.keys())}")
+        for key in ["distance", "urgency", "boxes", "labels", "num_objects"]:
+            if key in targets:
+                val = targets[key]
+                if torch.is_tensor(val):
+                    logger.info(f"  {key}: shape={val.shape}, dtype={val.dtype}")
+                    if key in ("distance", "urgency"):
+                        valid = (val >= 0).sum().item()
+                        total = val.numel()
+                        logger.info(f"    Valid samples (>=0): {valid}/{total}")
+                else:
+                    logger.info(f"  {key}: NOT A TENSOR ({type(val).__name__})")
+            else:
+                logger.info(f"  {key}: MISSING")
+    except Exception as e:
+        logger.warning(f"Diagnostic check failed: {e}")
+    logger.info("=" * 50)
+
     # -----------------------------------------------------------------
     # Model
     # -----------------------------------------------------------------
