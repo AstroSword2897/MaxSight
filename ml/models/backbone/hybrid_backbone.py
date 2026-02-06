@@ -184,6 +184,7 @@ class HybridCNNViTBackbone(nn.Module):
         self.cnn_stem = nn.Sequential(
             resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool
         )
+        self.cnn_layer1 = resnet.layer1  # 64 -> 256 channels (required before layer2)
         self.cnn_layer2 = resnet.layer2  # C3: 512 channels
         self.cnn_layer3 = resnet.layer3  # C4: 1024 channels
         self.cnn_layer4 = resnet.layer4  # C5: 2048 channels
@@ -292,7 +293,8 @@ class HybridCNNViTBackbone(nn.Module):
         
         def run_cnn():
             x_stem = self.cnn_stem(x)
-            c3 = self.cnn_layer2(x_stem)
+            x1 = self.cnn_layer1(x_stem)
+            c3 = self.cnn_layer2(x1)
             c4 = self.cnn_layer3(c3)
             c5 = self.cnn_layer4(c4)
             return c3, c4, c5

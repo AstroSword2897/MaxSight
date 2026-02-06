@@ -119,11 +119,16 @@ class DistanceZoneLoss(nn.Module):
         """
         Args:
             predictions: [B, N, num_zones] logits
-            targets: [B, N] zone indices
+            targets: [B, N] zone indices (use -1 or value >= num_zones for ignore)
         """
+        pred_flat = predictions.reshape(-1, self.num_zones)
+        tgt_flat = targets.reshape(-1).long()
+        valid = (tgt_flat >= 0) & (tgt_flat < self.num_zones)
+        if valid.sum() == 0:
+            return pred_flat.sum() * 0.0  # zero loss, keep device/dtype
         ce_loss = F.cross_entropy(
-            predictions.reshape(-1, self.num_zones),
-            targets.reshape(-1),
+            pred_flat[valid],
+            tgt_flat[valid],
             weight=self.class_weights,
             reduction='mean'
         )
@@ -150,21 +155,25 @@ class UrgencyLoss(nn.Module):
         """
         Args:
             predictions: [B, num_levels] logits
-            targets: [B] urgency level indices
+            targets: [B] urgency level indices (use -1 or >= num_levels for ignore)
         """
+        targets = targets.long()
+        valid = (targets >= 0) & (targets < self.num_levels)
+        if valid.sum() == 0:
+            return predictions.sum() * 0.0  # zero loss, keep device/dtype
+        pred_valid = predictions[valid]
+        tgt_valid = targets[valid]
         ce_loss = F.cross_entropy(
-            predictions,
-            targets,
+            pred_valid,
+            tgt_valid,
             weight=self.class_weights,
             reduction='none'
         )
-        
-        # Focal loss
-        p = F.softmax(predictions, dim=-1)
-        p_t = p.gather(1, targets.unsqueeze(-1)).squeeze(-1)
-        focal_weight = self.alpha * (1 - p_t) ** self.gamma
-        loss = focal_weight * ce_loss
-        return loss.mean()
+        p = F.softmax(pred_valid, dim=-1)
+        p_t = p.gather(1, tgt_valid.unsqueeze(-1)).squeeze(-1)
+        focal_weight = self.alpha * (1 - p_t).clamp(min=1e-6) ** self.gamma
+        loss = (focal_weight * ce_loss).mean()
+        return loss
 
 
 class UncertaintyLoss(nn.Module):

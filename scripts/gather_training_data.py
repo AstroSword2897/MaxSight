@@ -42,9 +42,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--splits-dir",
+        "--output-dir",
         type=Path,
+        dest="splits_dir",
         default=ROOT / "datasets" / "cleaned_splits",
-        help="Output directory for train/val/test JSON (default: datasets/cleaned_splits)",
+        help="Output directory for train/val/test JSON (default: datasets/cleaned_splits); --output-dir is an alias",
     )
     parser.add_argument(
         "--skip-download",

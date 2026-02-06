@@ -67,6 +67,44 @@ IMAGE_DIR = DATA_DIR  # Or separate if images are elsewhere
 - Mixed precision is disabled for stability (FP32 only)
 - GradNorm alpha defaults to 1.5
 
+### A100 80GB – 14 conditions (batch 45, AMP, 10 workers)
+```python
+import os
+REPO = "/content/2026-Prototype"
+os.chdir(REPO)
+CONDITIONS = [
+    "glaucoma", "amd", "cataracts", "color_blindness",
+    "diabetic_retinopathy", "retinitis_pigmentosa", "cvi",
+    "amblyopia", "strabismus",
+    "refractive_errors", "myopia", "hyperopia", "astigmatism", "presbyopia"
+]
+DATA = "/content/drive/MyDrive/MaxSight_Training"
+BASE_CKPT = "/content/drive/MyDrive/MaxSight"
+TRAIN_ANN = f"{DATA}/cleaned_splits/maxsight_train.json"
+VAL_ANN = f"{DATA}/cleaned_splits/maxsight_val.json"
+
+for cond in CONDITIONS:
+    ckpt_dir = f"{BASE_CKPT}/checkpoints_{cond}"
+    print(f"\n{'='*60}\nTraining condition: {cond} -> {ckpt_dir}\n{'='*60}\n")
+    !python {REPO}/scripts/train_maxsight.py \
+        --data-dir {DATA} \
+        --image-dir {DATA} \
+        --train-annotation {TRAIN_ANN} \
+        --val-annotation {VAL_ANN} \
+        --batch-size 45 \
+        --epochs 20 \
+        --num-workers 10 \
+        --grad-accumulation-steps 2 \
+        --use-gradnorm \
+        --condition-mode {cond} \
+        --checkpoint-dir {ckpt_dir} \
+        --checkpoint-interval 7 \
+        --early-stopping-patience 10 \
+        --device cuda \
+        --seed 42 \
+        --use-amp
+```
+
 ### Fast Testing (smoke test)
 ```python
 !python scripts/smoke_train.py \

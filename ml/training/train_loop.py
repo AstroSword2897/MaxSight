@@ -427,7 +427,11 @@ class ProductionTrainLoop:
             device == 'cuda' or str(device).startswith('cuda') or device == 'mps'
         )
         if self.use_mixed_precision and GradScaler is not None:
-            self.scaler = GradScaler()
+            try:
+                from torch.amp import GradScaler as AmpGradScaler
+                self.scaler = AmpGradScaler('cuda')
+            except (ImportError, TypeError, AttributeError):
+                self.scaler = GradScaler()
         else:
             self.scaler = None
             self.use_mixed_precision = False
