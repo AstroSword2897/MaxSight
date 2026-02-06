@@ -88,7 +88,10 @@ def parse_batch(batch: Any) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         targets = batch[1] if len(batch) > 1 else {}
     elif isinstance(batch, dict):
         # Support both 'images' and 'image' keys for flexibility
-        images = batch.get('images') or batch.get('image')
+        # Check None explicitly (can't use 'or' with tensors - causes ambiguous boolean error)
+        images = batch.get('images')
+        if images is None:
+            images = batch.get('image')
         if images is None:
             raise ValueError("Batch must contain 'images' or 'image' key")
         targets = {k: v for k, v in batch.items() if k not in ['images', 'image']}
