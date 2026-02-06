@@ -12,6 +12,13 @@ TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 BACKUP_ROOT = BASE / f"training_backups"
 BACKUP_DIR = BACKUP_ROOT / f"backup_{TIMESTAMP}"
 
+# Option: Use a single "gathered" backup folder instead of timestamped
+# Set GATHER_MODE = True to collect all checkpoints in one place
+GATHER_MODE = False  # Set to True to gather all checkpoints into one folder
+if GATHER_MODE:
+    BACKUP_DIR = BACKUP_ROOT / "gathered_backup"
+    print("📦 GATHER MODE: Collecting all checkpoints into one backup folder")
+
 if not BASE.exists():
     print("❌ Base directory not found:", BASE)
     print("   Make sure Drive is mounted: from google.colab import drive; drive.mount('/content/drive')")
@@ -21,6 +28,9 @@ else:
     print("="*70)
     print(f"BACKING UP ALL TRAINING PROGRESS")
     print(f"Backup location: {BACKUP_DIR}")
+    print(f"Mode: {'GATHER (collecting all)' if GATHER_MODE else 'TIMESTAMPED (new folder)'}")
+    print("="*70)
+    print("Note: Files are COPIED (not moved). Original checkpoints remain untouched.")
     print("="*70)
     
     backed_up_conditions = []
@@ -51,31 +61,41 @@ else:
         # Also backup any checkpoint_epoch_*.pt files
         epoch_checkpoints = list(ckpt_dir.glob("checkpoint_epoch_*.pt"))
         
-        # Copy important files
+        # Copy important files (only if not already in backup to avoid duplicates)
         for filename in important_files:
             src = ckpt_dir / filename
             if src.exists():
                 try:
                     dst = condition_backup / filename
-                    shutil.copy2(src, dst)
-                    size = src.stat().st_size / (1024 * 1024)  # MB
-                    size_mb += size
-                    files_copied.append(f"  ✅ {filename} ({size:.2f} MB)")
-                    total_files += 1
+                    # Skip if file already exists in backup (don't overwrite)
+                    if dst.exists():
+                        existing_size = dst.stat().st_size / (1024 * 1024)
+                        files_copied.append(f"  ⏭️  {filename} (already backed up, {existing_size:.2f} MB)")
+                    else:
+                        shutil.copy2(src, dst)
+                        size = src.stat().st_size / (1024 * 1024)  # MB
+                        size_mb += size
+                        files_copied.append(f"  ✅ {filename} ({size:.2f} MB)")
+                        total_files += 1
                 except Exception as e:
                     files_copied.append(f"  ❌ {filename}: {e}")
         
-        # Copy epoch checkpoints (limit to last 5 to save space)
+        # Copy ALL epoch checkpoints (gather them all, not just last 5)
         if epoch_checkpoints:
             epoch_checkpoints.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-            for ckpt in epoch_checkpoints[:5]:  # Last 5 epoch checkpoints
+            for ckpt in epoch_checkpoints:
                 try:
                     dst = condition_backup / ckpt.name
-                    shutil.copy2(ckpt, dst)
-                    size = ckpt.stat().st_size / (1024 * 1024)
-                    size_mb += size
-                    files_copied.append(f"  ✅ {ckpt.name} ({size:.2f} MB)")
-                    total_files += 1
+                    # Skip if already backed up
+                    if dst.exists():
+                        existing_size = dst.stat().st_size / (1024 * 1024)
+                        files_copied.append(f"  ⏭️  {ckpt.name} (already backed up, {existing_size:.2f} MB)")
+                    else:
+                        shutil.copy2(ckpt, dst)
+                        size = ckpt.stat().st_size / (1024 * 1024)
+                        size_mb += size
+                        files_copied.append(f"  ✅ {ckpt.name} ({size:.2f} MB)")
+                        total_files += 1
                 except Exception as e:
                     files_copied.append(f"  ❌ {ckpt.name}: {e}")
         
