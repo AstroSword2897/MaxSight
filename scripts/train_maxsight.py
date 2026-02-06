@@ -180,8 +180,8 @@ def main():
     # Hardware
     parser.add_argument("--device", choices=["cpu", "cuda", "mps", "mlx", "auto"], default="auto",
                         help="mlx = CPU (MPS disabled due to backward errors); mps also maps to CPU")
-    # FP32 only (fp16 removed for stability; use_mixed_precision always False)
-    parser.add_argument("--compile", action="store_true", help="Use torch.compile (CUDA only)")
+    parser.add_argument("--compile", action="store_true", help="Use torch.compile (CUDA only, faster after first epoch)")
+    parser.add_argument("--use-amp", action="store_true", help="Use mixed precision (FP16) on CUDA for faster training; default FP32 for stability")
     
     # Resume / backup
     parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint in --checkpoint-dir")
@@ -433,7 +433,7 @@ def main():
         num_epochs=args.epochs,
         checkpoint_dir=str(ckpt_dir),
         seed=args.seed,
-        use_mixed_precision=False,  # FP32 only
+        use_mixed_precision=getattr(args, "use_amp", False),
         gradient_clip_norm=args.grad_clip,
         gradient_accumulation_steps=args.grad_accumulation_steps,
         scheduler_type=args.scheduler_type,

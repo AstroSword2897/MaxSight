@@ -13,6 +13,11 @@ REQUIRED: Put maxsight_train.json and maxsight_val.json in:
 Create them with: python scripts/gather_training_data.py --coco-dir <path> --output-dir <path>/cleaned_splits
 Or use your own train/val JSON paths and set TRAIN_ANN / VAL_ANN in Cell 3.
 
+HOW LONG: 14 models × 20 epochs each. Depends on train set size and GPU (see TIME_ESTIMATES.md).
+  • ~2k train samples:  Colab T4 ~5–8 h total (faster cell) or ~10–14 h (standard); A100 ~2–3 h.
+  • ~10k train samples: T4 ~1–2 days (use resume); A100 ~8–14 h.
+  • Check first log line "Train samples: N" to see which row applies. Colab free often stops ~12 h — use --resume next run.
+
 ----------------------------------------------
 CELL 1: Mount Drive + go to repo
 ----------------------------------------------
@@ -31,6 +36,10 @@ CELL 2: Install deps (if first time in session)
 CELL 3: Train EVERY condition (14 models) — batch 16, T5, GradNorm
 ----------------------------------------------
 # Trains one model per vision condition; each saves to its own folder on Drive.
+# Ensure we're in the repo (required if you didn't run Cell 1, or run training in another notebook).
+import os
+REPO = "/content/2026-Prototype"
+os.chdir(REPO)
 CONDITIONS = [
     "glaucoma", "amd", "cataracts", "color_blindness",
     "diabetic_retinopathy", "retinitis_pigmentosa", "cvi",
@@ -46,7 +55,7 @@ VAL_ANN = f"{DATA}/cleaned_splits/maxsight_val.json"
 for cond in CONDITIONS:
     ckpt_dir = f"{BASE_CKPT}/checkpoints_{cond}"
     print(f"\n{'='*60}\nTraining condition: {cond} -> {ckpt_dir}\n{'='*60}\n")
-    !python scripts/train_maxsight.py \
+    !python {REPO}/scripts/train_maxsight.py \
         --data-dir {DATA} \
         --image-dir {DATA} \
         --train-annotation {TRAIN_ANN} \
@@ -64,9 +73,47 @@ for cond in CONDITIONS:
         --seed 42
 
 ----------------------------------------------
+CELL 3 (FASTER): Same 14 models — 6 workers, optional AMP/compile
+----------------------------------------------
+# num-workers 6 keeps GPU fed. If your Colab has the latest repo, add --use-amp --compile for more speed.
+import os
+REPO = "/content/2026-Prototype"
+os.chdir(REPO)
+CONDITIONS = [
+    "glaucoma", "amd", "cataracts", "color_blindness",
+    "diabetic_retinopathy", "retinitis_pigmentosa", "cvi",
+    "amblyopia", "strabismus",
+    "refractive_errors", "myopia", "hyperopia", "astigmatism", "presbyopia"
+]
+DATA = "/content/drive/MyDrive/MaxSight_Training"
+BASE_CKPT = "/content/drive/MyDrive/MaxSight"
+TRAIN_ANN = f"{DATA}/cleaned_splits/maxsight_train.json"
+VAL_ANN = f"{DATA}/cleaned_splits/maxsight_val.json"
+
+for cond in CONDITIONS:
+    ckpt_dir = f"{BASE_CKPT}/checkpoints_{cond}"
+    print(f"\n{'='*60}\nTraining condition: {cond} -> {ckpt_dir}\n{'='*60}\n")
+    !python {REPO}/scripts/train_maxsight.py \
+        --data-dir {DATA} \
+        --image-dir {DATA} \
+        --train-annotation {TRAIN_ANN} \
+        --val-annotation {VAL_ANN} \
+        --batch-size 12 \
+        --epochs 20 \
+        --num-workers 6 \
+        --grad-accumulation-steps 2 \
+        --use-gradnorm \
+        --condition-mode {cond} \
+        --checkpoint-dir {ckpt_dir} \
+        --checkpoint-interval 7 \
+        --early-stopping-patience 10 \
+        --device cuda \
+        --seed 42
+
+----------------------------------------------
 Alternative: Train general model only (no condition mode)
 ----------------------------------------------
-!python scripts/train_maxsight.py \
+!python /content/2026-Prototype/scripts/train_maxsight.py \
     --data-dir /content/drive/MyDrive/MaxSight_Training \
     --image-dir /content/drive/MyDrive/MaxSight_Training \
     --batch-size 16 \
@@ -83,7 +130,8 @@ Alternative: Train general model only (no condition mode)
 ----------------------------------------------
 Alternative: Train a single condition (e.g. glaucoma)
 ----------------------------------------------
-!python scripts/train_maxsight.py \
+# Run Cell 1 first (mount Drive + os.chdir to repo), or: os.chdir("/content/2026-Prototype")
+!python /content/2026-Prototype/scripts/train_maxsight.py \
     --data-dir /content/drive/MyDrive/MaxSight_Training \
     --image-dir /content/drive/MyDrive/MaxSight_Training \
     --train-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_train.json \
@@ -99,7 +147,7 @@ Alternative: Train a single condition (e.g. glaucoma)
 ----------------------------------------------
 Optional: Resume from checkpoint
 ----------------------------------------------
-!python scripts/train_maxsight.py \
+!python /content/2026-Prototype/scripts/train_maxsight.py \
     --data-dir /content/drive/MyDrive/MaxSight_Training \
     --image-dir /content/drive/MyDrive/MaxSight_Training \
     --batch-size 16 \
@@ -112,7 +160,7 @@ Optional: Resume from checkpoint
 ----------------------------------------------
 If OOM: reduce batch, increase grad accumulation
 ----------------------------------------------
-!python scripts/train_maxsight.py \
+!python /content/2026-Prototype/scripts/train_maxsight.py \
     --data-dir /content/drive/MyDrive/MaxSight_Training \
     --image-dir /content/drive/MyDrive/MaxSight_Training \
     --train-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_train.json \
