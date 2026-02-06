@@ -1,0 +1,130 @@
+# Backup ALL training progress: checkpoints, history, configs
+# Run this in Colab to save everything to a timestamped backup folder
+# Paste into a Colab cell and run (after mounting Drive)
+
+from pathlib import Path
+import shutil
+import json
+from datetime import datetime
+
+BASE = Path("/content/drive/MyDrive/MaxSight")
+TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
+BACKUP_ROOT = BASE / f"training_backups"
+BACKUP_DIR = BACKUP_ROOT / f"backup_{TIMESTAMP}"
+
+if not BASE.exists():
+    print("❌ Base directory not found:", BASE)
+    print("   Make sure Drive is mounted: from google.colab import drive; drive.mount('/content/drive')")
+else:
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    
+    print("="*70)
+    print(f"BACKING UP ALL TRAINING PROGRESS")
+    print(f"Backup location: {BACKUP_DIR}")
+    print("="*70)
+    
+    backed_up_conditions = []
+    total_files = 0
+    total_size_mb = 0
+    
+    # Find all checkpoint directories
+    for ckpt_dir in sorted(BASE.iterdir()):
+        if not ckpt_dir.is_dir() or not ckpt_dir.name.startswith("checkpoints_"):
+            continue
+        
+        condition = ckpt_dir.name.replace("checkpoints_", "")
+        condition_backup = BACKUP_DIR / condition
+        condition_backup.mkdir(exist_ok=True)
+        
+        files_copied = []
+        size_mb = 0
+        
+        # Files to backup for each condition
+        important_files = [
+            "best_model.pt",
+            "last_checkpoint.pt",
+            "training_history.json",
+            "training_history.csv",
+            "resume_info.json",
+        ]
+        
+        # Also backup any checkpoint_epoch_*.pt files
+        epoch_checkpoints = list(ckpt_dir.glob("checkpoint_epoch_*.pt"))
+        
+        # Copy important files
+        for filename in important_files:
+            src = ckpt_dir / filename
+            if src.exists():
+                try:
+                    dst = condition_backup / filename
+                    shutil.copy2(src, dst)
+                    size = src.stat().st_size / (1024 * 1024)  # MB
+                    size_mb += size
+                    files_copied.append(f"  ✅ {filename} ({size:.2f} MB)")
+                    total_files += 1
+                except Exception as e:
+                    files_copied.append(f"  ❌ {filename}: {e}")
+        
+        # Copy epoch checkpoints (limit to last 5 to save space)
+        if epoch_checkpoints:
+            epoch_checkpoints.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            for ckpt in epoch_checkpoints[:5]:  # Last 5 epoch checkpoints
+                try:
+                    dst = condition_backup / ckpt.name
+                    shutil.copy2(ckpt, dst)
+                    size = ckpt.stat().st_size / (1024 * 1024)
+                    size_mb += size
+                    files_copied.append(f"  ✅ {ckpt.name} ({size:.2f} MB)")
+                    total_files += 1
+                except Exception as e:
+                    files_copied.append(f"  ❌ {ckpt.name}: {e}")
+        
+        if files_copied:
+            print(f"\n📁 {condition}:")
+            for msg in files_copied:
+                print(msg)
+            print(f"   Total: {len([f for f in files_copied if '✅' in f])} files, {size_mb:.2f} MB")
+            backed_up_conditions.append(condition)
+            total_size_mb += size_mb
+        else:
+            print(f"\n⚠️  {condition}: No files found to backup")
+    
+    # Create a summary manifest
+    manifest = {
+        "backup_timestamp": TIMESTAMP,
+        "backup_location": str(BACKUP_DIR),
+        "conditions_backed_up": backed_up_conditions,
+        "total_files": total_files,
+        "total_size_mb": round(total_size_mb, 2),
+        "files_per_condition": {}
+    }
+    
+    # Count files per condition
+    for cond in backed_up_conditions:
+        cond_dir = BACKUP_DIR / cond
+        if cond_dir.exists():
+            manifest["files_per_condition"][cond] = len(list(cond_dir.iterdir()))
+    
+    manifest_path = BACKUP_DIR / "backup_manifest.json"
+    with open(manifest_path, 'w') as f:
+        json.dump(manifest, f, indent=2)
+    
+    print("\n" + "="*70)
+    print("BACKUP SUMMARY")
+    print("="*70)
+    print(f"✅ Backed up {len(backed_up_conditions)} conditions")
+    print(f"✅ Total files: {total_files}")
+    print(f"✅ Total size: {total_size_mb:.2f} MB")
+    print(f"✅ Manifest saved: {manifest_path.name}")
+    print(f"\n📍 Backup location: {BACKUP_DIR}")
+    print("="*70)
+    
+    # List recent backups
+    if BACKUP_ROOT.exists():
+        recent_backups = sorted([d for d in BACKUP_ROOT.iterdir() if d.is_dir() and d.name.startswith("backup_")], 
+                               key=lambda p: p.stat().st_mtime, reverse=True)
+        if len(recent_backups) > 1:
+            print(f"\n📦 Recent backups ({len(recent_backups)} total):")
+            for i, backup in enumerate(recent_backups[:5], 1):
+                size = sum(f.stat().st_size for f in backup.rglob("*") if f.is_file()) / (1024 * 1024)
+                print(f"  {i}. {backup.name} ({size:.2f} MB)")
