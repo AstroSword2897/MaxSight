@@ -881,9 +881,18 @@ class ProductionTrainLoop:
                         continue
                     
                     # Update DetectionMetrics using post-processed detections
+                    # Optimized: Process batch detections once instead of per-image
                     if 'boxes' in outputs and 'classifications' in outputs and 'boxes' in targets:
                         try:
                             batch_size = images.shape[0]
+                            
+                            # Process entire batch at once (get_detections handles batches efficiently)
+                            batch_detections = self.model.get_detections(
+                                outputs,
+                                confidence_threshold=0.3
+                            )
+                            
+                            # Process each image's detections from batch results
                             for b in range(batch_size):
                                 gt_boxes_b = targets['boxes'][b]
                                 gt_labels_b = targets['labels'][b]
@@ -892,20 +901,18 @@ class ProductionTrainLoop:
                                 if num_objects == 0:
                                     continue
                                 
+                                # Extract valid ground truth boxes (only actual objects, not padding)
                                 gt_boxes_valid = gt_boxes_b[:num_objects].to(self.device)
                                 gt_labels_valid = gt_labels_b[:num_objects].to(self.device)
                                 
                                 if len(gt_boxes_valid) == 0:
                                     continue
                                 
-                                detections_b = self.model.get_detections(
-                                    {k: v[b:b+1] for k, v in outputs.items() if isinstance(v, torch.Tensor)},
-                                    confidence_threshold=0.3
-                                )
-                                
-                                if detections_b and len(detections_b) > 0 and len(detections_b[0]) > 0:
-                                    detections_list = detections_b[0]
+                                # Get detections for this image from batch results
+                                if batch_detections and len(batch_detections) > b and len(batch_detections[b]) > 0:
+                                    detections_list = batch_detections[b]
                                     
+                                    # Extract predictions from detection dict format
                                     pred_boxes_list = []
                                     pred_labels_list = []
                                     pred_scores_list = []
@@ -923,6 +930,7 @@ class ProductionTrainLoop:
                                         pred_labels = torch.tensor(pred_labels_list, device=self.device, dtype=torch.long)
                                         pred_scores = torch.tensor(pred_scores_list, device=self.device, dtype=torch.float32)
                                         
+                                        # Update metrics with post-processed predictions
                                         if gt_boxes_valid.dim() == 2 and gt_boxes_valid.shape[1] == 4:
                                             self.detection_metrics.update(
                                                 pred_boxes=pred_boxes,
