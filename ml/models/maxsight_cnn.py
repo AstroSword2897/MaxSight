@@ -1,4 +1,4 @@
-"""MaxSight CNN: Object detection model for accessibility. Anchor-free, multi-task, condition-specific adaptations."""
+"""MaxSight CNN: anchor-free object detection for accessibility (Stage A + Stage B, condition-specific)."""
 
 import torch
 import torch.nn as nn
@@ -186,17 +186,14 @@ ACCESSIBILITY_CLASSES = [
     'snow', 'ice', 'path', 'trail', 'walkway', 'sidewalk', 'pavement',
     'road', 'street', 'park', 'park_bench', 'garden', 'fountain',
     
-    # ========== ADDITIONAL SAFETY ITEMS (Detailed) ==========
+    # Additional safety items (detailed)
     'wet_floor_sign', 'slippery_surface', 'construction_barrier',
     'construction_cone', 'cone', 'barricade', 'caution_tape', 'warning_tape',
     'debris', 'obstacle', 'pothole', 'crack', 'uneven_surface',
     'hazard', 'safety_cone', 'road_closed_sign',
 ]
 
-# Combine the base classes with accessibility classes, but skip duplicates
-# We keep the order so COCO classes come first (they're more common)
-# Using a set for O(1) lookup - this function gets called once at import time so
-# performance doesn't really matter, but good practice anyway
+# Merge base + accessibility classes, no duplicates; order preserved (COCO first).
 def _get_unique_classes(base: List[str], additional: List[str]) -> List[str]:
     """Combine classes, removing duplicates while preserving order"""
     seen = set(base)  # Track what we've already seen - set lookup is fast
@@ -207,8 +204,7 @@ def _get_unique_classes(base: List[str], additional: List[str]) -> List[str]:
             seen.add(cls)  # Don't forget to track it!
     return result
 
-# Final combined list - this is what the model actually uses
-# This gets computed once at module load, so it's fine that it's a bit expensive
+# Combined class list (computed once at load).
 COCO_CLASSES = _get_unique_classes(COCO_BASE_CLASSES, ACCESSIBILITY_CLASSES)
 
 COCO_CLASSES_DICT = {i: name for i, name in enumerate(COCO_CLASSES)}
@@ -273,7 +269,7 @@ class MaxSightCNN(nn.Module):
         enable_accessibility_features: bool = True,
         tier_config: Optional['TierConfig'] = None
     ):
-        """Initialize MaxSightCNN model...."""
+        """Initialize MaxSightCNN with tier config and condition mode."""
         super().__init__()
         
         self._urgency_map = {
@@ -304,11 +300,10 @@ class MaxSightCNN(nn.Module):
         self.detection_threshold = detection_threshold
         self.enable_accessibility_features = enable_accessibility_features
         
-        # Tier configuration (controls which components are enabled)
+        # Tier configuration (T5 only: hybrid, temporal, cross-task, cross-modal)
         if tier_config is None:
-            # Default to T0 baseline
             from ml.models.maxsight_cnn import TierConfig, CapabilityTier
-            tier_config = TierConfig.for_tier(CapabilityTier.T0_BASELINE_CNN)
+            tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
         self.tier_config = tier_config
         
         # OPTIMIZED: Initialize cached tensors (avoid hasattr checks in forward pass)
@@ -329,10 +324,10 @@ class MaxSightCNN(nn.Module):
         self.layer3 = resnet.layer3
         self.layer4 = resnet.layer4
         
-        # FPN - Always enabled (T0 baseline)
+        # FPN (Stage A; T5 Stage B adds hybrid/temporal)
         self.fpn = SimplifiedFPN([256, 512, 1024, 2048], fpn_channels)
         
-        # TIER 1: SE/CBAM Attention (T1+)
+        # T5: SE/CBAM attention on FPN
         if tier_config.use_se_attention or tier_config.use_cbam_attention:
             from ml.models.attention import CBAM, SEBlock
             # Apply attention to FPN features
@@ -360,7 +355,7 @@ class MaxSightCNN(nn.Module):
             self.hybrid_backbone = None
             self.use_hybrid = False
         
-        # TIER 2: Dynamic Convolution (T2+)
+        # T5: Dynamic convolution (Stage B)
         if tier_config.use_dynamic_conv:
             from ml.models.backbone.dynamic_conv import DynamicConv2d
             # Add dynamic conv layer in detection head (will be added later)
@@ -393,7 +388,7 @@ class MaxSightCNN(nn.Module):
         self.detection_fusion = nn.Sequential(
             nn.Conv2d(fpn_channels * 3, fpn_channels, 1, bias=False),  # Fuse 3 scales
             nn.BatchNorm2d(fpn_channels),
-            nn.ReLU(inplace=False)  # Changed: inplace=False for MPS compatibility
+            nn.ReLU(inplace=False)
         )
         
         # Process the fused features to extract detection information
@@ -401,13 +396,13 @@ class MaxSightCNN(nn.Module):
         self.detection_head = nn.Sequential(
             nn.Conv2d(fpn_channels, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=False),  # Changed: inplace=False for MPS compatibility
+            nn.ReLU(inplace=False),
             nn.Conv2d(256, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=False),  # Changed: inplace=False for MPS compatibility
+            nn.ReLU(inplace=False),
             nn.Conv2d(256, 256, 3, padding=1, bias=False),  # Extra depth for accuracy
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=False)  # Changed: inplace=False for MPS compatibility
+            nn.ReLU(inplace=False)
         )
         
         # Now the actual prediction heads - each one predicts something different
@@ -419,7 +414,7 @@ class MaxSightCNN(nn.Module):
         self.cls_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1, bias=False),  # 3x3 for spatial context
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=False),  # Changed: inplace=False for MPS compatibility
+            nn.ReLU(inplace=False),
             nn.Conv2d(256, num_classes, 1)  # 1x1 to get one logit per class
         )
         
@@ -428,7 +423,7 @@ class MaxSightCNN(nn.Module):
         self.box_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=False),  # Changed: inplace=False for MPS compatibility
+            nn.ReLU(inplace=False),
             nn.Conv2d(256, 4, 1)  # x, y, width, height (center format)
         )
         
@@ -438,7 +433,7 @@ class MaxSightCNN(nn.Module):
         self.obj_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=False),  # Changed: inplace=False for MPS compatibility
+            nn.ReLU(inplace=False),
             nn.Conv2d(256, 1, 1)  # Single confidence score per location
         )
         
@@ -448,7 +443,7 @@ class MaxSightCNN(nn.Module):
         self.text_head = nn.Sequential(
             nn.Conv2d(256, 128, 3, padding=1, bias=False),  # Fewer channels - text is simpler
             nn.BatchNorm2d(128),
-            nn.ReLU(inplace=False),  # Changed: inplace=False for MPS compatibility
+            nn.ReLU(inplace=False),
             nn.Conv2d(128, 1, 1)  # Text probability
         )
         
@@ -589,7 +584,7 @@ class MaxSightCNN(nn.Module):
             )
         
         # QUALITY: Retrieval system integration (Tier 4+, Advisory Only, Async)
-        # CRITICAL: Retrieval is ASYNC/NON-BLOCKING - never delays inference
+        # Retrieval is async and non-blocking; it never blocks inference.
         self.enable_retrieval = (tier_config.use_retrieval if hasattr(tier_config, 'use_retrieval') else False)
         self.retrieval_system = None
         if self.enable_retrieval:
@@ -606,8 +601,8 @@ class MaxSightCNN(nn.Module):
                     embedding_dims={'global': 512, 'region': 256, 'patch': 256},
                     hidden_dim=256,
                     num_concepts=10
-                ) if tier_config.tier.value >= 4 else None
-                knowledge_augment = KnowledgeAugmentedRetrieval(node_dim=256, embed_dim=512) if tier_config.tier.value >= 4 else None
+                ) if self.enable_retrieval else None
+                knowledge_augment = KnowledgeAugmentedRetrieval(node_dim=256, embed_dim=512) if self.enable_retrieval else None
                 
                 # Wrap in async system (non-blocking)
                 self.retrieval_system = AsyncRetrievalSystem(
@@ -652,10 +647,7 @@ class MaxSightCNN(nn.Module):
             nn.Linear(256, 256)
         )
         
-        # ============================================================================
-        # INTEGRATED SYSTEM COMPONENTS (Complete MaxSight Feature Set)
-        # ============================================================================
-        
+        # Integrated system components (spatial memory, monitor, therapy)
         # Spatial Memory System - Tracks objects across frames for navigation
         # CRITICAL FEATURE: Enables cognitive mapping and spatial awareness over time
         # Used during inference to remember object positions and support navigation
@@ -666,7 +658,7 @@ class MaxSightCNN(nn.Module):
         )
         
         # Performance Monitoring System - Self-assessment and drift detection
-        # CRITICAL FEATURE: Ensures model reliability, triggers alerts on degradation
+        # Readiness monitor for reliability and degradation alerts.
         # Monitors predictions in real-time, detects performance drift
         self.performance_monitor = ReadinessMonitor(
             window_size=100,  # Track last 100 predictions
@@ -674,12 +666,9 @@ class MaxSightCNN(nn.Module):
         )
         
         # Therapy Task Integration - Adaptive therapy task generation
-        # CRITICAL FEATURE: Uses scene descriptions for vision training exercises
+        # Therapy integrator uses scene descriptions for vision training exercises.
         # Integrates real-world scene information into therapy tasks
         self.therapy_integrator = TherapyTaskIntegrator()
-        
-        # ============================================================================
-        
         # Condition-specific adaptations
         if condition_mode == 'color_blindness':
             self.color_head = nn.Sequential(
@@ -721,9 +710,7 @@ class MaxSightCNN(nn.Module):
             # Multi-scale attention for inconsistent vision
             self.attention_weights = nn.Parameter(torch.ones(4))
         
-        # ============================================================================
-        # COMPLETE AWARENESS & THERAPY FEATURES (Problem Statement Alignment)
-        # ============================================================================
+        # Complete awareness and therapy features
         if enable_accessibility_features:
             # Import all specialized heads
             from ml.models.heads.contrast_head import ContrastMapHead
@@ -881,8 +868,8 @@ class MaxSightCNN(nn.Module):
                         nn.init.constant_(layer.bias, 0)
     
     def _forward_stage_a_backbone(self, images: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor, torch.Tensor]:
-        """Stage A backbone: ALWAYS ResNet50 + FPN (safety guarantee)...."""
-        # ResNet50 forward (ALWAYS - no tier-dependent switching)
+        """Stage A backbone: ResNet50 + FPN only. No hybrid or temporal (safety guarantee)."""
+        # ResNet50 forward (Stage A fixed; T5 tier uses temporal in Stage B only)
         x = self.conv1(images)
         x = self.bn1(x)
         x = self.relu(x)
@@ -893,7 +880,7 @@ class MaxSightCNN(nn.Module):
         c4 = self.layer3(c3)
         c5 = self.layer4(c4)
         
-        # FPN forward (ALWAYS - no hybrid backbone here)
+        # FPN forward (Stage A only; T5 hybrid/temporal run in Stage B)
         p2, p3, p4, p5 = self.fpn([c2, c3, c4, c5])
         
         # Optional attention (T1+) - lightweight, doesn't violate safety
@@ -930,15 +917,13 @@ class MaxSightCNN(nn.Module):
         B_orig: Optional[int] = None,
         T: Optional[int] = None
     ) -> Tuple[torch.Tensor, Optional[Dict]]:
-        """Stage B backbone: Can use Hybrid CNN-ViT and Temporal (tier-dependent)...."""
+        """Stage B backbone: optional hybrid CNN-ViT and temporal encoder (tier-dependent)."""
         # Start with Stage A features (will be enhanced if tier allows)
         stage_b_features = stage_a_features
         temporal_outputs = None
         
-        # Option 1: Use Hybrid backbone if tier allows (T2+)
-        # CRITICAL: Hybrid backbone uses RAW IMAGES, not Stage A features
-        if (self.use_hybrid and self.hybrid_backbone is not None and 
-            self.tier_config.tier.value >= 2):
+        # T5: Hybrid backbone (raw images, not Stage A features)
+        if self.use_hybrid and self.hybrid_backbone is not None:
             try:
                 # Hybrid backbone processes raw images independently
                 hybrid_fused, aux_features = self.hybrid_backbone(images, return_all_features=True)
@@ -982,10 +967,8 @@ class MaxSightCNN(nn.Module):
                     self._hybrid_backbone_warnings.append(f"Hybrid backbone failed: {e}")
                 pass  # Keep stage_b_features as Stage A features
         
-        # Option 2: Apply temporal processing if tier allows (T5+)
-        # CRITICAL: Temporal uses Stage A features (not raw images)
-        if (self.tier_config.use_temporal_modeling and 
-            self.tier_config.tier.value >= 5 and
+        # T5: Temporal processing (Stage A features, not raw images)
+        if (self.tier_config.use_temporal_modeling and
             temporal_mode and B_orig is not None and T is not None and
             self.temporal_encoder is not None):
             
@@ -1036,10 +1019,8 @@ class MaxSightCNN(nn.Module):
         use_temporal: bool = False,
         frame_id: Optional[int] = None  # For feature caching
     ) -> Dict[str, torch.Tensor]:
-        """Forward pass with enforced Stage A/Stage B separation...."""
-        # ============================================================
-        # 1. INPUT LAYER: Preprocessing & Normalization
-        # ============================================================
+        """Forward pass with enforced Stage A / Stage B separation."""
+        # Input: preprocessing and temporal handling
         temporal_mode = False
         B_orig = None
         T = None
@@ -1052,9 +1033,7 @@ class MaxSightCNN(nn.Module):
         else:
             batch_size = images.size(0)
         
-        # ============================================================
-        # STAGE A: Fast Safety Pass (<150ms) - ALWAYS ResNet50+FPN
-        # ============================================================
+        # Stage A: ResNet50+FPN backbone
         stage_a_start = time.perf_counter() if getattr(self, '_enable_timing', False) else None
         
         # Stage A backbone (ResNet50+FPN ONLY - no hybrid, no temporal)
@@ -1137,10 +1116,7 @@ class MaxSightCNN(nn.Module):
         # CRITICAL: Temporal processing is MOVED to Stage B only
         # Stage A does NOT use temporal features - safety guarantee
         
-        # ============================================================
-        # 4. STAGE A: FAST SAFETY PASS (<150ms, Tier 1 Heads)
-        # ============================================================
-        # Process the features to extract detection information
+        # Stage A: detection and Tier 1 heads
         # CRITICAL: Ensure fused_features is contiguous before detection_head
         fused_features = fused_features.contiguous()
         det_feats = self.detection_head(fused_features)
@@ -1328,9 +1304,7 @@ class MaxSightCNN(nn.Module):
         depth_scales = class_depth_scales[top_k_classes_depth]  # [B, K]
         precise_distances = depth_at_centers * depth_scales  # [B, K] in meters
         
-        # ============================================================
-        # STAGE A OUTPUTS: Tier 1 Safety-Critical Predictions
-        # ============================================================
+        # Stage A outputs (Tier 1)
         stage_a_outputs = {
             'classifications': cls_logits,
             'boxes': box_preds,
@@ -1380,20 +1354,14 @@ class MaxSightCNN(nn.Module):
                         self._timing_warnings = []
                     self._timing_warnings.append(f"Stage A latency {stage_a_latency_ms:.2f}ms exceeds threshold, skipping Stage B")
         
-        # ============================================================
-        # EXPLICIT STAGE A → STAGE B HANDOFF
-        # ============================================================
-        # CRITICAL: When Stage B is skipped, return Stage A outputs immediately
+        # Stage A → Stage B handoff (when Stage B skipped, return Stage A only)
         if skip_stage_b:
             stage_a_outputs['stage_a_latency_ms'] = stage_a_latency_ms
             stage_a_outputs['stage_b_completed'] = False
             stage_a_outputs['skip_stage_b_reason'] = 'high_latency' if (stage_a_latency_ms and stage_a_latency_ms > 200.0) else 'high_uncertainty'
             return stage_a_outputs
         
-        # ============================================================
-        # STAGE B: Context Pass (Opportunistic, Tier 2/3 Heads)
-        # ============================================================
-        # CRITICAL: Stage B uses RAW IMAGES (not Stage A features) for Hybrid backbone
+        # Stage B context pass (Hybrid backbone uses raw images)
         stage_b_features, temporal_outputs = self._forward_stage_b_backbone(
             images,  # RAW IMAGES - Hybrid backbone processes these
             fused_features,  # Stage A features - for temporal processing
@@ -1404,10 +1372,7 @@ class MaxSightCNN(nn.Module):
         outputs = stage_a_outputs.copy()
         outputs['stage_a_latency_ms'] = stage_a_latency_ms
         
-        # ============================================================
-        # STAGE B HEADS: Context & Enhancement (Tier 2/3)
-        # ============================================================
-        # TIER 2 HEADS: Navigation & Context (Can Degrade)
+        # Stage B heads (Tier 2/3)
         # Motion (temporal anchor) - only if temporal processing ran
         if temporal_outputs is not None:
             motion_features = temporal_outputs.get('motion')  # [B, 2, H, W]
@@ -1531,10 +1496,7 @@ class MaxSightCNN(nn.Module):
                     'shared_scene_embedding': shared_scene_emb
                 })
         
-        # ============================================================
-        # 7. POST-PROCESSING & HIGH-LEVEL PLANNING
-        # ============================================================
-        # Scene graph (top-K objects only) - for spatial memory
+        # Scene graph (top-K objects only) for spatial memory
         # OPTIMIZED: Vectorized object embedding extraction (no Python loops)
         top_k_scene = min(self.max_scene_graph_objects, H * W)
         top_k_scores_scene, top_k_indices_scene = torch.topk(obj_scores, k=top_k_scene, dim=1)  # [B, K]
@@ -1798,10 +1760,7 @@ class MaxSightCNN(nn.Module):
                 # Emphasize central regions (AMD affects central vision)
                 outputs['central_priority'] = center_mask * self.central_weight
         
-        # ============================================================
-        # 8. OUTPUT SCHEDULER & COGNITIVE LOAD MANAGEMENT
-        # ============================================================
-        # NOTE: Output scheduling happens in ml.utils.output_scheduler.py
+        # Output scheduling (see ml.utils.output_scheduler)
         # This module receives model outputs and manages:
         # - Multi-channel output prioritization (Visual, Audio, Haptic)
         # - Rate limiting (avoid flooding user)
@@ -1814,10 +1773,7 @@ class MaxSightCNN(nn.Module):
         #   scheduler = CrossModalScheduler(...)
         #   scheduled_outputs = scheduler.schedule(outputs)
         
-        # ============================================================
-        # 9. MULTIMODAL OUTPUT
-        # ============================================================
-        # NOTE: Multimodal output generation happens in app/overlays/
+        # Multimodal output (app/overlays)
         # This includes:
         # - Visual Overlays (bounding boxes, highlights, labels)
         # - Audio Output (TTS, alarms, priority tones)
@@ -1831,10 +1787,7 @@ class MaxSightCNN(nn.Module):
         #   voice_feedback.speak(scheduled_outputs)
         #   haptic_feedback.vibrate(scheduled_outputs)
         
-        # ============================================================
-        # 10. SIMULATION / TEST HARNESS
-        # ============================================================
-        # NOTE: Simulation interface receives all outputs for testing
+        # Simulation interface receives all outputs
         # Integration point:
         #   from tools.simulation.web_simulator import MaxSightSimulator
         #   simulator.step(outputs)  # Feeds outputs into simulator
@@ -1861,9 +1814,7 @@ class MaxSightCNN(nn.Module):
     @staticmethod
     @lru_cache(maxsize=32)
     def _get_center_mask_cached(H: int, W: int, device_type: str) -> torch.Tensor:
-        """Create a mask that is 1 in the center, 0 at edges (cached version).
-        Uses LRU cache with size limit to prevent memory leaks.
-        Note: Returns CPU tensor - caller must move to device."""
+        """Center mask (1 center, 0 edges), LRU-cached; returns CPU tensor, caller moves to device."""
         # Create device from type (ignore index for cache key to reduce cache size)
         device = torch.device(device_type)
         
@@ -1895,7 +1846,7 @@ class MaxSightCNN(nn.Module):
         nms_threshold: float = 0.5,
         max_detections: int = 20
     ) -> List[List[Dict]]:
-        """Post-process model outputs to get final detections with NMS...."""
+        """Post-process model outputs to final detections with confidence threshold and NMS."""
         if 'classifications' not in outputs or 'objectness' not in outputs:
             raise ValueError("Missing required outputs: 'classifications' and 'objectness'")
         
@@ -2010,7 +1961,7 @@ class MaxSightCNN(nn.Module):
         return detections
     
     def _nms(self, boxes: torch.Tensor, scores: torch.Tensor, threshold: float) -> List[int]:
-        """Non-Maximum Suppression - removes duplicate detections of the same object...."""
+        """Non-maximum suppression to remove duplicate detections for the same object."""
         if len(boxes) == 0:
             return []  # Edge case - no boxes to process
         
@@ -2129,7 +2080,7 @@ class MaxSightCNN(nn.Module):
         box_size: Optional[float] = None,
         confidence: Optional[float] = None,
     ) -> int:
-        """Map object class to urgency level for user safety prioritization...."""
+        """Map object class name to urgency level for user safety prioritization."""
         # Urgency map is now initialized in __init__ for thread safety
         class_lower = class_name.lower()  # Case-insensitive matching
         
@@ -2210,7 +2161,7 @@ class MaxSightCNN(nn.Module):
         return max(0, min(100, priority))
     
     def apply_tier_config(self, tier_config: 'TierConfig'):
-        """Apply tier configuration at runtime (for dynamic tier switching)...."""
+        """Apply tier configuration at runtime (for dynamic tier switching)."""
         self.tier_config = tier_config
         
         # Enable/disable components based on config
@@ -2258,9 +2209,8 @@ def create_model(
     tier_config: Optional['TierConfig'] = None
 ) -> MaxSightCNN:
     """Convenience function to create a MaxSight model with capability tier support...."""
-    # Create tier config if not provided
     if tier_config is None:
-        tier_config = TierConfig.for_tier(CapabilityTier.T0_BASELINE_CNN)
+        tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
     
     return MaxSightCNN(
         num_classes=num_classes,
@@ -2274,206 +2224,73 @@ def create_model(
 
 
 def build_model(**kwargs) -> MaxSightCNN:
-    """Build function for compatibility with quantization and export scripts...."""
+    """Build function for quantization and export scripts (same signature as create_model)."""
     return create_model(**kwargs)
 
 
-# ============================================================================
-# CAPABILITY TIERS (T0-T5) - Model Complexity Management
-# ============================================================================
-"""Model Capability Tiers..."""
+# T5 architecture only (Stage A: ResNet50+FPN; Stage B: hybrid, temporal, cross-task, cross-modal)
 
 from enum import Enum
 from dataclasses import dataclass
 
 
 class CapabilityTier(Enum):
-    """Model capability tiers with increasing complexity."""
-    T0_BASELINE_CNN = 0  # Baseline ResNet50 + FPN
-    T1_ATTENTION = 1  # + SE/CBAM attention
-    T2_HYBRID_VIT = 2  # + Hybrid CNN-ViT
-    T3_CROSS_TASK = 3  # + Cross-task attention
-    T4_CROSS_MODAL = 4  # + Cross-modal attention
-    T5_TEMPORAL = 5  # + Temporal modeling (video)
+    """T5 only: temporal + hybrid + cross-task + cross-modal."""
+    T5_TEMPORAL = 5
 
 
 @dataclass
 class TierConfig:
-    """Configuration for a capability tier...."""
+    """T5 configuration: Stage A ResNet50+FPN; Stage B hybrid, temporal, cross-task, cross-modal."""
     tier: CapabilityTier
     enabled: bool = True
-    
-    # Component flags (Stage B only - Stage A is always ResNet50+FPN)
-    use_se_attention: bool = False  # Stage A: Lightweight attention OK
-    use_cbam_attention: bool = False  # Stage A: Lightweight attention OK
-    use_hybrid_backbone: bool = False  # Stage B ONLY - never in Stage A
-    use_dynamic_conv: bool = False  # Stage B only
-    use_cross_task_attention: bool = False  # Stage B only
-    use_cross_modal_attention: bool = False  # Stage B only
-    use_temporal_modeling: bool = False  # Stage B ONLY - never in Stage A
-    use_retrieval: bool = False  # Stage B only, async/non-blocking
-    
-    # Performance constraints
-    max_latency_ms: float = 100.0  # Stage A target latency
-    min_confidence: float = 0.3
-    
+    use_se_attention: bool = True
+    use_cbam_attention: bool = True
+    use_hybrid_backbone: bool = True
+    use_dynamic_conv: bool = True
+    use_cross_task_attention: bool = True
+    use_cross_modal_attention: bool = True
+    use_temporal_modeling: bool = True
+    use_retrieval: bool = True
+    max_latency_ms: float = 300.0
+    min_confidence: float = 0.5
+
     @classmethod
     def for_tier(cls, tier: CapabilityTier) -> 'TierConfig':
-        """Create config for a specific tier."""
-        # CRITICAL FIX (Issue 6): Realistic latency numbers based on actual architecture
-        if tier == CapabilityTier.T0_BASELINE_CNN:
-            return cls(
-                tier=tier,
-                max_latency_ms=30.0,  # Realistic: 20-40ms for ResNet50+FPN only
-                min_confidence=0.3
-            )
-        elif tier == CapabilityTier.T1_ATTENTION:
-            return cls(
-                tier=tier,
-                use_se_attention=True,
-                use_cbam_attention=True,
-                max_latency_ms=50.0,  # Realistic: 30-60ms with lightweight attention
-                min_confidence=0.35
-            )
-        elif tier == CapabilityTier.T2_HYBRID_VIT:
-            return cls(
-                tier=tier,
-                use_se_attention=True,
-                use_cbam_attention=True,
-                use_hybrid_backbone=True,
-                use_dynamic_conv=True,
-                max_latency_ms=80.0,  # Realistic: 60-100ms with hybrid CNN-ViT
-                min_confidence=0.4
-            )
-        elif tier == CapabilityTier.T3_CROSS_TASK:
-            return cls(
-                tier=tier,
-                use_se_attention=True,
-                use_cbam_attention=True,
-                use_hybrid_backbone=True,
-                use_dynamic_conv=True,
-                use_cross_task_attention=True,
-                max_latency_ms=100.0,  # Realistic: 80-120ms with cross-task attention
-                min_confidence=0.4
-            )
-        elif tier == CapabilityTier.T4_CROSS_MODAL:
-            return cls(
-                tier=tier,
-                use_se_attention=True,
-                use_cbam_attention=True,
-                use_hybrid_backbone=True,  # Stage B only
-                use_dynamic_conv=True,
-                use_cross_task_attention=True,
-                use_cross_modal_attention=True,
-                use_retrieval=True,  # Async retrieval enabled
-                max_latency_ms=150.0,  # Realistic: 120-180ms with cross-modal attention
-                min_confidence=0.45
-            )
-        elif tier == CapabilityTier.T5_TEMPORAL:
-            return cls(
-                tier=tier,
-                use_se_attention=True,
-                use_cbam_attention=True,
-                use_hybrid_backbone=True,  # Stage B only
-                use_dynamic_conv=True,
-                use_cross_task_attention=True,
-                use_cross_modal_attention=True,
-                use_temporal_modeling=True,  # Stage B only
-                use_retrieval=True,  # Async retrieval enabled
-                max_latency_ms=300.0,  # Realistic: 200-350ms with temporal + cross-modal + hybrid
-                min_confidence=0.5
-            )
-        else:
-            return cls(tier=tier)
+        """Return T5 config (only tier supported)."""
+        return cls(tier=CapabilityTier.T5_TEMPORAL)
 
 
 class TierManager:
-    """Manages capability tier selection and kill switches...."""
-    
-    # Mode-based tier limits
-    MODE_TIER_LIMITS = {
-        'patient': CapabilityTier.T3_CROSS_TASK,
-        'clinician': CapabilityTier.T4_CROSS_MODAL,
-        'dev': CapabilityTier.T5_TEMPORAL
-    }
-    
+    """T5-only: holds T5 tier config (no tier switching)."""
     def __init__(self, mode: str = 'patient', initial_tier: Optional[CapabilityTier] = None):
-        """Initialize tier manager.
-        
-        Args:
-            mode: Output mode (patient/clinician/dev)
-            initial_tier: Initial tier (defaults to T0)"""
         self.mode = mode.lower()
-        self.max_tier = self.MODE_TIER_LIMITS.get(self.mode, CapabilityTier.T3_CROSS_TASK)
-        
-        if initial_tier is None:
-            # Start at T0 for safety
-            self.current_tier = CapabilityTier.T0_BASELINE_CNN
-        else:
-            # Clamp to max tier for mode
-            self.current_tier = self._clamp_tier(initial_tier)
-        
+        self.current_tier = CapabilityTier.T5_TEMPORAL
         self.tier_config = TierConfig.for_tier(self.current_tier)
         self.degradation_count = 0
-    
-    def _clamp_tier(self, tier: CapabilityTier) -> CapabilityTier:
-        """Clamp tier to maximum allowed for mode."""
-        if tier.value > self.max_tier.value:
-            return self.max_tier
-        return tier
-    
+
     def can_upgrade(self) -> bool:
-        """Check if tier can be upgraded."""
-        return self.current_tier.value < self.max_tier.value
-    
+        return False
+
     def upgrade_tier(self) -> bool:
-        """Upgrade to next tier if allowed.
-        
-        Returns:
-            True if upgraded, False otherwise"""
-        if not self.can_upgrade():
-            return False
-        
-        next_tier_value = self.current_tier.value + 1
-        next_tier = CapabilityTier(next_tier_value)
-        self.current_tier = next_tier
-        self.tier_config = TierConfig.for_tier(self.current_tier)
-        self.degradation_count = 0
-        return True
-    
+        return False
+
     def degrade_tier(self) -> bool:
-        """Degrade to previous tier.
-        
-        Returns:
-            True if degraded, False if already at T0"""
-        if self.current_tier.value == 0:
-            return False
-        
-        prev_tier_value = self.current_tier.value - 1
-        prev_tier = CapabilityTier(prev_tier_value)
-        self.current_tier = prev_tier
-        self.tier_config = TierConfig.for_tier(self.current_tier)
-        self.degradation_count += 1
-        return True
-    
+        return False
+
     def get_config(self) -> TierConfig:
-        """Get current tier configuration."""
         return self.tier_config
-    
+
     def get_tier_name(self) -> str:
-        """Get human-readable tier name."""
         return self.current_tier.name
-    
+
     def reset_to_baseline(self):
-        """Reset to T0 baseline."""
-        self.current_tier = CapabilityTier.T0_BASELINE_CNN
+        self.current_tier = CapabilityTier.T5_TEMPORAL
         self.tier_config = TierConfig.for_tier(self.current_tier)
         self.degradation_count = 0
 
 
-# ============================================================================
-# TEST HARNESS
-# ============================================================================
+# Test harness
 
 # Test model initialization
 if __name__ == "__main__":

@@ -9,11 +9,6 @@ from pathlib import Path
 
 import itertools
 
-# Default paths (Colab). Set via --val-annotation, --image-dir, --checkpoints-base.
-DEFAULT_VAL_ANN = "/content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json"
-DEFAULT_IMAGE_DIR = "/content/drive/MyDrive/MaxSight_Training"
-DEFAULT_CHECKPOINTS = "/content/drive/MyDrive/MaxSight"
-
 CONF_THRESHOLDS = [0.3, 0.1, 0.05, 0.02, 0.01]
 NMS_IOU_VALUES = [0.5, 0.6, 0.7, 0.8]
 
@@ -44,26 +39,30 @@ def parse_map_from_output(output: str) -> float:
 
 
 def main():
+    try:
+        _repo_root = Path(__file__).resolve().parents[1]
+    except NameError:
+        _repo_root = Path.cwd()
     parser = argparse.ArgumentParser(
         description="Sweep confidence and NMS IoU to find best mAP (inference only, no retraining)."
     )
     parser.add_argument(
         "--val-annotation",
         type=Path,
-        default=Path(DEFAULT_VAL_ANN),
-        help="Validation annotations JSON",
+        default=_repo_root / "datasets" / "cleaned_splits" / "maxsight_val.json",
+        help="Validation annotations JSON (default: repo datasets/cleaned_splits/maxsight_val.json)",
     )
     parser.add_argument(
         "--image-dir",
         type=Path,
-        default=Path(DEFAULT_IMAGE_DIR),
-        help="Image root directory",
+        default=_repo_root / "datasets",
+        help="Image root directory (default: repo datasets/)",
     )
     parser.add_argument(
         "--checkpoints-base",
         type=Path,
-        default=Path(DEFAULT_CHECKPOINTS),
-        help="Checkpoints base (checkpoints_<condition> folders)",
+        default=_repo_root / "checkpoints",
+        help="Checkpoints base with checkpoints_<condition> folders (default: repo checkpoints/)",
     )
     parser.add_argument(
         "--conditions",
@@ -134,8 +133,7 @@ def main():
             best_config = (conf, iou)
             print(f"  -> new best")
 
-    print("\n" + "=" * 50)
-    print("BEST RESULT")
+    print("\nBEST RESULT")
     print("  mAP@0.5:", best_map)
     print("  confidence:", best_config[0] if best_config else "N/A")
     print("  nms_iou:", best_config[1] if best_config else "N/A")

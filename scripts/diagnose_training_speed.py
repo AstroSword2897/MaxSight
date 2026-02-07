@@ -19,7 +19,7 @@ import json
 from collections import defaultdict
 
 from ml.data.data_pipeline import create_data_loaders
-from ml.models.maxsight_cnn import create_model, CapabilityTier
+from ml.models.maxsight_cnn import create_model, TierConfig, CapabilityTier
 from ml.training.train_loop import ProductionTrainLoop
 
 
@@ -195,15 +195,8 @@ def main():
     print(f"  Train batches: {len(train_loader)}")
     print(f"  Val batches: {len(val_loader)}")
     
-    # Create model
-    tier_map = {
-        "T2": CapabilityTier.T2_HYBRID_VIT,
-        "T3": CapabilityTier.T3_TEMPORAL,
-        "T4": CapabilityTier.T4_MULTIMODAL,
-        "T5": CapabilityTier.T5_TEMPORAL,
-    }
-    
-    model = create_model(tier=tier_map[args.tier])
+    tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
+    model = create_model(tier_config=tier_config)
     model = model.to(device)
     
     print(f"\n📦 Model: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M parameters")

@@ -1,6 +1,6 @@
-# MaxSight Training Configuration: T5 safety-focused
+# MaxSight Training Configuration: T5 safety-focused (reference only; do not retrain).
 # Same T5 architecture as t5_temporal; loss weights tuned for safety-critical detection.
-# Target: mAP@0.5 >= 0.5 after training.
+# Target: mAP@0.5 >= 0.5 via inference sweep only.
 
 model:
   tier: "T5_TEMPORAL"

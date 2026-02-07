@@ -38,7 +38,8 @@ This directory contains YAML configuration files for training different capabili
 - **Parameters**: ~320M
 - **Features**: + Temporal modeling, Video understanding
 - **Batch Size**: 4
-- **Use Case**: Full temporal understanding (requires video data)
+- **Use Case**: Full temporal understanding (requires video data). The model accepts 5D input `[B, T, C, H, W]` for temporal processing; the temporal encoder runs when such input is provided (e.g. at inference). The current training config and data pipeline use image-based data (same as other tiers); to train on video you need a dataloader that produces `[B, T, C, H, W]` batches.
+- **T5 with images (4D input)**: Yes. With standard image input `[B, C, H, W]`, T5 runs effectively: Stage A and Stage B (hybrid backbone, cross-modal, retrieval, all detection/context heads) run as usual. Only the temporal encoder is skipped, so `motion` and `temporal_consistency` outputs are `None`. You get a richer model than T4 (same plus temporal-capable weights) with no video required.
 
 ## Usage
 

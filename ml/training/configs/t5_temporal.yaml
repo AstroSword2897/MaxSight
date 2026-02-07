@@ -87,8 +87,7 @@ logging:
   log_every_n_steps: 50
   tensorboard: true
 
-# Target (post-training inference)
-# Reach mAP@0.5 >= 0.5 by training to full epochs then running improve_map_all_models on checkpoints.
+# Target: mAP@0.5 >= 0.5 via inference sweep only (no retraining).
 target_metrics:
   mAP_50: 0.5
 

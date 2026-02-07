@@ -15,6 +15,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from transformers import CLIPModel, CLIPProcessor
 from ml.data.inference_datasets import create_inference_dataloader
+from ml.data.data_pipeline import create_data_loaders
 from ml.utils.clip_utils import clip_image_features_to_tensor
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -27,6 +28,13 @@ INFERENCE_DATASET_ROOT = Path("/content/drive/MyDrive/MaxSight/datasets/open_ima
 SPLIT = "validation"
 BATCH_SIZE = 8
 MAX_SAMPLES = None  # set to e.g. 64 for a quick run
+# Fallback when inference dataset dir is missing: use val split (same as run_checkpoint_inference).
+# IMAGE_DIR must be the directory that contains the relative paths in the JSON (e.g. the folder that contains coco_raw).
+# If your COCO val images are under MaxSight/datasets, use MaxSight/datasets; if under MaxSight_Training, use that.
+VAL_ANNOTATION = Path("/content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json")
+IMAGE_DIR = Path("/content/drive/MyDrive/MaxSight/datasets")  # or Path("/content/drive/MyDrive/MaxSight_Training") if images live there
+# If images are in a different root than IMAGE_DIR, set this so missing files are tried under the fallback root
+FALLBACK_IMAGE_ROOT = Path("/content/drive/MyDrive/MaxSight_Training")  # try this when path under IMAGE_DIR is missing (e.g. val images live here)
 
 checkpoints = {
     "amblyopia": f"{CHECKPOINTS_BASE}/checkpoints_amblyopia/best_model.pt",
@@ -45,16 +53,50 @@ checkpoints = {
     "strabismus": f"{CHECKPOINTS_BASE}/checkpoints_strabismus/best_model.pt",
 }
 
-dataloader = create_inference_dataloader(
-    INFERENCE_DATASET_NAME,
-    INFERENCE_DATASET_ROOT,
-    split=SPLIT,
-    batch_size=BATCH_SIZE,
-    num_workers=0,
-    max_samples=MAX_SAMPLES,
-    shuffle=False,
-)
-print("Inference dataset batches:", len(dataloader), "dataset size:", len(dataloader.dataset))
+inference_split_dir = INFERENCE_DATASET_ROOT / SPLIT
+if inference_split_dir.exists():
+    dataloader = create_inference_dataloader(
+        INFERENCE_DATASET_NAME,
+        INFERENCE_DATASET_ROOT,
+        split=SPLIT,
+        batch_size=BATCH_SIZE,
+        num_workers=0,
+        max_samples=MAX_SAMPLES,
+        shuffle=False,
+    )
+    path_list = []
+    for batch in dataloader:
+        path_list.extend(batch["image_path"])
+    if MAX_SAMPLES is not None:
+        path_list = path_list[:MAX_SAMPLES]
+    print("Inference dataset:", len(path_list), "images")
+else:
+    print("Inference dataset dir not found:", inference_split_dir, "- using val split (VAL_ANNOTATION + IMAGE_DIR)")
+    _, val_loader, _ = create_data_loaders(
+        train_annotation_file=VAL_ANNOTATION,
+        val_annotation_file=VAL_ANNOTATION,
+        test_annotation_file=None,
+        image_dir=IMAGE_DIR,
+        batch_size=BATCH_SIZE,
+        num_workers=0,
+        pin_memory=(device.type == "cuda"),
+        condition_mode=None,
+        apply_lighting_augmentation=False,
+    )
+    ds = val_loader.dataset
+    path_list = []
+    for i in range(len(ds)):
+        ann = ds.annotations[ds.image_ids[i]]
+        p = ann["image_path"]
+        path_list.append(str(p) if not isinstance(p, str) else p)
+    if MAX_SAMPLES is not None:
+        path_list = path_list[:MAX_SAMPLES]
+    print("Val split:", len(path_list), "images")
+if not path_list:
+    raise FileNotFoundError(
+        "No images found. Either put the inference dataset at " + str(INFERENCE_DATASET_ROOT)
+        + " (with a '" + SPLIT + "' subdir) or set VAL_ANNOTATION and IMAGE_DIR to your val split."
+    )
 
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
 model.eval()
@@ -75,21 +117,37 @@ results = {}
 for condition in conditions:
     load_checkpoint(condition)
     feats_list = []
-    for batch in dataloader:
-        paths = batch["image_path"]
-        for path in paths:
-            try:
-                img = Image.open(path).convert("RGB")
-            except Exception as e:
-                print("Skip image", path, e)
-                continue
-            inputs = processor(images=img, return_tensors="pt")
-            inputs = {k: v.to(device) if torch.is_tensor(v) else v for k, v in inputs.items()}
-            with torch.no_grad():
-                out = model.get_image_features(**inputs)
-            f = clip_image_features_to_tensor(out)
-            feats_list.append(f.cpu())
+    skipped = 0
+    for path in path_list:
+        p = Path(path)
+        try:
+            if p.exists():
+                img = Image.open(p).convert("RGB")
+            elif FALLBACK_IMAGE_ROOT is not None and IMAGE_DIR is not None:
+                try:
+                    rel = p.relative_to(IMAGE_DIR)
+                    fallback_path = FALLBACK_IMAGE_ROOT / rel
+                    if fallback_path.exists():
+                        img = Image.open(fallback_path).convert("RGB")
+                    else:
+                        raise FileNotFoundError(str(fallback_path))
+                except (ValueError, FileNotFoundError):
+                    skipped += 1
+                    continue
+            else:
+                raise FileNotFoundError(str(p))
+        except Exception as e:
+            skipped += 1
+            continue
+        inputs = processor(images=img, return_tensors="pt")
+        inputs = {k: v.to(device) if torch.is_tensor(v) else v for k, v in inputs.items()}
+        with torch.no_grad():
+            out = model.get_image_features(**inputs)
+        f = clip_image_features_to_tensor(out)
+        feats_list.append(f.cpu())
     results[condition] = feats_list
+    if skipped:
+        print(condition, ": skipped", skipped, "images (missing or fallback missing)")
     print(condition, ":", len(feats_list), "feature vectors")
 
 for cond, feats in results.items():

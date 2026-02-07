@@ -180,10 +180,7 @@ def main():
     
     # Model
     parser.add_argument("--num-classes", type=int, default=None, help="Number of classes (default: len(COCO_CLASSES))")
-    parser.add_argument("--tier", 
-                        choices=["T0", "T1", "T2", "T3", "T4", "T5"], 
-                        default="T5",
-                        help="Model tier: T0 (baseline), T1 (attention), T2 (hybrid), T3 (cross-task), T4 (cross-modal), T5 (temporal+all features)")
+    parser.add_argument("--tier", choices=["T5"], default="T5", help="Model tier: T5 (temporal + hybrid + cross-task + cross-modal)")
     parser.add_argument("--use-audio", action="store_true")
     parser.add_argument("--condition-mode",
                         choices=[
@@ -366,16 +363,7 @@ def main():
     # Model
     num_classes = args.num_classes or len(COCO_CLASSES)
     
-    # Create tier configuration
-    tier_map = {
-        "T0": CapabilityTier.T0_BASELINE_CNN,
-        "T1": CapabilityTier.T1_ATTENTION,
-        "T2": CapabilityTier.T2_HYBRID_VIT,
-        "T3": CapabilityTier.T3_CROSS_TASK,
-        "T4": CapabilityTier.T4_CROSS_MODAL,
-        "T5": CapabilityTier.T5_TEMPORAL,
-    }
-    tier = tier_map[args.tier]
+    tier = CapabilityTier.T5_TEMPORAL
     tier_config = TierConfig.for_tier(tier)
     
     logger.info(f"Creating model with tier: {args.tier} ({tier.name})")

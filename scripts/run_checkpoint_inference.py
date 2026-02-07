@@ -295,8 +295,8 @@ def main():
     parser.add_argument(
         "--checkpoints-base",
         type=Path,
-        default=Path("/content/drive/MyDrive/MaxSight"),
-        help="Base directory containing checkpoints_<condition> folders",
+        default=None,
+        help="Base directory containing checkpoints_<condition> folders (e.g. ./checkpoints or /path/to/MaxSight). Required unless using --find-annotations.",
     )
     parser.add_argument(
         "--train-annotation",
@@ -314,7 +314,7 @@ def main():
         "--image-dir",
         type=Path,
         default=None,
-        help="Image root (e.g. /content/drive/MyDrive/MaxSight_Training); required unless using --find-annotations",
+        help="Image root (annotation file_name paths are relative to this). Required unless using --find-annotations.",
     )
     parser.add_argument(
         "--output",
@@ -387,15 +387,15 @@ def main():
     parser.add_argument(
         "--find-annotations",
         nargs="?",
-        const="/content/drive/MyDrive",
+        const=".",
         default=None,
         metavar="ROOT",
-        help="Search ROOT for .json files and print paths (then exit). Default ROOT: /content/drive/MyDrive. Use to discover val annotation path.",
+        help="Search ROOT for .json files and print paths (then exit). Default ROOT: current directory. Use to discover val annotation path.",
     )
     args = parser.parse_args()
 
     if args.find_annotations is not None:
-        root = Path(args.find_annotations)
+        root = Path(args.find_annotations).resolve()
         if not root.exists():
             logger.error("Find-annotations root does not exist: %s", root)
             return 1
@@ -411,6 +411,8 @@ def main():
 
     if args.val_annotation is None or args.image_dir is None:
         parser.error("--val-annotation and --image-dir are required (or use --find-annotations to discover paths).")
+    if args.checkpoints_base is None:
+        parser.error("--checkpoints-base is required (e.g. ./checkpoints or path to folder containing checkpoints_<condition>).")
 
     auto_confidence = str(args.confidence).strip().lower() == "auto"
     if auto_confidence:
@@ -444,7 +446,7 @@ def main():
     if not image_dir.exists():
         raise FileNotFoundError(
             f"Image dir not found: {image_dir}. "
-            "Use a real --image-dir (e.g. /content/drive/MyDrive/MaxSight_Training on Colab)."
+            "Point --image-dir to the root where annotation file_name paths resolve (e.g. ./datasets or path to your val images)."
         )
 
     conditions_list = _discover_conditions(args.checkpoints_base)

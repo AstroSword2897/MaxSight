@@ -180,7 +180,7 @@ def compute_losses(predictions: Dict, targets: Dict, loss_fns: Dict) -> Tuple[Di
 
 
 def smoke_train(
-    tier: CapabilityTier = CapabilityTier.T2_HYBRID_VIT,
+    tier: CapabilityTier = CapabilityTier.T5_TEMPORAL,
     num_epochs: int = 2,
     num_batches: int = 10,
     batch_size: int = 2,
@@ -207,7 +207,7 @@ def smoke_train(
     print(f"\nCreating model...")
     model = create_model(
         num_classes=91,
-        use_audio=(tier.value >= 4),
+        use_audio=True,
         tier_config=TierConfig.for_tier(tier)
     )
     model.eval()  # Set to eval for parameter counting
@@ -386,9 +386,7 @@ def smoke_train(
 
 def main():
     parser = argparse.ArgumentParser(description="Smoke training: proof of life")
-    parser.add_argument("--tier", type=str, default="T2_HYBRID_VIT",
-                       choices=["T0_BASELINE_CNN", "T1_ATTENTION", "T2_HYBRID_VIT", "T3_CROSS_TASK", "T4_CROSS_MODAL", "T5_TEMPORAL"],
-                       help="Capability tier to test")
+    parser.add_argument("--tier", type=str, default="T5_TEMPORAL", choices=["T5_TEMPORAL"], help="Capability tier (T5 only)")
     parser.add_argument("--epochs", type=int, default=2, help="Number of epochs")
     parser.add_argument("--batches", type=int, default=10, help="Batches per epoch")
     parser.add_argument("--batch-size", type=int, default=2, help="Batch size")

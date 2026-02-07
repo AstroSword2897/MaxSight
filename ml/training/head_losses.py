@@ -8,10 +8,7 @@ from abc import ABC, abstractmethod
 
 
 class HeadLoss(nn.Module, ABC):
-    """Base class for head-specific losses.
-    
-    All head losses should inherit from this class and implement the forward method
-    that returns a dictionary with at least a 'loss' key."""
+    """Base for head losses; subclasses implement forward and return a dict with at least 'loss'."""
     
     @abstractmethod
     def forward(
@@ -59,7 +56,7 @@ class ContrastLoss(HeadLoss):
 
 
 class FatigueLoss(HeadLoss):
-    """Fatigue head: fatigue score, blink rate, fixation stability. Informs when to suggest rest or reduce demand to protect user comfort and compliance."""
+    """Fatigue head: fatigue score, blink rate, fixation stability; used to modulate rest and demand for user comfort."""
     
     def __init__(self, fatigue_weight: float = 1.0, blink_weight: float = 0.5, fixation_weight: float = 0.5):
         super().__init__()
@@ -257,8 +254,7 @@ class DepthLoss(HeadLoss):
         depth_loss = torch.zeros((), device=device, dtype=dtype)
         zone_loss = torch.zeros((), device=device, dtype=dtype)
         
-        # CORRECT: Unified uncertainty-weighted depth loss
-        # L = |d - d_gt| * exp(-u) + u (single term, not separated)
+        # Uncertainty-weighted depth: L = |d - d_gt|*exp(-u) + u.
         if pred_depth is not None and target_depth is not None:
             depth_error = torch.abs(pred_depth - target_depth)  # [B, H, W]
             
@@ -266,9 +262,6 @@ class DepthLoss(HeadLoss):
                 # Clamp uncertainty away from exactly 0 or 1 for numerical stability
                 uncertainty = torch.clamp(pred_uncertainty, min=1e-6, max=1.0 - 1e-6)
                 
-                # CORRECT FORMULATION: Single unified term
-                # exp(-u) downweights errors in uncertain regions
-                # +u term encourages learning meaningful uncertainty (not just minimizing it)
                 depth_loss = (depth_error * torch.exp(-uncertainty) + uncertainty).mean()
             else:
                 # Fallback: standard L1 loss if uncertainty not available
