@@ -49,7 +49,9 @@ def load_model(condition: str, checkpoint_dir: Path, device: str):
 
 
 def load_image_tensor(img_info: dict, image_dir: Path, condition: str, device: str) -> torch.Tensor:
-    path = image_dir / img_info["file_name"]
+    # Support both "file_name" (COCO) and "image_path" (MaxSight list format)
+    rel = img_info.get("file_name", img_info.get("image_path", "image.jpg"))
+    path = Path(rel) if Path(rel).is_absolute() else image_dir / rel
     pil = Image.open(path).convert("RGB")
     preprocessor = ImagePreprocessor(image_size=(224, 224), condition_mode=condition)
     tensor = preprocessor(pil)
@@ -79,27 +81,54 @@ def main():
     with open(VAL_JSON) as f:
         data = json.load(f)
 
-    img_info = random.choice(data["images"])
-    image_id = img_info["id"]
-    img_w = img_info.get("width", 224)
-    img_h = img_info.get("height", 224)
-
-    gt_annos = [a for a in data["annotations"] if a["image_id"] == image_id]
-    print("GT boxes:", len(gt_annos))
-
-    if len(gt_annos) == 0:
-        print("No GT boxes — pick another image or check dataset.")
+    # Support COCO format (dict with "images"/"annotations") or MaxSight format (list of anns)
+    if isinstance(data, dict) and "images" in data and "annotations" in data:
+        img_info = random.choice(data["images"])
+        image_id = img_info["id"]
+        img_w = img_info.get("width", 224)
+        img_h = img_info.get("height", 224)
+        gt_annos = [a for a in data["annotations"] if a["image_id"] == image_id]
+        sx, sy = 224 / max(1, img_w), 224 / max(1, img_h)
+        gt_boxes = []
+        gt_classes = []
+        for ann in gt_annos:
+            x, y, w, h = ann["bbox"]
+            x1, y1 = x * sx, y * sy
+            x2, y2 = (x + w) * sx, (y + h) * sy
+            gt_boxes.append([x1, y1, x2, y2])
+            gt_classes.append(ann["category_id"])
+    elif isinstance(data, list):
+        # MaxSight cleaned_splits: list of { image_id, image_path, objects: [{ box: [cx,cy,w,h], class }] }
+        candidates = [a for a in data if a.get("objects")]
+        if not candidates:
+            print("No annotations with objects in JSON.")
+            return 1
+        ann = random.choice(candidates)
+        image_id = ann.get("image_id", ann.get("id", 0))
+        img_info = {
+            "file_name": ann.get("image_path", f"{image_id}.jpg"),
+            "image_path": ann.get("image_path", f"{image_id}.jpg"),
+        }
+        # GT boxes already normalized [cx, cy, w, h] -> convert to 224 xyxy
+        gt_boxes = []
+        gt_classes = []
+        for obj in ann["objects"]:
+            cx, cy, w, h = obj["box"]
+            x1 = (cx - w / 2) * 224
+            y1 = (cy - h / 2) * 224
+            x2 = (cx + w / 2) * 224
+            y2 = (cy + h / 2) * 224
+            gt_boxes.append([x1, y1, x2, y2])
+            gt_classes.append(obj.get("class", 0))
+    else:
+        print("Unknown JSON format: need 'images'/'annotations' (COCO) or list of annotations (MaxSight).")
         return 1
 
-    sx, sy = 224 / max(1, img_w), 224 / max(1, img_h)
-    gt_boxes = []
-    gt_classes = []
-    for ann in gt_annos:
-        x, y, w, h = ann["bbox"]
-        x1, y1 = x * sx, y * sy
-        x2, y2 = (x + w) * sx, (y + h) * sy
-        gt_boxes.append([x1, y1, x2, y2])
-        gt_classes.append(ann["category_id"])
+    print("GT boxes:", len(gt_boxes))
+
+    if len(gt_boxes) == 0:
+        print("No GT boxes — pick another image or check dataset.")
+        return 1
 
     image_tensor = load_image_tensor(img_info, IMAGE_DIR, CONDITION, DEVICE)
     model = load_model(CONDITION, CHECKPOINT_DIR, DEVICE)
