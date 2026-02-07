@@ -329,9 +329,18 @@ def main():
     val_ann = Path(args.val_annotation)
     image_dir = Path(args.image_dir)
     if not val_ann.exists():
-        raise FileNotFoundError(f"Val annotation not found: {val_ann}")
+        hint = (
+            " On Colab use real paths, e.g. "
+            "--val-annotation /content/drive/MyDrive/MaxSight/annotations/val.json "
+            "--image-dir /content/drive/MyDrive/MaxSight_Training"
+            if "/path/to" in str(val_ann) or "path/to" in str(val_ann) else ""
+        )
+        raise FileNotFoundError(f"Val annotation not found: {val_ann}.{hint}")
     if not image_dir.exists():
-        raise FileNotFoundError(f"Image dir not found: {image_dir}")
+        raise FileNotFoundError(
+            f"Image dir not found: {image_dir}. "
+            "Use a real --image-dir (e.g. /content/drive/MyDrive/MaxSight_Training on Colab)."
+        )
 
     conditions_list = _discover_conditions(args.checkpoints_base)
     if args.conditions:
