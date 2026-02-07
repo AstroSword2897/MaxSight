@@ -33,6 +33,30 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
+def _find_annotation_jsons(root: Path, max_files: int = 50, max_depth: int = 8) -> list[Path]:
+    """Find .json files under root (e.g. COCO-style annotation files)."""
+    root = Path(root)
+    if not root.exists():
+        return []
+    found = []
+    try:
+        for path in root.rglob("*.json"):
+            if len(found) >= max_files:
+                break
+            try:
+                if path.stat().st_size < 10:
+                    continue
+                depth = len(path.relative_to(root).parts)
+                if depth > max_depth:
+                    continue
+                found.append(path)
+            except (OSError, ValueError):
+                continue
+    except OSError:
+        pass
+    return sorted(found)[:max_files]
+
+
 def _discover_conditions(base_dir: Path):
     """Return sorted list of (condition_name, checkpoint_dir) for each checkpoints_*."""
     base_dir = Path(base_dir)
@@ -259,14 +283,14 @@ def main():
     parser.add_argument(
         "--val-annotation",
         type=Path,
-        required=True,
-        help="Path to validation annotations JSON",
+        default=None,
+        help="Path to validation annotations JSON (required unless using --find-annotations)",
     )
     parser.add_argument(
         "--image-dir",
         type=Path,
-        required=True,
-        help="Image root (e.g. /content/drive/MyDrive/MaxSight_Training)",
+        default=None,
+        help="Image root (e.g. /content/drive/MyDrive/MaxSight_Training); required unless using --find-annotations",
     )
     parser.add_argument(
         "--output",
@@ -323,19 +347,53 @@ def main():
         action="store_true",
         help="Log objectness stats (min/max/mean/percentiles, counts above 0.05/0.1/0.2/0.3) for first batch only",
     )
+    parser.add_argument(
+        "--find-annotations",
+        nargs="?",
+        const="/content/drive/MyDrive",
+        default=None,
+        metavar="ROOT",
+        help="Search ROOT for .json files and print paths (then exit). Default ROOT: /content/drive/MyDrive. Use to discover val annotation path.",
+    )
     args = parser.parse_args()
+
+    if args.find_annotations is not None:
+        root = Path(args.find_annotations)
+        if not root.exists():
+            logger.error("Find-annotations root does not exist: %s", root)
+            return 1
+        logger.info("Searching for .json under %s (max 50 files, depth 8)...", root)
+        found = _find_annotation_jsons(root)
+        if not found:
+            logger.warning("No .json files found under %s", root)
+            return 0
+        print("Use one of these with --val-annotation:")
+        for p in found:
+            print(f"  {p}")
+        return 0
+
+    if args.val_annotation is None or args.image_dir is None:
+        parser.error("--val-annotation and --image-dir are required (or use --find-annotations to discover paths).")
 
     train_ann = args.train_annotation or args.val_annotation
     val_ann = Path(args.val_annotation)
     image_dir = Path(args.image_dir)
     if not val_ann.exists():
-        hint = (
-            " On Colab use real paths, e.g. "
-            "--val-annotation /content/drive/MyDrive/MaxSight/annotations/val.json "
-            "--image-dir /content/drive/MyDrive/MaxSight_Training"
-            if "/path/to" in str(val_ann) or "path/to" in str(val_ann) else ""
-        )
-        raise FileNotFoundError(f"Val annotation not found: {val_ann}.{hint}")
+        hint = ""
+        parent = val_ann.parent
+        if parent.exists():
+            try:
+                found = sorted(p.name for p in parent.iterdir())[:20]
+                hint = f" In that directory found: {found}. Use one of these or the path to your val JSON."
+            except OSError:
+                pass
+        if not hint and parent.parent.exists():
+            try:
+                siblings = sorted(p.name for p in parent.parent.iterdir())[:20]
+                hint = f" Parent {parent.parent} has: {siblings}. Check path (e.g. annotations/val.json)."
+            except OSError:
+                pass
+        raise FileNotFoundError(f"Val annotation not found: {val_ann}. {hint}")
     if not image_dir.exists():
         raise FileNotFoundError(
             f"Image dir not found: {image_dir}. "
