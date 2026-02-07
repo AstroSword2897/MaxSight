@@ -369,9 +369,9 @@ def main():
     parser.add_argument(
         "--eval-class-id",
         type=int,
-        default=None,
+        default=0,
         metavar="ID",
-        help="Remap all prediction classes to this ID for evaluation (fixes mAP=0 when model class IDs don't match GT; e.g. --eval-class-id 0)",
+        help="Remap all prediction classes to this ID for evaluation (default 0 for single-class GT; set to -1 to disable remap)",
     )
     parser.add_argument(
         "--conditions",
@@ -489,7 +489,7 @@ def main():
                 confidence_threshold=confidence_threshold,
                 auto_confidence=auto_confidence,
                 nms_threshold=args.nms_iou,
-                remap_pred_class=args.eval_class_id,
+                remap_pred_class=args.eval_class_id if args.eval_class_id >= 0 else None,
                 diagnose=args.diagnose,
             )
             results.append(data)
@@ -518,6 +518,7 @@ def main():
         "image_dir": str(image_dir),
         "tier": args.tier,
         "confidence_threshold": args.confidence,
+        "eval_class_id": args.eval_class_id,
         "max_batches": args.max_batches,
         "checkpoints_base": str(args.checkpoints_base),
         "results": results,
