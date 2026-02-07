@@ -52,25 +52,28 @@ def load_model(condition, checkpoint_dir, device):
 
 def load_image_tensor(img_info, image_dir, condition, device):
     rel = img_info.get("file_name", img_info.get("image_path"))
-    path = image_dir / rel if not Path(rel).is_absolute() else Path(rel)
-    # If path from JSON doesn't exist (e.g. different Drive layout), try under image_dir
-    if not path.exists():
-        candidates = [image_dir / path.name, image_dir / rel]
-        if path.is_absolute():
-            for p in ("val2017", "train2017", "images", "val", "train"):
-                if p in path.parts:
-                    idx = path.parts.index(p)
-                    sub = Path(*path.parts[idx:])
-                    candidates.append(image_dir / sub)
-                    break
-        for p in candidates:
-            if p.exists():
-                path = p
-                break
-    if not path.exists():
+    filename = Path(rel).name
+
+    # Annotation JSON often stores old absolute paths; images may live under IMAGE_DIR.
+    # Try filename-only and common subdirs so inference runs and mAP is computed.
+    candidates = [
+        image_dir / filename,
+        image_dir / "val2017" / filename,
+        image_dir / "train2017" / filename,
+        image_dir / "images" / filename,
+    ]
+    # If rel was relative (e.g. val2017/xxx.jpg), try it under image_dir
+    if not Path(rel).is_absolute():
+        candidates.append(image_dir / rel)
+    path = None
+    for p in candidates:
+        if p.exists():
+            path = p
+            break
+    if path is None:
         raise FileNotFoundError(
-            f"Image not found: {path}. Tried under IMAGE_DIR={image_dir}. "
-            "Set IMAGE_DIR to the folder that contains your images (e.g. where val2017/ lives)."
+            f"Image not found for {filename}. Tried under IMAGE_DIR={image_dir} "
+            "(root, val2017/, train2017/, images/). Move images there or set IMAGE_DIR."
         )
     pil = Image.open(path).convert("RGB")
     preprocessor = ImagePreprocessor(
