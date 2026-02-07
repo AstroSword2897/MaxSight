@@ -75,12 +75,25 @@ def load_image_tensor(img_info, image_dir, condition, device):
         if p.exists():
             path = p
             break
-    if path is None:
+    if path is None and image_dir.exists():
+        # Fallback: search under IMAGE_DIR for filename (handles different folder layouts)
+        max_depth = 6
+        max_files = 15000
+        count = 0
+        for root, _dirs, files in os.walk(image_dir, topdown=True):
+            depth = len(Path(root).relative_to(image_dir).parts)
+            if depth > max_depth:
+                continue
+            if filename in files:
+                path = Path(root) / filename
+                break
+            count += len(files)
+            if count >= max_files:
+                break
+    if path is None or not path.exists():
         raise FileNotFoundError(
-            f"Image not found for {filename}. Tried under IMAGE_DIR={image_dir} "
-            "(root, val2017/, train2017/, images/, datasets/coco_raw/val2017|train2017/, coco_raw/...). "
-            "Set IMAGE_DIR to the folder that contains your images, e.g. in Colab: "
-            "os.environ['IMAGE_DIR'] = '/content/drive/MyDrive/MaxSight'"
+            f"Image not found for {filename}. Tried fixed paths and search under IMAGE_DIR={image_dir}. "
+            "Ensure the image exists under that folder (or set os.environ['IMAGE_DIR'] to the correct base)."
         )
     pil = Image.open(path).convert("RGB")
     preprocessor = ImagePreprocessor(
