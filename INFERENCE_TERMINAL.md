@@ -233,6 +233,41 @@ If you have cleaned splits instead, use `--val-annotation .../cleaned_splits/max
 
 Results: per-condition metrics in `inference_data.json`; with sweep, best confidence/nms in `improved_inference_config.json`. Copy paths from step 2 if your Drive layout is different.
 
+### Getting to mAP@0.5 when you see 0
+
+If inference reports mAP@0.5 = 0:
+
+1. **Diagnose objectness** (see if the model outputs any scores above threshold):
+   ```python
+   !python scripts/run_checkpoint_inference.py \
+     --val-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json \
+     --image-dir /content/drive/MyDrive/MaxSight_Training \
+     --checkpoints-base /content/drive/MyDrive/MaxSight \
+     --confidence 0.01 --diagnose --max-batches 2
+   ```
+   Check the log: if objectness max/p95 are below 0.05, a higher threshold filters everything out.
+
+2. **Sweep confidence and NMS** (finds best threshold without retraining; now includes 0.005):
+   ```python
+   !python scripts/improve_map_all_models.py \
+     --checkpoints-base /content/drive/MyDrive/MaxSight \
+     --val-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json \
+     --image-dir /content/drive/MyDrive/MaxSight_Training \
+     --output /content/drive/MyDrive/MaxSight/inference_data.json
+   ```
+   Omit `--skip-sweep` so it tries multiple confidence (0.3 down to 0.005) and NMS values, then runs full inference with the best. Use `--max-batches 20` for a quicker sweep.
+
+3. **Try adaptive confidence** (per-batch threshold from model scores):
+   ```python
+   !python scripts/run_checkpoint_inference.py \
+     --val-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json \
+     --image-dir /content/drive/MyDrive/MaxSight_Training \
+     --checkpoints-base /content/drive/MyDrive/MaxSight \
+     --confidence auto --output /content/drive/MyDrive/MaxSight/inference_data.json
+   ```
+
+4. **If mAP stays 0:** Checkpoints may be **untrained** (e.g. from `create_minimal_checkpoint.py`) or trained on different data. Reaching mAP@0.5 then requires **training** (e.g. `scripts/train_maxsight.py` or `scripts/train_t5_fast_colab.py`) on your val/train splits, then re-running inference.
+
 ---
 
 ## 7. Data on another disk (e.g. mounted Drive)

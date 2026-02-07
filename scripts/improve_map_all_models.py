@@ -50,7 +50,7 @@ CONDITIONS = [
     "presbyopia", "refractive_errors", "retinitis_pigmentosa", "strabismus",
 ]
 
-CONF_CANDIDATES = [0.3, 0.1, 0.05, 0.02, 0.01]
+CONF_CANDIDATES = [0.3, 0.1, 0.05, 0.02, 0.01, 0.005]  # 0.005 helps weak/partially trained checkpoints
 NMS_IOU_CANDIDATES = [0.5, 0.6, 0.7, 0.8]
 
 
@@ -92,6 +92,7 @@ def main():
     parser.add_argument("--skip-sweep", action="store_true", help="Skip sweep; run inference once with --confidence and --nms-iou")
     parser.add_argument("--confidence", type=float, default=0.05, help="Used if --skip-sweep")
     parser.add_argument("--nms-iou", type=float, default=0.5, help="Used if --skip-sweep")
+    parser.add_argument("--quiet", action="store_true", help="Minimal output: only best params and final result.")
     args = parser.parse_args()
 
     # Resolve checkpoint base
@@ -121,7 +122,8 @@ def main():
         n = 0
         for conf, iou in itertools.product(CONF_CANDIDATES, NMS_IOU_CANDIDATES):
             n += 1
-            print(f"\n[{n}/{total}] confidence={conf}, nms_iou={iou}")
+            if not args.quiet:
+                print(f"\n[{n}/{total}] confidence={conf}, nms_iou={iou}")
             cmd = [
                 sys.executable,
                 str(script),
@@ -135,24 +137,28 @@ def main():
                 cmd += ["--conditions"] + conditions
             if args.max_batches is not None:
                 cmd += ["--max-batches", str(args.max_batches)]
+            if args.quiet:
+                cmd += ["--quiet"]
             result = subprocess.run(cmd, cwd=str(REPO), capture_output=True, text=True)
             output = result.stdout + result.stderr
-            if result.returncode != 0:
+            if result.returncode != 0 and not args.quiet:
                 print(f"  Warning: exit code {result.returncode}", file=sys.stderr)
             m = parse_map_from_output(output)
-            print(f"  mAP@0.5: {m:.4f}")
+            if not args.quiet:
+                print(f"  mAP@0.5: {m:.4f}")
             if m > best_map:
                 best_map = m
                 best_conf, best_nms = conf, iou
-                print("  -> new best")
+                if not args.quiet:
+                    print("  -> new best")
 
-        print("\nBEST RESULT")
-        print("  mAP@0.5:", best_map)
-        print("  confidence:", best_conf)
-        print("  nms_iou:", best_nms)
+        if not args.quiet:
+            print("\nBEST RESULT")
+        print("mAP@0.5:", best_map, "| confidence:", best_conf, "| nms_iou:", best_nms)
 
     # Full inference with best params (all conditions, full val unless --max-batches)
-    print("\nRunning full inference with best params...")
+    if not args.quiet:
+        print("\nRunning full inference with best params...")
     cmd = [
         sys.executable,
         str(script),
@@ -167,8 +173,12 @@ def main():
         cmd += ["--conditions"] + conditions
     if args.max_batches is not None:
         cmd += ["--max-batches", str(args.max_batches)]
-    result = subprocess.run(cmd, cwd=str(REPO))
+    if args.quiet:
+        cmd += ["--quiet"]
+    result = subprocess.run(cmd, cwd=str(REPO), capture_output=True if args.quiet else False, text=True)
     if result.returncode != 0:
+        if args.quiet and result.stderr:
+            print(result.stderr, file=sys.stderr)
         return result.returncode
 
     config = {
@@ -179,7 +189,7 @@ def main():
     }
     with open(args.config_output, "w") as f:
         json.dump(config, f, indent=2)
-    print(f"\nDone. Results: {args.output} | Config: {args.config_output}")
+    print(f"Done. {args.output} | {args.config_output}")
     return 0
 
 

@@ -392,7 +392,16 @@ def main():
         metavar="ROOT",
         help="Search ROOT for .json files and print paths (then exit). Default ROOT: current directory. Use to discover val annotation path.",
     )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Only print errors and a single summary line; no per-condition logs.",
+    )
     args = parser.parse_args()
+
+    if args.quiet:
+        logging.getLogger().setLevel(logging.WARNING)
+        logger.setLevel(logging.WARNING)
 
     if args.find_annotations is not None:
         root = Path(args.find_annotations).resolve()
@@ -536,7 +545,11 @@ def main():
     }
     with open(args.output, "w") as f:
         json.dump(out_data, f, indent=2)
-    logger.info("Wrote inference data to %s", args.output)
+    if args.quiet:
+        n_ok = sum(1 for r in results if "error" not in r)
+        print(f"Done. {args.output} ({n_ok}/{len(results)} conditions)")
+    else:
+        logger.info("Wrote inference data to %s", args.output)
     return 0
 
 
