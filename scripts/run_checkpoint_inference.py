@@ -98,6 +98,7 @@ def run_inference_for_checkpoint(
     max_batches: Optional[int],
     confidence_threshold: float,
     auto_confidence: bool = False,
+    nms_threshold: float = 0.5,
     diagnose: bool = False,
 ) -> dict:
     """Load one checkpoint, run validation inference, return metrics and latency stats."""
@@ -174,6 +175,7 @@ def run_inference_for_checkpoint(
                 batch_detections = model.get_detections(
                     outputs,
                     confidence_threshold=batch_conf,
+                    nms_threshold=nms_threshold,
                 )
             except Exception as e:
                 logger.warning("get_detections failed batch %s: %s", batch_idx, e)
@@ -353,6 +355,12 @@ def main():
         help="Detection confidence threshold (float, e.g. 0.05) or 'auto' to use per-batch 85th percentile of objectness (no retrain; gets non-zero metrics when scores are low)",
     )
     parser.add_argument(
+        "--nms-iou",
+        type=float,
+        default=0.5,
+        help="NMS IoU threshold for overlapping detections (default 0.5)",
+    )
+    parser.add_argument(
         "--conditions",
         type=str,
         nargs="*",
@@ -467,6 +475,7 @@ def main():
                 max_batches=args.max_batches,
                 confidence_threshold=confidence_threshold,
                 auto_confidence=auto_confidence,
+                nms_threshold=args.nms_iou,
                 diagnose=args.diagnose,
             )
             results.append(data)
