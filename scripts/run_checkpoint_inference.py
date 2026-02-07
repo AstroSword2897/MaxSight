@@ -103,6 +103,7 @@ def run_inference_for_checkpoint(
     confidence_threshold: float,
     auto_confidence: bool = False,
     nms_threshold: float = 0.5,
+    remap_pred_class: Optional[int] = None,
     diagnose: bool = False,
 ) -> dict:
     """Load one checkpoint, run validation inference, return metrics and latency stats."""
@@ -211,8 +212,9 @@ def run_inference_for_checkpoint(
                         box = det.get("box")
                         if isinstance(box, (list, tuple)) and len(box) == 4:
                             pred_boxes_list.append(box)
+                            raw_class = det.get("class", det.get("class_id", 0))
                             pred_labels_list.append(
-                                det.get("class", det.get("class_id", 0))
+                                remap_pred_class if remap_pred_class is not None else raw_class
                             )
                             pred_scores_list.append(
                                 det.get("confidence", 0.5)
@@ -365,6 +367,13 @@ def main():
         help="NMS IoU threshold for overlapping detections (default 0.5)",
     )
     parser.add_argument(
+        "--eval-class-id",
+        type=int,
+        default=None,
+        metavar="ID",
+        help="Remap all prediction classes to this ID for evaluation (fixes mAP=0 when model class IDs don't match GT; e.g. --eval-class-id 0)",
+    )
+    parser.add_argument(
         "--conditions",
         type=str,
         nargs="*",
@@ -480,6 +489,7 @@ def main():
                 confidence_threshold=confidence_threshold,
                 auto_confidence=auto_confidence,
                 nms_threshold=args.nms_iou,
+                remap_pred_class=args.eval_class_id,
                 diagnose=args.diagnose,
             )
             results.append(data)
