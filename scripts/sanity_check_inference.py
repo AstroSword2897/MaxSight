@@ -7,6 +7,7 @@ import json
 import os
 import random
 import sys
+from collections import deque
 from pathlib import Path
 
 import torch
@@ -76,20 +77,33 @@ def load_image_tensor(img_info, image_dir, condition, device):
             path = p
             break
     if path is None and image_dir.exists():
-        # Fallback: search under IMAGE_DIR for filename (handles different folder layouts)
-        max_depth = 6
-        max_files = 15000
-        count = 0
-        for root, _dirs, files in os.walk(image_dir, topdown=True):
-            depth = len(Path(root).relative_to(image_dir).parts)
-            if depth > max_depth:
-                continue
-            if filename in files:
-                path = Path(root) / filename
-                break
-            count += len(files)
-            if count >= max_files:
-                break
+        # Fallback: breadth-first search so we check val2017/train2017 before hitting limit in a huge sibling
+        max_depth = 8
+        max_dirs = 5000
+        try:
+            queue = deque([(image_dir, 0)])
+            dirs_done = 0
+            while queue and dirs_done < max_dirs:
+                root, depth = queue.popleft()
+                if depth > max_depth:
+                    continue
+                dirs_done += 1
+                try:
+                    entries = list(Path(root).iterdir())
+                except OSError:
+                    continue
+                for e in entries:
+                    if e.is_file():
+                        if e.name == filename:
+                            path = e
+                            queue.clear()
+                            break
+                    elif e.is_dir():
+                        queue.append((e, depth + 1))
+                if path is not None:
+                    break
+        except (ValueError, OSError):
+            pass
     if path is None or not path.exists():
         raise FileNotFoundError(
             f"Image not found for {filename}. Tried fixed paths and search under IMAGE_DIR={image_dir}. "
