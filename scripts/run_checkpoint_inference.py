@@ -17,7 +17,11 @@ from typing import Optional
 import numpy as np
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+try:
+    _repo_root = Path(__file__).resolve().parents[1]
+except NameError:
+    _repo_root = Path.cwd()
+sys.path.insert(0, str(_repo_root))
 
 from ml.data.data_pipeline import create_data_loaders
 from ml.models.maxsight_cnn import (

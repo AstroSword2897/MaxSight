@@ -80,7 +80,10 @@ def main():
     )
     args = parser.parse_args()
 
-    repo_root = Path(__file__).resolve().parents[1]
+    try:
+        repo_root = Path(__file__).resolve().parents[1]
+    except NameError:
+        repo_root = Path.cwd()
     script = repo_root / "scripts" / "run_checkpoint_inference.py"
     if not script.exists():
         print(f"Error: {script} not found", file=sys.stderr)
