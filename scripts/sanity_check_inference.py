@@ -145,29 +145,47 @@ def main():
         print("Expected MaxSight format: JSON list of annotations with 'objects' and 'image_path'.")
         return 1
 
-    ann = random.choice([a for a in data if a.get("objects")])
+    candidates = [a for a in data if a.get("objects")]
+    if not candidates:
+        print("No annotations with objects in JSON.")
+        return 1
+    random.shuffle(candidates)
 
-    img_info = {
-        "file_name": ann["image_path"],
-        "image_path": ann["image_path"],
-    }
-
+    ann = None
     gt_boxes = []
     gt_classes = []
+    img_info = None
+    last_err = None
+    max_tries = min(15, len(candidates))
 
-    for obj in ann["objects"]:
-        cx, cy, w, h = obj["box"]
-        x1 = (cx - w / 2) * MODEL_SIZE
-        y1 = (cy - h / 2) * MODEL_SIZE
-        x2 = (cx + w / 2) * MODEL_SIZE
-        y2 = (cy + h / 2) * MODEL_SIZE
-        gt_boxes.append([x1, y1, x2, y2])
-        gt_classes.append(obj.get("class", 0))
+    for i in range(max_tries):
+        ann = candidates[i]
+        img_info = {
+            "file_name": ann["image_path"],
+            "image_path": ann["image_path"],
+        }
+        gt_boxes = []
+        gt_classes = []
+        for obj in ann["objects"]:
+            cx, cy, w, h = obj["box"]
+            x1 = (cx - w / 2) * MODEL_SIZE
+            y1 = (cy - h / 2) * MODEL_SIZE
+            x2 = (cx + w / 2) * MODEL_SIZE
+            y2 = (cy + h / 2) * MODEL_SIZE
+            gt_boxes.append([x1, y1, x2, y2])
+            gt_classes.append(obj.get("class", 0))
+        try:
+            image_tensor = load_image_tensor(img_info, IMAGE_DIR, CONDITION, DEVICE)
+            break
+        except FileNotFoundError as e:
+            last_err = e
+            if i < max_tries - 1:
+                continue
+            raise last_err from None
 
     print("GT boxes:", len(gt_boxes))
 
     model = load_model(CONDITION, CHECKPOINT_DIR, DEVICE)
-    image_tensor = load_image_tensor(img_info, IMAGE_DIR, CONDITION, DEVICE)
 
     detections = get_detections(model, image_tensor)[0]
     print("Predicted boxes:", len(detections))
