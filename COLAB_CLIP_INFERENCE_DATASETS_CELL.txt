@@ -1,0 +1,97 @@
+# CLIP + 14 condition checkpoints on repo inference datasets
+# Run after Cell 1 (clone repo) and Cell 2 (mount Drive). Uses ml.data.inference_datasets.
+
+import sys
+from pathlib import Path
+from PIL import Image
+import torch
+
+REPO_ROOT = Path("/content/2026-Prototype")
+if not REPO_ROOT.exists():
+    raise FileNotFoundError("Clone the repo first (Cell 1). Expected: " + str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT))
+
+!pip install -q transformers
+
+from transformers import CLIPModel, CLIPProcessor
+from ml.data.inference_datasets import create_inference_dataloader
+from ml.utils.clip_utils import clip_image_features_to_tensor
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Using device:", device)
+
+# Paths: checkpoints on Drive; inference dataset root on Drive or /content
+CHECKPOINTS_BASE = "/content/drive/MyDrive/MaxSight"
+INFERENCE_DATASET_NAME = "open_images_v6"  # or "bdd100k", "ade20k"
+INFERENCE_DATASET_ROOT = Path("/content/drive/MyDrive/MaxSight/datasets/open_images_v6")  # adjust to your layout
+SPLIT = "validation"
+BATCH_SIZE = 8
+MAX_SAMPLES = None  # set to e.g. 64 for a quick run
+
+checkpoints = {
+    "amblyopia": f"{CHECKPOINTS_BASE}/checkpoints_amblyopia/best_model.pt",
+    "amd": f"{CHECKPOINTS_BASE}/checkpoints_amd/best_model.pt",
+    "astigmatism": f"{CHECKPOINTS_BASE}/checkpoints_astigmatism/best_model.pt",
+    "cataracts": f"{CHECKPOINTS_BASE}/checkpoints_cataracts/best_model.pt",
+    "color_blindness": f"{CHECKPOINTS_BASE}/checkpoints_color_blindness/best_model.pt",
+    "cvi": f"{CHECKPOINTS_BASE}/checkpoints_cvi/best_model.pt",
+    "diabetic_retinopathy": f"{CHECKPOINTS_BASE}/checkpoints_diabetic_retinopathy/best_model.pt",
+    "glaucoma": f"{CHECKPOINTS_BASE}/checkpoints_glaucoma/best_model.pt",
+    "hyperopia": f"{CHECKPOINTS_BASE}/checkpoints_hyperopia/best_model.pt",
+    "myopia": f"{CHECKPOINTS_BASE}/checkpoints_myopia/best_model.pt",
+    "presbyopia": f"{CHECKPOINTS_BASE}/checkpoints_presbyopia/best_model.pt",
+    "refractive_errors": f"{CHECKPOINTS_BASE}/checkpoints_refractive_errors/best_model.pt",
+    "retinitis_pigmentosa": f"{CHECKPOINTS_BASE}/checkpoints_retinitis_pigmentosa/best_model.pt",
+    "strabismus": f"{CHECKPOINTS_BASE}/checkpoints_strabismus/best_model.pt",
+}
+
+dataloader = create_inference_dataloader(
+    INFERENCE_DATASET_NAME,
+    INFERENCE_DATASET_ROOT,
+    split=SPLIT,
+    batch_size=BATCH_SIZE,
+    num_workers=0,
+    max_samples=MAX_SAMPLES,
+    shuffle=False,
+)
+print("Inference dataset batches:", len(dataloader), "dataset size:", len(dataloader.dataset))
+
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
+model.eval()
+processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
+def load_checkpoint(condition_name):
+    ckpt = torch.load(checkpoints[condition_name], map_location=device, weights_only=True)
+    if "model_state_dict" in ckpt:
+        model.load_state_dict(ckpt["model_state_dict"], strict=False)
+        model.eval()
+        print(condition_name, "loaded")
+    else:
+        print(condition_name, "missing model_state_dict")
+
+conditions = list(checkpoints.keys())
+results = {}
+
+for condition in conditions:
+    load_checkpoint(condition)
+    feats_list = []
+    for batch in dataloader:
+        paths = batch["image_path"]
+        for path in paths:
+            try:
+                img = Image.open(path).convert("RGB")
+            except Exception as e:
+                print("Skip image", path, e)
+                continue
+            inputs = processor(images=img, return_tensors="pt")
+            inputs = {k: v.to(device) if torch.is_tensor(v) else v for k, v in inputs.items()}
+            with torch.no_grad():
+                out = model.get_image_features(**inputs)
+            f = clip_image_features_to_tensor(out)
+            feats_list.append(f.cpu())
+    results[condition] = feats_list
+    print(condition, ":", len(feats_list), "feature vectors")
+
+for cond, feats in results.items():
+    if feats:
+        print(cond, "feature shape:", feats[0].shape, "count:", len(feats))
