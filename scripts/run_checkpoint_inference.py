@@ -77,6 +77,17 @@ def _discover_conditions(base_dir: Path):
     return out
 
 
+def _adaptive_confidence_threshold(outputs: dict, percentile: float = 85.0, min_thresh: float = 0.01, max_thresh: float = 0.5) -> float:
+    """Compute confidence threshold from objectness so top (100 - percentile)% of scores pass. No retraining."""
+    if "objectness" not in outputs:
+        return min_thresh
+    obj = outputs["objectness"].float().flatten().cpu().numpy()
+    if obj.size == 0:
+        return min_thresh
+    p = float(np.percentile(obj, percentile))
+    return max(min_thresh, min(max_thresh, p))
+
+
 def run_inference_for_checkpoint(
     checkpoint_path: Path,
     condition: str,
@@ -86,6 +97,7 @@ def run_inference_for_checkpoint(
     tier: str,
     max_batches: Optional[int],
     confidence_threshold: float,
+    auto_confidence: bool = False,
     diagnose: bool = False,
 ) -> dict:
     """Load one checkpoint, run validation inference, return metrics and latency stats."""
@@ -153,10 +165,15 @@ def run_inference_for_checkpoint(
                     count = (obj_np > thresh).sum()
                     logger.info("  objectness > %.2f: %d / %d (%.1f%%)", thresh, int(count), n, 100.0 * count / n if n else 0)
 
+            batch_conf = confidence_threshold
+            if auto_confidence:
+                batch_conf = _adaptive_confidence_threshold(outputs)
+                if batch_idx == 0:
+                    logger.info("Auto confidence (batch 0): using threshold=%.4f from objectness 85th percentile", batch_conf)
             try:
                 batch_detections = model.get_detections(
                     outputs,
-                    confidence_threshold=confidence_threshold,
+                    confidence_threshold=batch_conf,
                 )
             except Exception as e:
                 logger.warning("get_detections failed batch %s: %s", batch_idx, e)
@@ -331,9 +348,9 @@ def main():
     )
     parser.add_argument(
         "--confidence",
-        type=float,
-        default=0.1,
-        help="Detection confidence threshold (0.1 recommended for current checkpoints)",
+        type=str,
+        default="0.05",
+        help="Detection confidence threshold (float, e.g. 0.05) or 'auto' to use per-batch 85th percentile of objectness (no retrain; gets non-zero metrics when scores are low)",
     )
     parser.add_argument(
         "--conditions",
@@ -374,6 +391,16 @@ def main():
 
     if args.val_annotation is None or args.image_dir is None:
         parser.error("--val-annotation and --image-dir are required (or use --find-annotations to discover paths).")
+
+    auto_confidence = str(args.confidence).strip().lower() == "auto"
+    if auto_confidence:
+        confidence_threshold = 0.05
+        logger.info("Using --confidence auto: per-batch threshold from objectness 85th percentile")
+    else:
+        try:
+            confidence_threshold = float(args.confidence)
+        except (TypeError, ValueError):
+            parser.error(f"--confidence must be a number or 'auto', got: {args.confidence!r}")
 
     train_ann = args.train_annotation or args.val_annotation
     val_ann = Path(args.val_annotation)
@@ -438,7 +465,8 @@ def main():
                 num_classes=args.num_classes,
                 tier=args.tier,
                 max_batches=args.max_batches,
-                confidence_threshold=args.confidence,
+                confidence_threshold=confidence_threshold,
+                auto_confidence=auto_confidence,
                 diagnose=args.diagnose,
             )
             results.append(data)

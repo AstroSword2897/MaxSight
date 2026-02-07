@@ -1,14 +1,18 @@
-"""Evaluation report generator with lighting-aware metrics analysis."""
+"""Evaluation report generator with lighting-aware metrics. Stratifying by lighting (bright, normal, dim, dark) matters because low-vision users often struggle in non-ideal conditions; we need graceful degradation."""
 
-from pathlib import Path
-from typing import Dict, Optional, Any, List
 import json
-from ml.training.scene_metrics import SceneMetrics
+import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 from ml.training.benchmark import benchmark_inference
+from ml.training.scene_metrics import SceneMetrics
+
+logger = logging.getLogger(__name__)
 
 
 def generate_evaluation_report(metrics: Dict[str, float], save_path: Optional[Path] = None) -> str:
-    """Generate text report with overall and lighting-stratified metrics."""
+    """Build text report with overall and per-lighting metrics; optionally save to path."""
     report = []
     
     report.append("MaxSight Model Evaluation Report")
@@ -123,13 +127,13 @@ def generate_evaluation_report(metrics: Dict[str, float], save_path: Optional[Pa
 
 
 def plot_lighting_metrics(metrics: Dict[str, float], save_path: Optional[Path] = None) -> None:
-    """Plot precision/recall comparison across lighting conditions. Requires matplotlib."""
+    """Plot precision/recall by lighting. Highlights where performance drops so we can improve assistive reliability in challenging light."""
     try:
         import matplotlib.pyplot as plt  # type: ignore
         import matplotlib  # type: ignore
         matplotlib.use('Agg')
     except ImportError:
-        print("matplotlib not installed, skipping plot")
+        logger.warning("matplotlib not installed, skipping plot")
         return
     
     lightings = ['bright', 'normal', 'dim', 'dark']
@@ -175,13 +179,13 @@ def plot_lighting_metrics(metrics: Dict[str, float], save_path: Optional[Path] =
     if save_path:
         save_path.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"Plot saved to {save_path}")
+        logger.info("Plot saved to %s", save_path)
     
     plt.close()
 
 
 def analyze_lighting_degradation(metrics: Dict[str, float], lighting_conditions: Optional[List[str]] = None) -> Dict[str, Dict[str, float]]:
-    """Calculate degradation % for each lighting condition vs normal. Positive = worse...."""
+    """Return degradation percent vs normal per lighting. Quantifies how much assistive quality drops in dim/dark so we can set acceptable thresholds."""
     if lighting_conditions is None:
         lighting_conditions = ['bright', 'dim', 'dark']
     
@@ -207,7 +211,7 @@ def analyze_lighting_degradation(metrics: Dict[str, float], lighting_conditions:
 
 
 def export_metrics_json(metrics: Dict[str, float], save_path: Path) -> None:
-    """Export metrics to JSON. Handles torch tensors."""
+    """Write metrics to JSON; scalar tensors are converted to float."""
     save_path.parent.mkdir(parents=True, exist_ok=True)
     
     json_metrics = {}
@@ -219,6 +223,5 @@ def export_metrics_json(metrics: Dict[str, float], save_path: Path) -> None:
     
     with open(save_path, 'w') as f:
         json.dump(json_metrics, f, indent=2)
-    
-    print(f"Metrics exported to JSON: {save_path}")
+    logger.info("Metrics exported to JSON: %s", save_path)
 

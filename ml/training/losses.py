@@ -1,6 +1,4 @@
-"""Per-Head Loss Definitions for MaxSight 3.0
-
-Explicit loss functions for each head with ground truth specifications."""
+"""Per-head loss definitions for MaxSight. Each head supports assistive outputs: what is in the scene, where it is, how urgent, and at what distance—so the system can guide users with low vision or blindness safely."""
 
 import torch
 import torch.nn as nn
@@ -9,11 +7,8 @@ from typing import Dict, Optional, Tuple
 
 
 class ObjectnessLoss(nn.Module):
-    """Objectness head loss.
-    
-    Ground Truth: Binary labels (0/1) indicating presence of object at location
-    Loss: Binary Cross-Entropy with focal loss for hard negatives"""
-    
+    """Objectness: BCE + focal loss for binary presence at each location. Ensures the model reliably detects that something is there—foundation for scene awareness for users with low vision."""
+
     def __init__(self, alpha: float = 0.25, gamma: float = 2.0):
         super().__init__()
         self.alpha = alpha
@@ -21,9 +16,7 @@ class ObjectnessLoss(nn.Module):
         self.bce = nn.BCEWithLogitsLoss(reduction='none')
     
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Args:
-            predictions: [B, N] logits
-            targets: [B, N] binary labels (0/1)"""
+        """Forward: [B, N] logits vs [B, N] binary labels."""
         bce_loss = self.bce(predictions, targets)
         p_t = torch.sigmoid(predictions)
         p_t = torch.where(targets == 1, p_t, 1 - p_t)
@@ -45,16 +38,13 @@ class ClassificationLoss(nn.Module):
         self.gamma = gamma
     
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Args:
-            predictions: [B, N, num_classes] logits
-            targets: [B, N] class indices"""
+        """Forward: [B, N, C] logits vs [B, N] class indices."""
         ce_loss = F.cross_entropy(
             predictions.reshape(-1, self.num_classes),
             targets.reshape(-1),
             reduction='none'
         )
         
-        # Focal loss weighting
         p = F.softmax(predictions, dim=-1)
         p_t = p.gather(2, targets.unsqueeze(-1)).squeeze(-1)
         focal_weight = self.alpha * (1 - p_t) ** self.gamma
@@ -63,19 +53,14 @@ class ClassificationLoss(nn.Module):
 
 
 class BoxRegressionLoss(nn.Module):
-    """Box regression head loss.
-    
-    Ground Truth: Normalized box coordinates [x_center, y_center, width, height] in [0, 1]
-    Loss: Smooth L1 loss (Huber loss)"""
-    
+    """Box regression: smooth L1 on normalized [cx, cy, w, h] boxes. Accurate location is needed to highlight or announce where hazards and objects are in the user’s field of view."""
+
     def __init__(self, beta: float = 1.0):
         super().__init__()
         self.beta = beta
     
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Args:
-            predictions: [B, N, 4] normalized boxes
-            targets: [B, N, 4] normalized boxes"""
+        """Forward: [B, N, 4] pred vs [B, N, 4] target boxes."""
         diff = predictions - targets
         abs_diff = torch.abs(diff)
         smooth_l1 = torch.where(
@@ -87,11 +72,8 @@ class BoxRegressionLoss(nn.Module):
 
 
 class DistanceZoneLoss(nn.Module):
-    """Distance zone head loss.
-    
-    Ground Truth: Zone indices (0=near, 1=medium, 2=far)
-    Loss: Cross-entropy with class weights"""
-    
+    """Distance zone: CE over zone indices (0=near, 1=medium, 2=far)."""
+
     def __init__(self, num_zones: int = 3, class_weights: Optional[torch.Tensor] = None):
         super().__init__()
         self.num_zones = num_zones
@@ -100,22 +82,11 @@ class DistanceZoneLoss(nn.Module):
         self.register_buffer('class_weights', class_weights)
     
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Compute distance zone classification loss.
-        
-        Args:
-            predictions: [B, N, num_zones] logits for each location
-            targets: [B, N] zone indices (0=near, 1=medium, 2=far, -1=ignore)
-        
-        Returns:
-            Cross-entropy loss (zero if no valid targets)
-        """
+        """Forward: [B, N, num_zones] logits vs [B, N] zone indices (-1=ignore). Returns 0 if no valid targets."""
         pred_flat = predictions.reshape(-1, self.num_zones)
         tgt_flat = targets.reshape(-1).long()
-        
-        # Filter out invalid targets (padding or ignore labels)
         valid = (tgt_flat >= 0) & (tgt_flat < self.num_zones)
         if valid.sum() == 0:
-            # Return safe zero instead of NaN when no valid targets
             return torch.zeros((), device=predictions.device, dtype=predictions.dtype)
         
         ce_loss = F.cross_entropy(
@@ -130,11 +101,8 @@ class DistanceZoneLoss(nn.Module):
 
 
 class UrgencyLoss(nn.Module):
-    """Urgency head loss.
-    
-    Ground Truth: Urgency levels (0=safe, 1=caution, 2=warning, 3=danger)
-    Loss: Focal loss with class weights (danger weighted higher)"""
-    
+    """Urgency: focal CE with higher weight for danger levels. Prioritizing hazards (e.g. moving vehicles, drop-offs) is critical for user safety."""
+
     def __init__(self, num_levels: int = 4, alpha: float = 0.25, gamma: float = 2.0):
         super().__init__()
         self.num_levels = num_levels
@@ -144,13 +112,10 @@ class UrgencyLoss(nn.Module):
         self.register_buffer('class_weights', torch.tensor([1.0, 1.5, 2.0, 3.0]))
     
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Args:
-            predictions: [B, num_levels] logits
-            targets: [B] urgency level indices (use -1 or >= num_levels for ignore)"""
+        """Forward: [B, num_levels] logits vs [B] level indices (-1=ignore). Returns 0 if no valid targets."""
         targets = targets.long()
         valid = (targets >= 0) & (targets < self.num_levels)
         if valid.sum() == 0:
-            # Return safe zero when no valid urgency targets (prevents NaN)
             return torch.zeros((), device=predictions.device, dtype=predictions.dtype)
         pred_valid = predictions[valid]
         tgt_valid = targets[valid]
@@ -170,11 +135,8 @@ class UrgencyLoss(nn.Module):
 
 
 class UncertaintyLoss(nn.Module):
-    """Uncertainty head loss.
-    
-    Ground Truth: Uncertainty scores [0, 1] derived from prediction variance
-    Loss: Uncertainty-weighted loss (learns to predict its own uncertainty)"""
-    
+    """Uncertainty: MSE on variance target (self-supervised). Model confidence helps the system know when to trust an alert vs. defer or ask for confirmation."""
+
     def __init__(self):
         super().__init__()
         self.mse = nn.MSELoss()
@@ -185,8 +147,7 @@ class UncertaintyLoss(nn.Module):
         targets: torch.Tensor,
         prediction_variance: torch.Tensor
     ) -> torch.Tensor:
-        """Args:..."""
-        # Use prediction variance as ground truth
+        """Forward: pred variance vs optional target; uses pred variance as target if None."""
         if targets is None:
             targets = prediction_variance
         
@@ -194,11 +155,8 @@ class UncertaintyLoss(nn.Module):
 
 
 class DepthLoss(nn.Module):
-    """Depth head loss.
-    
-    Ground Truth: Depth maps [B, H, W] in meters (or normalized [0, 1])
-    Loss: Uncertainty-weighted L1 loss"""
-    
+    """Depth: L1 with optional inverse-uncertainty weighting. Depth supports spatial awareness and collision risk for users with reduced depth perception."""
+
     def __init__(self):
         super().__init__()
         self.l1 = nn.L1Loss(reduction='none')
@@ -221,11 +179,8 @@ class DepthLoss(nn.Module):
 
 
 class MotionLoss(nn.Module):
-    """Motion head loss (Tier 2+).
-    
-    Ground Truth: Optical flow vectors [B, 2, H, W] or motion magnitude [B, H, W]
-    Loss: L2 loss for flow vectors"""
-    
+    """Motion: L2 loss on flow vectors."""
+
     def __init__(self):
         super().__init__()
         self.mse = nn.MSELoss()
@@ -238,11 +193,8 @@ class MotionLoss(nn.Module):
 
 
 class SceneDescriptionLoss(nn.Module):
-    """Scene description head loss (Tier 3+).
-    
-    Ground Truth: Text descriptions (tokenized)
-    Loss: Cross-entropy for language modeling"""
-    
+    """Scene description: CE over token sequence. Verbal scene descriptions support blind and low-vision users who rely on spoken output."""
+
     def __init__(self, vocab_size: int, ignore_index: int = -100):
         super().__init__()
         self.vocab_size = vocab_size
@@ -250,9 +202,7 @@ class SceneDescriptionLoss(nn.Module):
         self.ce = nn.CrossEntropyLoss(ignore_index=ignore_index)
     
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Args:
-            predictions: [B, seq_len, vocab_size] logits
-            targets: [B, seq_len] token indices"""
+        """Forward: [B, seq_len, vocab] logits vs [B, seq_len] token indices."""
         return self.ce(predictions.reshape(-1, self.vocab_size), targets.reshape(-1))
 
 
@@ -274,7 +224,7 @@ class OCRLoss(nn.Module):
         text_predictions: torch.Tensor,
         text_targets: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
-        """Args:..."""
+        """Forward: box pred/target and text logits/targets."""
         box_loss = self.box_loss(box_predictions, box_targets)
         text_loss = self.text_loss(text_predictions, text_targets)
         return {
@@ -295,29 +245,23 @@ class FatigueLoss(nn.Module):
         self.bce = nn.BCEWithLogitsLoss()
     
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Args:
-            predictions: [B, 1] fatigue logits
-            targets: [B, 1] binary fatigue labels"""
+        """Forward: [B, 1] logits vs [B, 1] binary labels."""
         return self.bce(predictions, targets)
 
 
 class MultiHeadLoss(nn.Module):
-    """Combined multi-head loss with task balancing.
-    
-    Uses GradNorm or simple weighted combination."""
-    
+    """Combined multi-head loss with optional per-head weights. Balances detection, safety (urgency/distance), and accessibility (description/OCR) so the assistive system performs well end-to-end."""
+
     def __init__(
         self,
         loss_functions: Dict[str, nn.Module],
         loss_weights: Optional[Dict[str, float]] = None,
-        use_gradnorm: bool = False
+        use_gradnorm: bool = False,
     ):
         super().__init__()
         self.loss_functions = loss_functions
         self.use_gradnorm = use_gradnorm
-        
         if loss_weights is None:
-            # Default weights (can be learned)
             loss_weights = {
                 'objectness': 1.0,
                 'classification': 1.0,
@@ -355,7 +299,6 @@ class MultiHeadLoss(nn.Module):
         return losses
 
 
-# Ground Truth Data Sources Documentation
 GROUND_TRUTH_SOURCES = {
     'objectness': 'COCO annotations (binary object presence)',
     'classification': 'COCO class labels',
@@ -367,5 +310,5 @@ GROUND_TRUTH_SOURCES = {
     'motion': 'Optical flow (Lucas-Kanade or deep flow)',
     'scene_description': 'Human-annotated scene descriptions',
     'ocr': 'Text detection datasets (ICDAR, COCO-Text)',
-    'fatigue': 'User interaction logs (time-based, interaction patterns)'
+    'fatigue': 'User interaction logs (time-based, interaction patterns)',
 }

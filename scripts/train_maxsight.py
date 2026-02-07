@@ -339,8 +339,7 @@ def main():
             generator=g,
         )
 
-    # Diagnostic: inspect first batch (distance/urgency often missing → NaN loss)
-    logger.info("=== DIAGNOSTIC CHECK (first train batch) ===")
+    logger.info("Diagnostic check (first train batch)")
     try:
         batch = next(iter(train_loader))
         images = batch.get("images", batch.get("image"))
@@ -363,11 +362,8 @@ def main():
                 logger.info(f"  {key}: MISSING")
     except Exception as e:
         logger.warning(f"Diagnostic check failed: {e}")
-    logger.info("=" * 50)
 
-    # -----------------------------------------------------------------
     # Model
-    # -----------------------------------------------------------------
     num_classes = args.num_classes or len(COCO_CLASSES)
     
     # Create tier configuration

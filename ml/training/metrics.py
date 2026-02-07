@@ -14,6 +14,7 @@ class DetectionPrediction:
 
 
 def compute_iou_matrix(pred_boxes: torch.Tensor, gt_boxes: torch.Tensor) -> torch.Tensor:
+    """Compute IoU matrix [P, G] for predicted vs ground-truth boxes (cx, cy, w, h)."""
     if pred_boxes.shape[0] == 0 or gt_boxes.shape[0] == 0:
         return torch.zeros(pred_boxes.shape[0], gt_boxes.shape[0], device=pred_boxes.device)
 
@@ -44,11 +45,12 @@ def compute_iou_matrix(pred_boxes: torch.Tensor, gt_boxes: torch.Tensor) -> torc
 
 
 class DetectionMetrics:
+    """Accumulates per-class and per-condition detection TP/FP/FN for mAP and precision/recall."""
 
     def __init__(self, num_classes: int, iou_thresholds: Optional[List[float]] = None,
                  device: Optional[torch.device] = None, image_size: Tuple[int, int] = (640, 640),
                  store_predictions: bool = True):
-        """Arguments:..."""
+        """Initialize counters and optional prediction storage."""
         self.num_classes = num_classes
         self.iou_thresholds = iou_thresholds or [0.5]
         self.device = device or torch.device('cpu')
@@ -56,7 +58,8 @@ class DetectionMetrics:
         self.store_predictions = store_predictions
         self.reset()
 
-    def reset(self, device: Optional[torch.device] = None):
+    def reset(self, device: Optional[torch.device] = None) -> None:
+        """Reset all TP/FP/FN counters and optional prediction lists."""
         if device:
             self.device = device
         self.class_tp = torch.zeros(self.num_classes, dtype=torch.long, device=self.device)
@@ -72,6 +75,7 @@ class DetectionMetrics:
         self.inference_times: List[float] = []
 
     def _get_size_category(self, box: torch.Tensor) -> str:
+        """Return 'small', 'medium', or 'large' from normalized box area."""
         normalized_area = box[2] * box[3]
         pixel_area = normalized_area * (self.image_size[0] * self.image_size[1])
         if pixel_area < 32 * 32:
@@ -83,7 +87,8 @@ class DetectionMetrics:
 
     def update(self, pred_boxes: torch.Tensor, pred_labels: torch.Tensor, pred_scores: torch.Tensor,
                gt_boxes: torch.Tensor, gt_labels: torch.Tensor, condition: Optional[str] = None,
-               iou_threshold: float = 0.5, lighting: Optional[str] = None):
+               iou_threshold: float = 0.5, lighting: Optional[str] = None) -> None:
+        """Update TP/FP/FN from one batch of predictions and ground truth."""
         if condition is None and lighting is not None:
             condition = lighting
 
@@ -206,7 +211,8 @@ class DetectionMetrics:
                     size_cat = ['small', 'medium', 'large'][int(size_cat_idx.item())]
                     self.size_metrics[size_cat]['fn'] += 1
 
-    def _handle_no_predictions(self, gt_boxes, gt_labels, condition):
+    def _handle_no_predictions(self, gt_boxes, gt_labels, condition) -> None:
+        """Count all ground-truth boxes as false negatives when there are no predictions."""
         for gt_label, gt_box in zip(gt_labels, gt_boxes):
             class_idx = int(gt_label.item())
             if 0 <= class_idx < self.num_classes:
@@ -216,7 +222,8 @@ class DetectionMetrics:
                 size_cat = self._get_size_category(gt_box)
                 self.size_metrics[size_cat]['fn'] += 1
 
-    def _handle_no_ground_truth(self, pred_boxes, pred_labels, pred_scores, condition):
+    def _handle_no_ground_truth(self, pred_boxes, pred_labels, pred_scores, condition) -> None:
+        """Count all predictions as false positives when there is no ground truth."""
         for pred_label, pred_score, pred_box in zip(pred_labels, pred_scores, pred_boxes):
             class_idx = int(pred_label.item())
             if 0 <= class_idx < self.num_classes:
@@ -231,6 +238,7 @@ class DetectionMetrics:
                 self.size_metrics[size_cat]['fp'] += 1
 
     def compute_precision(self, class_idx: Optional[int] = None) -> float:
+        """Precision TP/(TP+FP) for one class or overall."""
         if class_idx is None:
             tp, fp = self.class_tp.sum().item(), self.class_fp.sum().item()
         else:
@@ -240,6 +248,7 @@ class DetectionMetrics:
         return tp / (tp + fp) if (tp + fp) > 0 else 0.0
 
     def compute_recall(self, class_idx: Optional[int] = None) -> float:
+        """Recall TP/(TP+FN) for one class or overall."""
         if class_idx is None:
             tp, fn = self.class_tp.sum().item(), self.class_fn.sum().item()
         else:
@@ -249,10 +258,12 @@ class DetectionMetrics:
         return tp / (tp + fn) if (tp + fn) > 0 else 0.0
 
     def compute_f1(self, class_idx: Optional[int] = None) -> float:
+        """F1 score (harmonic mean of precision and recall) for one class or overall."""
         precision, recall = self.compute_precision(class_idx), self.compute_recall(class_idx)
         return 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
     def compute_ap_vectorized(self, class_idx: int, iou_threshold: float = 0.5) -> float:
+        """Average precision for one class from stored predictions (precision-recall curve)."""
         preds = self.class_predictions.get(class_idx, [])
         if not preds:
             return 0.0
@@ -279,6 +290,7 @@ class DetectionMetrics:
         return float(np.trapz(precision_unique, recall_unique))
 
     def compute_map_vectorized(self, iou_threshold: Optional[float] = None) -> Dict[str, float]:
+        """Mean average precision over classes; optional per-threshold and per-class AP."""
         thresholds = [iou_threshold] if iou_threshold else self.iou_thresholds
         per_threshold = {float(thresh): float(np.mean([self.compute_ap_vectorized(c, float(thresh)) 
                                                        for c in range(self.num_classes)])) 
@@ -299,6 +311,7 @@ class DetectionMetrics:
         return result
 
     def compute_coco_map(self) -> Dict[str, Any]:
+        """COCO-style mAP at 0.5, 0.75, and [0.5:0.95] with per-threshold and per-class AP."""
         coco_thresholds = [round(t, 2) for t in np.arange(0.5, 1.0, 0.05)]
         original_thresholds = self.iou_thresholds
         self.iou_thresholds = coco_thresholds
@@ -313,6 +326,7 @@ class DetectionMetrics:
         }
 
     def get_metrics_by_condition(self) -> Dict[str, Dict[str, float]]:
+        """Precision, recall, F1 per condition (e.g. lighting or impairment)."""
         results = {}
         for condition, counts in self.condition_metrics.items():
             tp, fp, fn = counts['tp'], counts['fp'], counts['fn']
@@ -323,6 +337,7 @@ class DetectionMetrics:
         return results
 
     def get_metrics_by_size(self) -> Dict[str, Dict[str, float]]:
+        """Precision, recall, F1 for small/medium/large object sizes."""
         results = {}
         for size_cat, counts in self.size_metrics.items():
             tp, fp, fn = counts['tp'], counts['fp'], counts['fn']
@@ -332,10 +347,12 @@ class DetectionMetrics:
             results[size_cat] = {'precision': precision, 'recall': recall, 'f1': f1}
         return results
 
-    def record_inference_time(self, time_ms: float):
+    def record_inference_time(self, time_ms: float) -> None:
+        """Append one inference latency sample (ms) for later stats."""
         self.inference_times.append(time_ms)
 
     def get_latency_stats(self) -> Dict[str, float]:
+        """Return mean, median, min, max, std, p95, p99 of recorded inference times (ms)."""
         if not self.inference_times:
             return {k: 0.0 for k in ['mean_ms','median_ms','min_ms','max_ms','std_ms','p95_ms','p99_ms']}
         times = np.array(self.inference_times)
@@ -350,15 +367,19 @@ class DetectionMetrics:
         }
 
     def reset_latency(self) -> None:
+        """Clear recorded inference times."""
         self.inference_times = []
 
     def compute_ap(self, class_idx: int, iou_threshold: float = 0.5) -> float:
+        """Average precision for one class; delegates to compute_ap_vectorized."""
         return self.compute_ap_vectorized(class_idx, iou_threshold)
 
     def compute_map(self, iou_threshold: Optional[float] = None) -> Dict[str, float]:
+        """Mean average precision; delegates to compute_map_vectorized."""
         return self.compute_map_vectorized(iou_threshold)
 
     def get_per_class_metrics(self) -> Dict[int, Dict[str, float]]:
+        """Precision, recall, F1, and AP per class index."""
         results = {}
         for class_idx in range(self.num_classes):
             results[class_idx] = {
@@ -370,7 +391,9 @@ class DetectionMetrics:
         return results
 
     def get_lighting_metrics(self) -> Dict[str, Dict[str, float]]:
+        """Alias for get_metrics_by_condition (lighting/condition stratification)."""
         return self.get_metrics_by_condition()
 
     def compute_map_coco(self) -> Dict[str, float]:
+        """COCO-style mAP dict; delegates to compute_coco_map."""
         return self.compute_coco_map()
