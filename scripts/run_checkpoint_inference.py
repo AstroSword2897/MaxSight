@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -61,6 +62,7 @@ def run_inference_for_checkpoint(
     tier: str,
     max_batches: Optional[int],
     confidence_threshold: float,
+    diagnose: bool = False,
 ) -> dict:
     """Load one checkpoint, run validation inference, return metrics and latency stats."""
     model = create_model(
@@ -112,6 +114,21 @@ def run_inference_for_checkpoint(
             t1 = time.perf_counter()
             latencies_ms.append((t1 - t0) * 1000.0)
 
+            if diagnose and batch_idx == 0 and "objectness" in outputs:
+                obj = outputs["objectness"].float().flatten()
+                obj_np = obj.cpu().numpy()
+                n = len(obj_np)
+                logger.info(
+                    "Diagnostic (first batch): objectness min=%.4f max=%.4f mean=%.4f p50=%.4f p90=%.4f p95=%.4f",
+                    float(obj_np.min()), float(obj_np.max()), float(obj_np.mean()),
+                    float(np.percentile(obj_np, 50)),
+                    float(np.percentile(obj_np, 90)),
+                    float(np.percentile(obj_np, 95)),
+                )
+                for thresh in (0.05, 0.1, 0.2, 0.3):
+                    count = (obj_np > thresh).sum()
+                    logger.info("  objectness > %.2f: %d / %d (%.1f%%)", thresh, int(count), n, 100.0 * count / n if n else 0)
+
             try:
                 batch_detections = model.get_detections(
                     outputs,
@@ -138,7 +155,8 @@ def run_inference_for_checkpoint(
                 if gt_boxes_valid.numel() == 0:
                     continue
 
-                if b < len(batch_detections) and batch_detections[b]:
+                has_pred = b < len(batch_detections) and batch_detections[b]
+                if has_pred:
                     pred_boxes_list = []
                     pred_labels_list = []
                     pred_scores_list = []
@@ -170,6 +188,24 @@ def run_inference_for_checkpoint(
                             gt_labels=gt_labels_valid,
                             iou_threshold=0.5,
                         )
+                    else:
+                        detection_metrics.update(
+                            pred_boxes=torch.empty(0, 4, device=device, dtype=torch.float32),
+                            pred_labels=torch.empty(0, device=device, dtype=torch.long),
+                            pred_scores=torch.empty(0, device=device, dtype=torch.float32),
+                            gt_boxes=gt_boxes_valid,
+                            gt_labels=gt_labels_valid,
+                            iou_threshold=0.5,
+                        )
+                else:
+                    detection_metrics.update(
+                        pred_boxes=torch.empty(0, 4, device=device, dtype=torch.float32),
+                        pred_labels=torch.empty(0, device=device, dtype=torch.long),
+                        pred_scores=torch.empty(0, device=device, dtype=torch.float32),
+                        gt_boxes=gt_boxes_valid,
+                        gt_labels=gt_labels_valid,
+                        iou_threshold=0.5,
+                    )
 
     map_results = detection_metrics.compute_map(iou_threshold=0.5)
     map_50 = map_results.get("mAP@0.5", map_results.get("mAP", 0.0))
@@ -272,8 +308,8 @@ def main():
     parser.add_argument(
         "--confidence",
         type=float,
-        default=0.3,
-        help="Detection confidence threshold",
+        default=0.1,
+        help="Detection confidence threshold (0.1 recommended for current checkpoints)",
     )
     parser.add_argument(
         "--conditions",
@@ -281,6 +317,11 @@ def main():
         nargs="*",
         default=None,
         help="Only run these conditions (default: all found)",
+    )
+    parser.add_argument(
+        "--diagnose",
+        action="store_true",
+        help="Log objectness stats (min/max/mean/percentiles, counts above 0.05/0.1/0.2/0.3) for first batch only",
     )
     args = parser.parse_args()
 
@@ -331,6 +372,7 @@ def main():
                 tier=args.tier,
                 max_batches=args.max_batches,
                 confidence_threshold=args.confidence,
+                diagnose=args.diagnose,
             )
             results.append(data)
             logger.info(
