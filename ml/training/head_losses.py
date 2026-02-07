@@ -1,6 +1,4 @@
-"""Unified loss interface for therapy heads.
-
-Provides a base class for head-specific losses and implementations for each head type."""
+"""Unified loss interface for therapy and assistive heads. These losses train outputs that support visual rehabilitation and real-world assistive use (contrast, fatigue, motion, priority, depth, uncertainty)."""
 
 import torch
 import torch.nn as nn
@@ -46,14 +44,9 @@ class ContrastLoss(HeadLoss):
         if pred_contrast is None or target_contrast is None:
             first_tensor = next(iter(predictions.values()))
             return {'loss': torch.zeros((), device=first_tensor.device, dtype=first_tensor.dtype)}
-        
-        # Pixel-wise MSE
         pixel_loss = self.mse_loss(pred_contrast, target_contrast)
-        
-        # Edge-aware weighting if enabled
         if self.use_edge_aware and 'edge_map' in predictions:
             edge_map = predictions['edge_map']
-            # Weight loss by edge strength (higher weight at edges)
             weighted_loss = pixel_loss * (1.0 + self.edge_weight * edge_map)
             loss = weighted_loss.mean()
         else:
@@ -66,7 +59,7 @@ class ContrastLoss(HeadLoss):
 
 
 class FatigueLoss(HeadLoss):
-    """Loss for fatigue head (fatigue, blink rate, fixation stability)."""
+    """Fatigue head: fatigue score, blink rate, fixation stability. Informs when to suggest rest or reduce demand to protect user comfort and compliance."""
     
     def __init__(self, fatigue_weight: float = 1.0, blink_weight: float = 0.5, fixation_weight: float = 0.5):
         super().__init__()
@@ -111,8 +104,8 @@ class FatigueLoss(HeadLoss):
 
 
 class MotionLoss(HeadLoss):
-    """Loss for motion head with smoothness regularization...."""
-    
+    """Motion head: flow + smoothness. Reliable motion estimation supports stability and moving-hazard cues for users with visual impairment."""
+
     def __init__(
         self,
         flow_weight: float = 1.0,
@@ -182,73 +175,46 @@ class MotionLoss(HeadLoss):
 
 
 class ROIPriorityLoss(HeadLoss):
-    """Loss for ROI priority head with ranking loss.
-    
-    VECTORIZED: Replaces O(N²) Python loop with efficient tensor operations.
-    Scales to large ROI counts without performance degradation."""
-    
+    """ROI priority with ranking loss. Ensures the system emphasizes what matters most to the user (e.g. hazards first, then navigation cues) so attention and speech are used effectively."""
+
     def __init__(self, ranking_margin: float = 0.1, max_rois: int = 100):
         super().__init__()
         self.ranking_margin = ranking_margin
-        self.max_rois = max_rois  # Cap ROI count for safety
+        self.max_rois = max_rois
         self.mse_loss = nn.MSELoss()
-    
+
     def forward(
         self,
         predictions: Dict[str, torch.Tensor],
         targets: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        """Compute ROI priority loss with vectorized ranking.
-        
-        Vectorized pairwise ranking loss: O(N²) operations but fully parallelized."""
+        """Compute score MSE plus pairwise ranking loss over ROIs."""
         pred_scores = predictions.get('roi_scores')
         target_scores = targets.get('roi_scores')
         target_rankings = targets.get('roi_rankings')
-        
         if pred_scores is None or target_scores is None:
             first_tensor = next(iter(predictions.values()))
             return {'loss': torch.zeros((), device=first_tensor.device, dtype=first_tensor.dtype)}
-        
-        # Cap ROI count for safety
         if len(pred_scores) > self.max_rois:
             pred_scores = pred_scores[:self.max_rois]
             target_scores = target_scores[:self.max_rois]
             if target_rankings is not None:
                 target_rankings = target_rankings[:self.max_rois]
-        
-        # MSE loss for score prediction
         score_loss = self.mse_loss(pred_scores, target_scores)
-        
-        # Vectorized ranking loss if rankings provided
         ranking_loss = torch.zeros((), device=pred_scores.device, dtype=pred_scores.dtype)
         if target_rankings is not None and len(pred_scores) > 1:
             N = len(pred_scores)
-            
-            # Create pairwise difference matrices (vectorized)
-            # pred_diff[i, j] = pred_scores[i] - pred_scores[j]
-            pred_diff = pred_scores.unsqueeze(1) - pred_scores.unsqueeze(0)  # [N, N]
-            
-            # rank_diff[i, j] = target_rankings[i] - target_rankings[j]
-            rank_diff = target_rankings.unsqueeze(1) - target_rankings.unsqueeze(0)  # [N, N]
-            
-            # Mask: only consider pairs where ranking differs (exclude ties and self-pairs)
+            pred_diff = pred_scores.unsqueeze(1) - pred_scores.unsqueeze(0)
+            rank_diff = target_rankings.unsqueeze(1) - target_rankings.unsqueeze(0)
             valid_mask = (rank_diff != 0) & ~torch.eye(N, dtype=torch.bool, device=pred_scores.device)
-            
             if valid_mask.any():
-                # Expected sign of score difference based on ranking
                 expected_sign = torch.sign(rank_diff[valid_mask])
                 actual_sign = torch.sign(pred_diff[valid_mask])
-                
-                # Margin loss: penalize when signs don't match
                 margin_violations = F.relu(
                     self.ranking_margin - pred_diff[valid_mask] * expected_sign
                 )
-                
-                # Only count violations where signs don't match
                 sign_mismatch = (expected_sign != actual_sign)
                 ranking_loss = margin_violations[sign_mismatch].sum()
-                
-                # Normalize by number of valid pairs
                 num_valid_pairs = valid_mask.sum().float()
                 if num_valid_pairs > 0:
                     ranking_loss = ranking_loss / num_valid_pairs
@@ -275,8 +241,7 @@ class DepthLoss(HeadLoss):
         predictions: Dict[str, torch.Tensor],
         targets: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        """Compute uncertainty-weighted depth loss...."""
-        # Get device and dtype from predictions for safety
+        """Compute depth L1 with uncertainty weighting plus optional zone classification."""
         first_tensor = next(iter(predictions.values()))
         device = first_tensor.device
         dtype = first_tensor.dtype
@@ -323,18 +288,18 @@ class DepthLoss(HeadLoss):
 
 
 class UncertaintyLoss(HeadLoss):
-    """Loss for uncertainty head."""
-    
+    """Uncertainty head: MSE on predicted vs target uncertainty. Lets the system know when to trust or soften alerts so users are not overloaded with low-confidence cues."""
+
     def __init__(self):
         super().__init__()
         self.mse_loss = nn.MSELoss()
-    
+
     def forward(
         self,
         predictions: Dict[str, torch.Tensor],
         targets: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        """Compute uncertainty loss."""
+        """Compute uncertainty prediction loss."""
         pred_uncertainty = predictions.get('uncertainty_score')
         target_uncertainty = targets.get('uncertainty_score')
         
@@ -361,7 +326,7 @@ HEAD_LOSS_REGISTRY = {
 
 
 def create_head_loss(head_type: str, **kwargs) -> HeadLoss:
-    """Create a head loss by type name...."""
+    """Build a head loss by type (contrast, fatigue, motion, roi_priority, depth, uncertainty) for therapy/assistive training."""
     if head_type not in HEAD_LOSS_REGISTRY:
         available = ', '.join(HEAD_LOSS_REGISTRY.keys())
         raise ValueError(

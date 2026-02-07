@@ -1,60 +1,52 @@
-"""Enhanced model quantization for mobile deployment (int8) - Production Ready...."""
+"""INT8 quantization for mobile and wearable deployment. Enables real-time assistive inference on phones and glasses so users with low vision or blindness can run the model in the field."""
+
+import logging
+import warnings
+from copy import deepcopy
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.ao.quantization as quantization
-from typing import Optional, Dict, Any, Union, List, Tuple
-from pathlib import Path
-import warnings
-from copy import deepcopy
+
+logger = logging.getLogger(__name__)
 
 
 def _fuse_maxsight_modules(model: nn.Module) -> nn.Module:
-    """Fuse Conv+BN+ReLU patterns in MaxSight CNN architecture...."""
+    """Fuse Conv+BN+ReLU patterns for faster quantized inference."""
     fuse_list = []
-    
-    # Helper to check if a Sequential has Conv+BN+ReLU pattern
+
     def is_fusable_conv_bn_relu(seq: nn.Sequential, start_idx: int = 0) -> bool:
-        # nn.Sequential supports len() but type checker doesn't always recognize it
         seq_len = len(seq)  # type: ignore[arg-type]
         if seq_len < start_idx + 3:
             return False
         return (isinstance(seq[start_idx], nn.Conv2d) and
                 isinstance(seq[start_idx + 1], nn.BatchNorm2d) and
                 isinstance(seq[start_idx + 2], (nn.ReLU, nn.ReLU6)))
-    
-    # Traverse model and find fusable patterns
+
     for name, module in model.named_modules():
-        if isinstance(module, nn.Sequential):
-            # Check for Conv+BN+ReLU at start of Sequential
-            if is_fusable_conv_bn_relu(module, 0):
-                # Create fuse pattern: ['module_name.0', 'module_name.1', 'module_name.2']
-                fuse_pattern = [f"{name}.0", f"{name}.1", f"{name}.2"]
-                fuse_list.append(fuse_pattern)
-    
-    # Also handle ResNet backbone patterns if present
-    # ResNet conv1, bn1, relu can be fused
+        if isinstance(module, nn.Sequential) and is_fusable_conv_bn_relu(module, 0):
+            fuse_list.append([f"{name}.0", f"{name}.1", f"{name}.2"])
+
     if hasattr(model, 'conv1') and hasattr(model, 'bn1') and hasattr(model, 'relu'):
         try:
             fuse_list.append(['conv1', 'bn1', 'relu'])
         except Exception:
             pass
-    
-    # Fuse all detected patterns
+
     fused_count = 0
     for fuse_pattern in fuse_list:
         try:
             quantization.fuse_modules(model, [fuse_pattern], inplace=True)
             fused_count += 1
-        except Exception as e:
-            # Some patterns might not be fusable (e.g., already fused, wrong structure)
+        except Exception:
             continue
-    
+
     if fused_count > 0:
-        print(f"Fused {fused_count} Conv+BN+ReLU patterns for better performance")
+        logger.info("Fused %d Conv+BN+ReLU patterns", fused_count)
     else:
         warnings.warn("No modules were fused. Model may not have standard Conv+BN+ReLU patterns.")
-    
     return model
 
 
@@ -62,49 +54,36 @@ def quantize_model_int8(
     model: nn.Module,
     calibration_data: Optional[torch.utils.data.DataLoader] = None,
     num_calibration_batches: int = 10,
-    backend: str = 'qnnpack',  # Default to ARM for iOS deployment
-    fuse_modules: bool = True
+    backend: str = 'qnnpack',
+    fuse_modules: bool = True,
 ) -> nn.Module:
-    """Quantize model to int8 using PyTorch's quantization API...."""
-    # Create a copy to avoid modifying original model
+    """Quantize to int8 for on-device use; qnnpack (ARM) targets phones/glasses. Calibration improves accuracy so assistive outputs stay reliable."""
     model = deepcopy(model)
     model.eval()
-    
-    # Set quantization backend
     torch.backends.quantized.engine = backend
-    
-    # Fuse modules if requested (MaxSight-specific fusion)
+
     if fuse_modules:
         try:
             model = _fuse_maxsight_modules(model)
         except Exception as e:
             warnings.warn(f"Module fusion failed: {e}. Continuing without fusion.")
-    
-    # Set quantization config with proper API usage
+
     if backend == 'qnnpack':
-        # ARM/iOS backend - REQUIRES per-channel weight quantization for stability
         model.qconfig = quantization.get_default_qconfig('qnnpack')  # type: ignore
-        # Critical: per-channel weight quantization for mobile CNN stability
         if model.qconfig is not None:
             model.qconfig.weight = quantization.default_per_channel_weight_observer  # type: ignore
     elif backend == 'fbgemm':
-        # x86 backend
         model.qconfig = quantization.get_default_qconfig('fbgemm')  # type: ignore
     else:
-        raise ValueError(f"Unsupported backend: {backend}. Use 'qnnpack' (ARM) or 'fbgemm' (x86)")
-    
-    # Prepare model for quantization - USE MODERN API
+        raise ValueError(f"Unsupported backend: {backend}. Use 'qnnpack' or 'fbgemm'.")
+
     model_prepared = quantization.prepare(model, inplace=False)
-    
-    # Calibrate with sample data
-    print(f"Calibrating model for quantization using {num_calibration_batches} batches...")
-    
+
     if calibration_data is None:
-        # Create dummy calibration data with realistic variations
-        print("Warning: No calibration data provided. Using synthetic data.")
+        logger.warning("No calibration data provided; using synthetic data.")
         dummy_inputs = [torch.randn(1, 3, 224, 224) for _ in range(num_calibration_batches)]
         calibration_data = [(inp,) for inp in dummy_inputs]  # type: ignore
-    
+
     batch_count = 0
     with torch.no_grad():
         for batch in calibration_data:  # type: ignore
@@ -114,31 +93,22 @@ def quantize_model_int8(
                 inputs = batch.get('images') or batch.get('input') or batch.get('data')
             else:
                 inputs = batch
-            
-            # Move to CPU if necessary (quantization typically done on CPU)
             if inputs is not None and hasattr(inputs, 'device') and inputs.device.type != 'cpu':
                 inputs = inputs.cpu()
-            
             try:
                 model_prepared(inputs)
                 batch_count += 1
-                if batch_count % 5 == 0:
-                    print(f"  Processed {batch_count}/{num_calibration_batches} batches")
                 if batch_count >= num_calibration_batches:
                     break
             except Exception as e:
                 warnings.warn(f"Error processing batch {batch_count}: {e}")
                 continue
-    
+
     if batch_count == 0:
         raise RuntimeError("No batches successfully processed during calibration")
-    
-    # Convert to quantized model - USE MODERN API
-    print("Converting to int8...")
+
     model_int8 = quantization.convert(model_prepared, inplace=False)
-    
-    print(f"Quantization complete ({batch_count} calibration batches used)")
-    print(f"  Backend: {backend} ({'ARM/iOS ready' if backend == 'qnnpack' else 'x86'})")
+    logger.info("Quantization complete (%d batches, backend=%s)", batch_count, backend)
     return model_int8
 
 
@@ -148,7 +118,7 @@ def compare_model_sizes(
     save_models: bool = False,
     output_dir: Optional[Path] = None
 ) -> Dict[str, Any]:
-    """Compare model sizes (FP32 vs INT8) with optional disk size measurement...."""
+    """Compare FP32 vs INT8 sizes and optionally write to disk. Helps ensure assistive models fit on phones and wearables for on-device inference."""
     # Count parameters
     total_params = sum(p.numel() for p in model_fp32.parameters())
     trainable_params = sum(p.numel() for p in model_fp32.parameters() if p.requires_grad)
@@ -168,7 +138,6 @@ def compare_model_sizes(
     }
     
     if model_int8 is not None:
-        # INT8 uses 1 byte per parameter (theoretical)
         int8_size_mb = total_params / (1024 * 1024)
         results['int8_size_mb'] = int8_size_mb
         results['int8_size_estimate'] = f"{int8_size_mb:.2f} MB"
@@ -203,33 +172,24 @@ def validate_quantized_model(
     model_int8: nn.Module,
     test_inputs: Union[torch.Tensor, List[torch.Tensor]],
     tolerance: float = 0.01,
-    metrics: Optional[List[str]] = None
+    metrics: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    """Validate quantized model by comparing outputs with FP32 model...."""
+    """Compare quantized vs FP32 outputs; return accuracy/tolerance metrics."""
     model_fp32.eval()
     model_int8.eval()
-    
     if not isinstance(test_inputs, list):
         test_inputs = [test_inputs]
-    
     metrics = metrics or ['mse', 'mae']
-    
     all_results = []
-    
     with torch.no_grad():
         for i, test_input in enumerate(test_inputs):
-            # Ensure CPU tensors
             if test_input.device.type != 'cpu':
                 test_input = test_input.cpu()
-            
             output_fp32 = model_fp32(test_input)
             output_int8 = model_int8(test_input)
-            
             result = _compare_outputs(output_fp32, output_int8, tolerance, metrics)
             result['input_index'] = i
             all_results.append(result)
-    
-    # Aggregate results
     if len(all_results) == 1:
         return all_results[0]
     else:
@@ -251,10 +211,9 @@ def _compare_outputs(
     output_fp32: Any,
     output_int8: Any,
     tolerance: float,
-    metrics: List[str]
+    metrics: List[str],
 ) -> Dict[str, Any]:
-    """Helper to compare two outputs (dict or tensor)."""
-    
+    """Compare FP32 vs INT8 output (dict or tensor); return diff and tolerance check."""
     if isinstance(output_fp32, dict) and isinstance(output_int8, dict):
         differences = {}
         max_diff = 0.0
@@ -330,7 +289,6 @@ def _compute_tensor_differences(
         result['mae'] = mae
     
     if 'cosine' in metrics:
-        # Cosine similarity
         t1_flat = t1_float.flatten()
         t2_flat = t2_float.flatten()
         cosine_sim = torch.nn.functional.cosine_similarity(
@@ -341,55 +299,34 @@ def _compute_tensor_differences(
     return result
 
 
-def print_quantization_results(
+def log_quantization_results(
     size_info: Dict[str, Any],
     validation: Dict[str, Any],
-    verbose: bool = True
+    verbose: bool = True,
 ) -> None:
-    """Print quantization results in readable format."""
-    print("\nModel Quantization Results")
-    
-    print("\nModel Statistics:")
-    print(f"  Total Parameters:     {size_info['total_parameters']:,}")
-    print(f"  Trainable Parameters: {size_info['trainable_parameters']:,}")
-    
-    print("\nSize Comparison:")
-    print(f"  FP32 Size (est):  {size_info['fp32_size_mb']:.1f} MB")
-    if size_info['int8_size_mb'] is not None:
-        print(f"  INT8 Size (est):  {size_info['int8_size_mb']:.1f} MB")
-        print(f"  Compression:      {size_info['compression_ratio']:.1f}x")
-        print(f"  Size Reduction:   {size_info.get('size_reduction', 'N/A')}")
-        print(f"  Target:           <50 MB")
-        print(f"  Status:           {'PASS' if size_info.get('meets_target', False) else 'FAIL'}")
-    
+    """Log quantization size and accuracy results."""
+    logger.info("Model Quantization Results")
+    logger.info("Total Parameters: %s, Trainable: %s",
+                f"{size_info['total_parameters']:,}", f"{size_info['trainable_parameters']:,}")
+    logger.info("FP32 Size (est): %.1f MB", size_info['fp32_size_mb'])
+    if size_info.get('int8_size_mb') is not None:
+        logger.info("INT8 Size (est): %.1f MB, Compression: %.1fx, Target <50 MB: %s",
+                    size_info['int8_size_mb'], size_info['compression_ratio'],
+                    'PASS' if size_info.get('meets_target') else 'FAIL')
     if size_info.get('disk_sizes'):
-        print("\nActual Disk Sizes:")
         for model_type, size in size_info['disk_sizes'].items():
-            print(f"  {model_type.upper()}: {size}")
-    
-    print("\nAccuracy Validation:")
+            logger.info("Disk %s: %s", model_type.upper(), size)
     if 'accuracy_loss_percent' in validation:
-        if 'avg_relative_difference' in validation:
-            print(f"  Max Accuracy Loss:  {validation['accuracy_loss_percent']:.2f}%")
-            print(f"  Avg Accuracy Loss:  {validation['avg_relative_difference'] * 100:.2f}%")
-        else:
-            print(f"  Accuracy Loss:      {validation['accuracy_loss_percent']:.2f}%")
-        print(f"  Target:             <1%")
-        print(f"  Status:             {'PASS' if validation.get('meets_tolerance', False) else 'FAIL'}")
-        
-        if verbose and 'additional_metrics' in validation:
-            print("\nDetailed Metrics:")
-            for metric, values in validation['additional_metrics'].items():
-                if isinstance(values, dict):
-                    print(f"  {metric.upper()}:")
-                    for key, val in values.items():
-                        print(f"    {key}: {val:.6f}")
-                elif values is not None:
-                    print(f"  {metric.upper()}: {values:.6f}")
+        logger.info("Accuracy loss: %.2f%%, target <1%%: %s",
+                    validation['accuracy_loss_percent'],
+                    'PASS' if validation.get('meets_tolerance') else 'FAIL')
+        if verbose and validation.get('additional_metrics'):
+            logger.info("Detailed metrics: %s", validation['additional_metrics'])
     else:
-        print(f"  Error: {validation.get('error', 'Unknown error')}")
-    
-    print()
+        logger.warning("Validation error: %s", validation.get('error', 'Unknown error'))
+
+
+print_quantization_results = log_quantization_results
 
 
 def quantize_and_validate(
@@ -398,37 +335,26 @@ def quantize_and_validate(
     test_data: Optional[torch.utils.data.DataLoader] = None,
     num_calibration_batches: int = 20,
     backend: str = 'qnnpack',
-    output_dir: Optional[Path] = None
+    output_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
-    """Complete Week 1 pipeline: Quantize → Validate → Size Check...."""
-    print("\nWeek 1: Model Quantization Pipeline")
-    
-    # Step 1: Quantize
-    print("\n[Step 1/3] Quantizing model to INT8...")
+    """Full pipeline: quantize, size check, accuracy validation. Ensures the model remains safe and effective for assistive use after compression."""
+    import json
+    logger.info("Quantizing model to INT8...")
     model_int8 = quantize_model_int8(
         model=model_fp32,
         calibration_data=calibration_data,
         num_calibration_batches=num_calibration_batches,
         backend=backend,
-        fuse_modules=True
+        fuse_modules=True,
     )
-    
-    # Step 2: Compare sizes
-    print("\n[Step 2/3] Comparing model sizes...")
     size_info = compare_model_sizes(
         model_fp32=model_fp32,
         model_int8=model_int8,
         save_models=(output_dir is not None),
-        output_dir=output_dir
+        output_dir=output_dir,
     )
-    
-    # Step 3: Validate accuracy
-    print("\n[Step 3/3] Validating quantized model accuracy...")
-    
-    # Get test inputs from test_data or calibration_data
     test_inputs = []
     data_source = test_data if test_data is not None else calibration_data
-    
     if data_source is not None:
         batch_count = 0
         for batch in data_source:
@@ -438,81 +364,57 @@ def quantize_and_validate(
                 inputs = batch.get('images') or batch.get('input') or batch.get('data')
             else:
                 inputs = batch
-            
             if inputs is not None:
                 if inputs.device.type != 'cpu':
                     inputs = inputs.cpu()
                 test_inputs.append(inputs)
                 batch_count += 1
-                if batch_count >= 5:  # Use 5 batches for validation
+                if batch_count >= 5:
                     break
-    
     if len(test_inputs) == 0:
-        # Fallback to dummy data
         test_inputs = [torch.randn(1, 3, 224, 224) for _ in range(3)]
-        warnings.warn("No test data provided. Using synthetic data for validation.")
-    
+        warnings.warn("No test data provided; using synthetic data for validation.")
     validation = validate_quantized_model(
         model_fp32=model_fp32,
         model_int8=model_int8,
         test_inputs=test_inputs,
         tolerance=0.01,
-        metrics=['mse', 'mae', 'cosine']
+        metrics=['mse', 'mae', 'cosine'],
     )
-    
-    # Print results
-    print_quantization_results(size_info, validation, verbose=True)
-    
-    # Determine if ready for export
+    log_quantization_results(size_info, validation, verbose=True)
     ready_for_export = (
-        size_info.get('meets_target', False) and
-        validation.get('meets_tolerance', False)
+        size_info.get('meets_target', False) and validation.get('meets_tolerance', False)
     )
-    
-    # Save quantized model if output_dir provided
     if output_dir is not None:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Save quantized model state dict
         int8_path = output_dir / "model_int8.pth"
         torch.save(model_int8.state_dict(), int8_path)
-        print(f"Saved quantized model to {int8_path}")
-        
-        # Save results summary
+        logger.info("Saved quantized model to %s", int8_path)
         results_summary = {
             'size_info': size_info,
             'validation': validation,
             'ready_for_export': ready_for_export,
-            'backend': backend
+            'backend': backend,
         }
-        import json
-        summary_path = output_dir / "quantization_summary.json"
-        # Convert to JSON-serializable format
         json_summary = {}
         for k, v in results_summary.items():
             if isinstance(v, dict):
-                json_summary[k] = {k2: float(v2) if isinstance(v2, (int, float)) else str(v2) 
-                                 for k2, v2 in v.items()}
+                json_summary[k] = {k2: float(v2) if isinstance(v2, (int, float)) else str(v2)
+                                  for k2, v2 in v.items()}
             else:
                 json_summary[k] = str(v) if not isinstance(v, (int, float, bool)) else v
+        summary_path = output_dir / "quantization_summary.json"
         with open(summary_path, 'w') as f:
             json.dump(json_summary, f, indent=2)
-        print(f"Saved results summary to {summary_path}")
-    
+        logger.info("Saved results summary to %s", summary_path)
     if ready_for_export:
-        print("\nQUANTIZATION COMPLETE - Model ready for ExecuTorch export (Week 2)")
+        logger.info("Quantization complete; model ready for export.")
     else:
-        print("\nQUANTIZATION COMPLETE - Model may need tuning before export")
-        if not size_info.get('meets_target', False):
-            print("   - Size target not met")
-        if not validation.get('meets_tolerance', False):
-            print("   - Accuracy loss exceeds 1% threshold")
-    print()
-    
+        logger.info("Quantization complete; model may need tuning (size or accuracy).")
     return {
         'model_int8': model_int8,
         'size_info': size_info,
         'validation': validation,
-        'ready_for_export': ready_for_export
+        'ready_for_export': ready_for_export,
     }
