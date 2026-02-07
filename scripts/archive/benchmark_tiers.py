@@ -118,7 +118,7 @@ def benchmark_model(
                 elapsed = (time.perf_counter() - start) * 1000  # ms
                 latencies.append(elapsed)
                 
-                # Try to get stage timings if available
+                # Get stage timings when available
                 if hasattr(model, '_last_stage_a_time'):
                     stage_a_latencies.append(model._last_stage_a_time * 1000)
                 if hasattr(model, '_last_stage_b_time'):
@@ -333,7 +333,7 @@ def main():
             memory = result['memory_mb']['peak']
             fps = result['throughput']['fps']
             
-            # Check Stage A target
+            # Checks Stage A target
             stage_a_ok = result.get('stage_a_meets_target')
             marker = "✅" if stage_a_ok else "⚠️ " if stage_a_ok is False else "  "
             

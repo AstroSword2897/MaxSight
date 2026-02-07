@@ -49,7 +49,7 @@ class EyeImagePreprocessor:
         Returns:
             Preprocessed tensor [3, 64, 64] in [0,1] range"""
         result = self.transform(image)
-        # Ensure result is a tensor (transform should return tensor due to ToTensor())
+        # Ensure result is a tensor (ToTensor() returns tensor)
         if not isinstance(result, torch.Tensor):
             # Fallback: convert manually if transform didn't work
             import torchvision.transforms.functional as TF
@@ -182,7 +182,7 @@ class EyeModel(nn.Module):
                 f"Use EyeImagePreprocessor to resize/crop correctly."
             )
         
-        # Validate input range (should be [0,1])
+        # Validate input range [0,1]
         if face_region.min() < 0.0 or face_region.max() > 1.0:
             # Warn but don't fail - might be intentional
             # However, this can lead to meaningless conv activations

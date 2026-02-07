@@ -112,7 +112,7 @@ def main():
     print("✅ COCO dataset verified")
     print()
     
-    # Check if splits already exist
+    # Checks if splits already exist
     output_dir = args.output_dir
     train_file = output_dir / 'train.json'
     val_file = output_dir / 'val.json'
@@ -136,7 +136,7 @@ def main():
     # Create splits
     print("Creating MaxSight splits from COCO...")
     
-    # Find annotation file
+    # Finds annotation file
     ann_file = args.coco_dir / 'annotations' / 'instances_train2017.json'
     if not ann_file.exists():
         ann_file = args.coco_dir / 'annotations' / 'instances_val2017.json'
@@ -145,7 +145,7 @@ def main():
         print(f"Error: Could not find COCO annotation file in {args.coco_dir}")
         sys.exit(1)
     
-    # Find image directory
+    # Finds image directory
     image_dir = args.coco_dir / 'train2017'
     if not image_dir.exists():
         image_dir = args.coco_dir / 'val2017'
@@ -219,7 +219,7 @@ def test_data_loaders(train_file: Path, val_file: Path, test_file: Path, coco_di
         print(f"  Train: {train_info['dataset_size']} samples, {train_info['num_batches']} batches")
         print(f"  Val:   {val_info['dataset_size']} samples, {val_info['num_batches']} batches")
         
-        # Try loading a batch
+        # Loads a batch
         print("  Loading sample batch...")
         batch = next(iter(train_loader))
         print(f"  ✅ Batch loaded: {list(batch.keys())}")

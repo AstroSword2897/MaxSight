@@ -165,7 +165,7 @@ def test_batch_processing():
         
         print(f"  Batch size {batch_size}: {mean_latency:.2f} ms")
     
-    # Batch size 1 should be fastest for mobile
+    # Batch size 1 is fastest for mobile
     assert results[1] < 500, f"Batch size 1 latency {results[1]:.2f}ms exceeds target"
     
     print("  ✅ PASSED: Batch processing performance acceptable")

@@ -66,7 +66,7 @@ def main():
         return 1
     print("  OK: All checked tensors finite (augmentations preserve valid range).")
 
-    # --- 3) Class weights: rare classes should have higher weights ---
+    # --- 3) Class weights: rare classes get higher weights ---
     print("Computing class weights (rare classes get higher weights)...")
     weights = compute_class_weights(args.train_annotation)
     if not weights:

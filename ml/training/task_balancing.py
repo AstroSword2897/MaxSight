@@ -89,7 +89,7 @@ class GradNormBalancer(nn.Module):
         # alpha controls restoring force (higher = stronger rebalancing)
         relative_inverse_rates = relative_losses ** self.alpha
         
-        # Target gradient norms: tasks that are behind should have larger gradients
+        # Target gradient norms: tasks that are behind get larger gradient targets
         target_grad_norms = avg_grad_norm * relative_inverse_rates
         
         # GradNorm loss: minimize difference between actual and target gradient norms

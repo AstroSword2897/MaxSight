@@ -140,7 +140,7 @@ def test_depth_vectorized():
     normalized = (box_centers / torch.tensor([14.0, 14.0])) * 2.0 - 1.0
     normalized = normalized.flip(-1).unsqueeze(2)
     
-    # Should use grid_sample (vectorized)
+    # Uses grid_sample (vectorized)
     sampled = F.grid_sample(
         depth_map.unsqueeze(1),
         normalized,

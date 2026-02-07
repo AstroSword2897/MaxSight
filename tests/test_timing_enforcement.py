@@ -76,7 +76,7 @@ def test_timing_tracking():
         with torch.no_grad():
             outputs = model(images)
         
-        # Check if timing metrics are in outputs
+        # Checks if timing metrics are in outputs
         has_timing = 'stage_a_latency_ms' in outputs
         has_stage_info = 'stage_a_completed' in outputs and 'stage_b_completed' in outputs
         
@@ -89,7 +89,7 @@ def test_timing_tracking():
             if latency is not None:
                 print(f"   - Measured latency: {latency:.2f}ms")
         
-        return has_stage_info  # At minimum, stage info should be present
+        return has_stage_info  # At minimum, stage info is present
     except Exception as e:
         print(f"❌ Timing tracking test failed: {e}")
         import traceback
@@ -123,7 +123,7 @@ def test_timing_enforcement():
         print(f"   - Skip reason: {skip_reason}")
         print(f"   - Stage A latency: {latency:.2f}ms" if latency is not None else "   - Stage A latency: Not measured")
         
-        # Verify outputs structure
+        # Verifies outputs structure
         assert 'stage_a_completed' in outputs, "stage_a_completed missing"
         assert 'stage_b_completed' in outputs, "stage_b_completed missing"
         assert 'skip_stage_b_reason' in outputs, "skip_stage_b_reason missing"
@@ -153,7 +153,7 @@ def test_timing_disabled():
         with torch.no_grad():
             outputs = model(images)
         
-        # Should still work normally
+        # Inference works normally with timing disabled
         assert 'stage_a_completed' in outputs
         assert 'stage_b_completed' in outputs
         

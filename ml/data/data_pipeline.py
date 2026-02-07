@@ -32,7 +32,7 @@ def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
     num_objects = torch.zeros(batch_size, dtype=torch.long)
     urgency = torch.zeros(batch_size, dtype=torch.long)
     
-    # Check if audio is present
+    # Checks if audio is present
     has_audio = any('audio' in item for item in batch)
     audio_tensors = []
     audio_lengths = []
@@ -113,7 +113,7 @@ def create_data_loaders(
     """Create train/val/test data loaders for MaxSight training...."""
     # Auto-detect image directory if not provided
     if image_dir is None:
-        # Try common locations
+        # Checks common locations
         possible_dirs = [
             train_annotation_file.parent.parent / 'train2017',
             train_annotation_file.parent.parent / 'val2017',

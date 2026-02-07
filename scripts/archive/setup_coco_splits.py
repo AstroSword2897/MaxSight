@@ -104,7 +104,7 @@ def main():
     
     # Auto-detect annotation file if not provided
     if args.annotation_file is None:
-        # Try common COCO annotation locations
+        # Checks common COCO annotation locations
         possible_locations = [
             args.coco_dir / 'annotations' / 'instances_train2017.json',
             args.coco_dir / 'annotations' / 'instances_val2017.json',

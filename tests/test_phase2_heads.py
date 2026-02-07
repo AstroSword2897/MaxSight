@@ -86,7 +86,7 @@ class TestSoundEventHead:
         )
         sound_head.eval()
         
-        # Input should be spectrogram: [B, T, freq_bins]
+        # Input is spectrogram: [B, T, freq_bins]
         spectrogram = torch.randn(2, 10, 128)  # [B, T, freq_bins]
         outputs = sound_head(spectrogram)
         

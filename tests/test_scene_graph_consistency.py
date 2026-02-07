@@ -45,7 +45,7 @@ def test_scene_graph_consistency():
         f"edge_index max ({edge_index.max().item()}) >= num_nodes ({num_nodes})"
     assert edge_index.min().item() >= 0, "edge_index has negative indices"
     
-    # Verify relations have explicit src/dst (not inferred)
+    # Verifies relations have explicit src/dst (not inferred)
     for rel in relations:
         assert hasattr(rel, 'src'), "Relation missing explicit src"
         assert hasattr(rel, 'dst'), "Relation missing explicit dst"
@@ -58,7 +58,7 @@ def test_scene_graph_consistency():
     edge_set = set(zip(edge_index[0].tolist(), edge_index[1].tolist()))
     relation_edges = set((rel.src, rel.dst) for rel in relations)
     
-    # All relation edges should be in edge_index
+    # All relation edges are in edge_index
     assert relation_edges.issubset(edge_set), \
         f"Relation edges {relation_edges - edge_set} not in edge_index"
     
@@ -103,7 +103,7 @@ def test_scene_graph_with_pruning():
         edges = list(edge_map.keys())
         pruned_edge_index = torch.tensor(edges, dtype=torch.long).T.contiguous()
         
-        # Verify consistency
+        # Verifies consistency
         assert pruned_edge_index.shape[1] == len(edge_map), \
             f"Pruned edge_index ({pruned_edge_index.shape[1]}) != edge_map count ({len(edge_map)})"
         

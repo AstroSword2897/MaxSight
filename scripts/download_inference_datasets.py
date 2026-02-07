@@ -26,12 +26,12 @@ def download_file(url: str, dest: Path, resume: bool = True) -> bool:
     """Download a file with progress bar and resume capability...."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     
-    # Check if file already exists
+    # Checks if file already exists
     if dest.exists():
         print(f"  ✓ File already exists: {dest}")
         return True
     
-    # Try curl first (better for resume)
+    # Uses curl when available (supports resume)
     if shutil.which('curl'):
         try:
             cmd = ['curl', '-L', '-C', '-', '--progress-bar', '--retry', '3', '-o', str(dest), url]
@@ -102,14 +102,14 @@ def download_open_images_v6(data_dir: Path) -> bool:
     validation_dir = data_dir / "validation"
     csv_path = data_dir / "validation-annotations-bbox.csv"
     
-    # Check if already downloaded
+    # Checks if already downloaded
     if validation_dir.exists():
         img_count = len(list(validation_dir.rglob("*.jpg")))
         if img_count > 0 and csv_path.exists():
             print(f"  ✓ Open Images V6 already downloaded ({img_count} images)")
             return True
     
-    # Try FiftyOne method first (easiest)
+    # Uses FiftyOne method when available
     try:
         import fiftyone as fo
         print("\n  Using FiftyOne to download Open Images V6...")
@@ -133,7 +133,7 @@ def download_open_images_v6(data_dir: Path) -> bool:
         # FiftyOne stores images in its own structure, we need to reorganize
         fo_dataset_dir = data_dir.parent / "open-images-v6-validation"
         if not fo_dataset_dir.exists():
-            # Try alternative location
+            # Uses alternative location
             fo_dataset_dir = data_dir.parent / "open-images-v6" / "validation"
         
         if fo_dataset_dir.exists():
@@ -197,7 +197,7 @@ def download_open_images_v6(data_dir: Path) -> bool:
     print("    4. Download: 'Validation Annotations' (validation-annotations-bbox.csv)")
     print("    5. Place CSV in: datasets/open_images_v6/")
     
-    # Try to download annotation CSV at least
+    # Download annotation CSV when possible
     csv_url = "https://storage.googleapis.com/openimages/v6/oidv6-validation-annotations-bbox.csv"
     print(f"\n  Attempting to download annotation CSV...")
     if download_file(csv_url, csv_path):
@@ -361,7 +361,7 @@ def download_ade20k(data_dir: Path) -> bool:
     data_dir.mkdir(parents=True, exist_ok=True)
     
     # ADE20K download URLs (MIT Vision Group)
-    # These are direct download links that should work
+    # Direct download links
     urls = {
         'validation_images': 'http://data.csail.mit.edu/places/ADEchallenge/ADEChallengeData2016.zip',
         # Note: This zip contains both training and validation

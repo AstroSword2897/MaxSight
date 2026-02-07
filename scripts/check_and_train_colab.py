@@ -63,7 +63,7 @@ def main() -> int:
     log(f"Cleaned splits dir: {cleaned_dir}")
 
     if not train_json.exists() or not val_json.exists():
-        # Try copy from repo
+        # Copy from repo when present
         repo_splits = repo / "datasets" / "cleaned_splits"
         for name in [TRAIN_ANN, VAL_ANN]:
             src = repo_splits / name

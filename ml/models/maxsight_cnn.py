@@ -1383,7 +1383,7 @@ class MaxSightCNN(nn.Module):
         # ============================================================
         # EXPLICIT STAGE A → STAGE B HANDOFF
         # ============================================================
-        # CRITICAL: If Stage B should be skipped, return Stage A outputs immediately
+        # CRITICAL: When Stage B is skipped, return Stage A outputs immediately
         if skip_stage_b:
             stage_a_outputs['stage_a_latency_ms'] = stage_a_latency_ms
             stage_a_outputs['stage_b_completed'] = False
@@ -2019,7 +2019,7 @@ class MaxSightCNN(nn.Module):
         boxes_corners = self._center_to_corners(boxes)
         
         # Sort by score (best first)
-        # Boxes should already be sorted but we sort again to be safe
+        # Boxes are sorted again for consistency
         # (defensive programming - doesn't hurt and makes code more robust)
         if scores.dim() == 0:
             scores = scores.unsqueeze(0)  # Handle scalar case
@@ -2217,7 +2217,7 @@ class MaxSightCNN(nn.Module):
         # Note: We can't remove modules that are already instantiated,
         # but we can skip them in forward pass
         
-        # Mark which components should be used
+        # Mark which components are used
         self._use_hybrid = tier_config.use_hybrid_backbone and self.hybrid_backbone is not None
         self._use_temporal = tier_config.use_temporal_modeling and self.temporal_encoder is not None
         self._use_cross_task = tier_config.use_cross_task_attention and self.cross_task_attention is not None

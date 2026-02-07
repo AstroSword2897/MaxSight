@@ -96,7 +96,7 @@ def cached(ttl: int = 60, redis_url: Optional[str] = None):
             # Generate cache key
             key = f"{func.__name__}:{cache_key(*args, **kwargs)}"
             
-            # Try to get from cache
+            # Get from cache when present
             cached_value = cache.get(key)
             if cached_value is not None:
                 return cached_value

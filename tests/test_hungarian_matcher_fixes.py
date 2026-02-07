@@ -134,7 +134,7 @@ def test_matching_batch_mixed():
     assert len(indices_list) == batch_size
     assert len(costs_list) == batch_size
     
-    # Samples 1 and 3 should have no matches (empty GT)
+    # Samples 1 and 3 have no matches (empty GT)
     assert indices_list[1].shape[1] == 0
     assert indices_list[3].shape[1] == 0
 

@@ -182,7 +182,7 @@ class StabilityManager:
                 )
                 self.adjustments_made += 1
         
-        # 4. Handle task imbalance: warn (GradNorm should self-correct)
+        # 4. Handle task imbalance: warn (GradNorm self-corrects)
         if task_imbalance > self.task_imbalance_threshold and epoch > 15:
             adjustments.append(
                 f"Task imbalance detected (weight ratio: {task_imbalance:.2f}). "

@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Produce inference data from all condition checkpoints.
-
-This script generates inference data only: for each checkpoint it runs inference on the
-validation set and writes metrics (mAP, precision, recall, F1) and latency stats to JSON.
-All outputs are inference data—no training or checkpoint modification.
-"""
+# Runs inference on the validation set for each condition checkpoint and writes metrics (mAP, precision, recall, F1) and latency to JSON. No training.
 
 import argparse
 import json
@@ -125,8 +120,10 @@ def run_inference_for_checkpoint(
     model.to(device)
     model.eval()
 
+    # When remapping to a single class, use num_classes=1 so mAP is AP for that class (not diluted by 80-way mean).
+    effective_num_classes = 1 if remap_pred_class is not None else num_classes
     detection_metrics = DetectionMetrics(
-        num_classes=num_classes,
+        num_classes=effective_num_classes,
         iou_thresholds=[0.5, 0.75],
         device=torch.device(device),
         image_size=(224, 224),
@@ -202,6 +199,8 @@ def run_inference_for_checkpoint(
                 gt_labels_valid = gt_labels_b[:num_objects].to(device)
                 if gt_boxes_valid.numel() == 0:
                     continue
+                if remap_pred_class is not None:
+                    gt_labels_valid = torch.zeros_like(gt_labels_valid, device=device, dtype=gt_labels_valid.dtype)
 
                 has_pred = b < len(batch_detections) and batch_detections[b]
                 if has_pred:

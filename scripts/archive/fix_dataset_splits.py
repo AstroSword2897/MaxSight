@@ -95,7 +95,7 @@ def fix_bbox(ann: Dict, image_w: int, image_h: int) -> Optional[Dict]:
     
     # Remove negative coordinates
     if x < 0 or y < 0 or w < 0 or h < 0:
-        # Try to fix by clipping
+        # Fix by clipping to image bounds
         x = max(0, x)
         y = max(0, y)
         w = max(0, w)
@@ -211,7 +211,7 @@ def split_dataset(images: List[Dict], annotations: List[Dict],
     val_ids = set(image_ids[num_train:num_train+num_val])
     test_ids = set(image_ids[num_train+num_val:])
     
-    # Verify no overlap
+    # Verifies no overlap
     assert len(train_ids & val_ids) == 0, "Train/Val overlap detected!"
     assert len(train_ids & test_ids) == 0, "Train/Test overlap detected!"
     assert len(val_ids & test_ids) == 0, "Val/Test overlap detected!"

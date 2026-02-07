@@ -32,7 +32,7 @@ def test_fallback_on_forced_exception():
     dummy_image = torch.randn(1, 3, 224, 224)
     outputs = failing_forward(dummy_image)
     
-    # Validate fallback was returned
+    # Validates fallback was returned
     assert 'classifications' in outputs
     assert 'boxes' in outputs
     assert 'objectness' in outputs
@@ -42,7 +42,7 @@ def test_fallback_on_forced_exception():
     assert outputs['boxes'].shape == (1, 196, 4)
     assert outputs['objectness'].shape == (1, 196)
     
-    # Fallback should be all zeros
+    # Fallback is all zeros
     assert outputs['classifications'].sum().item() == 0.0
     assert outputs['boxes'].sum().item() == 0.0
     assert outputs['objectness'].sum().item() == 0.0
@@ -67,12 +67,12 @@ def test_fallback_on_successful_execution():
     dummy_image = torch.randn(1, 3, 224, 224)
     outputs = successful_forward(dummy_image)
     
-    # Should get actual outputs, not fallback
+    # Actual outputs, not fallback
     assert outputs['classifications'].sum().item() > 0.0
     assert outputs['boxes'].sum().item() > 0.0
     assert outputs['objectness'].sum().item() > 0.0
     
-    # Check specific values
+    # Checks specific values
     assert torch.allclose(outputs['classifications'], torch.ones(1, 196, 80) * 0.5)
     assert torch.allclose(outputs['boxes'], torch.ones(1, 196, 4) * 10.0)
     assert torch.allclose(outputs['objectness'], torch.ones(1, 196) * 0.8)
@@ -129,7 +129,7 @@ def test_dependency_validation_missing():
     
     validation = graph.validate_dependencies(outputs)
     
-    # Model might be valid but others should fail
+    # Model may be valid; others fail when missing
     missing_components = ['ocr', 'spatial_memory', 'session_manager', 'preprocessing']
     failed_count = sum(1 for comp in missing_components if not validation.get(comp, False))
     
@@ -196,7 +196,7 @@ def test_uncertainty_fallback_high_uncertainty():
     assert outputs['objectness'].max().item() < 1.0, \
         "Objectness should be below 1.0"
     
-    # Check for numerical stability (no NaNs/Infs)
+    # Checks for numerical stability (no NaNs/Infs)
     assert not torch.isnan(outputs['objectness']).any(), "No NaNs should be present"
     assert not torch.isinf(outputs['objectness']).any(), "No Infs should be present"
     
@@ -250,7 +250,7 @@ def test_uncertainty_fallback_low_uncertainty():
     
     original_objectness = outputs['objectness'].clone()
     
-    # Low uncertainty - no fallback should trigger
+    # Low uncertainty; no fallback triggers
     uncertainty = outputs.get('uncertainty')
     if uncertainty is not None and uncertainty.mean() > 0.7:
         outputs['objectness'] = outputs['objectness'] * 0.8
@@ -276,7 +276,7 @@ def test_head_execution_manager_success():
         fallback_func=None
     )
     
-    # Verify output
+    # Verifies output
     assert 'output' in result
     assert result['output'].shape == (1, 10)
     assert torch.allclose(result['output'], torch.ones(1, 10))
@@ -313,7 +313,7 @@ def test_head_execution_manager_exception_with_fallback():
         assert result['output'].shape == (1, 10)
         assert result['output'].sum().item() == 0.0, "Should return zeros from fallback"
     
-    # Verify execution stats
+    # Verifies execution stats
     summary = manager.get_execution_summary()
     assert summary['total_executions'] >= 1
     assert summary['fallbacks_used'] >= 1 or summary['failed'] >= 1, \
@@ -391,7 +391,7 @@ def test_head_execution_manager_latency():
     # Should complete quickly on CPU (< 10ms per execution)
     assert avg_latency < 0.01, f"Average latency {avg_latency*1000:.2f}ms exceeds 10ms threshold"
     
-    # Verify result is correct
+    # Verifies result is correct
     assert result['output'].sum().item() == 20.0  # 1 * 10 * 2
     
     print(f"✅ Test 12: HeadExecutionManager latency {avg_latency*1000:.3f}ms/exec working")

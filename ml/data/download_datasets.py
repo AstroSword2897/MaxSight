@@ -33,23 +33,23 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco"), check_coco_raw: 
         'val_annotations': False
     }
     
-    # Check both datasets/coco and datasets/coco_raw (common locations)
+    # Checks both datasets/coco and datasets/coco_raw (common locations)
     coco_raw_dir = Path("datasets/coco_raw")
     if check_coco_raw and coco_raw_dir.exists():
-        # Use coco_raw if it exists
+        # Uses coco_raw if it exists
         actual_data_dir = coco_raw_dir
     else:
         actual_data_dir = data_dir
     
-    # Check directories
+    # Checks directories
     train_img_dir = actual_data_dir / "train2017"
     val_img_dir = actual_data_dir / "val2017"
     ann_dir = actual_data_dir / "annotations"
     
-    # Check image directories
+    # Checks image directories
     if train_img_dir.exists():
         img_count = len(list(train_img_dir.glob("*.jpg")))
-        status['train_images'] = img_count > 100000  # Should have ~118K images
+        status['train_images'] = img_count > 100000  # Expected ~118K images
         if status['train_images']:
             print(f"Train images: {img_count} images found")
         else:
@@ -57,13 +57,13 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco"), check_coco_raw: 
     
     if val_img_dir.exists():
         img_count = len(list(val_img_dir.glob("*.jpg")))
-        status['val_images'] = img_count > 4000  # Should have ~5K images
+        status['val_images'] = img_count > 4000  # Expected ~5K images
         if status['val_images']:
             print(f"Val images: {img_count} images found")
         else:
             print(f"⚠ Val images: Only {img_count} images found (expected ~5K)")
     
-    # Check annotations
+    # Checks annotations
     if ann_dir.exists():
         status['annotations'] = True
         train_ann = ann_dir / "instances_train2017.json"
@@ -122,18 +122,18 @@ def download_coco_dataset(data_dir: Path = Path("datasets/coco"), auto_download:
         import subprocess
         import shutil
         
-        # Try multiple download methods
+        # Use multiple download methods in order
         download_methods = []
         
-        # Method 1: Try wget
+        # Method 1: wget
         if shutil.which('wget'):
             download_methods.append(('wget', ['wget', '-c', '--progress=bar', '--tries=3']))
         
-        # Method 2: Try curl
+        # Method 2: curl
         if shutil.which('curl'):
             download_methods.append(('curl', ['curl', '-L', '-C', '-', '--progress-bar', '--retry', '3']))
         
-        # Method 3: Try Python requests (fallback)
+        # Method 3: Python requests (fallback)
         try:
             import requests
             download_methods.append(('requests', None))
@@ -220,7 +220,7 @@ def download_coco_dataset(data_dir: Path = Path("datasets/coco"), auto_download:
     
     print(f"\nDataset directory: {data_dir}")
     
-    # Verify if dataset already exists
+    # Verifies if dataset already exists
     print("\nVerifying existing dataset...")
     status = verify_coco_dataset(data_dir)
     if all(status.values()):

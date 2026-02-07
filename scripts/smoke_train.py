@@ -128,12 +128,12 @@ def compute_losses(predictions: Dict, targets: Dict, loss_fns: Dict) -> Tuple[Di
                 
                 # Handle shape mismatches gracefully
                 if pred.shape != target.shape:
-                    # Try to match shapes
+                    # Match shapes when possible
                     if pred.dim() == target.dim():
                         # Same dims, different sizes - skip if too different
                         if abs(pred.numel() - target.numel()) > pred.numel() * 0.5:
                             continue
-                        # Try to reshape target to match pred
+                        # Reshape target to match pred
                         try:
                             target = target.view(pred.shape)
                         except:

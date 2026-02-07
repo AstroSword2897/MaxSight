@@ -9,7 +9,7 @@ from pathlib import Path
 
 import itertools
 
-# Default paths (Colab); override with --val-annotation, --image-dir, --checkpoints-base
+# Default paths (Colab). Set via --val-annotation, --image-dir, --checkpoints-base.
 DEFAULT_VAL_ANN = "/content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json"
 DEFAULT_IMAGE_DIR = "/content/drive/MyDrive/MaxSight_Training"
 DEFAULT_CHECKPOINTS = "/content/drive/MyDrive/MaxSight"

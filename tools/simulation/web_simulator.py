@@ -1188,12 +1188,12 @@ registry = SessionRegistry()
 
 def get_session_id() -> Optional[str]:
     """Get session ID from request (header or JSON)."""
-    # Try header first
+    # Checks header first
     session_id = request.headers.get('X-Session-ID')
     if session_id:
         return session_id
     
-    # Try JSON body
+    # Checks JSON body
     if request.is_json and request.json:
         session_id = request.json.get('session_id')
         if session_id:
@@ -1231,7 +1231,7 @@ def require_session() -> MaxSightSession:
 # ============================================================================
 # Legacy MaxSightSimulator (DEPRECATED - Use MaxSightSession instead)
 # ============================================================================
-# Use MaxSightSession with SessionRegistry for multi-user support.
+# MaxSightSession with SessionRegistry provides multi-user support.
 
 class MaxSightSimulator:
     """DEPRECATED: Legacy single-user simulator...."""
@@ -2497,7 +2497,7 @@ def api_sample():
         # Load image from dataset
         image_path = dataset_dirs[dataset] / image_name
         if not image_path.exists():
-            # Try to find any image in the dataset
+            # Find any image in the dataset
             available = list(dataset_dirs[dataset].glob('*.jpg'))
             if not available:
                 return jsonify({

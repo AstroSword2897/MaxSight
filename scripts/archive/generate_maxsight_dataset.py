@@ -418,7 +418,7 @@ class SceneGenerator:
                 category = random.choice(COCO_BASE_CLASSES)
             
             # Generate bounding box (normalized coordinates)
-            # Try to avoid overlap
+            # Avoid overlap when placing
             for attempt in range(10):
                 cx = random.uniform(0.15, 0.85)
                 cy = random.uniform(0.15, 0.85)

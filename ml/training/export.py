@@ -41,7 +41,7 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
             test_output = traced_model(dummy_input)  # type: ignore
             logger.debug("Validation: Exported model forward pass successful")
         
-        # Move to CPU for saving (JIT models should be CPU)
+        # Move to CPU for saving (JIT models are expected on CPU)
         traced_model.cpu()
         save_path_obj = Path(save_path)
         traced_model.save(str(save_path_obj))
@@ -65,7 +65,7 @@ def export_to_executorch(
     logger.info(f"Exporting to ExecuTorch format: {save_path}")
     
     try:
-        # Try multiple ExecuTorch import paths (API may vary by version)
+        # ExecuTorch import paths vary by version; attempt multiple
         try:
             from executorch.exir import to_edge  # type: ignore
             from executorch.extension.pybind11.portable import to_edge as to_edge_legacy  # type: ignore
@@ -402,7 +402,7 @@ class AlertFrequency(Enum):
             for i, line in enumerate(lines):
                 # Check if this is our target function
                 if is_class_method:
-                    # Look for class method: "    def func_name("
+                    # Looks for class method: "    def func_name("
                     if f'    def {func_name}(' in line or f'\tdef {func_name}(' in line:
                         in_target_function = True
                         base_indent = len(line) - len(line.lstrip())
@@ -413,7 +413,7 @@ class AlertFrequency(Enum):
                 else:
                     # Look for standalone function: "def func_name("
                     if f'def {func_name}(' in line and not line.strip().startswith('class '):
-                        # Check it's not indented (standalone function)
+                        # Checks it's not indented (standalone function)
                         if not line.startswith(' ') and not line.startswith('\t'):
                             in_target_function = True
                             base_indent = 0
@@ -462,7 +462,7 @@ class AlertFrequency(Enum):
                     lines = func_code.split('\n')
                     cleaned_lines = []
                     for line in lines:
-                        # Check if line has config reference
+                        # Checks if line has config reference
                         if 'config.' in line:
                             # Add TODO comment before the line
                             indent = len(line) - len(line.lstrip())

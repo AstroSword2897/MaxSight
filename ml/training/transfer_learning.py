@@ -23,7 +23,7 @@ class TierTransferManager:
         self.target_model = target_model
         self.config = transfer_config
         
-        # Validate source checkpoint exists
+        # Validates source checkpoint exists
         if not self.source_checkpoint.exists():
             raise FileNotFoundError(f"Source checkpoint not found: {source_checkpoint}")
     
@@ -36,19 +36,19 @@ class TierTransferManager:
         
         checkpoint = torch.load(self.source_checkpoint, map_location='cpu')
         
-        # Check required keys
+        # Checks required keys
         required_keys = ['model_state_dict', 'epoch', 'val_loss']
         missing_keys = [k for k in required_keys if k not in checkpoint]
         if missing_keys:
             logger.error(f"Missing required keys: {missing_keys}")
             return False
         
-        # Check epoch count (should be trained for a while)
+        # Check epoch count (expect trained model)
         epoch = checkpoint.get('epoch', 0)
         if epoch < 50:
             logger.warning(f"Source checkpoint only at epoch {epoch}, recommend ≥50")
         
-        # Check for NaNs in state dict
+        # Checks for NaNs in state dict
         state_dict = checkpoint['model_state_dict']
         for name, param in state_dict.items():
             if torch.isnan(param).any():
@@ -102,7 +102,7 @@ class TierTransferManager:
         shape_mismatch = 0
         
         for target_name, target_param in target_state.items():
-            # Check if this parameter should be transferred
+            # Checks whether this parameter is transferred
             should_transfer = any(pattern in target_name for pattern in transfer_patterns)
             should_skip = any(pattern in target_name for pattern in skip_patterns)
             
@@ -111,12 +111,12 @@ class TierTransferManager:
                 continue
             
             if should_transfer:
-                # Try to find matching source parameter
+                # Find matching source parameter
                 source_name = target_name
                 if source_name in source_state:
                     source_param = source_state[source_name]
                     
-                    # Check shape compatibility
+                    # Checks shape compatibility
                     if source_param.shape == target_param.shape:
                         target_state[target_name] = source_param.clone()
                         transferred += 1
@@ -222,7 +222,7 @@ class TierTransferManager:
         freeze_map = {}
         
         for name, param in self.target_model.named_parameters():
-            # Check if this is a new T5 head (not in T2)
+            # Checks if this is a new T5 head (not in T2)
             is_new_head = any(x in name for x in [
                 'temporal', 'cross_task_attention', 'cross_modal_attention',
                 'scene_graph', 'ocr_head', 'sound_event_head',

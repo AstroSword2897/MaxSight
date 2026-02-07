@@ -8,7 +8,7 @@ from torchvision.models import resnet50, ResNet50_Weights
 from torchvision.ops.feature_pyramid_network import FeaturePyramidNetwork
 import math
 
-# Try to import xformers for memory-efficient attention
+# Import xformers for memory-efficient attention when available
 try:
     import xformers.ops as xops
     XFORMERS_AVAILABLE = True
@@ -542,9 +542,9 @@ class HybridCNNViTBackbone(nn.Module):
         
         # === ViT Backbone ===
         # Import VisionTransformerBackbone from the module (avoid circular import)
-        # The class should be defined in this file or imported from elsewhere
+        # The class is defined in this file or imported from elsewhere
         try:
-            # Try importing from the same module (if defined later in file)
+            # Import from the same module (if defined later in file)
             import sys
             current_module = sys.modules[__name__]
             if hasattr(current_module, 'VisionTransformerBackbone'):

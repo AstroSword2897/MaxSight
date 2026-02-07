@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""Single-image inference sanity check: load model, run detection, compare to GT with IoU.
-Uses MODEL_SIZE (224) for both GT and pred so they are in the same coordinate space.
-Works in Colab/notebook (no __file__)."""
+# Loads the model, runs detection on one image, and compares predictions to ground truth with IoU. Uses 224 for both. Works in Colab where __file__ is not set.
 
 import json
 import os
@@ -28,7 +26,7 @@ from ml.models.maxsight_cnn import (
 from ml.utils.preprocessing import ImagePreprocessor
 
 VAL_JSON = "/content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json"
-# Override in Colab: os.environ["IMAGE_DIR"] = "/content/drive/MyDrive/MaxSight"
+
 IMAGE_DIR = Path(os.environ.get("IMAGE_DIR", "/content/drive/MyDrive/MaxSight_Training"))
 CHECKPOINT_DIR = Path("/content/drive/MyDrive/MaxSight")
 CONDITION = "cvi"
@@ -57,8 +55,7 @@ def load_image_tensor(img_info, image_dir, condition, device):
     rel = img_info.get("file_name", img_info.get("image_path"))
     filename = Path(rel).name
 
-    # Annotation JSON often stores old absolute paths (e.g. .../MaxSight/datasets/coco_raw/val2017/).
-    # Try filename-only and common layouts so inference runs and mAP is computed.
+    # Annotation paths may be stale; the filename is looked up in common folder layouts.
     candidates = [
         image_dir / filename,
         image_dir / "val2017" / filename,
@@ -77,7 +74,7 @@ def load_image_tensor(img_info, image_dir, condition, device):
             path = p
             break
     if path is None and image_dir.exists():
-        # Fallback: breadth-first search so we check val2017/train2017 before hitting limit in a huge sibling
+        # Search the directory tree so val/train folders are checked before stopping.
         max_depth = 8
         max_dirs = 5000
         try:

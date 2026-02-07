@@ -58,7 +58,7 @@ class TherapySimulator:
                     frame = (frame * 255).astype(np.uint8)
                 pil_image = Image.fromarray(frame)
                 
-                # Convert to tensor (simplified - should use proper preprocessing)
+                # Convert to tensor (simplified; proper preprocessing not used here)
                 import torchvision.transforms as T
                 transform = T.Compose([
                     T.Resize((224, 224)),
@@ -78,7 +78,7 @@ class TherapySimulator:
         else:
             logger.debug("No model available - skipping inference")
         
-        # Generate overlays (simplified - should use overlay_engine)
+        # Generate overlays (simplified; overlay_engine not used here)
         overlays = []
         if model_output and 'boxes' in model_output:
             # Basic overlay generation

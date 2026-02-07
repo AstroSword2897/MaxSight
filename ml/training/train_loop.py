@@ -63,7 +63,7 @@ def set_seed(seed: int = 42) -> None:
         torch.cuda.manual_seed_all(seed)
     # MPS support (Apple Silicon)
     if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        # MPS doesn't have explicit seed setting, but manual_seed should cover it
+        # MPS has no explicit seed API; manual_seed covers RNG
         pass
     logger.debug(f"Random seed set to {seed}")
 
@@ -1289,7 +1289,7 @@ class ProductionTrainLoop:
                             # Transfer state for matching parameters
                             for new_group_idx, new_group in enumerate(self.optimizer.param_groups):
                                 for new_param_idx, new_param in enumerate(new_group['params']):
-                                    # Try to find matching old parameter
+                                    # Find matching old parameter
                                     # This is a simplified approach - full implementation would match by name
                                     if new_param_idx < len(old_optimizer_state.get('param_groups', [{}])[0].get('params', [])):
                                         old_param_id = old_optimizer_state['param_groups'][0]['params'][new_param_idx]

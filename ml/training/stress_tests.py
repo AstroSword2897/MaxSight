@@ -348,7 +348,7 @@ class InputCorruptionStressTest:
             avg_confidence = np.mean(metrics['confidence'])
             avg_uncertainty = np.mean(metrics['uncertainty'])
             
-            # Uncertainty should rise when confidence drops
+            # Uncertainty rises when confidence drops
             if avg_confidence < 0.5 and avg_uncertainty < 0.5:
                 red_flags.append("Uncertainty did not rise when confidence dropped")
         

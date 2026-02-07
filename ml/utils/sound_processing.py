@@ -133,7 +133,7 @@ class SoundProcessor:
             overlapping = []
             
             for det in detections[1:]:
-                # If confidence is close to primary, consider it overlapping
+                # Confidence close to primary is treated as overlapping
                 if det['confidence'] > primary['confidence'] * (1 - self.overlap_threshold):
                     overlapping.append(det)
             

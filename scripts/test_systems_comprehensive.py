@@ -181,7 +181,7 @@ def test_gradnorm(fixtures: TestFixtures) -> Tuple[bool, str]:
                 model=fixtures.model
             )
             
-            # Try backward pass (this should not fail with inplace errors)
+            # Backward pass (no inplace errors expected)
             loss.backward()
             
             print("   ✅ No inplace operation errors in full pipeline")
@@ -444,7 +444,7 @@ def test_model_forward(fixtures: TestFixtures) -> Tuple[bool, str]:
             outputs2 = fixtures.model(fixtures.images)
             outputs3 = fixtures.model(fixtures.images)
         
-        # Outputs should be deterministic in eval mode
+        # Outputs are deterministic in eval mode
         for key in required_keys:
             diff = (outputs2[key] - outputs3[key]).abs().max().item()
             if diff > 1e-6:
@@ -505,7 +505,7 @@ def test_validation_loss(fixtures: TestFixtures) -> Tuple[bool, str]:
         else:
             print(f"   ✅ Loss is in reasonable range")
         
-        # Test 4: Test loss with corrupted data (should still compute)
+        # Test 4: Test loss with corrupted data (still computes)
         print("\n4. Testing loss robustness with corrupted predictions...")
         corrupted_outputs = {}
         for key, value in fixtures.outputs.items():

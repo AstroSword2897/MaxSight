@@ -44,7 +44,7 @@ def test_gradnorm_availability():
     
     try:
         from ml.training.task_balancing import GradNormMultiHeadLoss
-        # Verify the class is actually usable (not just importable)
+        # Verifies the class is actually usable (not just importable)
         assert GradNormMultiHeadLoss is not None
         assert callable(GradNormMultiHeadLoss)
         print("✅ GradNormMultiHeadLoss imported successfully")
@@ -108,7 +108,7 @@ def test_training_loop_with_gradnorm():
         # Create loss function
         loss_fn = create_dummy_loss_fn()
         
-        # Try to create training loop with GradNorm
+        # Create training loop with GradNorm
         try:
             trainer = ProductionTrainLoop(
                 model=model,

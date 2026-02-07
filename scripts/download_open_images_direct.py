@@ -21,7 +21,7 @@ def download_with_cvdf_repo(data_dir: Path) -> bool:
     data_dir.mkdir(parents=True, exist_ok=True)
     validation_dir = data_dir / "validation"
     
-    # Check if already downloaded
+    # Checks if already downloaded
     if validation_dir.exists():
         img_count = len(list(validation_dir.rglob("*.jpg")))
         if img_count > 1000:  # Reasonable threshold
@@ -53,10 +53,10 @@ def download_with_cvdf_repo(data_dir: Path) -> bool:
             print("  See: OPEN_IMAGES_V6_DOWNLOAD_GUIDE.md")
             return False
     
-    # Find downloader script
+    # Finds downloader script
     downloader_script = downloader_dir / "downloader.py"
     if not downloader_script.exists():
-        # Try alternative location
+        # Uses alternative location
         downloader_script = downloader_dir / "download.py"
     
     if not downloader_script.exists():
@@ -180,7 +180,7 @@ def main():
     print("Open Images V6 Direct Downloader")
     print("="*70)
     
-    # Try CVDF method first
+    # Use CVDF method
     if download_with_cvdf_repo(data_dir):
         print("\n✅ Success!")
         return 0

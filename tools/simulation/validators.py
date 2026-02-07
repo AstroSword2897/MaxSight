@@ -113,7 +113,7 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
     if len(image_bytes) == 0:
         raise InvalidImageError("Empty image file")
     
-    # Try to open image
+    # Opens image file
     try:
         # Ensure we have bytes, not a BytesIO object
         if isinstance(image_bytes, BytesIO):
@@ -135,10 +135,10 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
         try:
             image = Image.open(image_buffer)
         except Exception as open_error:
-            # Check if it's a format issue
+            # Checks if it's a format issue
             error_msg = str(open_error)
             if 'cannot identify' in error_msg.lower() or 'cannot open' in error_msg.lower():
-                # Try to detect format from file signature
+                # Detect format from file signature
                 if image_bytes[:4] == b'\x00\x00\x00\x20':  # HEIC signature
                     raise InvalidImageError(
                         "HEIC/HEIF format is not supported. Please convert to JPEG or PNG. "
@@ -162,7 +162,7 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
         # Load image to verify it's valid (forces decoding)
         image.load()
         
-        # Check format
+        # Checks format
         if image.format not in config.allowed_image_formats:
             raise InvalidImageError(
                 f"Unsupported image format: {image.format}. "

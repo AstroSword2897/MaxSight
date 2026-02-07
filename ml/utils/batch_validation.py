@@ -12,13 +12,13 @@ logger = logging.getLogger(__name__)
 
 def validate_boxes(boxes: torch.Tensor, name: str = "boxes") -> Tuple[bool, str]:
     """Validate bounding boxes for training...."""
-    # Check for NaN/Inf
+    # Checks for NaN/Inf
     if torch.isnan(boxes).any():
         return False, f"{name} contains NaN values"
     if torch.isinf(boxes).any():
         return False, f"{name} contains Inf values"
     
-    # Check dimensions (width, height > 0)
+    # Checks dimensions (width, height > 0)
     if boxes.shape[-1] != 4:
         return False, f"{name} has wrong shape: expected [..., 4], got {boxes.shape}"
     
@@ -50,7 +50,7 @@ def validate_boxes(boxes: torch.Tensor, name: str = "boxes") -> Tuple[bool, str]
 
 def validate_labels(labels: torch.Tensor, num_classes: int, name: str = "labels") -> Tuple[bool, str]:
     """Validate class labels...."""
-    # Check for NaN/Inf
+    # Checks for NaN/Inf
     if torch.isnan(labels).any():
         return False, f"{name} contains NaN values"
     if torch.isinf(labels).any():
@@ -143,7 +143,7 @@ def validate_and_sanitize_batch(
                 # Check only actual boxes, not padding
                 actual_boxes = batch['boxes'][b, :num_obj]
                 
-                # Check for NaN/Inf
+                # Checks for NaN/Inf
                 if torch.isnan(actual_boxes).any() or torch.isinf(actual_boxes).any():
                     if not auto_fix:
                         return batch, False, f"Sample {b} has NaN/Inf in boxes"
@@ -174,7 +174,7 @@ def validate_and_sanitize_batch(
     if not auto_fix:
         return batch, False, msg
     
-    # Try to fix
+    # Apply fix when possible
     logger.warning(f"Batch validation failed: {msg}. Attempting auto-fix...")
     batch = batch.copy()
     

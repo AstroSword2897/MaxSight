@@ -77,7 +77,7 @@ class OCREncoder(nn.Module):
                         device=device
                     )  # [N_texts, embed_dim]
                 else:
-                    # Fallback: treat as nn.Sequential (shouldn't happen, but safe)
+                    # Fallback: treat as nn.Sequential (rare; safe path)
                     embeddings = []
                     for text in texts:
                         # Convert text to character indices

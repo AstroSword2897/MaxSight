@@ -41,7 +41,7 @@ class PriorityQueue:
             if priority_value >= MessagePriority.CRITICAL.value:
                 self._last_critical = (priority_value, message)
             
-            # Try to put in queue
+            # Put in queue
             try:
                 self.queue.put((priority_value, message), block=block, timeout=timeout)
                 return True
@@ -50,7 +50,7 @@ class PriorityQueue:
                 if priority_value >= MessagePriority.CRITICAL.value:
                     # Critical: replace last critical if this is newer/higher
                     if self._last_critical and priority_value >= self._last_critical[0]:
-                        # Try to remove old critical and add new one
+                        # Remove old critical and add new one
                         self._try_replace_critical(priority_value, message)
                         return True
                     else:
@@ -58,7 +58,7 @@ class PriorityQueue:
                         self._dropped_count += 1
                         return False
                 elif priority_value >= MessagePriority.HIGH.value:
-                    # High priority: try to drop a low-priority item
+                    # High priority: drop a low-priority item
                     if self._try_drop_low_priority():
                         try:
                             self.queue.put((priority_value, message), block=False)
@@ -85,7 +85,7 @@ class PriorityQueue:
         """Try to remove a low-priority item from queue."""
         # Queue doesn't support selective removal easily
         # For now, we'll just drop the incoming high-priority if queue is full
-        # In production, consider using a different data structure
+        # Alternative data structures may be used for production
         return False
     
     def get(self, block: bool = True, timeout: Optional[float] = None) -> Tuple[int, Any]:

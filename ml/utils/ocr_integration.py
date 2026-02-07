@@ -307,7 +307,7 @@ class OCRIntegration:
             
             # Extract text with confidence
             try:
-                # Try to get confidence scores
+                # Get confidence scores when available
                 ocr_data = pytesseract.image_to_data(
                     processed_image,
                     output_type=pytesseract.Output.DICT,

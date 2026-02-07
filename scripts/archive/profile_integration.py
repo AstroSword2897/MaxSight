@@ -21,12 +21,12 @@ def profile_forward():
         print(f"⚠️  Warning: Missing optional dependencies: {e}")
         print("   Some features may be unavailable, but core functionality should work.")
         print("   To install: pip install scikit-learn transformers")
-        # Try to continue with a minimal model if possible
+        # Continue with a minimal model when possible
         raise
     
     model.eval()
     
-    # Use CPU for consistent profiling (or MPS if available)
+    # Uses CPU for consistent profiling (or MPS if available)
     device = torch.device('cpu')
     if torch.backends.mps.is_available():
         device = torch.device('mps')
@@ -92,7 +92,7 @@ def profile_forward():
         print(f"\n❌ Missing required keys: {missing_keys}")
         return False
     
-    # Verify performance constraint
+    # Verifies performance constraint
     if avg_time < 85.0:
         print(f"\n✅ Performance constraint satisfied: {avg_time:.2f}ms < 85ms")
         return True

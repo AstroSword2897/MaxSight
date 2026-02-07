@@ -83,7 +83,7 @@ class SimulatorConfig:
 # Global config instance
 config = SimulatorConfig()
 
-# Override checkpoint path from environment variable if set
+# Checkpoint path is taken from environment when set
 if os.getenv('MAXSIGHT_CHECKPOINT_PATH'):
     checkpoint_path = Path(os.getenv('MAXSIGHT_CHECKPOINT_PATH')).expanduser().resolve()
     if checkpoint_path.exists():

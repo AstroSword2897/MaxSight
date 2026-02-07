@@ -91,7 +91,7 @@ class OpenImagesV6Dataset(Dataset):
         # FIXED: Aggregate all labels per image
         image_labels_map = {}  # image_id -> list of labels
         
-        # Try to load from annotation file if available
+        # Load from annotation file when available
         if annotation_file.exists():
             import csv
             with open(annotation_file, 'r') as f:
@@ -154,7 +154,7 @@ class OpenImagesV6Dataset(Dataset):
                 # Return None to signal skip (caller should handle)
                 raise RuntimeError(f"Corrupted image skipped: {image_path}") from e
             else:
-                # For backward compatibility, but this should be avoided
+                # Backward compatibility path; prefer explicit annotation
                 image = Image.new('RGB', (224, 224), color=(128, 128, 128))
                 logger.warning(f"Using dummy image for {image_path}")
         
@@ -414,7 +414,7 @@ class DetectionPostProcessor:
         batch_size: int
     ) -> List[List[Dict[str, Any]]]:
         """Process model outputs to detections...."""
-        # Try model.get_detections if available (backward compatibility)
+        # Use model.get_detections when available (backward compatibility)
         if hasattr(model, 'get_detections'):
             try:
                 detections = model.get_detections(  # type: ignore

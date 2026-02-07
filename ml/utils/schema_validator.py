@@ -122,7 +122,7 @@ class SchemaValidator:
                         f"scene_analysis: Old field name '{old_name}' found. Use '{new_name}' instead."
                     )
         
-        # Check for embedded images (should be references)
+        # Check for embedded images (expected as references)
         if 'hazard_density_heatmap' in scene:
             errors.append(
                 "scene_analysis: 'hazard_density_heatmap' embedded. Use 'hazard_density_heatmap_ref' instead."
