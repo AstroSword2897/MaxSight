@@ -4,6 +4,7 @@ Uses MODEL_SIZE (224) for both GT and pred so they are in the same coordinate sp
 Works in Colab/notebook (no __file__)."""
 
 import json
+import os
 import random
 import sys
 from pathlib import Path
@@ -26,7 +27,8 @@ from ml.models.maxsight_cnn import (
 from ml.utils.preprocessing import ImagePreprocessor
 
 VAL_JSON = "/content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json"
-IMAGE_DIR = Path("/content/drive/MyDrive/MaxSight_Training")
+# Override in Colab: os.environ["IMAGE_DIR"] = "/content/drive/MyDrive/MaxSight"
+IMAGE_DIR = Path(os.environ.get("IMAGE_DIR", "/content/drive/MyDrive/MaxSight_Training"))
 CHECKPOINT_DIR = Path("/content/drive/MyDrive/MaxSight")
 CONDITION = "cvi"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -54,15 +56,18 @@ def load_image_tensor(img_info, image_dir, condition, device):
     rel = img_info.get("file_name", img_info.get("image_path"))
     filename = Path(rel).name
 
-    # Annotation JSON often stores old absolute paths; images may live under IMAGE_DIR.
-    # Try filename-only and common subdirs so inference runs and mAP is computed.
+    # Annotation JSON often stores old absolute paths (e.g. .../MaxSight/datasets/coco_raw/val2017/).
+    # Try filename-only and common layouts so inference runs and mAP is computed.
     candidates = [
         image_dir / filename,
         image_dir / "val2017" / filename,
         image_dir / "train2017" / filename,
         image_dir / "images" / filename,
+        image_dir / "datasets" / "coco_raw" / "val2017" / filename,
+        image_dir / "datasets" / "coco_raw" / "train2017" / filename,
+        image_dir / "coco_raw" / "val2017" / filename,
+        image_dir / "coco_raw" / "train2017" / filename,
     ]
-    # If rel was relative (e.g. val2017/xxx.jpg), try it under image_dir
     if not Path(rel).is_absolute():
         candidates.append(image_dir / rel)
     path = None
@@ -73,7 +78,9 @@ def load_image_tensor(img_info, image_dir, condition, device):
     if path is None:
         raise FileNotFoundError(
             f"Image not found for {filename}. Tried under IMAGE_DIR={image_dir} "
-            "(root, val2017/, train2017/, images/). Move images there or set IMAGE_DIR."
+            "(root, val2017/, train2017/, images/, datasets/coco_raw/val2017|train2017/, coco_raw/...). "
+            "Set IMAGE_DIR to the folder that contains your images, e.g. in Colab: "
+            "os.environ['IMAGE_DIR'] = '/content/drive/MyDrive/MaxSight'"
         )
     pil = Image.open(path).convert("RGB")
     preprocessor = ImagePreprocessor(
