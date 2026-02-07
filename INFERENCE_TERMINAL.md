@@ -189,39 +189,45 @@ drive.mount("/content/drive")
 
 **2. Paths (adjust if your layout differs)**  
 - Checkpoints base: `/content/drive/MyDrive/MaxSight` (folder containing `checkpoints_amblyopia/`, `checkpoints_cvi/`, … each with `best_model.pt`).  
-- Val JSON: e.g. `/content/drive/MyDrive/MaxSight/datasets/coco_raw/cleaned_splits/maxsight_val.json` or `./datasets/cleaned_splits/maxsight_val.json` if you have data in the repo.  
-- Image root: e.g. `/content/drive/MyDrive/MaxSight/datasets` or `./datasets` so `image_dir / file_name` from the annotation resolves to real images.
+- **Val JSON and image root** depend on your Drive layout:
+  - **Cleaned MaxSight splits:**  
+    `--val-annotation .../datasets/coco_raw/cleaned_splits/maxsight_val.json` and `--image-dir .../datasets` (so `image_dir` + annotation `file_name` = image path).
+  - **Raw COCO layout** (only `coco_raw/annotations/`, `val2017/`, `train2017/`):  
+    Use COCO val file and coco_raw as image root:  
+    `--val-annotation /content/drive/MyDrive/MaxSight/datasets/coco_raw/annotations/instances_val2017.json`  
+    `--image-dir /content/drive/MyDrive/MaxSight/datasets/coco_raw`  
+    (COCO `file_name` is like `val2017/xxx.jpg`, so image_dir must be the folder that contains `val2017/`.)
 
 **3. All models – full run (sweep + inference with best params)**  
-Finds checkpoints on Drive, sweeps confidence/NMS, then runs full inference and writes `inference_data.json` and `improved_inference_config.json`:
+Use **raw COCO** paths if you don’t have `cleaned_splits/maxsight_val.json`:
 
 ```python
+# Raw COCO layout (annotations/instances_val2017.json, val2017/, train2017/)
 !python scripts/improve_map_all_models.py \
   --checkpoints-base /content/drive/MyDrive/MaxSight \
-  --val-annotation /content/drive/MyDrive/MaxSight/datasets/coco_raw/cleaned_splits/maxsight_val.json \
-  --image-dir /content/drive/MyDrive/MaxSight/datasets \
+  --val-annotation /content/drive/MyDrive/MaxSight/datasets/coco_raw/annotations/instances_val2017.json \
+  --image-dir /content/drive/MyDrive/MaxSight/datasets/coco_raw \
   --output /content/drive/MyDrive/MaxSight/inference_data.json
 ```
 
-**4. All models – single inference (no sweep, faster)**  
-Skip the sweep and run inference once with fixed thresholds:
+If you have cleaned splits instead, use `--val-annotation .../cleaned_splits/maxsight_val.json` and `--image-dir .../datasets`.
 
+**4. All models – single inference (no sweep, faster)**  
 ```python
 !python scripts/improve_map_all_models.py \
   --checkpoints-base /content/drive/MyDrive/MaxSight \
-  --val-annotation /content/drive/MyDrive/MaxSight/datasets/coco_raw/cleaned_splits/maxsight_val.json \
-  --image-dir /content/drive/MyDrive/MaxSight/datasets \
+  --val-annotation /content/drive/MyDrive/MaxSight/datasets/coco_raw/annotations/instances_val2017.json \
+  --image-dir /content/drive/MyDrive/MaxSight/datasets/coco_raw \
   --output /content/drive/MyDrive/MaxSight/inference_data.json \
   --skip-sweep --confidence 0.05 --nms-iou 0.5
 ```
 
 **5. Limit conditions or batches (optional)**  
 ```python
-# Few conditions, few batches (quick check)
 !python scripts/improve_map_all_models.py \
   --checkpoints-base /content/drive/MyDrive/MaxSight \
-  --val-annotation /content/drive/MyDrive/MaxSight/datasets/coco_raw/cleaned_splits/maxsight_val.json \
-  --image-dir /content/drive/MyDrive/MaxSight/datasets \
+  --val-annotation /content/drive/MyDrive/MaxSight/datasets/coco_raw/annotations/instances_val2017.json \
+  --image-dir /content/drive/MyDrive/MaxSight/datasets/coco_raw \
   --conditions cvi amd --max-batches 4 --skip-sweep
 ```
 

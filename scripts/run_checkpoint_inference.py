@@ -439,7 +439,17 @@ def main():
         if not hint and parent.parent.exists():
             try:
                 siblings = sorted(p.name for p in parent.parent.iterdir())[:20]
-                hint = f" Parent {parent.parent} has: {siblings}. Check path (e.g. annotations/val.json)."
+                hint = f" Parent {parent.parent} has: {siblings}."
+                # Suggest COCO layout when annotations/ and val2017/ exist
+                if "annotations" in siblings and "val2017" in siblings:
+                    ann_dir = parent.parent / "annotations"
+                    coco_val = ann_dir / "instances_val2017.json"
+                    if coco_val.exists():
+                        hint += f" Try: --val-annotation {coco_val} --image-dir {parent.parent}"
+                    else:
+                        hint += " Try: --val-annotation <coco_raw>/annotations/instances_val2017.json --image-dir <coco_raw>"
+                else:
+                    hint += " Check path (e.g. annotations/instances_val2017.json or cleaned_splits/maxsight_val.json)."
             except OSError:
                 pass
         raise FileNotFoundError(f"Val annotation not found: {val_ann}. {hint}")
