@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Single-image inference sanity check: load model, run detection, compare to GT with IoU. Works in Colab/notebook (no __file__)."""
+"""Single-image inference sanity check: load model, run detection, compare to GT with IoU.
+Uses MODEL_SIZE (224) for both GT and pred so they are in the same coordinate space.
+Works in Colab/notebook (no __file__)."""
 
 import json
 import random
@@ -23,16 +25,16 @@ from ml.models.maxsight_cnn import (
 )
 from ml.utils.preprocessing import ImagePreprocessor
 
-# ---- CONFIG ----
 VAL_JSON = "/content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json"
 IMAGE_DIR = Path("/content/drive/MyDrive/MaxSight_Training")
 CHECKPOINT_DIR = Path("/content/drive/MyDrive/MaxSight")
 CONDITION = "cvi"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-# ----------------
+
+MODEL_SIZE = 224
 
 
-def load_model(condition: str, checkpoint_dir: Path, device: str):
+def load_model(condition, checkpoint_dir, device):
     model = create_model(
         num_classes=len(COCO_CLASSES),
         use_audio=False,
@@ -48,20 +50,41 @@ def load_model(condition: str, checkpoint_dir: Path, device: str):
     return model
 
 
-def load_image_tensor(img_info: dict, image_dir: Path, condition: str, device: str) -> torch.Tensor:
-    # Support both "file_name" (COCO) and "image_path" (MaxSight list format)
-    rel = img_info.get("file_name", img_info.get("image_path", "image.jpg"))
-    path = Path(rel) if Path(rel).is_absolute() else image_dir / rel
+def load_image_tensor(img_info, image_dir, condition, device):
+    rel = img_info.get("file_name", img_info.get("image_path"))
+    path = image_dir / rel if not Path(rel).is_absolute() else Path(rel)
+    # If path from JSON doesn't exist (e.g. different Drive layout), try under image_dir
+    if not path.exists():
+        candidates = [image_dir / path.name, image_dir / rel]
+        if path.is_absolute():
+            for p in ("val2017", "train2017", "images", "val", "train"):
+                if p in path.parts:
+                    idx = path.parts.index(p)
+                    sub = Path(*path.parts[idx:])
+                    candidates.append(image_dir / sub)
+                    break
+        for p in candidates:
+            if p.exists():
+                path = p
+                break
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Image not found: {path}. Tried under IMAGE_DIR={image_dir}. "
+            "Set IMAGE_DIR to the folder that contains your images (e.g. where val2017/ lives)."
+        )
     pil = Image.open(path).convert("RGB")
-    preprocessor = ImagePreprocessor(image_size=(224, 224), condition_mode=condition)
+    preprocessor = ImagePreprocessor(
+        image_size=(MODEL_SIZE, MODEL_SIZE),
+        condition_mode=condition,
+    )
     tensor = preprocessor(pil)
     return tensor.unsqueeze(0).to(device)
 
 
-def get_detections(model, images: torch.Tensor, confidence_threshold: float = 0.001):
+def get_detections(model, images):
     with torch.no_grad():
         outputs = model(images)
-    return model.get_detections(outputs, confidence_threshold=confidence_threshold)
+    return model.get_detections(outputs, confidence_threshold=0.001)
 
 
 def iou(boxA, boxB):
@@ -81,72 +104,50 @@ def main():
     with open(VAL_JSON) as f:
         data = json.load(f)
 
-    # Support COCO format (dict with "images"/"annotations") or MaxSight format (list of anns)
-    if isinstance(data, dict) and "images" in data and "annotations" in data:
-        img_info = random.choice(data["images"])
-        image_id = img_info["id"]
-        img_w = img_info.get("width", 224)
-        img_h = img_info.get("height", 224)
-        gt_annos = [a for a in data["annotations"] if a["image_id"] == image_id]
-        sx, sy = 224 / max(1, img_w), 224 / max(1, img_h)
-        gt_boxes = []
-        gt_classes = []
-        for ann in gt_annos:
-            x, y, w, h = ann["bbox"]
-            x1, y1 = x * sx, y * sy
-            x2, y2 = (x + w) * sx, (y + h) * sy
-            gt_boxes.append([x1, y1, x2, y2])
-            gt_classes.append(ann["category_id"])
-    elif isinstance(data, list):
-        # MaxSight cleaned_splits: list of { image_id, image_path, objects: [{ box: [cx,cy,w,h], class }] }
-        candidates = [a for a in data if a.get("objects")]
-        if not candidates:
-            print("No annotations with objects in JSON.")
-            return 1
-        ann = random.choice(candidates)
-        image_id = ann.get("image_id", ann.get("id", 0))
-        img_info = {
-            "file_name": ann.get("image_path", f"{image_id}.jpg"),
-            "image_path": ann.get("image_path", f"{image_id}.jpg"),
-        }
-        # GT boxes already normalized [cx, cy, w, h] -> convert to 224 xyxy
-        gt_boxes = []
-        gt_classes = []
-        for obj in ann["objects"]:
-            cx, cy, w, h = obj["box"]
-            x1 = (cx - w / 2) * 224
-            y1 = (cy - h / 2) * 224
-            x2 = (cx + w / 2) * 224
-            y2 = (cy + h / 2) * 224
-            gt_boxes.append([x1, y1, x2, y2])
-            gt_classes.append(obj.get("class", 0))
-    else:
-        print("Unknown JSON format: need 'images'/'annotations' (COCO) or list of annotations (MaxSight).")
+    if not isinstance(data, list):
+        print("Expected MaxSight format: JSON list of annotations with 'objects' and 'image_path'.")
         return 1
+
+    ann = random.choice([a for a in data if a.get("objects")])
+
+    img_info = {
+        "file_name": ann["image_path"],
+        "image_path": ann["image_path"],
+    }
+
+    gt_boxes = []
+    gt_classes = []
+
+    for obj in ann["objects"]:
+        cx, cy, w, h = obj["box"]
+        x1 = (cx - w / 2) * MODEL_SIZE
+        y1 = (cy - h / 2) * MODEL_SIZE
+        x2 = (cx + w / 2) * MODEL_SIZE
+        y2 = (cy + h / 2) * MODEL_SIZE
+        gt_boxes.append([x1, y1, x2, y2])
+        gt_classes.append(obj.get("class", 0))
 
     print("GT boxes:", len(gt_boxes))
 
-    if len(gt_boxes) == 0:
-        print("No GT boxes — pick another image or check dataset.")
-        return 1
-
-    image_tensor = load_image_tensor(img_info, IMAGE_DIR, CONDITION, DEVICE)
     model = load_model(CONDITION, CHECKPOINT_DIR, DEVICE)
-    detections = get_detections(model, image_tensor, confidence_threshold=0.001)
-    print("Predicted boxes:", len(detections[0]))
+    image_tensor = load_image_tensor(img_info, IMAGE_DIR, CONDITION, DEVICE)
 
-    if len(detections[0]) == 0:
+    detections = get_detections(model, image_tensor)[0]
+    print("Predicted boxes:", len(detections))
+
+    if len(detections) == 0:
         print("Model predicts nothing.")
         return 1
 
     pred_boxes = []
     pred_classes = []
-    for d in detections[0]:
+
+    for d in detections:
         cx, cy, w, h = d["box"]
-        x1 = (cx - w / 2) * 224
-        y1 = (cy - h / 2) * 224
-        x2 = (cx + w / 2) * 224
-        y2 = (cy + h / 2) * 224
+        x1 = (cx - w / 2) * MODEL_SIZE
+        y1 = (cy - h / 2) * MODEL_SIZE
+        x2 = (cx + w / 2) * MODEL_SIZE
+        y2 = (cy + h / 2) * MODEL_SIZE
         pred_boxes.append([x1, y1, x2, y2])
         pred_classes.append(d["class"])
 
@@ -157,12 +158,14 @@ def main():
     for pb in pred_boxes:
         for gb in gt_boxes:
             max_iou_val = max(max_iou_val, iou(pb, gb))
+
     print("Max IoU:", max_iou_val)
 
     if max_iou_val < 0.1:
-        print("Boxes don't overlap — scaling/format issue.")
+        print("⚠ Boxes don't overlap → scaling/class mismatch.")
     else:
-        print("Predictions overlap GT.")
+        print("✅ Predictions overlap GT.")
+
     print("Done.")
     return 0
 
