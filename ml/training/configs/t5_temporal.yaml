@@ -87,6 +87,11 @@ logging:
   log_every_n_steps: 50
   tensorboard: true
 
+# Target (post-training inference)
+# Reach mAP@0.5 >= 0.5 by training to full epochs then running improve_map_all_models on checkpoints.
+target_metrics:
+  mAP_50: 0.5
+
 # Device
 device: "auto"
 seed: 42
