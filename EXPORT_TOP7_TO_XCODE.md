@@ -78,6 +78,7 @@ python scripts/export_one_model.py --checkpoint /path/to/checkpoints_amblyopia/b
 
 ## Troubleshooting
 
+- **`/bin/bash: line 1: path: No such file or directory` (e.g. after "Already up to date"):** Something is running the literal command `path`. On macOS/Linux there is no `path` command. Check Cursor/VS Code: **Settings** → search for "git" or "sync" or "pull" → look for a "run after pull/sync" or "post pull command" set to `path` and clear it or set it to a real command (e.g. `echo "Sync done"`). Do not run the word `path` from doc examples; use real paths (e.g. `.` or `$PWD`).
 - **No checkpoints found:** Ensure `<base>/checkpoints_<cond>/best_model.pt` exists. Run `python scripts/find_trained_checkpoints.py` to discover paths.
 - **Export segfault (exit 139):** JIT trace can crash on some environments; the export pipeline stubs the CLIP encoder to reduce this. Use `--device cpu` and `--no-subprocess` to see a full traceback.
 - **JIT-only vs PTE:** Default is JIT-only (`--quick`). Use `--no-quick` to try ExecuTorch PTE first (requires ExecuTorch installed).

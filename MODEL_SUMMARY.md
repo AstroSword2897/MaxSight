@@ -22,8 +22,8 @@
 # JIT-only export (default): fast, no ExecuTorch
 python scripts/inference_and_deploy_top7.py --checkpoints-base /path/to/MaxSight --output-dir /path/to/exports_top7 --quick
 
-# Or deploy only (skip inference)
-python scripts/inference_and_deploy_top7.py --skip-inference --quick --checkpoints-base /path --output-dir /path/exports
+# Or deploy only (skip inference). Replace <BASE> with your checkpoints root (e.g. . or /content/drive/MyDrive/MaxSight).
+python scripts/inference_and_deploy_top7.py --skip-inference --quick --checkpoints-base <BASE> --output-dir <BASE>/exports
 ```
 
 Colab: clone, `%cd /content/2026-Prototype`, then run the same with `--checkpoints-base /content/drive/MyDrive/MaxSight` (and `--quick` for fast export).
