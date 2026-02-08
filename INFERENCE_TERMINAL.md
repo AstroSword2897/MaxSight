@@ -247,7 +247,7 @@ If inference reports mAP@0.5 = 0:
    ```
    Check the log: if objectness max/p95 are below 0.05, a higher threshold filters everything out.
 
-2. **Sweep confidence and NMS** (finds best threshold without retraining; now includes 0.005):
+2. **Sweep confidence and NMS** (finds best threshold without retraining; includes 0.3 down to 0.001):
    ```python
    !python scripts/improve_map_all_models.py \
      --checkpoints-base /content/drive/MyDrive/MaxSight \
@@ -255,7 +255,7 @@ If inference reports mAP@0.5 = 0:
      --image-dir /content/drive/MyDrive/MaxSight_Training \
      --output /content/drive/MyDrive/MaxSight/inference_data.json
    ```
-   Omit `--skip-sweep` so it tries multiple confidence (0.3 down to 0.005) and NMS values, then runs full inference with the best. Use `--max-batches 20` for a quicker sweep.
+   Omit `--skip-sweep` so it tries confidence 0.3, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001 and several NMS values. Use `--max-batches 20` for a quicker sweep.
 
 3. **Try adaptive confidence** (per-batch threshold from model scores):
    ```python
@@ -267,6 +267,38 @@ If inference reports mAP@0.5 = 0:
    ```
 
 4. **If mAP stays 0:** Checkpoints may be **untrained** (e.g. from `create_minimal_checkpoint.py`) or trained on different data. Reaching mAP@0.5 then requires **training** (e.g. `scripts/train_maxsight.py` or `scripts/train_t5_fast_colab.py`) on your val/train splits, then re-running inference.
+
+### Run inference on the 2 inference datasets (Open Images V6 + ADE20K)
+
+Download the two inference datasets, then run checkpoint inference on them:
+
+```bash
+# Download Open Images V6 + ADE20K (BDD100K skipped), then run inference
+python scripts/run_inference_on_inference_datasets.py \
+  --download \
+  --datasets-dir /content/drive/MyDrive/MaxSight_Training/datasets \
+  --checkpoints-base /content/drive/MyDrive/MaxSight \
+  --conditions cvi amd \
+  --max-samples 100
+```
+
+Omit `--download` if the datasets are already present under `--datasets-dir`. Default datasets are `open_images_v6` and `ade20k`. Use `--output results.json` to write per-dataset/condition stats.
+
+### Train alive models on the same data (train/val splits)
+
+To **train** only the “alive” condition models on the same train/val data used for inference:
+
+```bash
+python scripts/train_alive_models.py \
+  --checkpoints-base /content/drive/MyDrive/MaxSight \
+  --data-dir /content/drive/MyDrive/MaxSight_Training \
+  --train-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_train.json \
+  --val-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json \
+  --conditions amblyopia amd color_blindness cvi glaucoma retinitis_pigmentosa strabismus \
+  --epochs 30 --batch-size 8
+```
+
+This runs `train_maxsight.py` once per condition and writes `checkpoints_<cond>/best_model.pt` under `--checkpoints-base`. Omit `--conditions` to use the default list of seven alive conditions. Then re-run inference (e.g. `improve_map_all_models.py`) to measure mAP.
 
 ---
 
