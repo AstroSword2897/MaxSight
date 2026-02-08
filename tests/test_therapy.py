@@ -1,4 +1,4 @@
-"""Tests for therapy modules: SessionManager, TaskGenerator, TherapyTaskIntegrator, TherapyStateHead...."""
+"""Tests for therapy modules: SessionManager, TaskGenerator, TherapyTaskIntegrator, TherapyStateHead."""
 
 import sys
 from pathlib import Path
@@ -273,5 +273,8 @@ def test_therapy_state_head_forward_motion_2d(therapy_head):
     out = therapy_head(eye, motion_2d, depth_feat, contrast_feat)
     assert out["fatigue_score"].shape == (B, 1)
     assert out["depth_map"].shape == (B, H, W)
+
+
+
 
 

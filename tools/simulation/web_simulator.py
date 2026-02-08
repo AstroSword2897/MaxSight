@@ -1,7 +1,4 @@
-"""MaxSight web simulator - local web server for end-to-end testing.
-Run: python tools/simulation/web_simulator.py
-Access: http://localhost:8002
-Note: Development mode only - not production-hardened."""
+"""MaxSight web simulator - local web server for end-to-end testing. Run: python tools/simulation/web_simulator.py Access: http://localhost:8002 Note: Development mode only - not production-hardened."""
 
 import torch
 import numpy as np
@@ -181,8 +178,7 @@ class MaxSightCore:
     
     @classmethod
     def get_instance(cls, device: Optional[str] = None) -> 'MaxSightCore':
-        """Get singleton instance (thread-safe).
-        Uses proper locking pattern (no double-checked locking)."""
+        """Get singleton instance (thread-safe). Uses proper locking pattern (no double-checked locking)."""
         with cls._lock:
             if cls._instance is None:
                 cls._instance = cls(device)
@@ -344,8 +340,7 @@ class MaxSightSession:
                         session_logger.warning("Voice output suppressed - audio degraded", 
                                               session_id=self.session_id)
                 except Exception as e:
-                    # Queue errors - log but continue.
-                    # Empty exception is expected on timeout, don't log as error.
+                    # Queue errors - log but continue. Empty exception is expected on timeout, don't log as error.
                     from queue import Empty
                     if not isinstance(e, (Empty, TimeoutError, AttributeError)):
                         session_logger.error(f"Voice queue error: {str(e)}", 
@@ -396,8 +391,7 @@ class MaxSightSession:
                         session_logger.warning("Haptic output suppressed - haptic degraded", 
                                             session_id=self.session_id)
                 except Exception as e:
-                    # Queue errors - log but continue.
-                    # Empty exception is expected on timeout, don't log as error.
+                    # Queue errors - log but continue. Empty exception is expected on timeout, don't log as error.
                     from queue import Empty
                     if not isinstance(e, (Empty, TimeoutError, AttributeError)):
                         session_logger.error(f"Haptic queue error: {str(e)}", 
@@ -409,8 +403,7 @@ class MaxSightSession:
         self.voice_thread.start()
         self.haptic_thread.start()
     
-    # Forward all the processing methods from MaxSightSimulator.
-    # (We'll move them in the next step)
+    # Forward all the processing methods from MaxSightSimulator. (We'll move them in the next step)
     
     def _preprocess_image(self, image: Image.Image) -> torch.Tensor:
         """Preprocess image for model input (using utility function)."""
@@ -421,8 +414,7 @@ class MaxSightSession:
         return postprocess_outputs(self.core.model, outputs, confidence_threshold)
     
     def _run_inference(self, image_tensor: torch.Tensor, audio_features: Optional[np.ndarray] = None) -> Tuple[Dict[str, Any], float]:
-        """Run model inference with thread safety guarantees.
-        Uses semaphore to serialize inference and torch.no_grad() to prevent memory leaks."""
+        """Run model inference with thread safety guarantees. Uses semaphore to serialize inference and torch.no_grad() to prevent memory leaks."""
         # Acquire inference semaphore (serializes model access)
         with INFERENCE_SEMAPHORE:
             inference_start = time.perf_counter()
@@ -648,7 +640,7 @@ class MaxSightSession:
         audio_features: Optional[np.ndarray] = None,
         frame_id: Optional[int] = None
     ) -> Dict[str, Any]:
-        """Process a single frame through the complete MaxSight pipeline...."""
+        """Process a single frame through the complete MaxSight pipeline."""
         with self.lock:  # Per-session locking.
             # Check if aborted.
             if self._aborted:
@@ -1227,7 +1219,7 @@ def require_session() -> MaxSightSession:
 # MaxSightSession with SessionRegistry provides multi-user support.
 
 class MaxSightSimulator:
-    """DEPRECATED: Legacy single-user simulator...."""
+    """DEPRECATED: Legacy single-user simulator."""
     
     # Configuration constants (DEPRECATED - use config module instead)
     _CONFIG = {
@@ -1329,8 +1321,7 @@ class MaxSightSimulator:
         return postprocess_outputs(self.model, outputs, confidence_threshold)
     
     def _run_inference(self, image_tensor: torch.Tensor, audio_features: Optional[np.ndarray] = None) -> Tuple[Dict[str, Any], float]:
-        """Run model inference with thread safety guarantees (legacy class).
-        Uses semaphore to serialize inference and torch.no_grad() to prevent memory leaks."""
+        """Run model inference with thread safety guarantees (legacy class). Uses semaphore to serialize inference and torch.no_grad() to prevent memory leaks."""
         # Acquire inference semaphore (serializes model access)
         with INFERENCE_SEMAPHORE:
             inference_start = time.perf_counter()
@@ -1344,14 +1335,7 @@ class MaxSightSimulator:
         return outputs, inference_time
     
     def _run_ocr(self, image: Image.Image, outputs: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Run OCR text detection.
-        
-        Args:
-            image: Original PIL image
-            outputs: Model outputs dictionary
-        
-        Returns:
-            List of OCR result dictionaries"""
+        """Run OCR text detection. Args: image: Original PIL image outputs: Model outputs dictionary Returns: List of OCR result dictionaries."""
         ocr_results = []
         try:
             text_scores = outputs.get('text_regions', torch.zeros(1, 196))
@@ -1385,10 +1369,7 @@ class MaxSightSimulator:
         return scene_description
     
     def _update_memory(self, detections_list: List[Dict[str, Any]]) -> None:
-        """Update spatial memory with current detections.
-        
-        Args:
-            detections_list: List of detection dictionaries"""
+        """Update spatial memory with current detections. Args: detections_list: List of detection dictionaries."""
         spatial_detections = []
         for det in detections_list:
             if 'bbox' in det and 'class_name' in det:
@@ -1405,13 +1386,7 @@ class MaxSightSimulator:
             )
     
     def _plan_path(self, detections_list: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-        """Plan navigation path if navigation scenario.
-        
-        Args:
-            detections_list: List of detection dictionaries
-        
-        Returns:
-            Path info dictionary or None"""
+        """Plan navigation path if navigation scenario. Args: detections_list: List of detection dictionaries Returns: Path info dictionary or None."""
         path_info = None
         if self.current_scenario == 'navigation':
             path_result = self.path_planner.plan_path(
@@ -1427,7 +1402,7 @@ class MaxSightSimulator:
         return path_info
     
     def _schedule_outputs(self, detections_list: List[Dict[str, Any]], outputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Schedule cross-modal outputs (voice, haptic, visual)...."""
+        """Schedule cross-modal outputs (voice, haptic, visual)."""
         model_outputs: Dict[str, Any] = {}
         urgency_scores = outputs.get('urgency_scores')
         uncertainty = outputs.get('uncertainty')
@@ -1447,7 +1422,7 @@ class MaxSightSimulator:
         return scheduled_outputs if isinstance(scheduled_outputs, dict) else {'outputs': scheduled_outputs}
     
     def _render_overlay(self, image: Image.Image, detections_list: List[Dict[str, Any]], ocr_results: List[Dict[str, Any]], path_info: Optional[Dict[str, Any]]) -> Optional[str]:
-        """Render visual overlays on image...."""
+        """Render visual overlays on image."""
         try:
             urgency_scores = None
             if detections_list and 'urgency' in detections_list[0]:
@@ -1556,7 +1531,7 @@ class MaxSightSimulator:
             self.haptic_thread.join(timeout=1.0)
     
     def _queue_outputs(self, scene_description: str, outputs: Dict[str, Any], detections_list: List[Dict[str, Any]]) -> Tuple[List[str], List[Dict[str, Any]]]:
-        """Queue voice and haptic outputs asynchronously...."""
+        """Queue voice and haptic outputs asynchronously."""
         voice_announcements = []
         haptic_patterns = []
         
@@ -1590,7 +1565,7 @@ class MaxSightSimulator:
         image: Image.Image,
         audio_features: Optional[np.ndarray] = None
     ) -> Dict[str, Any]:
-        """Process a single frame through the complete MaxSight pipeline...."""
+        """Process a single frame through the complete MaxSight pipeline."""
         start_time = time.perf_counter()
         tracker = PipelineLatencyTracker()
         
@@ -1705,10 +1680,7 @@ class MaxSightSimulator:
         return result
     
     def _extract_reasoning_trace(self, outputs: Dict[str, Any], detections_list: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Extract model reasoning trace showing how predictions are made.
-        
-        Returns:
-            Dictionary with reasoning trace information"""
+        """Extract model reasoning trace showing how predictions are made. Returns: Dictionary with reasoning trace information."""
         trace = {
             'feature_extraction': {},
             'attention_weights': {},
@@ -1759,10 +1731,7 @@ class MaxSightSimulator:
         return trace
     
     def _extract_final_judgment(self, outputs: Dict[str, Any], detections_list: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Extract final weighted judgment with confidence scores.
-        
-        Returns:
-            Dictionary with final judgment information"""
+        """Extract final weighted judgment with confidence scores. Returns: Dictionary with final judgment information."""
         # Compute weighted scores.
         urgency_scores = outputs.get('urgency_scores', torch.zeros(1, 4))
         urgency_level = int(urgency_scores.argmax(dim=1).item()) if urgency_scores.numel() > 0 else 0
@@ -1813,11 +1782,7 @@ class MaxSightSimulator:
         final_judgment: Dict[str, Any],
         scheduled_outputs: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Shape response based on output mode.
-        
-        Patient mode: minimal, actionable only
-        Clinician mode: adds metrics and component breakdown
-        Dev mode: full debug information"""
+        """Shape response based on output mode. Patient mode: minimal, actionable only Clinician mode: adds metrics and component breakdown Dev mode: full debug information."""
         # Extract urgency for patient safety.
         urgency_scores = outputs.get('urgency_scores', torch.zeros(1, 4))
         urgency_level = int(urgency_scores.argmax(dim=1).item()) if urgency_scores.numel() > 0 else 0
@@ -1972,8 +1937,7 @@ class MaxSightSimulator:
             }
     
     def _save_baseline_output(self, result: Dict[str, Any]) -> None:
-        """Save baseline output for regression testing.
-        Only saves first frame output to establish baseline."""
+        """Save baseline output for regression testing. Only saves first frame output to establish baseline."""
         if self.stats['frames_processed'] == config.baseline_save_frame:
             try:
                 stats = result.get('stats', {})
@@ -2194,8 +2158,7 @@ def api_process():
                 'error_type': type(e).__name__
             }), 500
         
-        # Overlay image is already in result from process_frame.
-        # If overlay_image is None, fallback to original image.
+        # Overlay image is already in result from process_frame. If overlay_image is None, fallback to original image.
         if not result.get('overlay_image'):
             try:
                 image_buffer = BytesIO()
@@ -2347,8 +2310,7 @@ def api_session_status():
 
 @app.route('/api/session/abort', methods=['POST'])
 def api_session_abort():
-    """Hard kill switch - immediately stop all outputs for a session.
-    Used for patient panic, clinician override, or system malfunction."""
+    """Hard kill switch - immediately stop all outputs for a session. Used for patient panic, clinician override, or system malfunction."""
     try:
         session = require_session()
         session.abort()
@@ -2394,8 +2356,7 @@ def api_set_mode():
 
 @app.route('/api/health', methods=['GET'])
 def api_health():
-    """Health check endpoint.
-    Returns system health status including model, sessions, and degraded modes."""
+    """Health check endpoint. Returns system health status including model, sessions, and degraded modes."""
     try:
         health_status = get_health_status()
         
@@ -2442,7 +2403,7 @@ def api_health():
 
 @app.route('/api/sample', methods=['POST', 'GET'])
 def api_sample():
-    """Process a sample image from the dataset...."""
+    """Process a sample image from the dataset."""
     try:
         # Get dataset directories.
         project_root = Path(__file__).parent.parent.parent
@@ -2465,8 +2426,7 @@ def api_sample():
                 'total_datasets': len([d for d in dataset_dirs.values() if d.exists()])
             })
         
-        # POST: Process a sample image.
-        # Get session.
+        # POST: Process a sample image. Get session.
         try:
             session = require_session()
         except ValueError as e:
@@ -2576,8 +2536,7 @@ def api_sample():
 
 @app.route('/api/metrics', methods=['GET'])
 def api_metrics():
-    """Metrics endpoint.
-    Returns system metrics including performance, usage, and error rates."""
+    """Metrics endpoint. Returns system metrics including performance, usage, and error rates."""
     try:
         metrics_data = metrics.get_metrics()
         
@@ -2694,6 +2653,9 @@ if __name__ == '__main__':
         logger.info("Shutting down...")
         registry.shutdown()
         logger.info("Shutdown complete")
+
+
+
 
 
 

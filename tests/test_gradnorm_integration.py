@@ -1,6 +1,4 @@
-"""Test GradNorm Integration in Training Loop
-
-Tests that GradNorm can be properly integrated and used in the training loop."""
+"""Test GradNorm Integration in Training Loop Tests that GradNorm can be properly integrated and used in the training loop."""
 
 import torch
 import torch.nn as nn
@@ -230,6 +228,9 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+
+
+
 
 
 

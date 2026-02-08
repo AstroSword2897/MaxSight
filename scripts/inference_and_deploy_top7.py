@@ -1,34 +1,5 @@
 #!/usr/bin/env python3
-"""Run inference and deployment for the top 7 conditions only. Target: ~1 hour.
-
-Inference and deployment are limited to the top 7 (fixed list or top 7 by mAP). No other conditions are inferred or deployed.
-
-1. Inference: optional, only for the top 7 (or all conditions once when --top-by-map, to rank by mAP).
-2. Deploy: export only those 7 to iOS bundles via deploy_top7.py.
-
-Usage:
-  # Deploy only (~35–45 min)
-  python scripts/inference_and_deploy_top7.py --checkpoints-base /path/to/MaxSight --output-dir /path/to/MaxSight/exports_top7
-
-  # Inference (quick) + deploy (~1 hr)
-  python scripts/inference_and_deploy_top7.py \\
-    --checkpoints-base /path/to/MaxSight \\
-    --output-dir /path/to/MaxSight/exports_top7 \\
-    --val-annotation /path/to/cleaned_splits/maxsight_val.json \\
-    --image-dir /path/to/data \\
-    --max-batches 10
-
-  # Colab (run Cell 1 first: clone repo and cd /content/2026-Prototype; see COLAB_FIRST_CELL.md)
-  python scripts/inference_and_deploy_top7.py \\
-    --checkpoints-base /content/drive/MyDrive/MaxSight \\
-    --output-dir /content/drive/MyDrive/MaxSight/exports_top7 \\
-    --val-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json \\
-    --image-dir /content/drive/MyDrive/MaxSight_Training \\
-    --max-batches 8
-
-  # Aim for 0.5 mAP on inference (sweep confidence/NMS; slower)
-  python scripts/inference_and_deploy_top7.py ... --sweep-for-map --target-map 0.5
-"""
+"""Run inference and deployment for the top 7 conditions only."""
 
 import argparse
 import subprocess
@@ -252,5 +223,6 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
 
 

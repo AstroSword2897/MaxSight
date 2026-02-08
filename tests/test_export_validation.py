@@ -17,7 +17,7 @@ def validate_exported_model(
     format: str = 'jit',
     tolerance: float = 0.01
 ) -> dict:
-    """Validate exported model by comparing outputs with PyTorch model...."""
+    """Validate exported model by comparing outputs with PyTorch model."""
     model_pytorch.eval()
     
     # Create test input.
@@ -39,8 +39,7 @@ def validate_exported_model(
             # ExecuTorch validation requires executorch runtime.
             try:
                 import executorch
-                # Load and run executorch model.
-                # Simplified check; actual ExecuTorch loading is more complex.
+                # Load and run executorch model. Simplified check; actual ExecuTorch loading is more complex.
                 return {
                     'format': format,
                     'status': 'skipped',
@@ -267,6 +266,9 @@ def test_e2e_checkpoint_to_jit():
 
 if __name__ == "__main__":
     test_all_exports()
+
+
+
 
 
 

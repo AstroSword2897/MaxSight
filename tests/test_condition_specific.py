@@ -1,6 +1,4 @@
-"""Test model robustness with condition-specific impairment simulations.
-
-Tests all 13 vision conditions to ensure model remains functional under various impairments."""
+"""Test model robustness with condition-specific impairment simulations. Tests all 13 vision conditions to ensure model remains functional under various impairments."""
 
 import torch
 import torch.nn as nn
@@ -25,7 +23,7 @@ from ml.utils.preprocessing import (
 
 
 def test_condition_robustness():
-    """Test model performance with all 13 vision condition impairment simulations...."""
+    """Test model performance with all 13 vision condition impairment simulations."""
     print("Condition-Specific Robustness Testing - All 13 Conditions")
     
     model = create_model()
@@ -161,6 +159,9 @@ def test_condition_robustness():
 
 if __name__ == "__main__":
     test_condition_robustness()
+
+
+
 
 
 

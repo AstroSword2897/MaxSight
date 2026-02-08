@@ -1,4 +1,4 @@
-"""Personalization Head for MaxSight 3.0 (v2)..."""
+"""Personalization Head for MaxSight 3.0 (v2)"""
 
 import torch
 import torch.nn as nn
@@ -7,7 +7,7 @@ from typing import Dict, Optional
 
 
 class PersonalizationHead(nn.Module):
-    """Personalization head for user-specific adaptation (v2)...."""
+    """Personalization head for user-specific adaptation (v2)."""
     
     def __init__(
         self,
@@ -71,7 +71,7 @@ class PersonalizationHead(nn.Module):
         user_id: torch.LongTensor,            # [B].
         interaction_features: Optional[torch.Tensor] = None  # [B, interaction_dim].
     ) -> Dict[str, torch.Tensor]:
-        """Forward pass for personalization (v2)...."""
+        """Forward pass for personalization (v2)."""
         B = scene_features.size(0)
         
         # Base user embedding.
@@ -101,8 +101,7 @@ class PersonalizationHead(nn.Module):
             'alert_priority_logits': alert_logits,
             'verbosity_logits': verbosity_logits,
             
-            # Normalized (for inference-time use)
-            # Apply crisp scaling: lower = sharper/focused, higher = softer/distributed.
+            # Normalized (for inference-time use) Apply crisp scaling: lower = sharper/focused, higher = softer/distributed.
             'attention_weights': torch.softmax(
                 attention_logits / self.crisp, dim=1
             ),
@@ -117,6 +116,9 @@ class PersonalizationHead(nn.Module):
             'user_embedding': user_emb
         }
     
+
+
+
 
 
 

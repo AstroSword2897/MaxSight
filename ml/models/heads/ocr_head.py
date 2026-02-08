@@ -1,4 +1,4 @@
-"""Transformer-Based OCR Head for MaxSight 3.0..."""
+"""Transformer-Based OCR Head for MaxSight 3.0."""
 
 import torch
 import torch.nn as nn
@@ -7,7 +7,7 @@ from typing import Dict, Optional
 
 
 class TransformerOCRHead(nn.Module):
-    """Transformer-based OCR head...."""
+    """Transformer-based OCR head."""
 
     def __init__(
         self,
@@ -74,7 +74,7 @@ class TransformerOCRHead(nn.Module):
         motion_stability: Optional[torch.Tensor] = None,  # [B, 1] - FIXED: Motion stability gate.
         cognitive_budget: Optional[float] = None  # FIXED: Cognitive budget gate.
     ) -> Dict[str, torch.Tensor]:
-        """Forward pass through OCR head...."""
+        """Forward pass through OCR head."""
         B, N_regions, _ = features.shape
 
         # FIXED: OCR Gating - don't run unconditionally.
@@ -163,5 +163,8 @@ class TransformerOCRHead(nn.Module):
             'encoded_features': encoded,
             'gated': gated_mask  # FIXED: Return gating information.
         }
+
+
+
 
 

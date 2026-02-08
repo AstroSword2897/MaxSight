@@ -57,9 +57,17 @@ datasets/
 !pyproject.toml
 !README.md
 
-# Documentation files (not tracked)
+# Documentation files (most not tracked; these are the canonical set)
 docs/*.md
 !docs/README.md
+!docs/architecture.md
+!docs/caching.md
+!docs/downloads.md
+!docs/status.md
+!docs/therapy_system.md
+!docs/training_architecture.md
+!docs/training-data-loading.md
+!docs/transferlearning.md
 
 # Logs
 logs/

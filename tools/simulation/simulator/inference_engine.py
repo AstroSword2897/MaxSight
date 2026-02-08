@@ -1,4 +1,4 @@
-"""Inference Engine - State Machine + Circuit Breaker..."""
+"""Inference Engine - State Machine + Circuit Breaker."""
 
 import torch
 import time
@@ -91,8 +91,7 @@ class CircuitBreakerConfig:
 
 
 class ThermalThrottleDetector:
-    """Detect sustained latency degradation (e.g. thermal throttling).
-    Uses a sliding window: if current avg latency > baseline * 2.0, return True."""
+    """Detect sustained latency degradation (e.g. thermal throttling). Uses a sliding window: if current avg latency > baseline * 2.0, return True."""
 
     def __init__(self, window_size_seconds: float = 30.0):
         self.window_size = window_size_seconds
@@ -126,7 +125,7 @@ class ThermalThrottleDetector:
 
 
 class InferenceEngine:
-    """Spine of MaxSight inference with state machine and circuit breaker...."""
+    """Spine of MaxSight inference with state machine and circuit breaker."""
     
     def __init__(
         self,
@@ -136,7 +135,7 @@ class InferenceEngine:
         circuit_breaker_config: Optional[CircuitBreakerConfig] = None,
         checkpoint_path: Optional[str] = None,
     ):
-        """Initialize inference engine...."""
+        """Initialize inference engine."""
         self.output_mode = output_mode
         self.condition_mode = condition_mode
         self.circuit_breaker_config = circuit_breaker_config or CircuitBreakerConfig()
@@ -212,7 +211,7 @@ class InferenceEngine:
         image: torch.Tensor,
         audio_features: Optional[torch.Tensor] = None
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """Run inference with state machine and circuit breaker...."""
+        """Run inference with state machine and circuit breaker."""
         if self.state == InferenceState.HALTED:
             logger.error("Inference engine is halted")
             return self._get_safe_fallback(), {'halted': True}
@@ -385,5 +384,8 @@ class InferenceEngine:
         self.metrics = InferenceMetrics()
         self.warmup_count = 0
         self.in_stabilization = True
+
+
+
 
 

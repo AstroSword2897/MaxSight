@@ -1,4 +1,4 @@
-"""Continuous Monitoring and Readiness Dashboard..."""
+"""Continuous Monitoring and Readiness Dashboard."""
 
 import torch
 import numpy as np
@@ -252,8 +252,7 @@ class PredictionMonitor:
 
 
 class ReadinessMonitor(PredictionMonitor):
-    """Alias used by MaxSightCNN for performance monitoring.
-    Accepts alert_threshold dict for compatibility with the model constructor."""
+    """Alias used by MaxSightCNN for performance monitoring. Accepts alert_threshold dict for compatibility with the model constructor."""
     def __init__(
         self,
         window_size: int = 100,
@@ -272,8 +271,7 @@ class ReadinessMonitor(PredictionMonitor):
 
 
 class ReadinessDashboard:
-    """Real-World Readiness Assessment Dashboard.
-    Provides comprehensive status of deployment readiness."""
+    """Real-World Readiness Assessment Dashboard. Provides comprehensive status of deployment readiness."""
     
     def __init__(self):
         self.checklist: List[ChecklistItem] = []
@@ -636,8 +634,7 @@ def create_monitoring_pipeline(model: torch.nn.Module) -> Dict:
 
 
 class HealthChecker:
-    """Health check system for MaxSight Tier 1 heads and system reliability.
-    Run daily to catch issues before they impact users."""
+    """Health check system for MaxSight Tier 1 heads and system reliability. Run daily to catch issues before they impact users."""
     
     # Thresholds for Tier 1 head alerts.
     TIER1_DETECTION_RATE_THRESHOLD = 0.85
@@ -862,6 +859,9 @@ class HealthChecker:
             report['overall_status'] = 'FAIL'
         
         return report
+
+
+
 
 
 

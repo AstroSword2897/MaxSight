@@ -1,6 +1,4 @@
-"""Scene Description Head for MaxSight 3.0
-
-Transformer decoder for generating natural language scene descriptions."""
+"""Scene Description Head for MaxSight 3.0 Transformer decoder for generating natural language scene descriptions."""
 
 import torch
 import torch.nn as nn
@@ -9,7 +7,7 @@ from typing import Dict, Optional, List
 
 
 class SceneDescriptionHead(nn.Module):
-    """Scene description head with transformer decoder...."""
+    """Scene description head with transformer decoder."""
     
     def __init__(
         self,
@@ -105,7 +103,7 @@ class SceneDescriptionHead(nn.Module):
         target_text: Optional[torch.Tensor] = None,  # [B, seq_len] for training.
         roi_priorities: Optional[torch.Tensor] = None  # [B, N_regions] - FIXED: ROI priority weights.
     ) -> Dict[str, torch.Tensor]:
-        """Generate scene description...."""
+        """Generate scene description."""
         B = global_embedding.shape[0]
         
         # Project inputs.
@@ -150,6 +148,9 @@ class SceneDescriptionHead(nn.Module):
             'description_logits': description_logits,
             'description': decoded
         }
+
+
+
 
 
 

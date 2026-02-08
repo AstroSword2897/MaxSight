@@ -1,6 +1,4 @@
-"""Error Sanitization Middleware
-
-Sanitizes error messages to prevent information leakage in production."""
+"""Error Sanitization Middleware Sanitizes error messages to prevent information leakage in production."""
 
 import os
 import traceback
@@ -8,7 +6,7 @@ from typing import Dict, Any
 
 
 def sanitize_error(error: Exception, debug: bool = None) -> Dict[str, Any]:
-    """Sanitize error for user-facing response...."""
+    """Sanitize error for user-facing response."""
     if debug is None:
         debug = os.environ.get('DEBUG', '0').lower() in ('1', 'true', 'yes')
     
@@ -28,11 +26,7 @@ def sanitize_error(error: Exception, debug: bool = None) -> Dict[str, Any]:
 
 
 def log_error(error: Exception, context: Dict[str, Any] = None) -> None:
-    """Log detailed error information server-side.
-    
-    Args:
-        error: Exception that occurred
-        context: Additional context information"""
+    """Log detailed error information server-side. Args: error: Exception that occurred context: Additional context information."""
     import logging
     logger = logging.getLogger(__name__)
     
@@ -46,6 +40,9 @@ def log_error(error: Exception, context: Dict[str, Any] = None) -> None:
         error_info['context'] = context
     
     logger.error(f"Error occurred: {error_info}", exc_info=True)
+
+
+
 
 
 

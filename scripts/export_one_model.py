@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""Load one checkpoint and export to JIT; print full traceback on error.
-
-Use when deploy fails and you need the real error. From repo root (e.g. on Colab after git pull):
-
-  python scripts/export_one_model.py --checkpoint /path/to/checkpoints_amblyopia/best_model.pt --out maxsight.pt
-  python scripts/export_one_model.py --condition amblyopia --checkpoints-base /content/drive/MyDrive/MaxSight --out /tmp/amblyopia.pt
-
-If the run stops after "JIT export: running torch.jit.trace" with no error, the runtime was likely killed (OOM).
-Try --fp16 to trace in half precision, or Runtime → Factory reset runtime. Use --no-subprocess to run in the same process.
-"""
+"""Load one checkpoint and export to JIT; print full traceback on error."""
 
 import argparse
 import os
@@ -152,5 +143,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
 
 

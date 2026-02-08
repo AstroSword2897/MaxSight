@@ -1,7 +1,4 @@
-"""COCO Dataset Splitter for MaxSight
-
-Creates train/test/validation splits from COCO dataset.
-Handles both COCO 2017 format and custom MaxSight annotations."""
+"""COCO Dataset Splitter for MaxSight Creates train/test/validation splits from COCO dataset. Handles both COCO 2017 format and custom MaxSight annotations."""
 
 import json
 import random
@@ -20,7 +17,7 @@ def split_coco_dataset(
     seed: int = 42,
     min_objects_per_image: int = 1
 ) -> Tuple[Path, Path, Path]:
-    """Split COCO dataset into train/val/test splits...."""
+    """Split COCO dataset into train/val/test splits."""
     # Validate splits.
     if abs(train_split + val_split + test_split - 1.0) > 1e-6:
         raise ValueError(f"Splits must sum to 1.0, got {train_split + val_split + test_split}")
@@ -128,7 +125,7 @@ def create_maxsight_splits_from_coco(
     num_samples: Optional[int] = None,
     min_objects_per_image: int = 1
 ) -> Tuple[Path, Path, Path]:
-    """Create MaxSight-format train/val/test splits from COCO dataset...."""
+    """Create MaxSight-format train/val/test splits from COCO dataset."""
     from ml.data.generate_annotations import (
         map_coco_to_environmental,
         assign_urgency_score,
@@ -361,6 +358,9 @@ if __name__ == "__main__":
     print(f"Train: {train_file}")
     print(f"Val:   {val_file}")
     print(f"Test:  {test_file}")
+
+
+
 
 
 

@@ -1,5 +1,4 @@
-"""Degraded mode tracking for MaxSight Web Simulator.
-Explicit failure modes instead of silent degradation."""
+"""Degraded mode tracking for MaxSight Web Simulator. Explicit failure modes instead of silent degradation."""
 from enum import Enum
 from typing import Dict, Set, Any
 from dataclasses import dataclass, field
@@ -72,5 +71,6 @@ class DegradedState:
             messages.append("Processing slower than normal")
         
         return "; ".join(messages) if messages else "Degraded operation"
+
 
 

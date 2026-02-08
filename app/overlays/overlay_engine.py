@@ -1,9 +1,4 @@
-"""Overlay Engine
-
-Renders visual overlays for therapy guidance.
-
-Phase 4: Overlay Engine & UX Guidance
-See docs/therapy_system_implementation_plan.md for implementation details."""
+"""Overlay Engine Renders visual overlays for therapy guidance. Phase 4: Overlay Engine & UX Guidance See docs/therapy_system_implementation_plan.md for implementation details."""
 
 from typing import Dict, List, Tuple, Optional, Any
 import numpy as np
@@ -16,7 +11,7 @@ from PIL import Image
 
 
 class OverlayEngine:
-    """Renders visual overlays for therapy guidance...."""
+    """Renders visual overlays for therapy guidance."""
     
     def __init__(self, screen_size: Tuple[int, int] = (224, 224)):
         self.screen_size = screen_size
@@ -29,7 +24,7 @@ class OverlayEngine:
         radius: float,
         intensity: float = 0.3
     ) -> Dict[str, Any]:
-        """Add subtle halo overlay...."""
+        """Add subtle halo overlay."""
         overlay = {
             'type': 'halo',
             'center': center,
@@ -46,7 +41,7 @@ class OverlayEngine:
         width: float = 2.0,
         intensity: float = 0.4
     ) -> Dict[str, Any]:
-        """Add edge glow for contrast reinforcement...."""
+        """Add edge glow for contrast reinforcement."""
         overlay = {
             'type': 'edge_glow',
             'edges': edges,
@@ -62,7 +57,7 @@ class OverlayEngine:
         depth_map: np.ndarray,
         near_threshold: float = 0.3
     ) -> Dict[str, Any]:
-        """Add depth "soft fog" for near objects...."""
+        """Add depth "soft fog" for near objects."""
         overlay = {
             'type': 'depth_fog',
             'depth_map': depth_map,
@@ -78,7 +73,7 @@ class OverlayEngine:
         path: List[Tuple[float, float]],
         width: float = 3.0
     ) -> Dict[str, Any]:
-        """Add motion trace for tracking tasks...."""
+        """Add motion trace for tracking tasks."""
         overlay = {
             'type': 'motion_trace',
             'path': path,
@@ -94,7 +89,7 @@ class OverlayEngine:
         position: Tuple[float, float],
         size: float = 10.0
     ) -> Dict[str, Any]:
-        """Add gaze position indicator...."""
+        """Add gaze position indicator."""
         overlay = {
             'type': 'gaze_indicator',
             'position': position,
@@ -111,7 +106,7 @@ class OverlayEngine:
         end: Tuple[float, float],
         width: float = 5.0
     ) -> Dict[str, Any]:
-        """Add gentle arrow for guidance...."""
+        """Add gentle arrow for guidance."""
         overlay = {
             'type': 'guidance_arrow',
             'start': start,
@@ -130,7 +125,7 @@ class OverlayEngine:
         urgency_scores: Optional[np.ndarray] = None,
         text_regions: Optional[List[Dict[str, Any]]] = None
     ) -> Image.Image:
-        """Create overlay with bounding boxes, labels, and text regions...."""
+        """Create overlay with bounding boxes, labels, and text regions."""
         if not CV2_AVAILABLE:
             return base_image
         
@@ -194,13 +189,7 @@ class OverlayEngine:
         return Image.fromarray(img_array)
     
     def render_overlays(self, base_image: np.ndarray) -> np.ndarray:
-        """Render all active overlays onto base image.
-        
-        Arguments:
-            base_image: Base image [H, W, 3]
-        
-        Returns:
-            Image with overlays [H, W, 3]"""
+        """Render all active overlays onto base image. Arguments: base_image: Base image [H, W, 3] Returns: Image with overlays [H, W, 3]."""
         if not CV2_AVAILABLE:
             return base_image.copy()
         
@@ -239,6 +228,9 @@ class OverlayEngine:
             overlay['intensity'] *= fade_factor
             if overlay['intensity'] < 0.01:
                 self.active_overlays.remove(overlay)
+
+
+
 
 
 

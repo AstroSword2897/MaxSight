@@ -1,4 +1,4 @@
-"""Ultra-Optimized Hybrid CNN + Vision Transformer Backbone for MaxSight 3.0..."""
+"""Ultra-Optimized Hybrid CNN + Vision Transformer Backbone for MaxSight 3.0."""
 
 import torch
 import torch.nn as nn
@@ -17,10 +17,7 @@ except ImportError:
 
 
 def create_sinusoidal_pos_embedding(num_positions: int, embed_dim: int) -> torch.Tensor:
-    """Create sinusoidal positional embeddings (non-learned alternative).
-    
-    Formula: PE(pos, 2i) = sin(pos / 10000^(2i/d_model))
-             PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))"""
+    """Create sinusoidal positional embeddings (non-learned alternative). Formula: PE(pos, 2i) = sin(pos / 10000^(2i/d_model)) PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))"""
     position = torch.arange(num_positions).unsqueeze(1).float()
     div_term = torch.exp(torch.arange(0, embed_dim, 2).float() * 
                         -(math.log(10000.0) / embed_dim))
@@ -33,7 +30,7 @@ def create_sinusoidal_pos_embedding(num_positions: int, embed_dim: int) -> torch
 
 
 class TransformerBlock(nn.Module):
-    """Single Transformer encoder block with pre-norm architecture...."""
+    """Single Transformer encoder block with pre-norm architecture."""
     
     def __init__(
         self,
@@ -72,13 +69,7 @@ class TransformerBlock(nn.Module):
         self.dropout = nn.Dropout(dropout)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass through transformer block.
-        
-        Args:
-            x: Input tokens [B, N, embed_dim]
-        
-        Returns:
-            Output tokens [B, N, embed_dim]"""
+        """Forward pass through transformer block. Args: x: Input tokens [B, N, embed_dim] Returns: Output tokens [B, N, embed_dim]."""
         # Pre-norm attention with residual.
         x_norm = self.norm1(x)
         attn_out, attn_weights = self.attention(x_norm, x_norm, x_norm)
@@ -93,7 +84,7 @@ class TransformerBlock(nn.Module):
 
 
 class VisionTransformerBackbone(nn.Module):
-    """Complete Vision Transformer backbone...."""
+    """Complete Vision Transformer backbone."""
     
     def __init__(
         self,
@@ -197,15 +188,14 @@ class VisionTransformerBackbone(nn.Module):
         x: torch.Tensor,
         return_patch_tokens: bool = True
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        """Forward pass through Vision Transformer...."""
+        """Forward pass through Vision Transformer."""
         B, C, H, W = x.shape
         
         # Validate input size.
         assert H == self.img_size and W == self.img_size, \
             f"Input size {H}x{W} must match img_size {self.img_size}"
         
-        # Patch embedding.
-        # [B, C, H, W] -> [B, embed_dim, H/patch_size, W/patch_size].
+        # Patch embedding. [B, C, H, W] -> [B, embed_dim, H/patch_size, W/patch_size].
         x = self.patch_embed(x)
         
         # Then transpose: [B, N_patches, embed_dim].
@@ -240,7 +230,7 @@ class VisionTransformerBackbone(nn.Module):
         x: torch.Tensor,
         n: int = 4
     ) -> list:
-        """Get intermediate layer outputs for feature extraction...."""
+        """Get intermediate layer outputs for feature extraction."""
         B, C, H, W = x.shape
         
         # Patch embedding and CLS token.
@@ -278,10 +268,7 @@ class MultiHeadEfficientPooling(nn.Module):
         self.proj = nn.Linear(dim, dim, bias=False)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Args:
-            x: [B, N, D]
-        Returns:
-            pooled: [B, D]"""
+        """Args x: [B, N, D] Returns: pooled: [B, D]."""
         B, N, D = x.shape
         
         # Mean as query, all patches as keys/values.
@@ -421,7 +408,7 @@ class EfficientCrossModalAttention(nn.Module):
 
 
 class FeatureCache:
-    """Feature cache for repeated forward passes...."""
+    """Feature cache for repeated forward passes."""
     
     def __init__(self, max_size: int = 8, use_frame_id: bool = True):
         self.cache = {}
@@ -446,7 +433,7 @@ class FeatureCache:
         self.frame_counter = 0
     
     def _make_cache_key(self, x: torch.Tensor, frame_id: Optional[int] = None) -> str:
-        """FIXED: Use frame ID/timestamp instead of mean hash to prevent collisions...."""
+        """FIXED: Use frame ID/timestamp instead of mean hash to prevent collisions."""
         if self.use_frame_id and frame_id is not None:
             # Use frame ID for deterministic, collision-free caching.
             return f"frame_{frame_id}"
@@ -461,7 +448,7 @@ class FeatureCache:
 
 
 class HybridCNNViTBackbone(nn.Module):
-    """Ultra-optimized Hybrid CNN + ViT backbone...."""
+    """Ultra-optimized Hybrid CNN + ViT backbone."""
 
     def __init__(
         self,
@@ -657,10 +644,7 @@ class HybridCNNViTBackbone(nn.Module):
             nn.init.zeros_(m.bias)
 
     def extract_cnn_features(self, x: torch.Tensor, frame_id: Optional[int] = None) -> List[torch.Tensor]:
-        """Extract CNN features with optional caching.
-        
-        FIXED: Uses frame_id for cache key instead of mean hash.
-        Caching is experimental and disabled by default in safety-critical paths."""
+        """Extract CNN features with optional caching. FIXED: Uses frame_id for cache key instead of mean hash. Caching is experimental and disabled by default in safety-critical paths."""
         
         if self.enable_feature_cache and not self.training:
             # FIXED: Use frame_id-based cache key instead of mean hash.

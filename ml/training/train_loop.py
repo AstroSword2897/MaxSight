@@ -1,4 +1,4 @@
-"""Production-grade training loop for MaxSight CNN - IMPROVED VERSION..."""
+"""Production-grade training loop for MaxSight CNN - IMPROVED VERSION."""
 
 import torch
 import torch.nn as nn
@@ -74,15 +74,7 @@ def move_targets_to_device(targets: Dict[str, torch.Tensor], device: str) -> Dic
 
 
 def parse_batch(batch: Any) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    """Parse batch from dataloader with validation.
-    
-    Handles multiple batch formats:
-    - List/tuple: (images, targets)
-    - Dict: {'images': ..., 'labels': ..., ...}
-    
-    Returns:
-        Tuple of (images tensor, targets dict)
-    """
+    """Parse batch from dataloader with validation. Handles multiple batch formats: - List/tuple: (images, targets) - Dict: {'images': ..., 'labels': ..., ...} Returns: Tuple of (images tensor, targets dict)"""
     if isinstance(batch, (list, tuple)):
         images = batch[0]
         targets = batch[1] if len(batch) > 1 else {}
@@ -108,18 +100,10 @@ def parse_batch(batch: Any) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
 
 
 class EMA:
-    """Exponential Moving Average with bias correction.
-    
-    Maintains shadow copies of model parameters with exponential moving average.
-    Provides bias correction for early training steps."""
+    """Exponential Moving Average with bias correction. Maintains shadow copies of model parameters with exponential moving average. Provides bias correction for early training steps."""
     
     def __init__(self, model: nn.Module, decay: float = 0.9999, total_steps: int = 10000):
-        """Initialize EMA.
-        
-        Arguments:
-            model: Model to track
-            decay: EMA decay factor
-            total_steps: Total training steps for bias correction"""
+        """Initialize EMA. Arguments: model: Model to track decay: EMA decay factor total_steps: Total training steps for bias correction."""
         self.decay = decay
         self.total_steps = total_steps
         self.global_step = 0
@@ -210,7 +194,7 @@ def _validate_training_config(
 
 
 class ProductionTrainLoop:
-    """Production-grade training loop with all improvements...."""
+    """Production-grade training loop with all improvements."""
     
     def __init__(
         self,
@@ -249,7 +233,7 @@ class ProductionTrainLoop:
         gradnorm_alpha: float = 1.5,  # GradNorm restoring force.
         gradnorm_update_interval: int = 100  # Update task weights every N iterations.
     ):
-        """Initialize production training loop...."""
+        """Initialize production training loop."""
         self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -347,8 +331,7 @@ class ProductionTrainLoop:
                         self.logger.warning("Loss function doesn't have valid head losses dict, disabling GradNorm")
                         self.use_gradnorm = False
                 else:
-                    # Single loss function - cannot use GradNorm directly.
-                    # Log warning but don't fail - will use standard loss.
+                    # Single loss function - cannot use GradNorm directly. Log warning but don't fail - will use standard loss.
                     self.logger.warning(
                         "GradNorm requires MultiHeadLoss with dict of head losses. "
                         "Using standard loss computation. To enable GradNorm, provide a "
@@ -544,8 +527,7 @@ class ProductionTrainLoop:
     def _validate_t5_batch(
         self, images: torch.Tensor, targets: Dict[str, torch.Tensor]
     ) -> bool:
-        """Validate T5-specific batch requirements (Fix #6).
-        Returns False if batch should be skipped."""
+        """Validate T5-specific batch requirements (Fix #6). Returns False if batch should be skipped."""
         if images.dim() == 5:
             B, T, C, H, W = images.shape
             if T < 2:
@@ -583,7 +565,7 @@ class ProductionTrainLoop:
         targets: Dict[str, torch.Tensor],
         is_training: bool = True,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        """Compute multi-head loss with safe .get() defaults...."""
+        """Compute multi-head loss with safe .get() defaults."""
         if self.use_gradnorm and self.gradnorm_loss is not None and is_training:
             total_loss, loss_dict = self.gradnorm_loss(outputs, targets, model=self.model)
             if 'total_loss' not in loss_dict:
@@ -846,7 +828,7 @@ class ProductionTrainLoop:
         return {'loss': avg_loss, 'all_losses': epoch_losses}
     
     def validate(self, epoch: int, use_ema: bool = True) -> Dict[str, float]:
-        """Validate model with DetectionMetrics integration...."""
+        """Validate model with DetectionMetrics integration."""
         self.model.eval()
         total_loss = 0.0
         num_batches = 0
@@ -883,8 +865,7 @@ class ProductionTrainLoop:
                         )
                         continue
                     
-                    # Update DetectionMetrics using post-processed detections.
-                    # Optimized: Process batch detections once instead of per-image.
+                    # Update DetectionMetrics using post-processed detections. Optimized: Process batch detections once instead of per-image.
                     if 'boxes' in outputs and 'classifications' in outputs and 'boxes' in targets:
                         try:
                             batch_size = images.shape[0]
@@ -1289,8 +1270,7 @@ class ProductionTrainLoop:
                             # Transfer state for matching parameters.
                             for new_group_idx, new_group in enumerate(self.optimizer.param_groups):
                                 for new_param_idx, new_param in enumerate(new_group['params']):
-                                    # Find matching old parameter.
-                                    # Simplified; full impl would match state dict by parameter name.
+                                    # Find matching old parameter. Simplified; full impl would match state dict by parameter name.
                                     if new_param_idx < len(old_optimizer_state.get('param_groups', [{}])[0].get('params', [])):
                                         old_param_id = old_optimizer_state['param_groups'][0]['params'][new_param_idx]
                                         if old_param_id in old_state:
@@ -1465,5 +1445,8 @@ def train_model(
         **kwargs
     )
     return trainer.train()
+
+
+
 
 

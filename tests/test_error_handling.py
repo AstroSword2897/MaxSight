@@ -1,5 +1,4 @@
-"""Error Handling and Fallback Tests
-Tests error propagation and fallback mechanisms with deterministic, adversarial coverage."""
+"""Error Handling and Fallback Tests Tests error propagation and fallback mechanisms with deterministic, adversarial coverage."""
 
 import torch
 import sys
@@ -487,5 +486,8 @@ if __name__ == "__main__":
     print("  - HeadExecutionManager accounting: ok")
     print("\nTotal: 13 comprehensive tests")
     print("="*70 + "\n")
+
+
+
 
 

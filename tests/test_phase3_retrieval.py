@@ -1,4 +1,4 @@
-"""Comprehensive Tests for Phase 3: Multi-Vector Retrieval System..."""
+"""Comprehensive Tests for Phase 3: Multi-Vector Retrieval System."""
 
 import torch
 import torch.nn as nn
@@ -184,8 +184,7 @@ class TestTwoStageRetrieval:
         )
         reranker.eval()
         
-        # Create dummy candidates (list of dicts)
-        # Use proper dimensions that match embedding_dims.
+        # Create dummy candidates (list of dicts) Use proper dimensions that match embedding_dims.
         candidates = [
             {'global': torch.randn(256), 'region': torch.randn(128), 'patch': torch.randn(64)}
             for _ in range(10)
@@ -218,6 +217,9 @@ def run_all_tests():
 
 if __name__ == "__main__":
     run_all_tests()
+
+
+
 
 
 

@@ -1,5 +1,4 @@
-"""Configuration for MaxSight Web Simulator.
-Centralizes all magic numbers and settings."""
+"""Configuration for MaxSight Web Simulator. Centralizes all magic numbers and settings."""
 import os
 from dataclasses import dataclass
 from typing import Optional
@@ -91,6 +90,9 @@ if os.getenv('MAXSIGHT_CHECKPOINT_PATH'):
     else:
         import warnings
         warnings.warn(f"Checkpoint path from environment variable does not exist: {checkpoint_path}")
+
+
+
 
 
 

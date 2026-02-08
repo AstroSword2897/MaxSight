@@ -1,4 +1,4 @@
-"""Preprocessing Pipeline for Environmental Structuring..."""
+"""Preprocessing Pipeline for Environmental Structuring."""
 
 import torch
 import torch.nn.functional as F
@@ -47,7 +47,7 @@ EPS = 1e-10  # Epsilon for division operations.
 EPS_LAB = 1e-8  # Epsilon for LAB conversions.
 
 def rgb_to_lab_tensor(rgb: torch.Tensor, eps: float = EPS_LAB) -> torch.Tensor:
-    """Convert RGB tensor to LAB color space using PyTorch operations...."""
+    """Convert RGB tensor to LAB color space using PyTorch operations."""
     # Input validation.
     if rgb.dim() not in [3, 4]:
         raise ValueError(f"Expected 3D [C,H,W] or 4D [B,C,H,W] tensor, got {rgb.dim()}D")
@@ -112,7 +112,7 @@ def rgb_to_lab_tensor(rgb: torch.Tensor, eps: float = EPS_LAB) -> torch.Tensor:
 
 
 def lab_to_rgb_tensor(lab: torch.Tensor, eps: float = EPS_LAB) -> torch.Tensor:
-    """Convert LAB tensor to RGB color space using PyTorch operations...."""
+    """Convert LAB tensor to RGB color space using PyTorch operations."""
     # Input validation.
     if lab.dim() not in [3, 4]:
         raise ValueError(f"Expected 3D [C,H,W] or 4D [B,C,H,W] tensor, got {lab.dim()}D")
@@ -173,7 +173,7 @@ def apply_clahe_tensor_fast(
     image: torch.Tensor,
     clip_limit: float = 2.0
 ) -> torch.Tensor:
-    """Fast CLAHE using torchvision's equalize or simple contrast enhancement...."""
+    """Fast CLAHE using torchvision's equalize or simple contrast enhancement."""
     if image.dim() == 3:
         image = image.unsqueeze(0)
         squeeze = True
@@ -203,7 +203,7 @@ def apply_clahe_tensor(
     tile_grid_size: Tuple[int, int] = (8, 8),
     use_fast: bool = True
 ) -> torch.Tensor:
-    """Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) using PyTorch...."""
+    """Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) using PyTorch."""
     if use_fast:
         return apply_clahe_tensor_fast(image, clip_limit)
     
@@ -296,7 +296,7 @@ class ImagePreprocessor:
         image_size: Tuple[int, int] = (224, 224),
         condition_mode: Optional[str] = None
     ):
-        """Initialize image preprocessor...."""
+        """Initialize image preprocessor."""
         self.image_size = image_size
         self.condition_mode = condition_mode
         # Pre-compute sharpening kernel for edge enhancement (lazy init)
@@ -316,7 +316,7 @@ class ImagePreprocessor:
         ])
     
     def __call__(self, image: Image.Image) -> torch.Tensor:
-        """Apply preprocessing with condition-specific visual enhancements...."""
+        """Apply preprocessing with condition-specific visual enhancements."""
         # Apply condition-specific transforms based on condition_mode.
         if self.condition_mode == 'cataracts':
             image = self._enhance_contrast(image)
@@ -337,9 +337,8 @@ class ImagePreprocessor:
         return self.base_transform(image)  # type: ignore
     
     def _enhance_contrast(self, image: Image.Image) -> Image.Image:
-        """High-contrast enhancement for cataracts (reduced visual acuity compensation)...."""
-        # Convert PIL to tensor for PyTorch processing.
-        # Meta AI-style: Work with tensors directly, GPU-friendly.
+        """High-contrast enhancement for cataracts (reduced visual acuity compensation)."""
+        # Convert PIL to tensor for PyTorch processing. Meta AI-style: Work with tensors directly, GPU-friendly.
         img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1].
         
         # Apply CLAHE using PyTorch implementation.
@@ -350,7 +349,7 @@ class ImagePreprocessor:
         return TF.to_pil_image(enhanced_tensor)
     
     def _low_light_enhancement(self, image: Image.Image) -> Image.Image:
-        """Brightness enhancement for retinitis pigmentosa (night blindness/tunnel vision compensation)...."""
+        """Brightness enhancement for retinitis pigmentosa (night blindness/tunnel vision compensation)."""
         # Convert PIL Image to numpy array with float32 precision for calculations.
         # Float32 provides sufficient precision while being memory-efficient.
         # Complexity: O(H*W) - converts image format.
@@ -373,9 +372,8 @@ class ImagePreprocessor:
         return Image.fromarray(img_array.astype(np.uint8))
     
     def _analyze_lighting_condition(self, image: Image.Image) -> str:
-        """Analyze image brightness and classify lighting condition...."""
-        # Convert to grayscale for brightness analysis - average RGB channels.
-        # Complexity: O(H*W) - processes all pixels once.
+        """Analyze image brightness and classify lighting condition."""
+        # Convert to grayscale for brightness analysis - average RGB channels. Complexity: O(H*W) - processes all pixels once.
         img_array = np.array(image).astype(np.float32)
         if len(img_array.shape) == 3:
             # Np.mean with axis returns 2D array, ensure it's float64.
@@ -383,8 +381,7 @@ class ImagePreprocessor:
         else:
             gray_image = img_array.astype(np.float64)  # Already grayscale, ensure float64.
         
-        # Calculate mean brightness - average of all pixel values.
-        # Complexity: O(H*W) - sums all pixels, then divides.
+        # Calculate mean brightness - average of all pixel values. Complexity: O(H*W) - sums all pixels, then divides.
         mean_brightness: float = float(np.mean(gray_image))
         
         # Calculate standard deviation - measures brightness variation across image.
@@ -407,7 +404,7 @@ class ImagePreprocessor:
             return 'dark'  # Very low light (night, dark room)
     
     def _simulate_bright_lighting(self, image: Image.Image, brightness_factor: float = 1.5) -> Image.Image:
-        """Simulate overexposed/bright lighting conditions...."""
+        """Simulate overexposed/bright lighting conditions."""
         from PIL import ImageEnhance
         
         # Use PIL's ImageEnhance for efficient brightness adjustment.
@@ -420,7 +417,7 @@ class ImagePreprocessor:
         return brightened
     
     def _simulate_dim_lighting(self, image: Image.Image, brightness_factor: float = 0.6) -> Image.Image:
-        """Simulate dim lighting conditions...."""
+        """Simulate dim lighting conditions."""
         from PIL import ImageEnhance
         
         # Use PIL's ImageEnhance for efficient brightness adjustment.
@@ -431,11 +428,10 @@ class ImagePreprocessor:
         return dimmed
     
     def _simulate_dark_lighting(self, image: Image.Image, brightness_factor: float = 0.3) -> Image.Image:
-        """Simulate very dark lighting conditions...."""
+        """Simulate very dark lighting conditions."""
         from PIL import ImageEnhance
         
-        # First apply brightness reduction.
-        # Complexity: O(H*W) - applies brightness multiplier.
+        # First apply brightness reduction. Complexity: O(H*W) - applies brightness multiplier.
         enhancer = ImageEnhance.Brightness(image)
         darkened = enhancer.enhance(brightness_factor)
         
@@ -451,12 +447,11 @@ class ImagePreprocessor:
         return Image.fromarray(img_array.astype(np.uint8))
     
     def preprocess_with_lighting(self, image: Image.Image) -> Dict[str, Any]:
-        """Preprocess image and return both tensor and lighting metadata...."""
+        """Preprocess image and return both tensor and lighting metadata."""
         # Complexity: O(H*W) - analyzes all pixels for brightness.
         lighting = self._analyze_lighting_condition(image)
         
-        # Apply condition-specific transforms if needed (same as __call__)
-        # Complexity: O(H*W) - applies transforms to all pixels.
+        # Apply condition-specific transforms if needed (same as __call__) Complexity: O(H*W) - applies transforms to all pixels.
         if self.condition_mode == 'cataracts':
             image = self._enhance_contrast(image)
         elif self.condition_mode == 'retinitis_pigmentosa':
@@ -472,8 +467,7 @@ class ImagePreprocessor:
         elif self.condition_mode == 'color_blindness':
             image = self._simulate_color_blindness(image)
         
-        # Apply base transforms (resize, to tensor, normalize)
-        # Complexity: O(H*W) - standard image transforms.
+        # Apply base transforms (resize, to tensor, normalize) Complexity: O(H*W) - standard image transforms.
         tensor = self.base_transform(image)  # type: ignore
         
         # Return both tensor and lighting metadata.
@@ -484,8 +478,7 @@ class ImagePreprocessor:
     
     def _simulate_refractive_error(self, image: Image.Image) -> Image.Image:
         """Simulate blurry vision from refractive errors (myopia, hyperopia, astigmatism, presbyopia)"""
-        # Meta AI-style: Pure PyTorch implementation.
-        # Convert to tensor.
+        # Meta AI-style: Pure PyTorch implementation. Convert to tensor.
         img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1].
         
         # Apply Gaussian blur using torchvision (GPU-friendly)
@@ -508,7 +501,7 @@ class ImagePreprocessor:
         boost_center: bool = True,
         strength: float = 0.8
     ) -> torch.Tensor:
-        """Create radial mask for central/peripheral enhancement...."""
+        """Create radial mask for central/peripheral enhancement."""
         C, H, W = img_tensor.shape
         center_x, center_y = W // 2, H // 2
         
@@ -529,9 +522,7 @@ class ImagePreprocessor:
             return 1.0 + (strength * 0.625) * norm_dist
     
     def _enhance_peripheral(self, image: Image.Image) -> Image.Image:
-        """Enhance peripheral regions for glaucoma (peripheral vision loss).
-        
-        Meta AI-style: Pure PyTorch tensor operations, GPU-accelerated."""
+        """Enhance peripheral regions for glaucoma (peripheral vision loss). Meta AI-style: Pure PyTorch tensor operations, GPU-accelerated."""
         # Convert to tensor.
         img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1].
         
@@ -545,9 +536,7 @@ class ImagePreprocessor:
         return TF.to_pil_image(enhanced)
     
     def _enhance_central(self, image: Image.Image) -> Image.Image:
-        """Enhance central regions for AMD (central vision loss).
-        
-        Meta AI-style: Pure PyTorch tensor operations, GPU-accelerated."""
+        """Enhance central regions for AMD (central vision loss). Meta AI-style: Pure PyTorch tensor operations, GPU-accelerated."""
         # Convert to tensor.
         img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1].
         
@@ -561,9 +550,7 @@ class ImagePreprocessor:
         return TF.to_pil_image(enhanced)
     
     def _enhance_edges(self, image: Image.Image) -> Image.Image:
-        """Enhance edges for diabetic retinopathy (spotty/blurry vision).
-        
-        Meta AI-style: Uses PyTorch convolution for edge enhancement, GPU-accelerated."""
+        """Enhance edges for diabetic retinopathy (spotty/blurry vision). Meta AI-style: Uses PyTorch convolution for edge enhancement, GPU-accelerated."""
         # Convert to tensor.
         img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1].
         
@@ -596,9 +583,7 @@ class ImagePreprocessor:
         return TF.to_pil_image(enhanced)
     
     def _simulate_color_blindness(self, image: Image.Image) -> Image.Image:
-        """Simulate color blindness (red-green color confusion).
-        
-        Meta AI-style: Pure PyTorch tensor operations, GPU-accelerated."""
+        """Simulate color blindness (red-green color confusion). Meta AI-style: Pure PyTorch tensor operations, GPU-accelerated."""
         # Convert to tensor.
         img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1].
         
@@ -614,16 +599,15 @@ class ImagePreprocessor:
 
 
 class AudioPreprocessor:
-    """Audio preprocessing - MFCC feature extraction"""
+    """Audio preprocessing - MFCC feature extraction."""
     
     def __init__(self, n_mfcc: int = 128, sample_rate: int = 16000):
         self.n_mfcc = n_mfcc
         self.sample_rate = sample_rate
     
     def extract_mfcc(self, audio: np.ndarray) -> torch.Tensor:
-        """Extract MFCC features from audio..."""
-        # TODO: Implement actual MFCC extraction using librosa or torchaudio.
-        # For now, return dummy features.
+        """Extract MFCC features from audio."""
+        # TODO: Implement actual MFCC extraction using librosa or torchaudio. For now, return dummy features.
         if audio.ndim == 1:
             return torch.randn(self.n_mfcc)
         else:
@@ -632,11 +616,10 @@ class AudioPreprocessor:
 
 
 class DistanceEstimator:
-    """Enhanced distance estimation using monocular depth, object sizes, and ground plane detection...."""
+    """Enhanced distance estimation using monocular depth, object sizes, and ground plane detection."""
     
     def __init__(self):
-        # Known object size references (in meters) for common COCO classes.
-        # Enhanced with more objects and confidence scores.
+        # Known object size references (in meters) for common COCO classes. Enhanced with more objects and confidence scores.
         self.object_sizes = {
             'person': (1.7, 0.9),  # (average_height, confidence)
             'car': (4.5, 0.85),
@@ -667,7 +650,7 @@ class DistanceEstimator:
         object_class: Optional[str] = None,
         focal_length: float = 500.0  # Approximate focal length in pixels.
     ) -> int:
-        """Estimate distance zone from bounding box size and perspective cues..."""
+        """Estimate distance zone from bounding box size and perspective cues."""
         h, w = image_size
         bbox_w = bbox[2] * w  # Width in pixels.
         bbox_h = bbox[3] * h  # Height in pixels.
@@ -695,8 +678,7 @@ class DistanceEstimator:
                 # Apply ground plane correction for more accuracy.
                 y_center = bbox[1] + bbox[3] / 2  # Normalized y center.
                 if y_center > self.ground_plane_threshold:
-                    # Object is on ground plane - apply perspective correction.
-                    # Objects lower in image appear closer due to perspective.
+                    # Object is on ground plane - apply perspective correction. Objects lower in image appear closer due to perspective.
                     perspective_factor = 1.0 + (y_center - self.ground_plane_threshold) * 0.2
                     estimated_distance *= perspective_factor
                 
@@ -740,7 +722,7 @@ class DistanceEstimator:
         focal_length: float = 500.0,
         use_ground_plane: bool = True
     ) -> Optional[Tuple[float, float]]:
-        """Estimate precise distance in meters with confidence score...."""
+        """Estimate precise distance in meters with confidence score."""
         if object_class not in self.object_sizes:
             return None
         
@@ -762,8 +744,7 @@ class DistanceEstimator:
             if use_ground_plane:
                 y_center = bbox[1] + bbox[3] / 2  # Normalized y center.
                 if y_center > self.ground_plane_threshold:
-                    # Object is on ground plane - apply perspective correction.
-                    # Objects lower in image appear closer due to perspective.
+                    # Object is on ground plane - apply perspective correction. Objects lower in image appear closer due to perspective.
                     perspective_factor = 1.0 + (y_center - self.ground_plane_threshold) * 0.2
                     distance *= perspective_factor
                     # Increase confidence for ground plane objects.
@@ -784,7 +765,7 @@ class DistanceEstimator:
         detections: List[Dict],
         image_size: Tuple[int, int]
     ) -> Dict[str, Any]:
-        """Detect ground plane from object positions...."""
+        """Detect ground plane from object positions."""
         if not detections:
             return {
                 'horizon_y': self.horizon_estimate,
@@ -812,8 +793,7 @@ class DistanceEstimator:
                     y_positions.append(y_bottom)
         
         if len(y_positions) > 0:
-            # Estimate horizon as median of top edges of ground objects.
-            # (simplified - more sophisticated would use vanishing points)
+            # Estimate horizon as median of top edges of ground objects. (simplified - more sophisticated would use vanishing points)
             horizon_y = float(np.median(y_positions)) - 0.1  # Slightly above median.
             confidence = min(1.0, len(ground_objects) / 5.0)  # More objects = higher confidence.
         else:
@@ -831,11 +811,7 @@ class TextRegionDetector:
     """Text region detection preprocessing for OCR integration. Uses model's text_head output."""
     
     def __init__(self, text_threshold: float = 0.5, min_text_size: int = 10):
-        """Initialize text region detector.
-        
-        Arguments:
-            text_threshold: Confidence threshold for text detection
-            min_text_size: Minimum text region size in pixels"""
+        """Initialize text region detector. Arguments: text_threshold: Confidence threshold for text detection min_text_size: Minimum text region size in pixels."""
         self.text_threshold = text_threshold
         self.min_text_size = min_text_size
     
@@ -845,7 +821,7 @@ class TextRegionDetector:
         text_scores: Optional[torch.Tensor] = None,
         boxes: Optional[torch.Tensor] = None
     ) -> list:
-        """Detect text regions in image using model's text_head output with enhanced fallback...."""
+        """Detect text regions in image using model's text_head output with enhanced fallback."""
         # If model outputs are provided, use them (primary method)
         if text_scores is not None and boxes is not None:
             text_mask = text_scores > self.text_threshold
@@ -880,8 +856,7 @@ class TextRegionDetector:
                 if results:
                     return results
         
-        # Enhanced fallback: edge-based detection using PyTorch.
-        # Meta AI-style: Pure PyTorch edge detection for text-like regions.
+        # Enhanced fallback: edge-based detection using PyTorch. Meta AI-style: Pure PyTorch edge detection for text-like regions.
         if isinstance(image, np.ndarray):
             img_tensor = torch.from_numpy(image).float() / 255.0
             if img_tensor.dim() == 3 and img_tensor.shape[2] == 3:
@@ -921,7 +896,7 @@ class TextRegionDetector:
 
 # Synthetic Impairment Functions.
 def apply_refractive_error_blur(image: torch.Tensor, sigma: float = 3.0) -> torch.Tensor:
-    """Apply Gaussian blur for refractive errors"""
+    """Apply Gaussian blur for refractive errors."""
     kernel_size = int(2 * sigma * 2 + 1)
     if kernel_size % 2 == 0:
         kernel_size += 1
@@ -929,12 +904,12 @@ def apply_refractive_error_blur(image: torch.Tensor, sigma: float = 3.0) -> torc
 
 
 def apply_cataract_contrast(image: torch.Tensor, contrast_factor: float = 0.5) -> torch.Tensor:
-    """Reduce contrast for cataracts simulation"""
+    """Reduce contrast for cataracts simulation."""
     return TF.adjust_contrast(image, contrast_factor)
 
 
 def apply_glaucoma_vignette(image: torch.Tensor, center_percent: float = 0.4) -> torch.Tensor:
-    """Apply peripheral masking for glaucoma"""
+    """Apply peripheral masking for glaucoma."""
     h, w = image.shape[-2:]
     center_x, center_y = w // 2, h // 2
     radius = min(w, h) * center_percent
@@ -959,7 +934,7 @@ def apply_glaucoma_vignette(image: torch.Tensor, center_percent: float = 0.4) ->
 
 
 def apply_amd_central_darkening(image: torch.Tensor, darken_factor: float = 0.3) -> torch.Tensor:
-    """Darken center region for AMD simulation"""
+    """Darken center region for AMD simulation."""
     h, w = image.shape[-2:]
     center_x, center_y = w // 2, h // 2
     radius = float(min(w, h)) * 0.2
@@ -984,12 +959,12 @@ def apply_amd_central_darkening(image: torch.Tensor, darken_factor: float = 0.3)
 
 
 def apply_low_light(image: torch.Tensor, brightness_factor: float = 0.3) -> torch.Tensor:
-    """Reduce brightness for retinitis pigmentosa"""
+    """Reduce brightness for retinitis pigmentosa."""
     return image * brightness_factor
 
 
 def apply_color_shift(image: torch.Tensor, shift_type: str = 'red_green') -> torch.Tensor:
-    """Apply color shifts for color blindness simulation using proper color space transformation...."""
+    """Apply color shifts for color blindness simulation using proper color space transformation."""
     # Validate input.
     if image.dim() == 4:
         if image.shape[1] != 3:
@@ -1045,12 +1020,10 @@ def apply_color_shift(image: torch.Tensor, shift_type: str = 'red_green') -> tor
     transform = transform.to(device=image.device, dtype=image.dtype)
     
     if is_batch:
-        # Efficient einsum: [B, C, H, W] format.
-        # Transform: [3, 3], image: [B, 3, H, W] -> result: [B, 3, H, W].
+        # Efficient einsum: [B, C, H, W] format. Transform: [3, 3], image: [B, 3, H, W] -> result: [B, 3, H, W].
         result = torch.einsum('ij,bjhw->bihw', transform, image)
     else:
-        # [C, H, W] format.
-        # Transform: [3, 3], image: [3, H, W] -> result: [3, H, W].
+        # [C, H, W] format. Transform: [3, 3], image: [3, H, W] -> result: [3, H, W].
         result = torch.einsum('ij,jhw->ihw', transform, image)
         result = result.unsqueeze(0)  # Add batch dim for consistency.
     
@@ -1064,7 +1037,7 @@ def apply_batch_transforms(
     transform_fn: Callable[..., torch.Tensor],
     **kwargs: Any
 ) -> torch.Tensor:
-    """Apply a transform function to a batch of images efficiently...."""
+    """Apply a transform function to a batch of images efficiently."""
     if not images:
         raise ValueError("images list cannot be empty")
     
@@ -1102,6 +1075,9 @@ if __name__ == "__main__":
     print("- Cached transformation matrices (3-5x speedup for RGB↔LAB)")
     print("- Optimized CLAHE with fast approximation")
     print("- Numerical stability improvements (eps, clamping)")
+
+
+
 
 
 

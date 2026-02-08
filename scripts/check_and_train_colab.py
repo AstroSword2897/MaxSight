@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""One script: check setup for training, then run training.
-Run in Colab after mounting Drive. Set DATA_DIR and RUN_TRAINING below."""
+"""One script: check setup for training, then run training. Run in Colab after mounting Drive. Set DATA_DIR and RUN_TRAINING below."""
 
 import os
 import shutil
@@ -162,5 +161,8 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
 
 

@@ -1,4 +1,4 @@
-"""MaxSight 3.0 Attention Modules - Consolidated Production Version..."""
+"""MaxSight 3.0 Attention Modules - Consolidated Production Version."""
 
 import torch
 import torch.nn as nn
@@ -208,6 +208,9 @@ class CrossTaskAttention(nn.Module):
             desc_enhanced = desc_enhanced.squeeze(1)
         
         return det_enhanced, ocr_enhanced, desc_enhanced
+
+
+
 
 
 

@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""Download Open Images from S3 bucket s3://open-images-dataset.
-
-Requires AWS CLI installed and configured (aws configure).
-Syncs to datasets/open_images_v6 by default so inference scripts find the data.
-
-Usage:
-  python scripts/download_open_images_s3.py
-  python scripts/download_open_images_s3.py --prefix validation/
-  python scripts/download_open_images_s3.py --dest datasets/open_images_v6 --dry-run
-"""
+"""Download Open Images from S3 bucket s3://open-images-dataset."""
 
 import argparse
 import shutil
@@ -69,5 +60,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 

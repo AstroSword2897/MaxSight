@@ -1,7 +1,4 @@
-"""HMAC-Signed Session Tokens for MaxSight
-
-Provides stateless HMAC token generation and verification for secure session management.
-Tokens include expiration time and are signed with HMAC-SHA256."""
+"""HMAC-Signed Session Tokens for MaxSight Provides stateless HMAC token generation and verification for secure session management. Tokens include expiration time and are signed with HMAC-SHA256."""
 
 import base64
 import hmac
@@ -18,7 +15,7 @@ TTL = int(os.environ.get("MAXSIGHT_SESSION_TIMEOUT", 3600))  # Default 1 hour.
 
 
 def make_token(payload: Dict) -> str:
-    """Generate HMAC-signed session token with expiration...."""
+    """Generate HMAC-signed session token with expiration."""
     payload = dict(payload)
     payload['exp'] = int(time.time()) + TTL
     
@@ -39,7 +36,7 @@ def make_token(payload: Dict) -> str:
 
 
 def verify_token(token: str) -> Dict:
-    """Verify HMAC-signed token and return payload if valid...."""
+    """Verify HMAC-signed token and return payload if valid."""
     try:
         # Split token into payload and signature.
         parts = token.split('.')
@@ -70,6 +67,9 @@ def verify_token(token: str) -> Dict:
         
     except (ValueError, json.JSONDecodeError, base64.binascii.Error) as e:
         raise ValueError(f"Invalid token: {str(e)}") from e
+
+
+
 
 
 

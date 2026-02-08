@@ -1,6 +1,4 @@
-"""Audio Encoder for Multi-Vector Retrieval
-
-Encodes environmental audio using CNN + Transformer."""
+"""Audio Encoder for Multi-Vector Retrieval Encodes environmental audio using CNN + Transformer."""
 
 import torch
 import torch.nn as nn
@@ -9,12 +7,7 @@ from typing import Optional, Tuple
 
 
 class AudioEncoder(nn.Module):
-    """Audio encoder for retrieval.
-    
-    Architecture:
-    - CNN + Transformer on spectrograms
-    - Environmental sound embeddings
-    - Spatial audio embeddings (direction + distance)"""
+    """Audio encoder for retrieval. Architecture: - CNN + Transformer on spectrograms - Environmental sound embeddings - Spatial audio embeddings (direction + distance)"""
     
     def __init__(
         self,
@@ -60,7 +53,7 @@ class AudioEncoder(nn.Module):
         audio_features: torch.Tensor,  # [B, T, input_dim] or [B, input_dim].
         stereo_channels: Optional[torch.Tensor] = None  # [B, T, 2].
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Encode audio to embeddings...."""
+        """Encode audio to embeddings."""
         B = audio_features.shape[0]
         
         # Handle different input formats.
@@ -91,6 +84,9 @@ class AudioEncoder(nn.Module):
         audio_embed = F.normalize(audio_embed, p=2, dim=1)
         
         return audio_embed, spatial_features
+
+
+
 
 
 

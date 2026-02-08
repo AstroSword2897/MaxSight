@@ -1,10 +1,4 @@
-"""Test Hungarian Matcher Robustness
-
-Verifies that the matcher handles edge cases without crashing:
-- NaN/Inf in boxes
-- Zero-width/height boxes
-- Empty ground truth
-- Invalid cost matrices"""
+"""Test Hungarian Matcher Robustness Verifies that the matcher handles edge cases without crashing: - NaN/Inf in boxes - Zero-width/height boxes - Empty ground truth - Invalid cost matrices."""
 
 import torch
 import pytest
@@ -23,14 +17,14 @@ from ml.utils.batch_validation import (
 
 
 def test_validate_boxes_valid():
-    """Test validation of valid boxes"""
+    """Test validation of valid boxes."""
     boxes = torch.tensor([[0.5, 0.5, 0.2, 0.3]])
     is_valid, msg = validate_boxes(boxes)
     assert is_valid, f"Valid boxes should pass: {msg}"
 
 
 def test_validate_boxes_nan():
-    """Test validation catches NaN"""
+    """Test validation catches NaN."""
     boxes = torch.tensor([[float('nan'), 0.5, 0.2, 0.3]])
     is_valid, msg = validate_boxes(boxes)
     assert not is_valid
@@ -38,7 +32,7 @@ def test_validate_boxes_nan():
 
 
 def test_validate_boxes_inf():
-    """Test validation catches Inf"""
+    """Test validation catches Inf."""
     boxes = torch.tensor([[0.5, float('inf'), 0.2, 0.3]])
     is_valid, msg = validate_boxes(boxes)
     assert not is_valid
@@ -46,7 +40,7 @@ def test_validate_boxes_inf():
 
 
 def test_validate_boxes_zero_width():
-    """Test validation catches zero width"""
+    """Test validation catches zero width."""
     boxes = torch.tensor([[0.5, 0.5, 0.0, 0.3]])
     is_valid, msg = validate_boxes(boxes)
     assert not is_valid
@@ -54,7 +48,7 @@ def test_validate_boxes_zero_width():
 
 
 def test_sanitize_boxes_nan():
-    """Test sanitization replaces NaN"""
+    """Test sanitization replaces NaN."""
     boxes = torch.tensor([[float('nan'), 0.5, 0.2, 0.3]])
     clean_boxes = sanitize_boxes(boxes)
     assert not torch.isnan(clean_boxes).any()
@@ -63,7 +57,7 @@ def test_sanitize_boxes_nan():
 
 
 def test_sanitize_boxes_zero_size():
-    """Test sanitization fixes zero size"""
+    """Test sanitization fixes zero size."""
     boxes = torch.tensor([[0.5, 0.5, 0.0, 0.0]])
     clean_boxes = sanitize_boxes(boxes, min_size=1e-4)
     assert (clean_boxes[:, 2] >= 1e-4).all()
@@ -71,7 +65,7 @@ def test_sanitize_boxes_zero_size():
 
 
 def test_matching_empty_gt():
-    """Test matcher handles empty ground truth"""
+    """Test matcher handles empty ground truth."""
     pred_boxes = torch.rand(10, 4)
     pred_logits = torch.rand(10, 91)
     gt_boxes = torch.empty(0, 4)
@@ -86,7 +80,7 @@ def test_matching_empty_gt():
 
 
 def test_matching_valid_inputs():
-    """Test matcher works with valid inputs"""
+    """Test matcher works with valid inputs."""
     pred_boxes = torch.tensor([
         [0.3, 0.3, 0.2, 0.2],
         [0.7, 0.7, 0.15, 0.15]
@@ -108,7 +102,7 @@ def test_matching_valid_inputs():
 
 
 def test_matching_batch_mixed():
-    """Test batch matching with some valid, some empty samples"""
+    """Test batch matching with some valid, some empty samples."""
     batch_size = 4
     num_pred = 10
     num_gt = 5
@@ -140,7 +134,7 @@ def test_matching_batch_mixed():
 
 
 def test_validate_and_sanitize_batch():
-    """Test end-to-end batch validation and sanitization"""
+    """Test end-to-end batch validation and sanitization."""
     batch = {
         'images': torch.rand(2, 3, 224, 224),
         'boxes': torch.tensor([
@@ -175,5 +169,8 @@ if __name__ == '__main__':
     test_validate_and_sanitize_batch()
     
     print("OK All Hungarian matcher robustness tests passed!")
+
+
+
 
 

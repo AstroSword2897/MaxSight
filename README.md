@@ -3,7 +3,7 @@
 **Production-Grade Accessibility System** | **Multi-Task Deep Learning for Environmental Understanding**
 
 **Last Updated**: 2026-02  
-**Status**: 🟢 Production-Ready | Training & Data Pipeline Ready | One-day cleanup done (scripts/docs archived) | Run `scripts/gather_training_data.py` then `scripts/train_maxsight.py`
+**Status**: Production-ready training and data pipeline. Run `scripts/gather_training_data.py` then `scripts/train_maxsight.py`. See **docs/status.md** for current status.
 
 ---
 
@@ -72,7 +72,7 @@ MaxSight answers this by implementing four barrier-removal methods from accessib
 #### Medium-Term Goals (In Progress)
 - ✅ Data gathering script and train/val/test splits (see [Requirements before training](#requirements-before-training))
 - 🔄 Full training runs (T0 baseline; use cloud GPU for production scale)
-- 🔄 Performance benchmarking (scripts in `scripts/archive/`)
+- 🔄 Performance benchmarking (see `ml/training/benchmark.py` and `pytest tests/`)
 - 🔄 Model export (JIT/ONNX/CoreML; see `python -m ml.training.export --help`)
 
 #### Long-Term Goals
@@ -2322,7 +2322,7 @@ def get_loss_weights_for_epoch(epoch):
 #### Optimization & Deployment
 - **TorchAO**: 0.14.1+ (model optimization)
 - **FAISS**: 1.13.2+ (efficient similarity search)
-- **CoreML**: iOS deployment (image input only; audio/temporal not in export — see REQUIREMENTS.md)
+- **CoreML**: iOS deployment (image input only; audio/temporal not in export — see docs/status.md)
 - **ONNX**: Cross-platform deployment
 - **ExecuTorch**: Mobile deployment
 
@@ -2394,7 +2394,6 @@ def get_loss_weights_for_epoch(epoch):
 │   ├── AutoMLType.py            # Optuna hyperparameter tuning; writes best_hyperparameters.json
 │   ├── smoke_train.py          # Smoke training (proof of life; tier: T0_BASELINE_CNN, T2_HYBRID_VIT, etc.)
 │   ├── gather_training_data.py # One-time: download COCO (optional), extract, create train/val/test splits
-│   └── archive/                 # Validation, benchmarking, COCO helpers (validate_forward_passes, benchmark_tiers, download_coco, etc.)
 │
 ├── tests/                       # Test suite
 │   ├── test_phase0_backbone.py
@@ -2406,12 +2405,14 @@ def get_loss_weights_for_epoch(epoch):
 │   └── ...
 │
 ├── docs/                        # Documentation
-│   ├── DEPLOYMENT.md            # End-to-end deployment flow
-│   ├── TRAINING.md              # Training guide
-│   ├── TROUBLESHOOTING.md       # Common issues
-│   ├── architecture.md          # High-level architecture
-│   ├── training/                # Memory, optimization
-│   └── archive/                 # Legacy/detailed docs
+│   ├── architecture.md          # Model and system architecture
+│   ├── caching.md               # Caching (Redis, usage)
+│   ├── downloads.md             # Dataset and asset downloads
+│   ├── status.md                # Project status and health
+│   ├── therapy_system.md        # Therapy sessions and tasks
+│   ├── training_architecture.md # Training loop, losses, config
+│   ├── training-data-loading.md # Data pipeline and dataset
+│   └── transferlearning.md      # Tier transfer and checkpoint loading
 │
 ├── checkpoints/                 # Model checkpoints
 ├── datasets/                    # Training data
@@ -2447,7 +2448,7 @@ def get_loss_weights_for_epoch(epoch):
 2. **Smoke check**: `python scripts/smoke_train.py --tier T0_BASELINE_CNN --epochs 2 --force-cpu`
 3. **Full training**: Use the training command from [Full Training](#full-training-annotation-based-cloud-gpu-recommended) with your `--data-dir`, `--train-annotation`, `--val-annotation`, `--image-dir` (cloud GPU recommended for full runs).
 4. **Export**: After a checkpoint exists, `python -m ml.training.export --checkpoint <path> --format <jit|coreml|onnx|executorch> --output <path>`.
-5. **Simulator with trained model**: Set `model_checkpoint_path` in `tools/simulation/config.py` or use `ComprehensiveSimulator(model_path=...)`; see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+5. **Simulator with trained model**: Set `model_checkpoint_path` in `tools/simulation/config.py` or use `ComprehensiveSimulator(model_path=...)`. See **docs/architecture.md** (export section) and **README** for deployment.
 
 ### Short-term goals (next 2–4 weeks)
 
@@ -2556,7 +2557,7 @@ python -c "import torch; print(f'PyTorch {torch.__version__}, MPS: {torch.backen
 
 **All MaxSight tiers (210M+ parameters) require cloud GPU for training.**
 
-See [Device Selection Policy](docs/archive/DEVICE_SELECTION_POLICY.md) for details.
+See **docs/status.md** for device and hardware notes.
 
 ### Requirements before training
 
@@ -2564,7 +2565,7 @@ See [Device Selection Policy](docs/archive/DEVICE_SELECTION_POLICY.md) for detai
 2. **Prepare data**: Run once: `python scripts/gather_training_data.py` (optionally `--skip-download` / `--skip-extract` if COCO is already present). This creates `datasets/cleaned_splits/maxsight_train.json`, `maxsight_val.json`, `maxsight_test.json`.
 3. **Hardware**: For full training use a CUDA GPU; for smoke/short runs CPU or MPS is fine.
 
-See **[REQUIREMENTS.md](REQUIREMENTS.md)** for the full checklist (software, data, runtime modules, hardware).
+See **docs/status.md** and **docs/downloads.md** for setup and data requirements.
 
 ### Smoke Training (Proof of Life)
 
@@ -2607,9 +2608,9 @@ Options: `--skip-env`, `--skip-data-check`, `--no-export`, `--dry-run`. Override
 Optional **Phase 3 data validation** (no invalid values; class weights):  
 `python scripts/validate_data_pipeline.py --train-annotation datasets/cleaned_splits/maxsight_train.json --image-dir datasets/coco_raw`
 
-### Validation and benchmarking scripts
+### Validation and benchmarking
 
-Forward pass validation, tier benchmarking, and production rehearsal scripts are in **`scripts/archive/`** (e.g. `scripts/archive/validate_forward_passes.py`, `scripts/archive/benchmark_tiers.py`, `scripts/archive/full_production_rehearsal.py`). Run them from the archive if needed. See [REQUIREMENTS.md](REQUIREMENTS.md) for the list.
+Use the test suite and training benchmark: `pytest tests/` and `python -m ml.training.benchmark`. See **docs/status.md** for current status.
 
 ---
 
@@ -2705,14 +2706,8 @@ pytest tests/test_phase5_training.py
 # Smoke training (proof of life)
 python scripts/smoke_train.py --tier T2_HYBRID_VIT --epochs 2 --batches 5
 
-# Forward pass validation (in archive)
-python scripts/archive/validate_forward_passes.py
-
-# Function flow analysis (in archive)
-python scripts/archive/analyze_function_flow.py
-
-# Stress tests (in archive)
-python scripts/archive/run_stress_tests.py --checkpoint checkpoints/model.pt
+# Benchmark inference (ml/training/benchmark.py)
+python -m ml.training.benchmark
 ```
 
 ### Validation Status
@@ -2755,7 +2750,7 @@ python scripts/archive/run_stress_tests.py --checkpoint checkpoints/model.pt
 ### Quick Links
 
 - **Export for Xcode**: [EXPORT_FOR_XCODE.md](EXPORT_FOR_XCODE.md) - Complete export guide
-- **Deployment Workflow**: [STEP_BY_STEP_DEPLOYMENT.md](STEP_BY_STEP_DEPLOYMENT.md) - Step-by-step deployment
+- **Deployment**: Run `scripts/export_top7_to_xcode.py` for iOS bundles; see README deployment section.
 - **Training Runbook**: [TRAINING_RUNBOOK.md](TRAINING_RUNBOOK.md) - Training commands and monitoring
 - **Pre-Train Checklist**: [PRE_TRAIN_CHECKLIST.md](PRE_TRAIN_CHECKLIST.md) - Verification before training
 - **Web Simulator**: [tools/simulation/README.md](tools/simulation/README.md) - Simulator setup and usage
@@ -2799,21 +2794,18 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 
 ## 📚 Documentation
 
-### Core Documentation (active)
+### Documentation (docs/)
 
-- **[DEPLOYMENT.md](docs/DEPLOYMENT.md)**: End-to-end deployment flow (train → checkpoint → export → simulator)
-- **[TRAINING.md](docs/TRAINING.md)**: Training guide and data setup
-- **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)**: Common issues and fixes
-- **[architecture.md](docs/architecture.md)**: High-level architecture
-- **docs/training/**: Memory and optimization notes
-- **[REQUIREMENTS.md](REQUIREMENTS.md)**: Software, data, and hardware checklist
-- **[COMMENT_STYLE.md](docs/COMMENT_STYLE.md)**: Comment and docstring standard for the whole repo (intent, active voice, concise)
-- **[Hyperparameter Rationale](HYPERPARAMETER_RATIONALE.md)**: Detailed hyperparameter explanations
-- **Warnings & Critical Cautions** (below): ⚠️ Production deployment warnings and fixes (READ BEFORE DEPLOYING)
+- **[architecture.md](docs/architecture.md)**: Model and system architecture
+- **[caching.md](docs/caching.md)**: Caching (Redis, usage)
+- **[downloads.md](docs/downloads.md)**: Dataset and asset downloads
+- **[status.md](docs/status.md)**: Project status and health
+- **[therapy_system.md](docs/therapy_system.md)**: Therapy sessions and tasks
+- **[training_architecture.md](docs/training_architecture.md)**: Training loop, losses, config
+- **[training-data-loading.md](docs/training-data-loading.md)**: Data pipeline and dataset
+- **[transferlearning.md](docs/transferlearning.md)**: Tier transfer and checkpoint loading
 
-### Archived documentation
-
-Detailed and legacy docs (device selection, MPS, system architecture, tier transfer, function flow, etc.) are in **`docs/archive/`**. Use them for deep dives; start with the core docs above for day-to-day use.
+**Warnings & Critical Cautions** (below): Production deployment warnings and fixes (read before deploying).
 
 ### Advanced Topics & Implementation Details
 
@@ -3266,7 +3258,7 @@ class CustomAccessibilityAugmentation(BaseAugmentation):
 
 - **[Training Setup Summary](TRAINING_SETUP_SUMMARY.md)**: Training preparation guide
 - **[What Has Been Done](WHAT_HAS_BEEN_DONE.md)**: Complete accomplishment summary
-- **docs/archive/**: Compressed validation path, stress testing, maintenance survival map, and other legacy guides
+- **docs/**: Architecture, caching, downloads, status, therapy, training, transfer learning (see Documentation section above)
 
 ---
 
@@ -3342,7 +3334,7 @@ class CustomAccessibilityAugmentation(BaseAugmentation):
 - Edge learning disabled in MPS-stable mode
 - Use cloud GPU for production training
 
-See [MPS Compatibility](docs/archive/MPS_COMPATIBILITY.md) for details.
+See **docs/status.md** for device and compatibility notes.
 
 ---
 
@@ -3374,13 +3366,13 @@ MaxSight 3.0 is designed based on accessibility research and barrier-removal met
 ## 📝 Recent Updates
 
 - ✅ **Phases 0-9 Complete**: All components implemented
-- ✅ **One-day cleanup**: Scripts/docs archived; active scripts: `train_maxsight.py`, `smoke_train.py`, `AutoMLType.py`, `gather_training_data.py`; active docs: `DEPLOYMENT.md`, `TRAINING.md`, `TROUBLESHOOTING.md`, `architecture.md`
+- ✅ **Scripts**: `train_maxsight.py`, `smoke_train.py`, `AutoMLType.py`, `gather_training_data.py`, `export_top7_to_xcode.py`; docs in **docs/** (architecture, status, training, etc.)
 - ✅ **Export CLI**: `python -m ml.training.export --checkpoint ... --format jit|onnx|coreml|executorch --output ...`
 - ✅ **Checkpoint loading**: Web simulator and inference engine support `model_checkpoint_path` / checkpoint path for trained models
 - ✅ **Deployment flow**: End-to-end path (train → checkpoint → export → simulator) documented in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- ✅ **Forward Pass Validation**: All tiers T0-T5 validated (scripts in `scripts/archive/`)
+- ✅ **Forward Pass Validation**: All tiers T0-T5 covered by tests and `ml.training.benchmark`
 - ✅ **Smoke Training**: Proof of life passed (loss decreased)
-- ✅ **Device Selection Policy**: Automatic CPU/GPU selection (doc in `docs/archive/`)
+- ✅ **Device selection**: Automatic CPU/GPU where applicable; see **docs/status.md**
 - ✅ **MPS-Stable Mode**: Apple Silicon development support
 - ✅ **Training Framework Fixes**: EMA, optimizer state, validation safety
 - ✅ **Data Pipeline**: Annotation-based training (`--train-annotation`, `--val-annotation`, `--image-dir`); no `--config`
@@ -3815,7 +3807,7 @@ def main():
 - `scripts/AutoMLType.py` - Hyperparameter tuning
 - `scripts/gather_training_data.py` - Data preparation
 - `python -m ml.training.export` - Export (JIT/ONNX/CoreML/ExecuTorch)
-- `scripts/archive/` - Validation, benchmarking, COCO helpers (validate_forward_passes, benchmark_tiers, etc.)
+- `pytest tests/` and `ml/training/benchmark.py` - Validation and benchmarking
 
 **Production Impact**: 🟢 **LOW** - Code quality issue, not correctness issue
 

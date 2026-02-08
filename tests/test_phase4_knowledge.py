@@ -1,9 +1,4 @@
-"""Comprehensive Tests for Phase 4: Knowledge-Augmented Retrieval
-
-Tests all Phase 4 components:
-- Scene Graph Encoder
-- GNN Encoder
-- Knowledge-Augmented Retrieval"""
+"""Comprehensive Tests for Phase 4: Knowledge-Augmented Retrieval Tests all Phase 4 components: - Scene Graph Encoder - GNN Encoder - Knowledge-Augmented Retrieval."""
 
 import torch
 import torch.nn as nn
@@ -151,6 +146,9 @@ def run_all_tests():
 
 if __name__ == "__main__":
     run_all_tests()
+
+
+
 
 
 

@@ -1,9 +1,4 @@
-"""Evaluation Metrics for Phase 9: Evaluation & Metrics
-
-Includes:
-- Multi-modal metrics
-- Accessibility-specific metrics
-- Robustness evaluation"""
+"""Evaluation Metrics for Phase 9: Evaluation & Metrics Includes: - Multi-modal metrics - Accessibility-specific metrics - Robustness evaluation."""
 
 import torch
 import numpy as np
@@ -43,12 +38,7 @@ class RobustnessMetrics:
 
 
 class EvaluationMetrics:
-    """Comprehensive evaluation metrics for Phase 9.
-    
-    Provides:
-    - Multi-modal metrics
-    - Accessibility-specific metrics
-    - Robustness evaluation"""
+    """Comprehensive evaluation metrics for Phase 9. Provides: - Multi-modal metrics - Accessibility-specific metrics - Robustness evaluation."""
     
     def __init__(self):
         self.reset()
@@ -66,7 +56,7 @@ class EvaluationMetrics:
         ground_truth: Dict[str, torch.Tensor],
         audio_outputs: Optional[Dict[str, torch.Tensor]] = None
     ) -> MultiModalMetrics:
-        """Compute multi-modal evaluation metrics...."""
+        """Compute multi-modal evaluation metrics."""
         metrics = MultiModalMetrics()
         
         # Vision accuracy.
@@ -90,7 +80,7 @@ class EvaluationMetrics:
         response_times: List[float],
         navigation_success: List[bool]
     ) -> AccessibilityMetrics:
-        """Compute accessibility-specific metrics...."""
+        """Compute accessibility-specific metrics."""
         metrics = AccessibilityMetrics()
         
         # Detection rate.
@@ -124,7 +114,7 @@ class EvaluationMetrics:
         occlusion_performance: Dict[str, float],
         noise_performance: Dict[str, float]
     ) -> RobustnessMetrics:
-        """Compute robustness evaluation metrics...."""
+        """Compute robustness evaluation metrics."""
         metrics = RobustnessMetrics()
         
         # Lighting robustness (performance retention)
@@ -170,10 +160,7 @@ class EvaluationMetrics:
         return 0.0
     
     def generate_report(self) -> Dict[str, Dict]:
-        """Generate comprehensive evaluation report.
-        
-        Returns:
-            Dictionary with all metrics"""
+        """Generate comprehensive evaluation report. Returns: Dictionary with all metrics."""
         return {
             'multi_modal': {
                 'vision_accuracy': self.multi_modal.vision_accuracy,
@@ -192,6 +179,9 @@ class EvaluationMetrics:
                 'noise_robustness': self.robustness.noise_robustness
             }
         }
+
+
+
 
 
 

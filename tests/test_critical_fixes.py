@@ -1,4 +1,4 @@
-"""Test Plan for Critical Fixes - Thread Safety, Overlay Rendering, OCR Clustering..."""
+"""Test Plan for Critical Fixes - Thread Safety, Overlay Rendering, OCR Clustering."""
 
 import pytest
 import torch
@@ -346,6 +346,9 @@ class TestIntegration:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+
 
 
 

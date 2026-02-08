@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""Get the top 7 conditions by mAP from inference_data.json.
-
-Reads the JSON produced by run_checkpoint_inference (or improve_map_all_models).
-Ranks conditions by mAP@0.5 (mAP_50) and returns the top 7. Used by deploy/train
-when you want to deploy the best-performing models by validation mAP.
-
-Usage:
-  python scripts/get_top7_by_map.py --inference-data inference_data.json
-  python scripts/get_top7_by_map.py --inference-data inference_data.json --k 5
-  # Print one per line for shell:.
-  python scripts/get_top7_by_map.py --inference-data inference_data.json --print
-"""
+"""Get the top 7 conditions by mAP from inference_data.json."""
 
 import argparse
 import json
@@ -78,5 +67,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
 
 

@@ -1,7 +1,4 @@
-"""Async/Non-Blocking Retrieval for MaxSight 3.0
-
-Retrieval system that runs asynchronously to avoid blocking inference.
-Uses threading/queue for non-blocking execution."""
+"""Async/Non-Blocking Retrieval for MaxSight 3.0 Retrieval system that runs asynchronously to avoid blocking inference. Uses threading/queue for non-blocking execution."""
 
 import torch
 import numpy as np
@@ -33,9 +30,7 @@ class RetrievalResult:
 
 
 class AsyncRetrievalWorker:
-    """Worker thread for async retrieval.
-    
-    Processes retrieval requests in background without blocking inference."""
+    """Worker thread for async retrieval. Processes retrieval requests in background without blocking inference."""
     
     def __init__(
         self,
@@ -233,7 +228,7 @@ class AsyncRetrievalWorker:
         blocking: bool = False,
         timeout_ms: Optional[float] = None
     ) -> Optional[RetrievalResult]:
-        """Submit a retrieval request...."""
+        """Submit a retrieval request."""
         # Check cache first.
         if request_id:
             cached = self.get_cached_result(request_id)
@@ -275,9 +270,7 @@ class AsyncRetrievalWorker:
 
 
 class AsyncRetrievalSystem:
-    """Async retrieval system wrapper.
-    
-    Provides non-blocking retrieval that doesn't delay inference."""
+    """Async retrieval system wrapper. Provides non-blocking retrieval that doesn't delay inference."""
     
     def __init__(
         self,
@@ -312,7 +305,7 @@ class AsyncRetrievalSystem:
         request_id: Optional[str] = None,
         blocking: bool = False
     ) -> Optional[Dict[str, Any]]:
-        """Retrieve similar items (non-blocking by default)...."""
+        """Retrieve similar items (non-blocking by default)."""
         if not self.enable_async:
             # Synchronous mode.
             if self.stage1_ann is None:
@@ -359,6 +352,9 @@ class AsyncRetrievalSystem:
         """Shutdown async worker."""
         if self.worker:
             self.worker.stop()
+
+
+
 
 
 

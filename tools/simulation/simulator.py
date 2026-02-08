@@ -1,4 +1,4 @@
-"""Simulation Harness..."""
+"""Simulation Harness."""
 
 from typing import Dict, List, Optional, Any
 import numpy as np
@@ -9,14 +9,10 @@ logger = logging.getLogger(__name__)
 
 
 class TherapySimulator:
-    """End-to-end simulation harness for therapy system...."""
+    """End-to-end simulation harness for therapy system."""
     
     def __init__(self, config: Optional[Dict[str, Any]] = None, model=None):
-        """Initialize simulator.
-        
-        Arguments:
-            config: Optional configuration dictionary
-            model: Optional MaxSightCNN model instance (if None, will need to be set later)"""
+        """Initialize simulator. Arguments: config: Optional configuration dictionary model: Optional MaxSightCNN model instance (if None, will need to be set later)"""
         self.config = config or {}
         self.model = model
         self.is_running = False
@@ -25,7 +21,7 @@ class TherapySimulator:
         self.processing_times = []  # Track processing times for summary.
     
     def start_simulation(self, video_source: Optional[str] = None):
-        """Start simulation...."""
+        """Start simulation."""
         self.is_running = True
         self.frame_count = 0
         self.logs = []
@@ -38,7 +34,7 @@ class TherapySimulator:
             )
     
     def process_frame(self, frame: np.ndarray) -> Dict[str, Any]:
-        """Process a single frame...."""
+        """Process a single frame."""
         if not self.is_running:
             logger.warning("Simulation not started. Call start_simulation() first.")
             return {}
@@ -100,7 +96,7 @@ class TherapySimulator:
         return result
     
     def stop_simulation(self) -> Dict[str, Any]:
-        """Stop simulation and return summary...."""
+        """Stop simulation and return summary."""
         self.is_running = False
         
         return {
@@ -110,7 +106,7 @@ class TherapySimulator:
         }
     
     def _generate_summary(self) -> Dict[str, Any]:
-        """Generate simulation summary with statistics...."""
+        """Generate simulation summary with statistics."""
         errors = []
         for log in self.logs:
             if 'error' in log.get('model_output', {}):
@@ -137,10 +133,7 @@ class TherapySimulator:
         }
     
     def save_logs(self, filepath: str):
-        """Save simulation logs to file.
-        
-        Arguments:
-            filepath: Path to save JSON log file"""
+        """Save simulation logs to file. Arguments: filepath: Path to save JSON log file."""
         import json
         with open(filepath, 'w') as f:
             json.dump({
@@ -148,6 +141,9 @@ class TherapySimulator:
                 'logs': self.logs,
                 'summary': self._generate_summary()
             }, f, indent=2)
+
+
+
 
 
 

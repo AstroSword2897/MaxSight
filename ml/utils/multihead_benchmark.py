@@ -1,5 +1,4 @@
-"""Multi-Head Latency Benchmarking
-Measures latency for each head individually and in combination."""
+"""Multi-Head Latency Benchmarking Measures latency for each head individually and in combination."""
 
 import torch
 import time
@@ -26,7 +25,7 @@ class MultiHeadBenchmark:
         num_warmup: int = 5,
         num_runs: int = 50
     ) -> Dict[str, float]:
-        """Benchmark a combination of heads...."""
+        """Benchmark a combination of heads."""
         # Warmup.
         with torch.no_grad():
             for _ in range(num_warmup):
@@ -63,13 +62,7 @@ class MultiHeadBenchmark:
         return stats
     
     def benchmark_all_heads(self, input_tensor: torch.Tensor) -> Dict[str, Dict[str, float]]:
-        """Benchmark all head combinations.
-        
-        Arguments:
-            input_tensor: Input tensor
-        
-        Returns:
-            Dictionary of all benchmark results"""
+        """Benchmark all head combinations. Arguments: input_tensor: Input tensor Returns: Dictionary of all benchmark results."""
         # Core heads (always needed)
         core_heads = ['classification', 'box_regression', 'objectness']
         
@@ -101,7 +94,7 @@ class MultiHeadBenchmark:
         return self.results
     
     def identify_bottlenecks(self, target_latency_ms: float = 500.0) -> Dict[str, Any]:
-        """Identify which head combinations exceed target latency...."""
+        """Identify which head combinations exceed target latency."""
         bottlenecks = []
         recommendations = []
         
@@ -146,7 +139,7 @@ class MultiHeadBenchmark:
         target_latency_ms: float = 500.0,
         required_heads: Optional[List[str]] = None
     ) -> List[str]:
-        """Get optimal head configuration that meets latency target...."""
+        """Get optimal head configuration that meets latency target."""
         if required_heads is None:
             required_heads = ['classification', 'box_regression', 'objectness']
         
@@ -169,6 +162,9 @@ class MultiHeadBenchmark:
         else:
             # Fallback to required heads only.
             return required_heads
+
+
+
 
 
 

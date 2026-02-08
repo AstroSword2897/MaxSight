@@ -1,4 +1,4 @@
-"""Unified Therapy State Head for MaxSight 3.0..."""
+"""Unified Therapy State Head for MaxSight 3.0."""
 
 import torch
 import torch.nn as nn
@@ -7,7 +7,7 @@ from typing import Dict, Optional, Tuple
 
 
 class TherapyStateHead(nn.Module):
-    """Unified Therapy State Head:..."""
+    """Unified Therapy State Head:."""
     
     def __init__(
         self,
@@ -178,12 +178,11 @@ class TherapyStateHead(nn.Module):
         contrast_features: torch.Tensor,  # [B, in_channels_contrast, H, W].
         fpn_features: Optional[Dict[str, torch.Tensor]] = None
     ) -> Dict[str, torch.Tensor]:
-        """Forward pass for all therapy state outputs...."""
+        """Forward pass for all therapy state outputs."""
         B = eye_features.shape[0]
         device = eye_features.device
         
-        # --- Fatigue/Gaze ---.
-        # Extract motion features for fatigue (if 2D, pool to 1D)
+        # --- Fatigue/Gaze ---. Extract motion features for fatigue (if 2D, pool to 1D)
         if motion_features.dim() == 4:
             # [B, motion_dim, H, W] -> [B, motion_dim].
             motion_1d = F.adaptive_avg_pool2d(motion_features, 1).squeeze(-1).squeeze(-1)
@@ -215,8 +214,7 @@ class TherapyStateHead(nn.Module):
         blink_rate = self.blink_rate_head(shared_features)
         fixation_stability = self.fixation_stability_head(shared_features)
         
-        # --- Depth/Focus ---.
-        # Motion-conditioned depth (if motion is 4D)
+        # --- Depth/Focus ---. Motion-conditioned depth (if motion is 4D)
         if motion_features.dim() == 4 and hasattr(self, 'motion_proj_depth'):
             motion_proj = self.motion_proj_depth(motion_features)
             if motion_proj.shape[2:] != depth_features.shape[2:]:
@@ -302,6 +300,9 @@ class TherapyStateHead(nn.Module):
             outputs['edge_map'] = edge_map.squeeze(1)  # [B, H, W].
         
         return outputs
+
+
+
 
 
 

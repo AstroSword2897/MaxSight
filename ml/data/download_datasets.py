@@ -21,10 +21,7 @@ SOUND_CLASSES = [
 
 
 def verify_coco_dataset(data_dir: Path = Path("datasets/coco"), check_coco_raw: bool = True) -> Dict[str, bool]:
-    """Verify COCO dataset is properly downloaded and structured.
-    
-    Returns:
-        Dictionary with verification status for each component"""
+    """Verify COCO dataset is properly downloaded and structured. Returns: Dictionary with verification status for each component."""
     status = {
         'train_images': False,
         'val_images': False,
@@ -93,7 +90,7 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco"), check_coco_raw: 
 
 
 def download_coco_dataset(data_dir: Path = Path("datasets/coco"), auto_download: bool = False):
-    """Download COCO dataset with improved error handling and multiple download methods...."""
+    """Download COCO dataset with improved error handling and multiple download methods."""
     data_dir.mkdir(parents=True, exist_ok=True)
     
     # COCO dataset URLs (official)
@@ -275,9 +272,7 @@ def download_visual_genome(data_dir: Path = Path("datasets/visual_genome")):
 
 
 def download_lvis(data_dir: Path = Path("datasets/lvis")):
-    """Download LVIS dataset - 164K images, 2.2M+ instances, 1203 classes
-    
-    Long-tail distribution dataset - good for rare object detection"""
+    """Download LVIS dataset - 164K images, 2.2M+ instances, 1203 classes Long-tail distribution dataset - good for rare object detection."""
     print("LVIS Dataset Download Instructions:")
     print("1. Visit: https://www.lvisdataset.org/dataset")
     print("2. Download: LVIS V1.0 Train (100K images, ~20GB)")
@@ -292,7 +287,7 @@ def download_lvis(data_dir: Path = Path("datasets/lvis")):
 
 
 def download_audioset(data_dir: Path = Path("datasets/audioset"), auto_download: bool = False):
-    """Download AudioSet dataset - 2M+ audio clips, 632 classes..."""
+    """Download AudioSet dataset - 2M+ audio clips, 632 classes."""
     data_dir.mkdir(parents=True, exist_ok=True)
     
     if auto_download:
@@ -300,8 +295,7 @@ def download_audioset(data_dir: Path = Path("datasets/audioset"), auto_download:
         print("Note: AudioSet requires YouTube-DL and API access")
         try:
             import subprocess
-            # AudioSet provides CSV files with YouTube video IDs.
-            # Actual download requires youtube-dl and API keys.
+            # AudioSet provides CSV files with YouTube video IDs. Actual download requires youtube-dl and API keys.
             print("AudioSet automatic download requires:")
             print("  1. AudioSet CSV files (from Google Research)")
             print("  2. youtube-dl or yt-dlp installed")
@@ -328,11 +322,7 @@ def download_audioset(data_dir: Path = Path("datasets/audioset"), auto_download:
 
 
 def create_synthetic_impairments():
-    """Create functions for synthetic impairment simulations.
-    These will be applied during training data loading.
-    
-    Returns:
-        Dictionary of impairment functions keyed by condition name"""
+    """Create functions for synthetic impairment simulations. These will be applied during training data loading. Returns: Dictionary of impairment functions keyed by condition name."""
     import numpy as np
     from scipy import ndimage  # type: ignore
     
@@ -433,7 +423,7 @@ def create_synthetic_impairments():
 
 
 def save_class_mappings(data_dir: Path = Path("datasets")):
-    """Save class mappings to files"""
+    """Save class mappings to files."""
     data_dir.mkdir(parents=True, exist_ok=True)
     
     # Save environmental classes.
@@ -450,7 +440,7 @@ def save_class_mappings(data_dir: Path = Path("datasets")):
 
 
 def get_all_datasets_info() -> Dict[str, Dict]:
-    """Get information about all supported datasets"""
+    """Get information about all supported datasets."""
     return {
         'coco': {
             'name': 'COCO 2017',
@@ -563,6 +553,9 @@ if __name__ == "__main__":
     print("  - LVIS: 164K images, 2.2M+ instances")
     print("  - AudioSet: 2M+ audio clips")
     print("\n  TOTAL: 11M+ images, 70M+ instances for maximum training data")
+
+
+
 
 
 

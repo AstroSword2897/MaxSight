@@ -1,4 +1,4 @@
-"""ROI Priority Head for MaxSight Therapy System..."""
+"""ROI Priority Head for MaxSight Therapy System."""
 
 import torch
 import torch.nn as nn
@@ -18,7 +18,7 @@ class ROIPriorityHead(nn.Module):
         dropout: float = 0.1,
         use_attention: bool = True
     ):
-        """Initialize ROI priority head...."""
+        """Initialize ROI priority head."""
         super().__init__()
         self.scene_dim = scene_dim
         self.roi_dim = roi_dim
@@ -68,7 +68,7 @@ class ROIPriorityHead(nn.Module):
         roi_features: torch.Tensor,
         roi_mask: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        """Forward pass to generate ROI utility scores...."""
+        """Forward pass to generate ROI utility scores."""
         # Validate inputs.
         if scene_embedding.dim() != 2:
             raise ValueError(f"Expected 2D scene_embedding [B, scene_dim], got {scene_embedding.shape}")
@@ -90,8 +90,7 @@ class ROIPriorityHead(nn.Module):
             # Project scene to query space.
             scene_query = self.scene_proj(scene_embedding).unsqueeze(1)  # [B, 1, roi_dim].
             
-            # Attend to ROI features.
-            # Key_padding_mask: True = ignore (invalid ROI), False = attend (valid ROI)
+            # Attend to ROI features. Key_padding_mask: True = ignore (invalid ROI), False = attend (valid ROI)
             attn_mask = None if roi_mask is None else ~roi_mask  # Invert: True = invalid.
             attended_rois, _ = self.attention(
                 scene_query.expand(B, N, -1),  # Query: scene context for each ROI.
@@ -133,7 +132,7 @@ class ROIPriorityHead(nn.Module):
         rankings: torch.Tensor,
         margin: float = 0.1
     ) -> torch.Tensor:
-        """Compute pairwise ranking loss with proper tie handling...."""
+        """Compute pairwise ranking loss with proper tie handling."""
         # Validate inputs.
         if scores.shape != rankings.shape:
             raise ValueError(f"Shape mismatch: scores {scores.shape} vs rankings {rankings.shape}")
@@ -144,13 +143,11 @@ class ROIPriorityHead(nn.Module):
             # Need at least 2 ROIs for ranking.
             return torch.tensor(0.0, device=scores.device)
         
-        # Vectorized pairwise ranking loss.
-        # Compute all pairwise differences: score_diff[i,j] = score[i] - score[j].
+        # Vectorized pairwise ranking loss. Compute all pairwise differences: score_diff[i,j] = score[i] - score[j].
         score_diff = scores.unsqueeze(2) - scores.unsqueeze(1)  # [B, N, N].
         rank_diff = rankings.unsqueeze(2) - rankings.unsqueeze(1)  # [B, N, N].
         
-        # Loss when score order doesn't match rank order.
-        # We want: score_diff * sign(rank_diff) > margin.
+        # Loss when score order doesn't match rank order. We want: score_diff * sign(rank_diff) > margin.
         loss_matrix = F.relu(margin - score_diff * torch.sign(rank_diff))
         
         # Mask valid pairs (where rankings differ)
@@ -165,5 +162,8 @@ class ROIPriorityHead(nn.Module):
             loss = torch.tensor(0.0, device=scores.device, dtype=scores.dtype)
         
         return loss
+
+
+
 
 

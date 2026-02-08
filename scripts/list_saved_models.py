@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""List paths to saved condition models (best_model.pt per condition)...."""
+"""List paths to saved condition models (best_model.pt per condition)."""
 import argparse
 import shutil
 from pathlib import Path
@@ -61,5 +61,6 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 

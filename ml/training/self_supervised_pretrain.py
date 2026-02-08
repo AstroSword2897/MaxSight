@@ -1,4 +1,4 @@
-"""Advanced Training Techniques for MaxSight 3.0 (Production v2)..."""
+"""Advanced Training Techniques for MaxSight 3.0 (Production v2)"""
 
 import torch
 import torch.nn as nn
@@ -7,7 +7,7 @@ from typing import Dict, Optional
 
 
 class MAELoss(nn.Module):
-    """Masked Autoencoder reconstruction loss (production v2)...."""
+    """Masked Autoencoder reconstruction loss (production v2)."""
     
     def __init__(self, patch_size: int = 16):
         super().__init__()
@@ -19,7 +19,7 @@ class MAELoss(nn.Module):
         target: torch.Tensor,
         mask: torch.Tensor,
     ) -> torch.Tensor:
-        """Compute MAE reconstruction loss...."""
+        """Compute MAE reconstruction loss."""
         loss = (recon - target) ** 2
         loss = loss.mean(dim=-1)          # Per-patch MSE.
         loss = (loss * mask.float()).sum() / (mask.sum().float() + 1e-8)  # Only masked patches.
@@ -27,19 +27,14 @@ class MAELoss(nn.Module):
 
 
 class SimCLRLoss(nn.Module):
-    """NT-Xent contrastive loss (SimCLR) - production v2.
-    
-    Batch-stable, AMP-safe, correct positives/negatives.
-    
-    Args:
-        temperature: Temperature for softmax (default: 0.07)"""
+    """NT-Xent contrastive loss (SimCLR) - production v2. Batch-stable, AMP-safe, correct positives/negatives. Args: temperature: Temperature for softmax (default: 0.07)"""
     
     def __init__(self, temperature: float = 0.07):
         super().__init__()
         self.temperature = temperature
     
     def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
-        """Compute NT-Xent contrastive loss...."""
+        """Compute NT-Xent contrastive loss."""
         B = z1.size(0)
         
         # Normalize embeddings.
@@ -66,7 +61,7 @@ class SimCLRLoss(nn.Module):
 
 
 class KnowledgeDistillationLoss(nn.Module):
-    """Standard teacher-student knowledge distillation loss (production v2)...."""
+    """Standard teacher-student knowledge distillation loss (production v2)."""
     
     def __init__(self, temperature: float = 3.0, alpha: float = 0.7):
         super().__init__()
@@ -79,7 +74,7 @@ class KnowledgeDistillationLoss(nn.Module):
         teacher_logits: torch.Tensor,
         labels: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
-        """Compute knowledge distillation loss...."""
+        """Compute knowledge distillation loss."""
         # Teacher forward pass is frozen.
         with torch.no_grad():
             teacher_soft = F.softmax(
@@ -112,7 +107,7 @@ class KnowledgeDistillationLoss(nn.Module):
 
 
 class ElasticWeightConsolidation:
-    """Elastic Weight Consolidation for continual learning (production v2)...."""
+    """Elastic Weight Consolidation for continual learning (production v2)."""
     
     def __init__(self, model: nn.Module, lambda_ewc: float = 0.4):
         self.model = model
@@ -128,7 +123,7 @@ class ElasticWeightConsolidation:
                 self.optimal_params[name] = param.clone()
     
     def compute_fisher(self, dataloader, loss_fn, device):
-        """Compute Fisher information matrix from dataloader...."""
+        """Compute Fisher information matrix from dataloader."""
         self.model.eval()
         fisher = {}
         
@@ -183,10 +178,7 @@ class ElasticWeightConsolidation:
         self.fisher = fisher
     
     def penalty(self) -> torch.Tensor:
-        """Compute EWC penalty term (additive, differentiable).
-        
-        Returns:
-            Scalar penalty tensor"""
+        """Compute EWC penalty term (additive, differentiable). Returns: Scalar penalty tensor."""
         loss = torch.tensor(0.0, device=next(iter(self.model.parameters())).device)
         
         for name, param in self.model.named_parameters():
@@ -207,5 +199,8 @@ KnowledgeDistillation = KnowledgeDistillationLoss
 # Test compatibility aliases (old class names)
 MAE = MAELoss  # For tests - but MAE should be a model, not a loss.
 SimCLR = SimCLRLoss  # For tests - but SimCLR should be a model, not a loss.
+
+
+
 
 

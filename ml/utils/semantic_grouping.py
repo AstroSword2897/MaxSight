@@ -1,4 +1,4 @@
-"""Semantic Grouping Module for MaxSight..."""
+"""Semantic Grouping Module for MaxSight."""
 
 import torch
 from typing import Dict, List, Optional, Tuple, Any
@@ -51,7 +51,7 @@ class SemanticGrouper:
         cross_category_threshold: float = 0.15,
         use_confidence_weighting: bool = True
     ):
-        """Initialize semantic grouper...."""
+        """Initialize semantic grouper."""
         self.spatial_threshold = spatial_threshold
         self.enable_cross_category = enable_cross_category
         self.cross_category_threshold = cross_category_threshold
@@ -107,7 +107,7 @@ class SemanticGrouper:
             return [self._create_group_dict(group) for group in self._group_by_proximity(detections)]
     
     def _group_by_proximity(self, objects: List[Dict]) -> List[List[Dict]]:
-        """Group objects by spatial proximity...."""
+        """Group objects by spatial proximity."""
         if not objects:
             return []
         
@@ -161,7 +161,7 @@ class SemanticGrouper:
         return groups
     
     def _group_cross_category_proximity(self, detections: List[Dict]) -> List[List[Dict]]:
-        """Group objects from different categories that are spatially close (e.g., chairs + tables = dining area)...."""
+        """Group objects from different categories that are spatially close (e.g., chairs + tables = dining area)."""
         if not detections:
             return []
         
@@ -280,7 +280,7 @@ class SemanticGrouper:
         grouped_detections: List[Dict],
         verbosity: str = 'normal'
     ) -> str:
-        """Create description from grouped detections...."""
+        """Create description from grouped detections."""
         if not grouped_detections:
             return "No objects detected"
         
@@ -478,6 +478,9 @@ def visualize_semantic_groups(
         plt.show()
     else:
         plt.close()
+
+
+
 
 
 

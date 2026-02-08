@@ -1,6 +1,4 @@
-"""Test Two-Stage Inference Timing Enforcement
-
-Tests that timing enforcement works correctly in the two-stage inference pipeline."""
+"""Test Two-Stage Inference Timing Enforcement Tests that timing enforcement works correctly in the two-stage inference pipeline."""
 
 import torch
 import torch.nn as nn
@@ -270,6 +268,9 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+
+
+
 
 
 

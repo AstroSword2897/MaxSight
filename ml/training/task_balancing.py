@@ -1,4 +1,4 @@
-"""Task Balancing for Multi-Head Training..."""
+"""Task Balancing for Multi-Head Training."""
 
 import torch
 import torch.nn as nn
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class GradNormBalancer(nn.Module):
-    """GradNorm: Gradient normalization for adaptive loss balancing...."""
+    """GradNorm: Gradient normalization for adaptive loss balancing."""
     
     def __init__(
         self,
@@ -19,7 +19,7 @@ class GradNormBalancer(nn.Module):
         alpha: float = 1.5,  # Restoring force hyperparameter.
         initial_task_weights: Optional[List[float]] = None
     ):
-        """Initialize GradNorm balancer...."""
+        """Initialize GradNorm balancer."""
         super().__init__()
         self.num_tasks = num_tasks
         self.alpha = alpha
@@ -40,15 +40,14 @@ class GradNormBalancer(nn.Module):
         shared_params: List[nn.Parameter],
         task_losses: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute gradient norms for each task...."""
+        """Compute gradient norms for each task."""
         # Apply learnable task weights to balance loss magnitudes.
         weighted_losses = [
             self.task_weights[i] * loss 
             for i, loss in enumerate(task_losses)
         ]
         
-        # Compute gradient norms for each task.
-        # Retain_graph=True keeps computation graph alive for multiple backward passes.
+        # Compute gradient norms for each task. Retain_graph=True keeps computation graph alive for multiple backward passes.
         gradient_norms = []
         for i, weighted_loss in enumerate(weighted_losses):
             model.zero_grad()
@@ -72,7 +71,7 @@ class GradNormBalancer(nn.Module):
         gradient_norms: torch.Tensor,
         iteration: int
     ) -> Dict[str, float]:
-        """Update task weights using GradNorm algorithm...."""
+        """Update task weights using GradNorm algorithm."""
         # Initialize reference losses on first iteration.
         if not self.initialized:
             self.initial_losses = torch.stack([loss.detach() for loss in task_losses])
@@ -119,7 +118,7 @@ class GradNormBalancer(nn.Module):
 
 
 class PCGradBalancer:
-    """PCGrad: Projected Conflicting Gradients for multi-task learning...."""
+    """PCGrad: Projected Conflicting Gradients for multi-task learning."""
     
     def __init__(self):
         """Initialize PCGrad balancer."""
@@ -129,7 +128,7 @@ class PCGradBalancer:
         self,
         gradients: List[torch.Tensor]
     ) -> List[torch.Tensor]:
-        """Project conflicting gradients to resolve conflicts...."""
+        """Project conflicting gradients to resolve conflicts."""
         projected_grads = []
         
         for i, grad_i in enumerate(gradients):
@@ -151,22 +150,16 @@ class PCGradBalancer:
 
 
 class PerHeadLossMonitor:
-    """Monitor per-head loss magnitudes over time...."""
+    """Monitor per-head loss magnitudes over time."""
     
     def __init__(self, window_size: int = 100):
-        """Initialize loss monitor.
-        
-        Arguments:
-            window_size: Number of iterations to track"""
+        """Initialize loss monitor. Arguments: window_size: Number of iterations to track."""
         self.window_size = window_size
         self.loss_history: Dict[str, List[float]] = defaultdict(list)
         self.iteration = 0
     
     def update(self, head_losses: Dict[str, torch.Tensor]):
-        """Update loss history.
-        
-        Arguments:
-            head_losses: Dictionary mapping head names to loss values"""
+        """Update loss history. Arguments: head_losses: Dictionary mapping head names to loss values."""
         self.iteration += 1
         
         for head_name, loss in head_losses.items():
@@ -180,10 +173,7 @@ class PerHeadLossMonitor:
                 self.loss_history[head_name].pop(0)
     
     def detect_issues(self) -> Dict[str, List[str]]:
-        """Detect potential gradient warfare issues.
-        
-        Returns:
-            Dictionary mapping issue types to affected heads"""
+        """Detect potential gradient warfare issues. Returns: Dictionary mapping issue types to affected heads."""
         issues = {
             'dominant': [],  # Loss decaying too fast.
             'oscillating': [],  # Loss oscillating.
@@ -244,7 +234,7 @@ class PerHeadLossMonitor:
 
 
 class GradNormMultiHeadLoss(nn.Module):
-    """Multi-head loss combiner with GradNorm for adaptive task balancing...."""
+    """Multi-head loss combiner with GradNorm for adaptive task balancing."""
     
     def __init__(
         self,
@@ -460,8 +450,7 @@ class GradNormMultiHeadLoss(nn.Module):
         head_losses: Dict[str, torch.Tensor],
         gradient_norms: torch.Tensor
     ) -> Dict[str, float]:
-        """Update task weights using GradNorm algorithm.
-        On MPS, GradNorm math runs on CPU to avoid unsupported ops; weights are then copied back."""
+        """Update task weights using GradNorm algorithm. On MPS, GradNorm math runs on CPU to avoid unsupported ops; weights are then copied back."""
         orig_device = self.task_weights.device
         use_cpu_fallback = orig_device.type == 'mps'
         if use_cpu_fallback:
@@ -575,7 +564,7 @@ class GradNormMultiHeadLoss(nn.Module):
 
 
 class GradNormStressIntegrator:
-    """Integrates GradNormMultiHeadLoss with MaxSight Stress Test Suite...."""
+    """Integrates GradNormMultiHeadLoss with MaxSight Stress Test Suite."""
     
     def __init__(
         self,
@@ -585,7 +574,7 @@ class GradNormStressIntegrator:
         auto_dampen: bool = False,
         damp_factor: float = 0.9
     ):
-        """Initialize GradNorm stress integrator...."""
+        """Initialize GradNorm stress integrator."""
         self.loss_module = loss_module
         self.monitor = PerHeadLossMonitor(window_size=monitor_window)
         self.alert_thresholds = alert_thresholds or {
@@ -604,7 +593,7 @@ class GradNormStressIntegrator:
         targets: Dict[str, torch.Tensor],
         model: Optional[nn.Module] = None
     ) -> Tuple[torch.Tensor, Dict[str, Any]]:
-        """Compute total loss, update task weights, monitor head trends, and return metrics...."""
+        """Compute total loss, update task weights, monitor head trends, and return metrics."""
         self.iteration += 1
         
         # Compute loss and update task weights via GradNorm.
@@ -613,8 +602,7 @@ class GradNormStressIntegrator:
         # Extract head losses for monitoring.
         head_losses = metrics.get('head_losses', {})
         
-        # Convert to format expected by PerHeadLossMonitor.
-        # PerHeadLossMonitor expects Dict[str, torch.Tensor].
+        # Convert to format expected by PerHeadLossMonitor. PerHeadLossMonitor expects Dict[str, torch.Tensor].
         monitor_losses = {}
         for head_name, loss_val in head_losses.items():
             if isinstance(loss_val, (int, float)):
@@ -671,7 +659,7 @@ class GradNormStressIntegrator:
         return total_loss, metrics
     
     def _handle_issues(self, issues: Dict[str, List[str]]):
-        """Automatically dampen task weights for heads flagged as problematic...."""
+        """Automatically dampen task weights for heads flagged as problematic."""
         for issue_type, heads in issues.items():
             for head_name in heads:
                 if head_name in self.loss_module.head_names:
@@ -688,17 +676,11 @@ class GradNormStressIntegrator:
                         )
     
     def get_alerts(self, max_alerts: int = 10) -> List[Dict[str, Any]]:
-        """Get recent alerts.
-        
-        Arguments:
-            max_alerts: Maximum number of alerts to return
-        
-        Returns:
-            List of alert dictionaries"""
+        """Get recent alerts. Arguments: max_alerts: Maximum number of alerts to return Returns: List of alert dictionaries."""
         return self.alert_history[-max_alerts:]
     
     def get_metrics_summary(self) -> Dict[str, Any]:
-        """Get comprehensive metrics summary for stress testing...."""
+        """Get comprehensive metrics summary for stress testing."""
         return {
             'current_iteration': self.iteration,
             'head_loss_summary': self.monitor.get_summary(),
@@ -716,6 +698,9 @@ class GradNormStressIntegrator:
         self.alert_history.clear()
         self.iteration = 0
         logger.info("GradNorm stress monitoring reset")
+
+
+
 
 
 

@@ -1,6 +1,4 @@
-"""Temporal Processing Modules for MaxSight 3.0
-
-Includes ConvLSTM for motion tracking and TimeSformer for long-range temporal dependencies."""
+"""Temporal Processing Modules for MaxSight 3.0 Includes ConvLSTM for motion tracking and TimeSformer for long-range temporal dependencies."""
 
 import torch
 import torch.nn as nn
@@ -8,9 +6,7 @@ from typing import Tuple, Optional
 
 
 class ConvLSTMCell(nn.Module):
-    """Single ConvLSTM cell.
-    
-    Processes spatial-temporal information using convolutional operations."""
+    """Single ConvLSTM cell. Processes spatial-temporal information using convolutional operations."""
     
     def __init__(self, input_dim: int, hidden_dim: int, kernel_size: int = 3):
         super().__init__()
@@ -31,7 +27,7 @@ class ConvLSTMCell(nn.Module):
         x: torch.Tensor,  # [B, C, H, W].
         hidden: Tuple[torch.Tensor, torch.Tensor]  # (h, c)
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass through ConvLSTM cell...."""
+        """Forward pass through ConvLSTM cell."""
         h_prev, c_prev = hidden
         
         # Concatenate input and hidden state.
@@ -59,9 +55,7 @@ class ConvLSTMCell(nn.Module):
 
 
 class ConvLSTM(nn.Module):
-    """Multi-layer ConvLSTM for motion tracking.
-    
-    Tracks motion across multiple frames for people, vehicles, and obstacles."""
+    """Multi-layer ConvLSTM for motion tracking. Tracks motion across multiple frames for people, vehicles, and obstacles."""
     
     def __init__(
         self,
@@ -90,7 +84,7 @@ class ConvLSTM(nn.Module):
         x: torch.Tensor,  # [B, T, C, H, W] - sequence of frames.
         hidden_state: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        """Forward pass through ConvLSTM...."""
+        """Forward pass through ConvLSTM."""
         B, T, C, H, W = x.shape
         
         # Initialize hidden state if not provided.
@@ -167,6 +161,9 @@ class TimeSformer(nn.Module):
         x = self.norm(x)
         x = x.mean(dim=(1, 2))  # [B, D].
         return x
+
+
+
 
 
 

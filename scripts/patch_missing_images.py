@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch missing COCO images during training...."""
+"""Patch missing COCO images during training."""
 
 import json
 import logging
@@ -32,13 +32,7 @@ class COCOImagePatcher:
         self.splits_dir = self.datasets_dir / "cleaned_splits"
         
     def find_missing_images(self, split: str) -> Tuple[List[str], List[Path]]:
-        """Find missing images for a given split.
-        
-        Args:
-            split: 'train' or 'val'
-            
-        Returns:
-            (list of image filenames, list of expected paths)"""
+        """Find missing images for a given split. Args: split: 'train' or 'val' Returns: (list of image filenames, list of expected paths)"""
         # Load annotation file.
         ann_file = self.splits_dir / f"maxsight_{split}.json"
         if not ann_file.exists():
@@ -65,7 +59,7 @@ class COCOImagePatcher:
         return missing_files, missing_paths
     
     def download_image(self, filename: str, split: str, retries: int = 3) -> bool:
-        """Download a single image from COCO servers...."""
+        """Download a single image from COCO servers."""
         # Determine URL and target directory.
         if split == 'train':
             url = self.TRAIN_URL + filename
@@ -99,7 +93,7 @@ class COCOImagePatcher:
         return False
     
     def patch_split(self, split: str, max_workers: int = 4) -> Tuple[int, int]:
-        """Download all missing images for a split...."""
+        """Download all missing images for a split."""
         logger.info(f"Starting patch for {split} split...")
         
         # Find missing images.
@@ -218,5 +212,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+
 
 

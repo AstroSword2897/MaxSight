@@ -1,10 +1,4 @@
-"""Production-grade validation utilities for MaxSight.
-
-Provides:
-- Input validation
-- Model validation
-- Data validation
-- Configuration validation"""
+"""Production-grade validation utilities for MaxSight. Provides: - Input validation - Model validation - Data validation - Configuration validation."""
 
 import torch
 import torch.nn as nn
@@ -18,7 +12,7 @@ def validate_model_inputs(
     images: torch.Tensor,
     expected_shape: Tuple[int, ...] = (4,)
 ) -> bool:
-    """Validate model input tensors...."""
+    """Validate model input tensors."""
     if not torch.is_tensor(images):
         raise ValueError(f"Images must be a tensor, got {type(images)}")
     
@@ -42,7 +36,7 @@ def validate_model_outputs(
     outputs: Dict[str, torch.Tensor],
     expected_keys: Optional[list] = None
 ) -> bool:
-    """Validate model output dictionary...."""
+    """Validate model output dictionary."""
     if not isinstance(outputs, dict):
         raise ValueError(f"Outputs must be a dictionary, got {type(outputs)}")
     
@@ -62,7 +56,7 @@ def validate_batch(
     batch: Any,
     required_keys: Optional[list] = None
 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    """Validate and parse training batch...."""
+    """Validate and parse training batch."""
     if isinstance(batch, (list, tuple)):
         if len(batch) < 1:
             raise ValueError("Batch must contain at least images")
@@ -92,7 +86,7 @@ def validate_checkpoint(
     checkpoint: Dict[str, Any],
     required_keys: Optional[list] = None
 ) -> bool:
-    """Validate checkpoint dictionary...."""
+    """Validate checkpoint dictionary."""
     if not isinstance(checkpoint, dict):
         raise ValueError(f"Checkpoint must be a dictionary, got {type(checkpoint)}")
     
@@ -106,6 +100,9 @@ def validate_checkpoint(
         raise ValueError("Checkpoint must contain 'model_state_dict'")
     
     return True
+
+
+
 
 
 

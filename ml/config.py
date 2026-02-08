@@ -1,5 +1,4 @@
-"""MaxSight Configuration and Dependency Management
-Centralized configuration with versioning and dependency tracking."""
+"""MaxSight Configuration and Dependency Management Centralized configuration with versioning and dependency tracking."""
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
@@ -198,5 +197,8 @@ def load_config(filepath: Path) -> ModelConfig:
         head_dependencies=config_data.get('head_dependencies', {}),
         head_execution_order=config_data.get('head_execution_order', [])
     )
+
+
+
 
 

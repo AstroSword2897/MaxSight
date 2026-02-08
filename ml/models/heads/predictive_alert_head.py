@@ -1,6 +1,4 @@
-"""Predictive Alert Head for MaxSight 3.0
-
-Anticipates hazards and provides predictive navigation guidance."""
+"""Predictive Alert Head for MaxSight 3.0 Anticipates hazards and provides predictive navigation guidance."""
 
 import torch
 import torch.nn as nn
@@ -20,7 +18,7 @@ class PredictiveAlert:
 
 
 class PredictiveAlertHead(nn.Module):
-    """Predictive alert head for hazard anticipation...."""
+    """Predictive alert head for hazard anticipation."""
     
     def __init__(
         self,
@@ -76,7 +74,7 @@ class PredictiveAlertHead(nn.Module):
         motion_features: Optional[torch.Tensor] = None,  # [B, motion_dim].
         spatial_memory: Optional[torch.Tensor] = None  # [B, N_objects, 4] (boxes)
     ) -> Dict[str, torch.Tensor]:
-        """Predict hazards and generate alerts...."""
+        """Predict hazards and generate alerts."""
         B = scene_features.shape[0]
         
         # Default motion features if not provided.
@@ -117,6 +115,9 @@ class PredictiveAlertHead(nn.Module):
             'confidence': confidence,
             'motion_prediction': motion_pred
         }
+
+
+
 
 
 

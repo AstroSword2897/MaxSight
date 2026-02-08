@@ -1,5 +1,4 @@
-"""Unit tests for integration constraints.
-Ensures architectural constraints are enforced."""
+"""Unit tests for integration constraints. Ensures architectural constraints are enforced."""
 import torch
 import torch.nn.functional as F
 import pytest
@@ -155,6 +154,9 @@ def test_depth_vectorized():
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+
 
 
 

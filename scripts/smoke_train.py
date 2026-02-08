@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Meant to overfit as a boundary..."""
+"""Meant to overfit as a boundary."""
 
 import torch
 import torch.nn as nn
@@ -30,7 +30,7 @@ def get_device(
     num_parameters: int = 0,
     param_threshold: int = 10000
 ) -> torch.device:
-    """Get the appropriate device for training based on model size...."""
+    """Get the appropriate device for training based on model size."""
     # Explicit overrides take precedence.
     if force_cpu:
         return torch.device("cpu")
@@ -60,8 +60,7 @@ def get_device(
 
 
 def create_synthetic_batch(batch_size: int = 2, device: Optional[torch.device] = None):
-    """Create synthetic training batch.
-    Note: We'll create targets AFTER seeing model outputs to match shapes exactly."""
+    """Create synthetic training batch. Note: We'll create targets AFTER seeing model outputs to match shapes exactly."""
     if device is None:
         # Default to CPU for batch creation (device will be set later)
         device = torch.device("cpu")
@@ -89,13 +88,11 @@ def create_loss_functions():
 
 
 def compute_losses(predictions: Dict, targets: Dict, loss_fns: Dict) -> Tuple[Dict[str, Any], torch.Tensor]:
-    """Compute losses for all heads - simplified for smoke test.
-    Focus: Can gradients flow? Not accuracy."""
+    """Compute losses for all heads - simplified for smoke test. Focus: Can gradients flow? Not accuracy."""
     losses = {}
     total_loss = torch.tensor(0.0, device=list(predictions.values())[0].device if predictions else 'cpu')
     
-    # Simplified: Just compute what we can, skip complex dependencies.
-    # Loss weights (simplified for smoke test)
+    # Simplified: Just compute what we can, skip complex dependencies. Loss weights (simplified for smoke test)
     weights = {
         'objectness': 1.0,
         'classification': 1.0,
@@ -416,6 +413,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
 
 
 

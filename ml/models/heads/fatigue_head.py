@@ -1,4 +1,4 @@
-"""Fatigue/Gaze Head for MaxSight Therapy System..."""
+"""Fatigue/Gaze Head for MaxSight Therapy System."""
 
 import torch
 import torch.nn as nn
@@ -19,7 +19,7 @@ class FatigueHead(nn.Module):
         lstm_hidden_size: int = 32,
         lstm_num_layers: int = 2
     ):
-        """Initialize fatigue head...."""
+        """Initialize fatigue head."""
         super().__init__()
         self.eye_dim = eye_dim
         self.temporal_dim = temporal_dim
@@ -66,7 +66,7 @@ class FatigueHead(nn.Module):
         self.lstm_hidden = None
     
     def _make_head(self, input_dim: int) -> nn.Module:
-        """Create a task-specific head with additional capacity...."""
+        """Create a task-specific head with additional capacity."""
         return nn.Sequential(
             nn.Linear(input_dim, 16),
             nn.ReLU(inplace=True),
@@ -79,7 +79,7 @@ class FatigueHead(nn.Module):
         eye_features: torch.Tensor,
         motion_features: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
-        """Forward pass to generate fatigue and gaze predictions...."""
+        """Forward pass to generate fatigue and gaze predictions."""
         # Validate inputs.
         if eye_features.dim() != 2:
             raise ValueError(f"Expected 2D eye_features [B, eye_dim], got {eye_features.shape}")
@@ -138,5 +138,8 @@ class FatigueHead(nn.Module):
                 raise RuntimeError(f"NaN/Inf detected in {key}. Check model initialization.")
         
         return outputs
+
+
+
 
 

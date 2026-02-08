@@ -1,7 +1,4 @@
-"""User Preferences Management for MaxSight
-Handles user preference persistence, custom labels, and verbosity customization.
-
-Sprint 3 Day 28: User Customization"""
+"""User Preferences Management for MaxSight Handles user preference persistence, custom labels, and verbosity customization. Sprint 3 Day 28: User Customization."""
 
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
@@ -51,15 +48,10 @@ class UserPreferences:
 
 
 class UserPreferencesManager:
-    """Manages user preferences persistence and customization.
-    
-    Sprint 3 Day 28: User Customization"""
+    """Manages user preferences persistence and customization. Sprint 3 Day 28: User Customization."""
     
     def __init__(self, preferences_file: Optional[Path] = None):
-        """Initialize preferences manager.
-        
-        Arguments:
-            preferences_file: Path to preferences JSON file (default: ~/.maxsight/preferences.json)"""
+        """Initialize preferences manager. Arguments: preferences_file: Path to preferences JSON file (default: ~/.maxsight/preferences.json)"""
         if preferences_file is None:
             # Default location.
             home_dir = Path.home()
@@ -71,10 +63,7 @@ class UserPreferencesManager:
         self.preferences: Optional[UserPreferences] = None
     
     def load_preferences(self) -> UserPreferences:
-        """Load user preferences from file.
-        
-        Returns:
-            UserPreferences object"""
+        """Load user preferences from file. Returns: UserPreferences object."""
         if self.preferences_file.exists():
             try:
                 with open(self.preferences_file, 'r') as f:
@@ -92,7 +81,7 @@ class UserPreferencesManager:
         return self.preferences
     
     def save_preferences(self, preferences: Optional[UserPreferences] = None) -> bool:
-        """Save user preferences to file...."""
+        """Save user preferences to file."""
         if preferences is None:
             preferences = self.preferences
         
@@ -123,7 +112,7 @@ class UserPreferencesManager:
         ocr: Optional[int] = None,
         navigation: Optional[int] = None
     ) -> bool:
-        """Update verbosity levels...."""
+        """Update verbosity levels."""
         if self.preferences is None:
             self.load_preferences()
         
@@ -139,7 +128,7 @@ class UserPreferencesManager:
         return self.save_preferences()
     
     def add_custom_label(self, object_id: str, custom_name: str) -> bool:
-        """Add or update a custom label for an object...."""
+        """Add or update a custom label for an object."""
         if self.preferences is None:
             self.load_preferences()
         
@@ -147,13 +136,7 @@ class UserPreferencesManager:
         return self.save_preferences()
     
     def remove_custom_label(self, object_id: str) -> bool:
-        """Remove a custom label.
-        
-        Arguments:
-            object_id: Object identifier to remove
-        
-        Returns:
-            True if removed successfully"""
+        """Remove a custom label. Arguments: object_id: Object identifier to remove Returns: True if removed successfully."""
         if self.preferences is None:
             self.load_preferences()
         
@@ -163,26 +146,14 @@ class UserPreferencesManager:
         return False
     
     def get_custom_label(self, object_id: str) -> Optional[str]:
-        """Get custom label for an object.
-        
-        Arguments:
-            object_id: Object identifier
-        
-        Returns:
-            Custom label if exists, None otherwise"""
+        """Get custom label for an object. Arguments: object_id: Object identifier Returns: Custom label if exists, None otherwise."""
         if self.preferences is None:
             self.load_preferences()
         
         return self.preferences.custom_labels.get(object_id)
     
     def update_adaptive_thresholds(self, thresholds: Dict[str, float]) -> bool:
-        """Update adaptive assistance thresholds.
-        
-        Arguments:
-            thresholds: Dictionary of threshold name -> value
-        
-        Returns:
-            True if updated successfully"""
+        """Update adaptive assistance thresholds. Arguments: thresholds: Dictionary of threshold name -> value Returns: True if updated successfully."""
         if self.preferences is None:
             self.load_preferences()
         
@@ -190,13 +161,13 @@ class UserPreferencesManager:
         return self.save_preferences()
     
     def get_preferences(self) -> UserPreferences:
-        """Get current preferences (loads if not already loaded).
-        
-        Returns:
-            UserPreferences object"""
+        """Get current preferences (loads if not already loaded). Returns: UserPreferences object."""
         if self.preferences is None:
             self.load_preferences()
         return self.preferences
+
+
+
 
 
 

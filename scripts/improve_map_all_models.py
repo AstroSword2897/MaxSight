@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-Terminal script to improve mAP for all condition models (detection checkpoints) without retraining.
-- Automatically discovers trained checkpoints (or use CHECKPOINTS_BASE)
-- Sweeps confidence & NMS IoU thresholds via run_checkpoint_inference
-- Runs full inference with best params and saves inference_data.json
-- Optionally saves best thresholds to improved_inference_config.json
-"""
+"""Terminal script to improve mAP for all condition models (detection checkpoints) without retraining."""
 import argparse
 import itertools
 import json
@@ -218,5 +212,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
 
 

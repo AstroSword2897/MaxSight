@@ -1,9 +1,4 @@
-"""Batched Scene Graph + GNN Encoder for MaxSight 3.0
-
-- Efficient GPU computation
-- Supports multiple scene graphs per batch
-- Trainable spatial and semantic relation scoring
-- Edge-aware GNN"""
+"""Batched Scene Graph + GNN Encoder for MaxSight 3.0 - Efficient GPU computation - Supports multiple scene graphs per batch - Trainable spatial and semantic relation scoring - Edge-aware GNN."""
 
 import torch
 import torch.nn as nn
@@ -151,7 +146,7 @@ class SceneGraphEncoder(nn.Module):
         object_classes: List[str],
         batch_offsets: Optional[torch.Tensor] = None
     ) -> tuple:
-        """Extract both spatial and semantic relations, returning them with edge_index and edge_attr...."""
+        """Extract both spatial and semantic relations, returning them with edge_index and edge_attr."""
         # Extract spatial and semantic relations.
         if boxes.dim() == 3:
             # Batched input - flatten for processing.
@@ -224,8 +219,7 @@ class SceneGraphEncoder(nn.Module):
                 all_semantic_relations.extend(semantic_rels)
                 all_relations.extend(spatial_rels + semantic_rels)
             
-            # Build edge_index and edge_attr for batched graphs.
-            # For now, return simple structure - can be enhanced later.
+            # Build edge_index and edge_attr for batched graphs. For now, return simple structure - can be enhanced later.
             edge_index = torch.empty((2, 0), dtype=torch.long, device=object_embeddings.device)
             edge_attr = torch.empty((0, self.relation_embed_dim), dtype=torch.float32, device=object_embeddings.device)
             batch = torch.arange(batch_size, device=object_embeddings.device).repeat_interleave(boxes.shape[1])
@@ -312,6 +306,9 @@ else:
             super().__init__()
         def forward(self, *args, **kwargs):
             raise ImportError("torch-geometric is required for GNNEncoder")
+
+
+
 
 
 

@@ -1,6 +1,4 @@
-"""Production-grade Quantization-Aware Training (QAT) for MaxSight models.
-
-Use this when PTQ degrades accuracy >1% on critical heads (embedding, bbox, urgency)."""
+"""Production-grade Quantization-Aware Training (QAT) for MaxSight models. Use this when PTQ degrades accuracy >1% on critical heads (embedding, bbox, urgency)."""
 
 import torch
 import torch.nn as nn
@@ -35,7 +33,7 @@ def set_seed(seed: int = 42):
 
 
 def fuse_maxsight_model(model: nn.Module):
-    """Fuse conv+bn+relu patterns for MaxSight CNN architecture...."""
+    """Fuse conv+bn+relu patterns for MaxSight CNN architecture."""
     patterns = []
     
     # Auto-detect fusion patterns in all modules.
@@ -77,8 +75,7 @@ def fuse_maxsight_model(model: nn.Module):
 
 
 class QATTrainer:
-    """Production QAT trainer with multi-head loss support and validation.
-    Integrated with MaxSightLoss for proper multi-task training."""
+    """Production QAT trainer with multi-head loss support and validation. Integrated with MaxSightLoss for proper multi-task training."""
     
     def __init__(
         self,
@@ -279,8 +276,7 @@ class QATTrainer:
         return metrics
     
     def train(self) -> Dict[str, Any]:
-        """Run full QAT training loop.
-        Returns dict with best model path and training history."""
+        """Run full QAT training loop. Returns dict with best model path and training history."""
         print("Starting Quantization-Aware Training (QAT)")
         
         # Prepare model for QAT.
@@ -507,6 +503,9 @@ if __name__ == "__main__":
     print(f"  Best model: {results['qat_model_path']}")
     print(f"  INT8 model: {results['int8_model_path']}")
     print(f"  Best validation loss: {results['best_val_loss']:.4f}")
+
+
+
 
 
 

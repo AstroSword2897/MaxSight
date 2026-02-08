@@ -1,4 +1,4 @@
-"""Task Generator..."""
+"""Task Generator."""
 
 from typing import Dict, List, Optional, Any
 from enum import Enum
@@ -15,7 +15,7 @@ class TaskType(Enum):
 
 
 class TaskGenerator:
-    """Generates adaptive therapy tasks...."""
+    """Generates adaptive therapy tasks."""
     
     def __init__(self, user_profile: Optional[Dict[str, Any]] = None):
         self.user_profile = user_profile or {}
@@ -28,9 +28,8 @@ class TaskGenerator:
         fatigue_score: float,
         recent_performance: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Generate next therapy task...."""
-        # TODO: Implement adaptive task generation logic.
-        # For now, return default task.
+        """Generate next therapy task."""
+        # TODO: Implement adaptive task generation logic. For now, return default task.
         
         # If fatigued, suggest rest task.
         if fatigue_score > 0.7:
@@ -58,8 +57,7 @@ class TaskGenerator:
     
     def _choose_task_type(self, recent_performance: List[Dict[str, Any]]) -> TaskType:
         """Choose task type based on recent performance."""
-        # TODO: Implement task type selection logic.
-        # For now, cycle through task types.
+        # TODO: Implement task type selection logic. For now, cycle through task types.
         if not self.task_history:
             return TaskType.CONTRAST_MICRO
         
@@ -87,6 +85,9 @@ class TaskGenerator:
             # Keep only recent failures.
             if len(self.recent_failures) > 10:
                 self.recent_failures.pop(0)
+
+
+
 
 
 

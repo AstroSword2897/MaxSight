@@ -195,7 +195,7 @@ ACCESSIBILITY_CLASSES = [
 
 # Merge base + accessibility classes, no duplicates; order preserved (COCO first).
 def _get_unique_classes(base: List[str], additional: List[str]) -> List[str]:
-    """Combine classes, removing duplicates while preserving order"""
+    """Combine classes, removing duplicates while preserving order."""
     seen = set(base)  # Track what we've already seen - set lookup is fast.
     result = list(base)  # Start with base classes.
     for cls in additional:
@@ -432,8 +432,7 @@ class MaxSightCNN(nn.Module):
             nn.Conv2d(256, num_classes, 1)  # 1x1 to get one logit per class.
         )
         
-        # Box head: where is it? (bounding box coordinates)
-        # Outputs normalized coordinates [0, 1] - easier to train.
+        # Box head: where is it? (bounding box coordinates) Outputs normalized coordinates [0, 1] - easier to train.
         self.box_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
@@ -485,8 +484,7 @@ class MaxSightCNN(nn.Module):
             nn.Linear(128, num_distance_zones)
         )
         
-        # Enhanced audio processing (replaces simple audio_branch)
-        # Audio is always enabled if use_audio=True (part of baseline)
+        # Enhanced audio processing (replaces simple audio_branch) Audio is always enabled if use_audio=True (part of baseline)
         if use_audio:
             from ml.models.fusion.multimodal_fusion import EnhancedAudioEncoder, SpatialSoundMapping
             from ml.models.heads.sound_event_head import SoundEventHead
@@ -598,8 +596,7 @@ class MaxSightCNN(nn.Module):
                 from ml.retrieval.retrieval.knowledge_augment import KnowledgeAugmentedRetrieval
                 from ml.retrieval.retrieval.async_retrieval import AsyncRetrievalSystem
                 
-                # Initialize retrieval components (optional, can fail gracefully)
-                # Note: Requires FAISS index to be built separately.
+                # Initialize retrieval components (optional, can fail gracefully) Note: Requires FAISS index to be built separately.
                 stage1_ann = None  # Will be initialized if index available.
                 stage2_reranker = Stage2Reranker(
                     embedding_dims={'global': 512, 'region': 256, 'patch': 256},
@@ -928,9 +925,7 @@ class MaxSightCNN(nn.Module):
         T: Optional[int] = None,
         prev_temporal_state: Optional[Dict] = None,
     ) -> Tuple[torch.Tensor, Optional[Dict]]:
-        """Stage B backbone: optional hybrid CNN-ViT and temporal encoder (tier-dependent).
-        prev_temporal_state is reserved for stateful temporal across batches; TemporalEncoder does not use it yet.
-        """
+        """Stage B backbone: optional hybrid CNN-ViT and temporal encoder (tier-dependent). prev_temporal_state is reserved for stateful temporal across batches; TemporalEncoder does not use it yet."""
         stage_b_features = stage_a_features
         temporal_outputs = None
         
@@ -1086,8 +1081,7 @@ class MaxSightCNN(nn.Module):
                         align_corners=False
                     )
                 
-                # 3. MULTIPLICATIVE (not concatenation) - preserves pretrained weights.
-                # Use sigmoid for smoother gradients.
+                # 3. MULTIPLICATIVE (not concatenation) - preserves pretrained weights. Use sigmoid for smoother gradients.
                 audio_attention_map = torch.sigmoid(audio_attention_map)  # [0, 1] with smooth gradients.
                 fused_features = fused_features * (1.0 + audio_attention_map)  # Multiplicative gating.
             
@@ -1246,8 +1240,7 @@ class MaxSightCNN(nn.Module):
             'num_locations': _scalar_tensor_num_locations(H, W, images.device),  # Scalar tensor for JIT trace (no int in dict)
         }
         
-        # Check if Stage A is stable (uncertainty check)
-        # If uncertainty is too high, skip Stage B (safety-first)
+        # Check if Stage A is stable (uncertainty check) If uncertainty is too high, skip Stage B (safety-first)
         uncertainty_score = None
         if self.enable_accessibility_features:
             shared_scene_emb = self.shared_scene_embedding(combined_context)
@@ -1314,8 +1307,7 @@ class MaxSightCNN(nn.Module):
             enable_cross_task_heads = False  # Toggle this for isolation (start with False)
             
             if enable_cross_task_heads:
-                # Scene Description (uses ROI priorities if available)
-                # Compute shared scene embedding (reused by multiple heads)
+                # Scene Description (uses ROI priorities if available) Compute shared scene embedding (reused by multiple heads)
                 shared_scene_emb = self.shared_scene_embedding(combined_context)  # [B, 256].
                 
                 assert combined_context.is_contiguous(), "combined_context not contiguous before shared_scene_embedding"
@@ -1345,8 +1337,7 @@ class MaxSightCNN(nn.Module):
                 )  # Dict with 'roi_utility'
                 roi_utility = roi_priority_outputs.get('roi_utility')  # [B, H*W].
                 
-                # 5. Predictive Alerts - Hazard anticipation.
-                # Requires motion features from motion_head.
+                # 5. Predictive Alerts - Hazard anticipation. Requires motion features from motion_head.
                 alert_outputs = self.predictive_alert_head(
                     scene_features=combined_context,
                     motion_features=motion_magnitude.mean(dim=[2, 3]) if motion_magnitude is not None else None
@@ -1666,7 +1657,7 @@ class MaxSightCNN(nn.Module):
         return mask
     
     def _get_center_mask(self, H: int, W: int, device: torch.device) -> torch.Tensor:
-        """Create a mask that is 1 in the center, 0 at edges..."""
+        """Create a mask that is 1 in the center, 0 at edges."""
         device_type = device.type  # Use only device type for cache key (not index)
         
         # Get cached mask (or compute if not cached) - returns CPU tensor.
@@ -1814,16 +1805,14 @@ class MaxSightCNN(nn.Module):
         for i in range(len(boxes)):
             idx = int(sorted_indices[i].item())  # Get the actual index.
             
-            # Skip box already marked for suppression.
-            # (can happen if a lower-confidence box was processed first due to sorting)
+            # Skip box already marked for suppression. (can happen if a lower-confidence box was processed first due to sorting)
             if suppressed[idx]:
                 continue
             
             # Keep this box - it's the best one so far.
             keep.append(idx)
             
-            # Suppress boxes that overlap too much with the kept box.
-            # Only check remaining boxes (ones we haven't processed yet)
+            # Suppress boxes that overlap too much with the kept box. Only check remaining boxes (ones we haven't processed yet)
             if i < len(boxes) - 1:
                 remaining_indices = sorted_indices[i+1:]  # All boxes after current.
                 remaining_mask = ~suppressed[remaining_indices]  # Only check unsuppressed ones.
@@ -1837,15 +1826,14 @@ class MaxSightCNN(nn.Module):
                     current_box = boxes_corners[idx:idx+1]  # Keep as [1, 4] for broadcasting.
                     ious = self._compute_iou_corners(current_box, remaining_boxes)
                     
-                    # Suppress boxes that overlap too much (IoU >= threshold)
-                    # Higher threshold = more aggressive suppression.
+                    # Suppress boxes that overlap too much (IoU >= threshold) Higher threshold = more aggressive suppression.
                     suppress_mask = ious.flatten() >= threshold
                     suppressed[remaining_idx[suppress_mask]] = True
         
         return keep
     
     def _center_to_corners(self, boxes: torch.Tensor) -> torch.Tensor:
-        """Convert boxes from center format to corner format..."""
+        """Convert boxes from center format to corner format."""
         x_center, y_center, w, h = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
         x1 = x_center - w / 2  # Left edge.
         y1 = y_center - h / 2  # Top edge.
@@ -1854,7 +1842,7 @@ class MaxSightCNN(nn.Module):
         return torch.stack([x1, y1, x2, y2], dim=1)
     
     def _compute_iou(self, box1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
-        """Compute IoU between box1 (center format) and all boxes2 (center format)..."""
+        """Compute IoU between box1 (center format) and all boxes2 (center format)"""
         # Convert center format to corners.
         box1_corners = self._center_to_corners(box1)
         boxes2_corners = self._center_to_corners(boxes2)
@@ -1862,7 +1850,7 @@ class MaxSightCNN(nn.Module):
         return self._compute_iou_corners(box1_corners, boxes2_corners)
     
     def _compute_iou_corners(self, box1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
-        """Compute Intersection over Union (IoU) between box1 and all boxes2..."""
+        """Compute Intersection over Union (IoU) between box1 and all boxes2."""
         # Make sure box1 is 2D - handle edge case where it's 1D.
         if box1.dim() == 1:
             box1 = box1.unsqueeze(0)  # [4] -> [1, 4].
@@ -1872,8 +1860,7 @@ class MaxSightCNN(nn.Module):
         box1 = box1.unsqueeze(1)  # [N, 4] -> [N, 1, 4].
         boxes2 = boxes2.unsqueeze(0)  # [M, 4] -> [1, M, 4].
         
-        # Find the intersection rectangle.
-        # Two boxes overlap if their intersection exists.
+        # Find the intersection rectangle. Two boxes overlap if their intersection exists.
         inter_x1 = torch.max(box1[..., 0], boxes2[..., 0])  # X1 coordinates.
         inter_y1 = torch.max(box1[..., 1], boxes2[..., 1])  # Y1 coordinates.
         inter_x2 = torch.min(box1[..., 2], boxes2[..., 2])  # X2 coordinates.
@@ -1885,8 +1872,7 @@ class MaxSightCNN(nn.Module):
         inter_h = torch.clamp(inter_y2 - inter_y1, min=0)  # Height of intersection.
         inter_area = inter_w * inter_h  # Area of intersection.
         
-        # Calculate area of each box.
-        # Simple width * height.
+        # Calculate area of each box. Simple width * height.
         box1_area = (box1[..., 2] - box1[..., 0]) * (box1[..., 3] - box1[..., 1])
         boxes2_area = (boxes2[..., 2] - boxes2[..., 0]) * (boxes2[..., 3] - boxes2[..., 1])
         
@@ -1897,8 +1883,7 @@ class MaxSightCNN(nn.Module):
         # IoU = intersection / union (add tiny epsilon to avoid division by zero)
         iou = inter_area / (union_area + 1e-6)
         
-        # Clean up dimensions if needed.
-        # If box1 was [1, 4], result is [1, M] - squeeze to [M] for convenience.
+        # Clean up dimensions if needed. If box1 was [1, 4], result is [1, M] - squeeze to [M] for convenience.
         if iou.size(0) == 1:
             iou = iou.squeeze(0)
         
@@ -1935,7 +1920,7 @@ class MaxSightCNN(nn.Module):
         return base_urgency
     
     def _calculate_priority(self, class_name: str, urgency: int, confidence: float) -> int:
-        """Calculate priority score (0-100) for a detection...."""
+        """Calculate priority score (0-100) for a detection."""
         # Base priority from urgency.
         base_priority = {
             0: 20,   # Safe -> low priority.
@@ -2003,7 +1988,7 @@ def create_model(
     fpn_channels: int = 256,
     tier_config: Optional['TierConfig'] = None
 ) -> MaxSightCNN:
-    """Convenience function to create a MaxSight model with capability tier support...."""
+    """Convenience function to create a MaxSight model with capability tier support."""
     if tier_config is None:
         tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
     
@@ -2179,5 +2164,8 @@ if __name__ == "__main__":
         print(f"  {condition}: {len(cond_outputs)} outputs")
     
     print("\nAll tests passed - Model ready for deployment")
+
+
+
 
 

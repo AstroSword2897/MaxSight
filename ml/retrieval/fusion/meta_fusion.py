@@ -1,4 +1,4 @@
-"""Meta-Learning Fusion Weights for Phase 6: Personalization & Active Guidance..."""
+"""Meta-Learning Fusion Weights for Phase 6: Personalization & Active Guidance."""
 
 import torch
 import torch.nn as nn
@@ -17,10 +17,7 @@ class UserProfile:
 
 
 class MetaFusionWeights(nn.Module):
-    """Meta-learning fusion weights that adapt to user preferences.
-    
-    Uses gradient-based meta-learning to quickly adapt fusion weights
-    based on user feedback and task performance."""
+    """Meta-learning fusion weights that adapt to user preferences. Uses gradient-based meta-learning to quickly adapt fusion weights based on user feedback and task performance."""
     
     def __init__(
         self,
@@ -58,7 +55,7 @@ class MetaFusionWeights(nn.Module):
         urgency: Optional[float] = None,
         confidence: Optional[float] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute personalized fusion weights...."""
+        """Compute personalized fusion weights."""
         B = next(iter(modality_embeddings.values())).shape[0]
         device = next(iter(modality_embeddings.values())).device
         
@@ -142,9 +139,8 @@ class MetaFusionWeights(nn.Module):
         task_performance: Dict[str, float],
         num_steps: int = 5
     ) -> torch.Tensor:
-        """Adapt fusion weights to a specific user using meta-learning...."""
-        # Create user-specific adaptation.
-        # Simplified meta-update; full MAML would use inner-loop optimization.
+        """Adapt fusion weights to a specific user using meta-learning."""
+        # Create user-specific adaptation. Simplified meta-update; full MAML would use inner-loop optimization.
         
         # Start with base weights.
         adapted_weights = self.base_weights.clone()
@@ -161,12 +157,7 @@ class MetaFusionWeights(nn.Module):
 
 
 class ActiveSceneExploration(nn.Module):
-    """Active scene exploration for Phase 6.
-    
-    Determines which regions of the scene to explore next based on:
-    - Current uncertainty
-    - User preferences
-    - Task requirements"""
+    """Active scene exploration for Phase 6. Determines which regions of the scene to explore next based on: - Current uncertainty - User preferences - Task requirements."""
     
     def __init__(self, embed_dim: int = 256):
         super().__init__()
@@ -189,7 +180,7 @@ class ActiveSceneExploration(nn.Module):
         urgency: Optional[torch.Tensor] = None,  # [B].
         user_preference: Optional[float] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Determine which regions to explore next...."""
+        """Determine which regions to explore next."""
         B, N, D = region_embeddings.shape
         device = region_embeddings.device
         
@@ -232,7 +223,7 @@ class ActiveSceneExploration(nn.Module):
 
 
 class PredictiveNavigationGuidance(nn.Module):
-    """Predictive navigation guidance for Phase 6...."""
+    """Predictive navigation guidance for Phase 6."""
     
     def __init__(self, embed_dim: int = 256, hidden_dim: int = 128):
         super().__init__()
@@ -261,7 +252,7 @@ class PredictiveNavigationGuidance(nn.Module):
         goal_embedding: torch.Tensor,  # [B, embed_dim].
         scene_context: Optional[torch.Tensor] = None  # [B, embed_dim].
     ) -> Dict[str, torch.Tensor]:
-        """Predict navigation path and generate guidance...."""
+        """Predict navigation path and generate guidance."""
         B = current_embedding.shape[0]
         device = current_embedding.device
         
@@ -290,6 +281,9 @@ class PredictiveNavigationGuidance(nn.Module):
             'confidence': confidence,
             'guidance_priority': guidance_priority
         }
+
+
+
 
 
 

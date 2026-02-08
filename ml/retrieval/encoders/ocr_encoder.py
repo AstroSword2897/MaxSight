@@ -1,6 +1,4 @@
-"""OCR Encoder for Multi-Vector Retrieval
-
-Encodes OCR text snippets using sentence-transformers."""
+"""OCR Encoder for Multi-Vector Retrieval Encodes OCR text snippets using sentence-transformers."""
 
 import torch
 import torch.nn as nn
@@ -13,9 +11,7 @@ except ImportError:
 
 
 class OCREncoder(nn.Module):
-    """OCR encoder for text embeddings.
-    
-    Uses sentence-transformers to embed OCR text snippets."""
+    """OCR encoder for text embeddings. Uses sentence-transformers to embed OCR text snippets."""
     
     def __init__(
         self,
@@ -54,7 +50,7 @@ class OCREncoder(nn.Module):
         text_snippets: List[List[str]],  # [B, N_texts] list of text strings.
         text_confidences: Optional[torch.Tensor] = None  # [B, N_texts].
     ) -> Tuple[torch.Tensor, List[List[str]]]:
-        """Encode OCR text snippets...."""
+        """Encode OCR text snippets."""
         B = len(text_snippets)
         device = next(self.parameters()).device if list(self.parameters()) else torch.device('cpu')
         
@@ -133,6 +129,9 @@ class OCREncoder(nn.Module):
         text_embeddings = nn.functional.normalize(text_embeddings, p=2, dim=2)
         
         return text_embeddings, valid_texts_list
+
+
+
 
 
 

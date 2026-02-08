@@ -1,4 +1,4 @@
-"""OCR Integration Module for MaxSight..."""
+"""OCR Integration Module for MaxSight."""
 
 import torch
 import torch.nn.functional as F
@@ -9,13 +9,10 @@ from PIL import Image
 
 
 class OCRIntegration:
-    """OCR integration for MaxSight - reads text from detected regions.
-    
-    For iOS: Uses Vision framework VNRecognizeTextRequest
-    For Python: Uses fallback text extraction methods"""
+    """OCR integration for MaxSight - reads text from detected regions. For iOS: Uses Vision framework VNRecognizeTextRequest For Python: Uses fallback text extraction methods."""
     
     def __init__(self, text_threshold: float = 0.5, confidence_threshold: float = 0.3):
-        """Initialize OCR integration...."""
+        """Initialize OCR integration."""
         self.text_threshold = text_threshold
         self.confidence_threshold = confidence_threshold
     
@@ -25,7 +22,7 @@ class OCRIntegration:
         boxes: torch.Tensor,
         image_size: Tuple[int, int] = (224, 224)
     ) -> List[Dict]:
-        """Detect text regions from model's text_head output...."""
+        """Detect text regions from model's text_head output."""
         text_regions = []
         
         # Handle different input shapes.
@@ -79,7 +76,7 @@ class OCRIntegration:
         cluster_distance: int = 10,
         use_dbscan: bool = True
     ) -> List[Tuple[int, int, int, int]]:
-        """Cluster text pixels into regions using DBSCAN (improved) or simple distance-based method...."""
+        """Cluster text pixels into regions using DBSCAN (improved) or simple distance-based method."""
         if len(x_coords) == 0:
             return []
         
@@ -217,9 +214,8 @@ class OCRIntegration:
         region_box: List[float],
         use_vision_framework: bool = False
     ) -> Tuple[Optional[str], float]:
-        """Extract text from a specific image region with confidence score...."""
-        # Crop region from image.
-        # PIL Image.size is (width, height), not (height, width)
+        """Extract text from a specific image region with confidence score."""
+        # Crop region from image. PIL Image.size is (width, height), not (height, width)
         w, h = image.size
         cx, cy, width, height = region_box
         
@@ -242,15 +238,14 @@ class OCRIntegration:
         region_image = image.crop((x1, y1, x2, y2))
         
         if use_vision_framework:
-            # IOS Vision framework integration (for iOS app)
-            # Call VNRecognizeTextRequest in Swift when porting to iOS.
+            # IOS Vision framework integration (for iOS app) Call VNRecognizeTextRequest in Swift when porting to iOS.
             return self._extract_text_vision_framework(region_image)
         else:
             # Python fallback: OCR using pytesseract with confidence.
             return self._extract_text_fallback(region_image)
     
     def _extract_text_vision_framework(self, image: Image.Image) -> Tuple[Optional[str], float]:
-        """Extract text using iOS Vision framework...."""
+        """Extract text using iOS Vision framework."""
         # In iOS app, use native text recognition API.
         # Let request = VNRecognizeTextRequest { request, error in.
         # Guard let observations = request.results else { return }.
@@ -267,7 +262,7 @@ class OCRIntegration:
         image: Image.Image,
         use_adaptive_threshold: bool = True
     ) -> Tuple[Optional[str], float]:
-        """Fallback text extraction for Python (development/testing)...."""
+        """Fallback text extraction for Python (development/testing)."""
         try:
             import pytesseract  # type: ignore
             
@@ -346,7 +341,7 @@ class OCRIntegration:
         boxes: torch.Tensor,
         max_regions: int = 10
     ) -> List[Dict]:
-        """Complete OCR pipeline: detect regions and extract text...."""
+        """Complete OCR pipeline: detect regions and extract text."""
         # Detect text regions.
         text_regions = self.detect_text_regions_from_model(text_scores, boxes)
         
@@ -389,12 +384,11 @@ class OCRIntegration:
 
 
 def create_text_description(text_results: List[Dict], verbosity: str = 'normal') -> str:
-    """Create natural language description of detected text with line/block grouping...."""
+    """Create natural language description of detected text with line/block grouping."""
     if not text_results:
         return "No text detected"
     
-    # Group text by proximity (line/block grouping)
-    # WHY: Prevents splitting connected text into multiple regions.
+    # Group text by proximity (line/block grouping) WHY: Prevents splitting connected text into multiple regions.
     grouped_texts = _group_text_by_proximity(text_results)
     
     if verbosity == 'brief':
@@ -469,7 +463,7 @@ def _group_text_by_proximity(text_results: List[Dict], proximity_threshold: floa
 
 
 def read_text_aloud(text: str) -> None:
-    """Read text aloud using TTS (text-to-speech)...."""
+    """Read text aloud using TTS (text-to-speech)."""
     try:
         import pyttsx3  # type: ignore
         engine = pyttsx3.init()
@@ -500,6 +494,9 @@ if __name__ == "__main__":
     
     for region in regions:
         print(f"  Region {region['region_id']}: confidence={region['confidence']:.2f}, box={region['box']}")
+
+
+
 
 
 

@@ -16,7 +16,7 @@ class HeadLoss(nn.Module, ABC):
         predictions: Dict[str, torch.Tensor], 
         targets: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        """Compute loss for head predictions...."""
+        """Compute loss for head predictions."""
         raise NotImplementedError
 
 
@@ -125,7 +125,7 @@ class MotionLoss(HeadLoss):
         predictions: Dict[str, torch.Tensor],
         targets: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        """Compute motion loss with edge-weighted smoothness...."""
+        """Compute motion loss with edge-weighted smoothness."""
         pred_flow = predictions.get('flow')
         target_flow = targets.get('flow')
         
@@ -137,8 +137,7 @@ class MotionLoss(HeadLoss):
         flow_error = pred_flow - target_flow
         flow_loss = self._charbonnier_loss(flow_error).mean()
         
-        # Smoothness loss (edge-weighted if image provided)
-        # Compute flow gradients.
+        # Smoothness loss (edge-weighted if image provided) Compute flow gradients.
         flow_grad_x = pred_flow[:, :, :, :-1] - pred_flow[:, :, :, 1:]  # [B, 2, H, W-1].
         flow_grad_y = pred_flow[:, :, :-1, :] - pred_flow[:, :, 1:, :]  # [B, 2, H-1, W].
         
@@ -226,7 +225,7 @@ class ROIPriorityLoss(HeadLoss):
 
 
 class DepthLoss(HeadLoss):
-    """Uncertainty-weighted depth loss (Kendall & Gal formulation)...."""
+    """Uncertainty-weighted depth loss (Kendall & Gal formulation)."""
     
     def __init__(self, zone_weight: float = 0.5):
         super().__init__()
@@ -341,6 +340,9 @@ __all__ = [
     'HEAD_LOSS_REGISTRY',
     'create_head_loss',
 ]
+
+
+
 
 
 

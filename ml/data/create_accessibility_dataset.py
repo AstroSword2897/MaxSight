@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MaxSight Accessibility Dataset (Production Version)..."""
+"""MaxSight Accessibility Dataset (Production Version)"""
 
 import json
 import random
@@ -17,7 +17,7 @@ import torchvision.transforms as T
 # Core Dataset (Pure Loader - No On-the-Fly Augmentation)
 
 class AccessibilityDataset(Dataset):
-    """Pure dataset loader for accessibility features...."""
+    """Pure dataset loader for accessibility features."""
     
     def __init__(
         self,
@@ -55,7 +55,7 @@ class AccessibilityDataset(Dataset):
         return len(self.image_files)
     
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        """Get dataset item...."""
+        """Get dataset item."""
         path = self.image_files[idx]
         
         # Load and resize image.
@@ -91,16 +91,15 @@ class AccessibilityDataset(Dataset):
 # Synthetic Augmentation Engine (Medically-Aligned)
 
 class SyntheticImpairmentEngine:
-    """Engine for generating synthetic impairments more realistically...."""
+    """Engine for generating synthetic impairments more realistically."""
     
     @staticmethod
     def apply_contrast_loss(img: Image.Image, level: float) -> Image.Image:
-        """Apply contrast loss (medically-grounded)...."""
+        """Apply contrast loss (medically-grounded)."""
         arr = np.array(img).astype(np.float32)
         mean = arr.mean(axis=(0, 1), keepdims=True)
         
-        # Mean-preserving contrast reduction.
-        # Level 1.0 = full contrast, level 0.0 = gray (no contrast)
+        # Mean-preserving contrast reduction. Level 1.0 = full contrast, level 0.0 = gray (no contrast)
         contrast_factor = level
         arr = (arr - mean) * contrast_factor + mean
         
@@ -108,7 +107,7 @@ class SyntheticImpairmentEngine:
     
     @staticmethod
     def apply_glare(img: Image.Image, intensity: float) -> Image.Image:
-        """Apply veiling glare (medically-grounded)...."""
+        """Apply veiling glare (medically-grounded)."""
         arr = np.array(img).astype(np.float32)
         h, w = arr.shape[:2]
         
@@ -133,11 +132,10 @@ class SyntheticImpairmentEngine:
     
     @staticmethod
     def apply_peripheral_blur(img: Image.Image, amount: float) -> Image.Image:
-        """Apply peripheral blur (medically-grounded)...."""
+        """Apply peripheral blur (medically-grounded)."""
         arr = np.array(img).astype(np.float32)
         
-        # Apply Gaussian blur (handles both grayscale and RGB)
-        # Pre-allocate output to avoid memory leaks from temporary arrays.
+        # Apply Gaussian blur (handles both grayscale and RGB) Pre-allocate output to avoid memory leaks from temporary arrays.
         if len(arr.shape) == 3:
             # Multi-channel: apply filter to each channel with pre-allocated output.
             blurred = np.empty_like(arr)
@@ -162,11 +160,10 @@ class SyntheticImpairmentEngine:
     
     @staticmethod
     def apply_depth_flattening(img: Image.Image, strength: float) -> Image.Image:
-        """Apply depth flattening (medically-grounded)...."""
+        """Apply depth flattening (medically-grounded)."""
         arr = np.array(img).astype(np.float32)
         
-        # Reduce local contrast (depth cues rely on contrast)
-        # Apply subtle blur to depth-separating edges.
+        # Reduce local contrast (depth cues rely on contrast) Apply subtle blur to depth-separating edges.
         if strength > 0:
             blurred = ndimage.gaussian_filter(arr, sigma=strength * 2.0)
             arr = arr * (1 - strength * 0.3) + blurred * (strength * 0.3)
@@ -175,7 +172,7 @@ class SyntheticImpairmentEngine:
     
     @staticmethod
     def apply_halo_effect(img: Image.Image, intensity: float) -> Image.Image:
-        """Apply halo effect (medically-grounded)...."""
+        """Apply halo effect (medically-grounded)."""
         arr = np.array(img).astype(np.float32)
         
         # Detect edges (high contrast regions)
@@ -194,7 +191,7 @@ class SyntheticImpairmentEngine:
     
     @staticmethod
     def apply_low_resolution(img: Image.Image, acuity_drop: float) -> Image.Image:
-        """Apply low resolution (visual acuity drop)...."""
+        """Apply low resolution (visual acuity drop)."""
         if acuity_drop <= 0:
             return img
         
@@ -210,13 +207,7 @@ class SyntheticImpairmentEngine:
     
     @staticmethod
     def _radial_mask(shape: Tuple[int, int]) -> np.ndarray:
-        """Create radial mask (center = 1.0, edges = 0.0).
-        
-        Arguments:
-            shape: (height, width)
-        
-        Returns:
-            Radial mask [H, W] with values [0, 1]"""
+        """Create radial mask (center = 1.0, edges = 0.0). Arguments: shape: (height, width) Returns: Radial mask [H, W] with values [0, 1]."""
         h, w = shape
         y, x = np.ogrid[-h/2:h/2, -w/2:w/2]
         r = np.sqrt(x*x + y*y)
@@ -239,7 +230,7 @@ def generate_synthetic_dataset(
     n_per_image: int = 8,
     augmentation_types: Optional[List[str]] = None
 ) -> Dict[str, int]:
-    """Generate synthetic dataset with pre-computed augmentations...."""
+    """Generate synthetic dataset with pre-computed augmentations."""
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     
@@ -359,10 +350,7 @@ def generate_synthetic_dataset(
 # Labeling Template.
 
 def create_label_template(path: Path):
-    """Create labeling template for user annotation.
-    
-        Arguments:
-        path: Path to save template JSON file"""
+    """Create labeling template for user annotation. Arguments: path: Path to save template JSON file."""
     template = {
         "example_image_id": {
             "contrast_sensitivity": 0.0,  # 0-1: How well can user detect contrast?
@@ -391,7 +379,7 @@ def combine_datasets(
     synthetic_labels: Path,
     output_dir: Path
 ) -> Dict[str, Any]:
-    """Combine real and synthetic datasets into unified structure...."""
+    """Combine real and synthetic datasets into unified structure."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -505,5 +493,8 @@ if __name__ == "__main__":
     
     else:
         parser.print_help()
+
+
+
 
 

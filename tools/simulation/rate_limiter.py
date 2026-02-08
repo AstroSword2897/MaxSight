@@ -1,5 +1,4 @@
-"""Rate limiting for MaxSight Web Simulator.
-Prevents abuse and ensures fair resource usage."""
+"""Rate limiting for MaxSight Web Simulator. Prevents abuse and ensures fair resource usage."""
 import time
 from typing import Dict, Optional
 from collections import defaultdict
@@ -11,16 +10,14 @@ class RateLimiter:
     """Thread-safe rate limiter using token bucket algorithm."""
     
     def __init__(self, requests_per_minute: int, window_seconds: int = 60):
-        """Args:
-            requests_per_minute: Maximum requests allowed per minute
-            window_seconds: Time window in seconds (default 60)"""
+        """Args requests_per_minute: Maximum requests allowed per minute window_seconds: Time window in seconds (default 60)"""
         self.requests_per_minute = requests_per_minute
         self.window_seconds = window_seconds
         self.requests: Dict[str, list] = defaultdict(list)  # Session_id -> timestamps.
         self.lock = Lock()
     
     def check_rate_limit(self, session_id: str, identifier: Optional[str] = None) -> None:
-        """Check if request is within rate limit...."""
+        """Check if request is within rate limit."""
         key = f"{session_id}:{identifier}" if identifier else session_id
         now = time.time()
         
@@ -62,6 +59,9 @@ class GlobalRateLimiter:
     def get_remaining(self, identifier: str) -> int:
         """Get remaining global requests."""
         return self.limiter.get_remaining("global", identifier)
+
+
+
 
 
 

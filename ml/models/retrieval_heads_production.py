@@ -1,4 +1,4 @@
-"""Production-Ready Multi-Vector Retrieval Heads for MaxSight 3.0..."""
+"""Production-Ready Multi-Vector Retrieval Heads for MaxSight 3.0."""
 
 import torch
 import torch.nn as nn
@@ -13,7 +13,7 @@ from ml.retrieval.encoders.scene_graph_encoder import SceneGraphRetrievalEncoder
 
 
 class MultiVectorRetrievalHeads(nn.Module):
-    """Production-ready multi-vector retrieval heads...."""
+    """Production-ready multi-vector retrieval heads."""
     
     def __init__(
         self,
@@ -60,7 +60,7 @@ class MultiVectorRetrievalHeads(nn.Module):
         text_snippets: Optional[List[List[str]]] = None,  # Variable length per image.
         scene_graph: Optional[Dict] = None
     ) -> Dict[str, torch.Tensor]:
-        """Extract all embedding types in common space...."""
+        """Extract all embedding types in common space."""
         B = images.shape[0]
         device = images.device
         embeddings = {}
@@ -139,6 +139,9 @@ class MultiVectorRetrievalHeads(nn.Module):
             embeddings['scene_graph'] = torch.zeros(B, self.common_embed_dim, device=device)
         
         return embeddings
+
+
+
 
 
 

@@ -1,6 +1,4 @@
-"""Production hardening tests: pipeline latency, priority filter, temporal smoother,
-safety bias, thermal throttling, alert cooldown.
-Run with: pytest tests/test_production_hardening.py -v"""
+"""Production hardening tests: pipeline latency, priority filter, temporal smoother, safety bias, thermal throttling, alert cooldown. Run with: pytest tests/test_production_hardening.py -v."""
 import pytest
 import sys
 import time
@@ -154,5 +152,8 @@ class TestSafetyBiasUrgency:
         # Large/close object gets +1 urgency.
         u_large = model._get_urgency('chair', box_size=0.3, confidence=0.5)
         assert u_large >= 1
+
+
+
 
 

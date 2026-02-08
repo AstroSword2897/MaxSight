@@ -1,4 +1,4 @@
-"""Path Planning Module for MaxSight..."""
+"""Path Planning Module for MaxSight."""
 
 import torch
 import numpy as np
@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 
 class PathDirection(Enum):
-    """Safe navigation directions"""
+    """Safe navigation directions."""
     FORWARD = "forward"
     LEFT = "left"
     RIGHT = "right"
@@ -33,7 +33,7 @@ class PathPlanner:
         safety_threshold: float = 0.7,
         min_clearance: float = 0.15  # Minimum normalized clearance for safe path.
     ):
-        """Initialize path planner...."""
+        """Initialize path planner."""
         self.safety_threshold = safety_threshold
         self.min_clearance = min_clearance
     
@@ -227,6 +227,9 @@ class PathPlanner:
 def create_path_planner(safety_threshold: float = 0.7) -> PathPlanner:
     """Factory function to create path planner."""
     return PathPlanner(safety_threshold=safety_threshold)
+
+
+
 
 
 

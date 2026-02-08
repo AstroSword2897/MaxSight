@@ -1,5 +1,4 @@
-"""Shared utility functions for MaxSight simulator.
-Extracted from duplicated code to reduce duplication."""
+"""Shared utility functions for MaxSight simulator. Extracted from duplicated code to reduce duplication."""
 import torch
 import numpy as np
 from typing import Dict, List, Any, Optional, Tuple
@@ -8,13 +7,7 @@ import torchvision.transforms as T
 
 
 def get_device(device: Optional[str] = None) -> torch.device:
-    """Get the best available device for PyTorch.
-    
-    Args:
-        device: Optional device string ('cuda', 'mps', 'cpu')
-    
-    Returns:
-        torch.device instance"""
+    """Get the best available device for PyTorch. Args: device: Optional device string ('cuda', 'mps', 'cpu') Returns: torch.device instance."""
     if device is None:
         if torch.cuda.is_available():
             return torch.device('cuda')
@@ -30,7 +23,7 @@ def preprocess_image(
     preprocessor: Optional[Any],
     device: torch.device
 ) -> torch.Tensor:
-    """Preprocess image for model input...."""
+    """Preprocess image for model input."""
     if preprocessor:
         preprocessed_tensor = preprocessor(image)
         image_tensor = preprocessed_tensor.unsqueeze(0).to(device)
@@ -45,7 +38,7 @@ def postprocess_outputs(
     outputs: Dict[str, Any],
     confidence_threshold: float = 0.3
 ) -> List[Dict[str, Any]]:
-    """Post-process model outputs to extract detections...."""
+    """Post-process model outputs to extract detections."""
     detections = model.get_detections(outputs, confidence_threshold=confidence_threshold)
     detections_list: List[Dict[str, Any]] = detections[0] if detections else []
     return detections_list
@@ -57,7 +50,7 @@ def run_inference(
     audio_features: Optional[np.ndarray] = None,
     device: torch.device = None
 ) -> Tuple[Dict[str, Any], float]:
-    """Run model inference (thread-safe under no_grad)...."""
+    """Run model inference (thread-safe under no_grad)."""
     import time
     inference_start = time.perf_counter()
     with torch.no_grad():
@@ -73,13 +66,7 @@ def run_inference(
 
 
 def extract_urgency_level(outputs: Dict[str, Any]) -> int:
-    """Extract urgency level from model outputs.
-    
-    Args:
-        outputs: Model outputs dictionary
-    
-    Returns:
-        Urgency level (0-3)"""
+    """Extract urgency level from model outputs. Args: outputs: Model outputs dictionary Returns: Urgency level (0-3)"""
     urgency_score = outputs.get('urgency_scores', torch.zeros(1, 4))
     if urgency_score.numel() > 0:
         return int(urgency_score.argmax(dim=1).item())
@@ -90,7 +77,7 @@ def prepare_scene_detections(
     detections_list: List[Dict[str, Any]],
     urgency_level: int
 ) -> List[Dict[str, Any]]:
-    """Prepare detection list for scene description generation...."""
+    """Prepare detection list for scene description generation."""
     scene_detections = []
     for det in detections_list:
         if 'bbox' in det and 'class_name' in det:
@@ -102,4 +89,5 @@ def prepare_scene_detections(
                 'priority': det.get('confidence', 0.5) * 100
             })
     return scene_detections
+
 

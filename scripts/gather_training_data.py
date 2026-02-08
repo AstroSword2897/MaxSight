@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gather all data required for MaxSight training and AutoML...."""
+"""Gather all data required for MaxSight training and AutoML."""
 
 import argparse
 import subprocess
@@ -207,5 +207,8 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
 
 

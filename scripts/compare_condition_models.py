@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare trained condition models by best validation loss and mAP...."""
+"""Compare trained condition models by best validation loss and mAP."""
 import argparse
 import json
 from pathlib import Path
@@ -129,5 +129,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
 
 

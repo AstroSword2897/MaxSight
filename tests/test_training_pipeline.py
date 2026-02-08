@@ -1,5 +1,4 @@
-"""Training Pipeline Tests for MaxSight Model
-Tests training infrastructure with dummy/synthetic data."""
+"""Training Pipeline Tests for MaxSight Model Tests training infrastructure with dummy/synthetic data."""
 
 import torch
 import torch.nn as nn
@@ -39,8 +38,7 @@ class DetectionLoss(nn.Module):
         B = predictions['classifications'].shape[0]
         N = predictions['classifications'].shape[1]
         
-        # Convert list targets to batched tensors.
-        # Labels: list of [num_objects] -> [B, N] (pad with -1 for no object)
+        # Convert list targets to batched tensors. Labels: list of [num_objects] -> [B, N] (pad with -1 for no object)
         if 'labels' in targets:
             labels_list = targets['labels'] if isinstance(targets['labels'], list) else [targets['labels']]
             labels_batched = torch.full((B, N), -1, dtype=torch.long, device=predictions['classifications'].device)
@@ -398,6 +396,9 @@ if __name__ == "__main__":
     
     print("\n" + "=" * 50)
     print("All training pipeline tests passed!")
+
+
+
 
 
 

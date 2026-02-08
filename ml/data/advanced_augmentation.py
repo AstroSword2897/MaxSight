@@ -1,4 +1,4 @@
-"""Advanced Data Augmentation for Real-World Robustness..."""
+"""Advanced Data Augmentation for Real-World Robustness."""
 
 import torch
 import torch.nn as nn
@@ -402,8 +402,7 @@ class AdvancedAugmentation:
         """Simulate JPEG compression artifacts."""
         quality = random.randint(*self.config.jpeg_quality_range)
         
-        # Convert to PIL, compress, convert back.
-        # For efficiency, simulate with block artifacts.
+        # Convert to PIL, compress, convert back. For efficiency, simulate with block artifacts.
         block_size = 8
         h, w = image.shape[-2:]
         
@@ -435,8 +434,7 @@ class AdvancedAugmentation:
 
 
 class StressTestAugmentation(AdvancedAugmentation):
-    """Stress-test augmentation for edge case robustness testing.
-    Applies more aggressive transforms to find model weaknesses."""
+    """Stress-test augmentation for edge case robustness testing. Applies more aggressive transforms to find model weaknesses."""
     
     def __init__(self):
         config = AugmentationConfig(
@@ -466,10 +464,7 @@ class MixUp:
         
     def __call__(self, images: torch.Tensor, 
                  labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
-        """Apply MixUp.
-        
-        Returns:
-            Mixed images, labels_a, labels_b, lambda"""
+        """Apply MixUp. Returns: Mixed images, labels_a, labels_b, lambda."""
         if self.alpha > 0:
             lam = np.random.beta(self.alpha, self.alpha)
         else:
@@ -527,10 +522,7 @@ class CutMix:
 
 
 def create_augmentation_pipeline(mode: str = 'train') -> AdvancedAugmentation:
-    """Create augmentation pipeline based on mode.
-    
-    Args:
-        mode: 'train', 'val', 'test', or 'stress_test'"""
+    """Create augmentation pipeline based on mode. Args: mode: 'train', 'val', 'test', or 'stress_test'"""
     if mode == 'train':
         return AdvancedAugmentation()
     elif mode == 'stress_test':
@@ -549,6 +541,9 @@ def create_augmentation_pipeline(mode: str = 'train') -> AdvancedAugmentation:
             extreme_lighting_prob=0,
             partial_occlusion_prob=0
         ))
+
+
+
 
 
 

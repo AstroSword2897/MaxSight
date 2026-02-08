@@ -1,4 +1,4 @@
-"""Adaptive Training Stability Manager for MaxSight..."""
+"""Adaptive Training Stability Manager for MaxSight."""
 
 import logging
 import math
@@ -30,7 +30,7 @@ class StabilityMetrics:
 
 
 class StabilityManager:
-    """Monitors training stability and auto-adjusts hyperparameters...."""
+    """Monitors training stability and auto-adjusts hyperparameters."""
     
     def __init__(
         self,
@@ -49,7 +49,7 @@ class StabilityManager:
         # Logging.
         log_every: int = 1,
     ):
-        """Initialize stability manager...."""
+        """Initialize stability manager."""
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.gradnorm_loss = gradnorm_loss
@@ -81,7 +81,7 @@ class StabilityManager:
         train_metrics: Optional[Dict[str, float]] = None,
         val_metrics: Optional[Dict[str, float]] = None,
     ) -> StabilityMetrics:
-        """Check stability and auto-adjust hyperparameters...."""
+        """Check stability and auto-adjust hyperparameters."""
         # Get current LR and weight decay (guard empty param_groups)
         if not self.optimizer.param_groups:
             logger.warning("StabilityManager: optimizer has no param_groups, skipping check")
@@ -231,5 +231,8 @@ class StabilityManager:
             'current_wd': self.optimizer.param_groups[0].get('weight_decay', 0.0),
             'history_length': len(self.stability_history),
         }
+
+
+
 
 

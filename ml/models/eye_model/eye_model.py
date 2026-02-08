@@ -1,4 +1,4 @@
-"""Eye/Face Micro-Model..."""
+"""Eye/Face Micro-Model."""
 
 import torch
 import torch.nn as nn
@@ -17,7 +17,7 @@ class EyeImagePreprocessor:
         normalize: bool = True,
         contrast_adjust: bool = True
     ):
-        """Initialize eye image preprocessor...."""
+        """Initialize eye image preprocessor."""
         self.target_size = target_size
         self.normalize = normalize
         self.contrast_adjust = contrast_adjust
@@ -35,19 +35,13 @@ class EyeImagePreprocessor:
         self.transform = transforms.Compose(transform_list)
     
     def _adjust_contrast(self, image: Image.Image) -> Image.Image:
-        """Adjust contrast for better eye detection...."""
+        """Adjust contrast for better eye detection."""
         from PIL import ImageEnhance
         enhancer = ImageEnhance.Contrast(image)
         return enhancer.enhance(1.2)  # 20% contrast boost.
     
     def __call__(self, image: Image.Image) -> torch.Tensor:
-        """Preprocess eye/face image.
-        
-        Arguments:
-            image: PIL Image of face/eye region
-        
-        Returns:
-            Preprocessed tensor [3, 64, 64] in [0,1] range"""
+        """Preprocess eye/face image. Arguments: image: PIL Image of face/eye region Returns: Preprocessed tensor [3, 64, 64] in [0,1] range."""
         result = self.transform(image)
         # Ensure result is a tensor (ToTensor() returns tensor)
         if not isinstance(result, torch.Tensor):
@@ -106,7 +100,7 @@ class EyeModel(nn.Module):
         input_size: Tuple[int, int] = (64, 64),
         dropout: float = 0.15
     ):
-        """Initialize eye model...."""
+        """Initialize eye model."""
         super().__init__()
         if input_size != (64, 64):
             raise ValueError(f"EyeModel requires input_size=(64, 64), got {input_size}")
@@ -121,8 +115,7 @@ class EyeModel(nn.Module):
         self.bn2 = nn.BatchNorm2d(32)
         self.pool = nn.AdaptiveAvgPool2d(1)
         
-        # Output heads with dropout to prevent degenerate outputs.
-        # Can lead to NaN or constant outputs. Dropout prevents this.
+        # Output heads with dropout to prevent degenerate outputs. Can lead to NaN or constant outputs. Dropout prevents this.
         self.blink_head = nn.Sequential(
             nn.Linear(32, 16),
             nn.ReLU(),
@@ -137,8 +130,7 @@ class EyeModel(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(16, 2),  # [fixation_prob, saccade_prob].
             nn.Softmax(dim=1)  # Softmax ensures probabilities sum to 1.
-            # Use binary labels (0/1) for fixation vs saccade.
-            # If labels are continuous probabilities, use Sigmoid instead.
+            # Use binary labels (0/1) for fixation vs saccade. If labels are continuous probabilities, use Sigmoid instead.
         )
         
         self.pupil_head = nn.Sequential(
@@ -153,7 +145,7 @@ class EyeModel(nn.Module):
         self._initialize_weights()
     
     def _initialize_weights(self):
-        """Initialize weights to prevent degenerate outputs...."""
+        """Initialize weights to prevent degenerate outputs."""
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -168,7 +160,7 @@ class EyeModel(nn.Module):
                     nn.init.constant_(m.bias, 0)
     
     def forward(self, face_region: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """Forward pass through eye model...."""
+        """Forward pass through eye model."""
         # Validate input shape.
         if face_region.dim() != 4:
             raise ValueError(f"Expected 4D tensor [B, 3, 64, 64], got {face_region.shape}")
@@ -184,8 +176,7 @@ class EyeModel(nn.Module):
         
         # Validate input range [0,1].
         if face_region.min() < 0.0 or face_region.max() > 1.0:
-            # Warn but don't fail - might be intentional.
-            # Avoid meaningless conv activations when input is invalid.
+            # Warn but don't fail - might be intentional. Avoid meaningless conv activations when input is invalid.
             if self.training:
                 # In training, normalize on-the-fly.
                 face_region = torch.clamp(face_region, 0.0, 1.0)
@@ -238,6 +229,9 @@ class EyeModel(nn.Module):
             "[0, 1] for fixation, [1, 0] for saccade. "
             "If continuous probabilities are needed, modify head to use Sigmoid instead."
         )
+
+
+
 
 
 

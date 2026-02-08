@@ -10,7 +10,7 @@ def compute_contrastive_loss(
     positive_mask: torch.Tensor,  # [B, K] binary.
     temperature: float = 0.1
 ) -> torch.Tensor:
-    """Corrected InfoNCE contrastive loss for personalization...."""
+    """Corrected InfoNCE contrastive loss for personalization."""
     B, K = object_emb.shape[:2]
     
     # Compute similarities: [B, K].
@@ -24,6 +24,9 @@ def compute_contrastive_loss(
     loss = F.binary_cross_entropy_with_logits(similarity, labels, reduction='mean')
     
     return loss
+
+
+
 
 
 

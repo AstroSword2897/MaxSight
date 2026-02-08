@@ -1,5 +1,4 @@
-"""Edge Case Tests for MaxSight Model
-Tests extreme conditions, combined impairments, and unusual scenarios."""
+"""Edge Case Tests for MaxSight Model Tests extreme conditions, combined impairments, and unusual scenarios."""
 
 import torch
 import numpy as np
@@ -170,8 +169,7 @@ def test_crowded_scene_simulation():
     model = create_model()
     model.eval()
     
-    # Create image that might have many detections.
-    # In a real scenario, use an actual crowded-scene image.
+    # Create image that might have many detections. In a real scenario, use an actual crowded-scene image.
     dummy_image = torch.randn(1, 3, 224, 224)
     
     with torch.no_grad():
@@ -237,6 +235,9 @@ if __name__ == "__main__":
     
     print("\n" + "=" * 50)
     print("All edge case tests passed!")
+
+
+
 
 
 

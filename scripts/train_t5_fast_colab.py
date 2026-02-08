@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""T5 Fast Training Script for Colab (~4 hour runs)..."""
+"""T5 Fast Training Script for Colab (~4 hour runs)"""
 
 import argparse
 import sys
@@ -72,9 +72,7 @@ def create_loss_fn(num_classes: int, use_gradnorm: bool = True):
 
 
 def subset_dataset_stratified(dataset, fraction: float, seed: int):
-    """Create a stratified subset of the dataset (best-effort).
-    
-    For now: random subset (TODO: add stratification by class if dataset has labels accessible)."""
+    """Create a stratified subset of the dataset (best-effort). For now: random subset (TODO: add stratification by class if dataset has labels accessible)."""
     total = len(dataset)
     subset_size = max(1, int(total * fraction))
     
@@ -273,5 +271,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
 
 

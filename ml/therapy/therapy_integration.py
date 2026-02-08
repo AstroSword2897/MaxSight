@@ -1,4 +1,4 @@
-"""Therapy Integration Module for MaxSight..."""
+"""Therapy Integration Module for MaxSight."""
 
 from typing import Dict, List, Optional, Tuple
 from enum import Enum
@@ -6,7 +6,7 @@ import torch
 
 
 class TherapyTaskType(Enum):
-    """Therapy task types that use scene descriptions"""
+    """Therapy task types that use scene descriptions."""
     ATTENTION_TRAINING = "attention"  # Focus on specific objects in scene.
     CONTRAST_RECOGNITION = "contrast"  # Identify objects with different contrast.
     EDGE_DETECTION = "edge"  # Identify edges and boundaries.
@@ -27,7 +27,7 @@ class TherapyTaskIntegrator:
         target_objects: List[str],
         difficulty: float = 0.5
     ) -> Dict:
-        """Create attention training task from scene description...."""
+        """Create attention training task from scene description."""
         return {
             'task_type': TherapyTaskType.ATTENTION_TRAINING,
             'scene_description': scene_description,
@@ -43,7 +43,7 @@ class TherapyTaskIntegrator:
         contrast_levels: List[float],
         difficulty: float = 0.5
     ) -> Dict:
-        """Create contrast recognition task from scene description...."""
+        """Create contrast recognition task from scene description."""
         return {
             'task_type': TherapyTaskType.CONTRAST_RECOGNITION,
             'scene_description': scene_description,
@@ -59,7 +59,7 @@ class TherapyTaskIntegrator:
         edge_types: List[str],
         difficulty: float = 0.5
     ) -> Dict:
-        """Create edge detection task from scene description...."""
+        """Create edge detection task from scene description."""
         return {
             'task_type': TherapyTaskType.EDGE_DETECTION,
             'scene_description': scene_description,
@@ -75,7 +75,7 @@ class TherapyTaskIntegrator:
         spatial_relationships: List[str],
         difficulty: float = 0.5
     ) -> Dict:
-        """Create spatial awareness task from scene description...."""
+        """Create spatial awareness task from scene description."""
         return {
             'task_type': TherapyTaskType.SPATIAL_AWARENESS,
             'scene_description': scene_description,
@@ -92,7 +92,7 @@ class TherapyTaskIntegrator:
         cue_description: str,
         difficulty: float = 0.5
     ) -> Dict:
-        """Create warning recognition task so the user learns to associate cues with hazards...."""
+        """Create warning recognition task so the user learns to associate cues with hazards."""
         return {
             'task_type': TherapyTaskType.WARNING_RECOGNITION,
             'hazard_type': hazard_type,
@@ -158,6 +158,9 @@ class TherapyTaskIntegrator:
 def create_therapy_integrator() -> TherapyTaskIntegrator:
     """Factory function to create therapy task integrator."""
     return TherapyTaskIntegrator()
+
+
+
 
 
 

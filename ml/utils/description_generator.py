@@ -1,58 +1,4 @@
-"""
-Enhanced Description Generator for MaxSight
-Generates natural, actionable descriptions with direction, distance, and context.
-
-PROJECT PHILOSOPHY & APPROACH:
-=============================
-This module is central to MaxSight's core mission: "Removing Barriers for Vision & Hearing Disabilities."
-
-WHY THIS APPROACH:
-People with vision impairments need information about their environment in a format they can process.
-Raw bounding boxes and class names are meaningless - users need actionable, spatial descriptions that
-help them navigate and understand their surroundings. This module transforms technical ML outputs into
-human-understandable language that directly supports independent navigation.
-
-HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-The problem statement asks: "What are ways that those who cannot see and hear be able to interact 
-with the world like those who can?" This module answers that by providing:
-
-1. ENVIRONMENTAL STRUCTURING (Barrier Removal Method # 1):.
-   - Converts raw detections into structured descriptions: "Door 2 meters ahead, handle left"
-   - Labels surroundings in ways users can understand and act upon
-   - Provides spatial context (distance, direction, height) that sighted people take for granted
-
-2. CLEAR MULTIMODAL COMMUNICATION (Barrier Removal Method # 2):.
-   - Generates descriptions suitable for TTS (text-to-speech) for blind users
-   - Creates concise summaries for visual overlays for deaf users
-   - Adapts verbosity based on user needs (brief/normal/detailed)
-
-3. SKILL DEVELOPMENT ACROSS SENSES (Barrier Removal Method # 3):.
-   - Provides consistent spatial language that helps users build mental maps
-   - Gradually reduces detail as users improve (via verbosity levels)
-   - Reinforces spatial understanding through repeated, structured descriptions
-
-HOW IT CONTRIBUTES TO VISUAL AWARENESS GOALS:
-This directly implements the "Environmental Awareness Goals" and "Spatial Awareness & Localization"
-from the comprehensive requirements. It transforms the CNN's technical outputs (bounding boxes, 
-class probabilities) into the kind of information that helps users:
-- Understand where objects are relative to them (not just "door detected")
-- Navigate safely ("Obstacle on left, move right")
-- Build cognitive maps of their environment over time
-
-RELATIONSHIP TO OTHER COMPONENTS:
-- Input: Receives detections from MaxSightCNN (object positions, classes, distances)
-- Output: Feeds into CrossModalScheduler for TTS/visual/haptic presentation
-- Integration: Works with SpatialMemory to provide contextual reminders
-- User Experience: Enables the "Reads Environment" MVP feature ("User points phone → app says: 
-  'Door 2 meters ahead, handle left'")
-
-TECHNICAL DESIGN DECISION:
-We use verbosity levels (brief/normal/detailed) rather than a single format because:
-- Users with different vision conditions need different levels of detail
-- CVI (Cortical Visual Impairment) users benefit from simplified, consistent formats
-- Advanced users can reduce verbosity as their skills improve (gradual independence)
-- This supports the "Routine Workflow" barrier removal method by adapting to user needs
-"""
+"""Enhanced Description Generator for MaxSight Generates natural, actionable descriptions with direction, distance, and context."""
 
 import torch
 from typing import Dict, List, Optional, Tuple
@@ -60,21 +6,7 @@ import math
 
 
 class DescriptionGenerator:
-    """
-    Generates natural language descriptions from model outputs.
-    Provides directional cues, distance estimates, and contextual information.
-    
-    WHY THIS CLASS EXISTS:
-    The CNN model outputs technical data (bounding boxes, class probabilities, distance zones).
-    Users with vision impairments need this translated into actionable language. This class bridges
-    that gap by converting technical ML outputs into natural descriptions that support independent
-    navigation and environmental understanding.
-    
-    DESIGN PHILOSOPHY:
-    Every description is designed to answer: "Where is it, how far, and what should I do?"
-    This aligns with the project's focus on practical usability - descriptions must be immediately
-    actionable, not just informative.
-    """
+    """Generates natural language descriptions from model outputs."""
     
     # Distance zone names.
     DISTANCE_NAMES = ['near', 'medium', 'far']
@@ -96,12 +28,7 @@ class DescriptionGenerator:
     URGENCY_NAMES = ['safe', 'caution', 'warning', 'danger']
     
     def __init__(self, verbosity: str = 'normal'):
-        """
-        Initialize description generator.
-        
-        Arguments:
-            verbosity: 'brief', 'normal', or 'detailed'
-        """
+        """Initialize description generator. Arguments: verbosity: 'brief', 'normal', or 'detailed'"""
         self.verbosity = verbosity
     
     def get_direction_from_box(
@@ -109,25 +36,7 @@ class DescriptionGenerator:
         box: torch.Tensor, 
         image_size: Tuple[int, int] = (224, 224)
     ) -> Tuple[str, str]:
-        """
-        Get horizontal and vertical direction from bounding box center.
-        
-        WHY THIS MATTERS:
-        Directional cues are critical for navigation. A sighted person can see "door on the left"
-        instantly, but a blind user needs this explicitly stated. This function converts the camera's
-        perspective (bounding box position) into user-relative directions that support safe navigation.
-        
-        This directly addresses the "Spatial Awareness & Localization" goal: helping users understand
-        where things are in 3D space relative to them. Without direction, "door detected" is useless
-        for navigation - "door slightly left" is actionable.
-        
-        Arguments:
-            box: [cx, cy, w, h] in normalized coordinates [0, 1]
-            image_size: (width, height) of image
-        
-        Returns:
-            (horizontal_direction, vertical_direction)
-        """
+        """Get horizontal and vertical direction from bounding box center."""
         cx, cy = box[0].item(), box[1].item()
         
         # Horizontal direction (x-axis)
@@ -161,16 +70,7 @@ class DescriptionGenerator:
         distance_zone: int, 
         box_size: Optional[float] = None
     ) -> str:
-        """
-        Get distance description from zone and optional size.
-        
-        Arguments:
-            distance_zone: 0 (near), 1 (medium), 2 (far) or string ('near', 'medium', 'far')
-            box_size: Optional box area for more precise estimation
-        
-        Returns:
-            Distance description string
-        """
+        """Get distance description from zone and optional size."""
         # Handle string distance zones (convert to int)
         if isinstance(distance_zone, str):
             distance_map = {'near': 0, 'medium': 1, 'far': 2}
@@ -211,22 +111,11 @@ class DescriptionGenerator:
         box_size: float,
         object_type: str = 'object'
     ) -> Optional[str]:
-        """
-        Estimate distance in meters (rough approximation).
-        
-        Arguments:
-            distance_zone: 0 (near), 1 (medium), 2 (far)
-            box_size: Box area (normalized)
-            object_type: Type of object for size reference
-        
-        Returns:
-            Estimated meters string or None if not available
-        """
+        """Estimate distance in meters (rough approximation)."""
         if self.verbosity != 'detailed':
             return None
         
-        # Rough size-based estimation.
-        # Larger boxes = closer objects.
+        # Rough size-based estimation. Larger boxes = closer objects.
         if distance_zone == 0:  # Near.
             if box_size > 0.15:
                 return "1-2 meters"
@@ -250,16 +139,7 @@ class DescriptionGenerator:
         box: torch.Tensor,
         image_size: Tuple[int, int] = (224, 224)
     ) -> str:
-        """
-        Get relative height description.
-        
-        Arguments:
-            box: [cx, cy, w, h] in normalized coordinates
-            image_size: (width, height)
-        
-        Returns:
-            Height description
-        """
+        """Get relative height description. Arguments: box: [cx, cy, w, h] in normalized coordinates image_size: (width, height) Returns: Height description."""
         if self.verbosity != 'detailed':
             return ""
         
@@ -301,44 +181,7 @@ class DescriptionGenerator:
             distance_map = {'near': 0, 'medium': 1, 'far': 2}
             distance_zone = distance_map.get(distance_zone.lower(), 1)
         distance_zone = int(distance_zone)
-        """
-        Generate natural language description for a single object.
-        
-        CORE FUNCTION - WHY THIS EXISTS:
-        This is the heart of MaxSight's "Environmental Structuring" approach. It transforms a technical
-        detection (class="door", box=[0.3, 0.5, 0.2, 0.3], distance=0) into actionable information:
-        "Door 2 meters ahead, slightly left, at eye level".
-        
-        This directly implements the MVP feature: "User points phone → app says: 'Door 2 meters ahead,
-        handle left' or 'Stop sign.'" Without this transformation, users get raw technical data they
-        cannot act upon.
-        
-        HOW IT SUPPORTS DIFFERENT VISION CONDITIONS:
-        - Brief mode: For users who need minimal information (CVI, cognitive overload)
-        - Normal mode: Standard actionable descriptions (most users)
-        - Detailed mode: For users learning spatial relationships or needing full context
-        
-        This adaptive verbosity supports "Skill Development Across Senses" - users can start with
-        detailed descriptions and gradually reduce to brief as they build spatial awareness.
-        
-        RELATIONSHIP TO SAFETY:
-        Urgency levels are prominently featured because safety is paramount. A "door" is different
-        from a "vehicle approaching" - this function ensures hazards are clearly communicated,
-        supporting the "Safety-Oriented Visual Awareness" goal.
-        
-        Implements: "Stairs 3 meters ahead, slightly left"
-        
-        Arguments:
-            class_name: Object class name
-            box: [cx, cy, w, h] normalized bounding box
-            distance_zone: 0 (near), 1 (medium), 2 (far)
-            urgency: Urgency level (0-3)
-            priority: Optional priority score (0-100)
-            verbosity: Override default verbosity
-        
-        Returns:
-            Natural language description
-        """
+        """Generate natural language description for a single object."""
         verbosity = verbosity or self.verbosity
         
         # Get direction.
@@ -416,19 +259,7 @@ class DescriptionGenerator:
         urgency_score: int = 0,
         verbosity: Optional[str] = None
     ) -> str:
-        """
-        Generate overall scene description from multiple detections.
-        
-        Implements: "Three people approaching from left, vehicle approaching right"
-        
-        Arguments:
-            detections: List of detection dictionaries with class_name, box, distance, urgency
-            urgency_score: Overall scene urgency
-            verbosity: Override default verbosity
-        
-        Returns:
-            Scene description string
-        """
+        """Generate overall scene description from multiple detections."""
         verbosity = verbosity or self.verbosity
         
         if not detections:
@@ -485,43 +316,11 @@ class DescriptionGenerator:
         detections: List[Dict],
         target_direction: Optional[str] = None
     ) -> str:
-        """
-        Generate navigation guidance with path suggestions.
-        
-        WHY NAVIGATION GUIDANCE IS CRITICAL:
-        This function directly addresses the core problem: helping users navigate safely when they
-        cannot see obstacles. A sighted person can instantly see "obstacle on left, clear path right"
-        - this function provides that same information through language.
-        
-        This is not just about detecting objects - it's about providing actionable navigation advice
-        that prevents collisions, falls, and disorientation. This supports the "Safety-Oriented Visual
-        Awareness" goal and is essential for independent mobility.
-        
-        HOW IT CONNECTS TO THE PROBLEM STATEMENT:
-        The problem asks: "What are ways that those who cannot see... be able to interact with the
-        world like those who can?" Navigation guidance is a direct answer - it provides the spatial
-        awareness that sighted people take for granted, enabling safe, independent movement.
-        
-        RELATIONSHIP TO OTHER FEATURES:
-        - Works with urgency scoring to prioritize hazards
-        - Integrates with distance estimation to focus on immediate obstacles
-        - Feeds into CrossModalScheduler for haptic/audio alerts
-        - Supports the "Navigation Assistance" feature from Sprint 3
-        
-        Implements: "Clear path ahead" or "Obstacle on left, move right"
-        
-        Arguments:
-            detections: List of detections
-            target_direction: Optional target direction ('forward', 'left', 'right')
-        
-        Returns:
-            Navigation guidance string
-        """
+        """Generate navigation guidance with path suggestions."""
         if not detections:
             return "Clear path ahead"
         
-        # Filter for obstacles (high urgency, near objects)
-        # Handle distance as either int (zone) or string (name)
+        # Filter for obstacles (high urgency, near objects) Handle distance as either int (zone) or string (name)
         obstacles = []
         for d in detections:
             urgency = d.get('urgency', 0)
@@ -571,20 +370,7 @@ class DescriptionGenerator:
         distance_zone: int,
         urgency: int
     ) -> str:
-        """
-        Generate urgent hazard alert.
-        
-        Implements: "Warning: Vehicle approaching from right"
-        
-        Arguments:
-            class_name: Object class
-            box: Bounding box
-            distance_zone: Distance zone
-            urgency: Urgency level
-        
-        Returns:
-            Alert string
-        """
+        """Generate urgent hazard alert."""
         h_dir, _ = self.get_direction_from_box(box)
         distance_desc = self.get_distance_description(distance_zone)
         
@@ -603,26 +389,16 @@ class DescriptionGenerator:
         urgency_score: int = 0,
         verbosity: Optional[str] = None
     ) -> str:
-        """
-        Generate description from detections (wrapper for generate_scene_description).
-        
-        This method provides backward compatibility for code that calls generate_description()
-        instead of generate_scene_description().
-        
-        Arguments:
-            detections: List of detection dictionaries with class_name, box, distance, urgency
-            urgency_score: Overall scene urgency
-            verbosity: Override default verbosity
-        
-        Returns:
-            Scene description string
-        """
+        """Generate description from detections (wrapper for generate_scene_description)."""
         return self.generate_scene_description(detections, urgency_score, verbosity)
 
 
 def create_description_generator(verbosity: str = 'normal') -> DescriptionGenerator:
     """Factory function to create description generator."""
     return DescriptionGenerator(verbosity=verbosity)
+
+
+
 
 
 

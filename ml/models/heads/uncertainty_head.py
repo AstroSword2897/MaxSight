@@ -1,4 +1,4 @@
-"""Global Confidence Aggregator for MaxSight 3.0 (v2)..."""
+"""Global Confidence Aggregator for MaxSight 3.0 (v2)"""
 
 import torch
 import torch.nn as nn
@@ -6,7 +6,7 @@ from typing import Dict, Optional
 
 
 class GlobalConfidenceAggregator(nn.Module):
-    """Global Confidence Aggregator (v2)...."""
+    """Global Confidence Aggregator (v2)."""
     
     def __init__(
         self,
@@ -37,7 +37,7 @@ class GlobalConfidenceAggregator(nn.Module):
         ocr_entropy: Optional[torch.Tensor] = None,
         audio_entropy: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
-        """Forward pass with multi-modal uncertainty aggregation...."""
+        """Forward pass with multi-modal uncertainty aggregation."""
         x = self.backbone(scene_embedding)
         
         # Future: additive uncertainty penalties.
@@ -59,5 +59,8 @@ class GlobalConfidenceAggregator(nn.Module):
 
 # Backward compatibility alias.
 UncertaintyHead = GlobalConfidenceAggregator
+
+
+
 
 

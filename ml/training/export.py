@@ -549,8 +549,7 @@ class AlertFrequency(Enum):
                             indent = len(line) - len(line.lstrip())
                             todo_comment = ' ' * indent + '# TODO: Parameterize config when porting to Swift.'
                             cleaned_lines.append(todo_comment)
-                            # Replace config. with placeholder that needs to be parameterized.
-                            # Handle both .config. and config. (after self. removal)
+                            # Replace config. with placeholder that needs to be parameterized. Handle both .config. and config. (after self. removal)
                             line = re.sub(r'\.?config\.preferred_channel\b', 'preferred_channel', line)
                             line = re.sub(r'\.?config\.alert_frequency\b', 'alert_frequency', line)
                             line = re.sub(r'\.?config\.audio_volume\b', 'audio_volume', line)
@@ -936,6 +935,7 @@ if __name__ == "__main__":
         elif fmt == "executorch":
             export_to_executorch(model, out_path)
     print("Export done.")
+
 
 
 

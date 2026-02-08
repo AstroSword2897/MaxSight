@@ -56,3 +56,6 @@ if __name__ == "__main__":
     print(f"Min/Max pixel values: {images.min().item():.3f}/{images.max().item():.3f}")
 
 
+
+
+

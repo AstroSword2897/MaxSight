@@ -1,4 +1,4 @@
-"""Inference Dataset Loaders for MaxSight..."""
+"""Inference Dataset Loaders for MaxSight."""
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -26,9 +26,7 @@ STANDARD_METADATA_KEYS = {
 
 
 def create_imagenet_transform() -> transforms.Compose:
-    """Create ImageNet normalization transform.
-    
-    This is configurable so it can be replaced for different backbones or modalities."""
+    """Create ImageNet normalization transform. This is configurable so it can be replaced for different backbones or modalities."""
     return transforms.Compose([
         transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BILINEAR),
         transforms.ToTensor(),
@@ -40,12 +38,7 @@ def create_imagenet_transform() -> transforms.Compose:
 
 
 class OpenImagesV6Dataset(Dataset):
-    """Open Images V6 dataset for MaxSight inference.
-    
-    Covers: Broad semantic diversity
-    - 9M images with 600 object classes
-    - Diverse scenes, objects, and contexts
-    - Real-world complexity"""
+    """Open Images V6 dataset for MaxSight inference. Covers: Broad semantic diversity - 9M images with 600 object classes - Diverse scenes, objects, and contexts - Real-world complexity."""
     
     def __init__(
         self,
@@ -56,7 +49,7 @@ class OpenImagesV6Dataset(Dataset):
         max_samples: Optional[int] = None,
         skip_corrupted: bool = True  # FIXED: Skip corrupted images instead of dummy fallback.
     ):
-        """Initialize Open Images V6 dataset...."""
+        """Initialize Open Images V6 dataset."""
         self.root = Path(root)
         self.split = split
         self.max_samples = max_samples  # FIXED: Actually assign max_samples.
@@ -77,9 +70,7 @@ class OpenImagesV6Dataset(Dataset):
         print(f"Loaded Open Images V6 {split} set: {len(self.image_list)} images")
     
     def _load_image_list(self) -> List[Dict[str, Any]]:
-        """Load list of images from Open Images format.
-        
-        FIXED: Aggregates all labels per image instead of keeping only first."""
+        """Load list of images from Open Images format. FIXED: Aggregates all labels per image instead of keeping only first."""
         image_list = []
         
         image_dir = self.root / self.split
@@ -139,9 +130,7 @@ class OpenImagesV6Dataset(Dataset):
         return len(self.image_list)
     
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        """Get a sample from the dataset.
-        
-        FIXED: Proper error handling, standard metadata schema."""
+        """Get a sample from the dataset. FIXED: Proper error handling, standard metadata schema."""
         item = self.image_list[idx]
         image_path = item['image_path']
         
@@ -181,7 +170,7 @@ class OpenImagesV6Dataset(Dataset):
 
 
 class BDD100KDataset(Dataset):
-    """BDD100K dataset for MaxSight inference...."""
+    """BDD100K dataset for MaxSight inference."""
     
     def __init__(
         self,
@@ -191,7 +180,7 @@ class BDD100KDataset(Dataset):
         max_samples: Optional[int] = None,
         skip_corrupted: bool = True  # FIXED: Skip corrupted images.
     ):
-        """Initialize BDD100K dataset...."""
+        """Initialize BDD100K dataset."""
         self.root = Path(root)
         self.split = split
         self.max_samples = max_samples  # FIXED: Actually assign max_samples.
@@ -250,9 +239,7 @@ class BDD100KDataset(Dataset):
         return len(self.image_list)
     
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        """Get a sample from the dataset.
-        
-        FIXED: Proper error handling, standard metadata schema."""
+        """Get a sample from the dataset. FIXED: Proper error handling, standard metadata schema."""
         item = self.image_list[idx]
         image_path = item['image_path']
         
@@ -288,7 +275,7 @@ class BDD100KDataset(Dataset):
 
 
 class ADE20KDataset(Dataset):
-    """ADE20K dataset for MaxSight inference...."""
+    """ADE20K dataset for MaxSight inference."""
     
     def __init__(
         self,
@@ -298,7 +285,7 @@ class ADE20KDataset(Dataset):
         max_samples: Optional[int] = None,
         skip_corrupted: bool = True  # FIXED: Skip corrupted images.
     ):
-        """Initialize ADE20K dataset...."""
+        """Initialize ADE20K dataset."""
         self.root = Path(root)
         self.split = split
         self.max_samples = max_samples  # FIXED: Actually assign max_samples.
@@ -349,9 +336,7 @@ class ADE20KDataset(Dataset):
         return len(self.image_list)
     
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        """Get a sample from the dataset.
-        
-        FIXED: Proper error handling, standard metadata schema."""
+        """Get a sample from the dataset. FIXED: Proper error handling, standard metadata schema."""
         item = self.image_list[idx]
         image_path = item['image_path']
         
@@ -388,10 +373,7 @@ class ADE20KDataset(Dataset):
 
 
 class DetectionPostProcessor:
-    """Post-processor interface for model outputs.
-    
-    FIXED: Abstraction layer instead of model.get_detections().
-    Handles different output formats and batching."""
+    """Post-processor interface for model outputs. FIXED: Abstraction layer instead of model.get_detections(). Handles different output formats and batching."""
     
     def __init__(
         self,
@@ -399,7 +381,7 @@ class DetectionPostProcessor:
         max_detections: int = 10,
         nms_threshold: float = 0.5
     ):
-        """Initialize post-processor...."""
+        """Initialize post-processor."""
         self.confidence_threshold = confidence_threshold
         self.max_detections = max_detections
         self.nms_threshold = nms_threshold
@@ -410,7 +392,7 @@ class DetectionPostProcessor:
         outputs: Dict[str, torch.Tensor],
         batch_size: int
     ) -> List[List[Dict[str, Any]]]:
-        """Process model outputs to detections...."""
+        """Process model outputs to detections."""
         # Use model.get_detections when available (backward compatibility)
         if hasattr(model, 'get_detections'):
             try:
@@ -505,7 +487,7 @@ def create_inference_dataloader(
     shuffle: bool = False,
     pin_memory: Optional[bool] = None  # FIXED: Make configurable.
 ) -> DataLoader:
-    """Create DataLoader for inference datasets...."""
+    """Create DataLoader for inference datasets."""
     if dataset_name.lower() == 'open_images_v6':
         dataset = OpenImagesV6Dataset(
             root=root,
@@ -552,7 +534,7 @@ def run_inference_on_dataset(
     postprocessor: Optional[DetectionPostProcessor] = None,
     skip_corrupted: bool = True
 ) -> Dict[str, Any]:
-    """Run MaxSight inference on inference dataset...."""
+    """Run MaxSight inference on inference dataset."""
     model.eval()
     model.to(device)
     
@@ -747,5 +729,8 @@ if __name__ == "__main__":
     if stats['corrupted_images_skipped'] > 0:
         print(f"WARNING Corrupted images skipped: {stats['corrupted_images_skipped']}")
     print("="*50)
+
+
+
 
 

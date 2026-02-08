@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""Find where trained checkpoints live. Prints first base dir that has checkpoints_<condition>/best_model.pt.
-Use: CHECKPOINTS_BASE=$(python scripts/find_trained_checkpoints.py) && echo $CHECKPOINTS_BASE
-"""
+"""Find where trained checkpoints live."""
 import os
 import sys
 from pathlib import Path
@@ -54,5 +52,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
 
 

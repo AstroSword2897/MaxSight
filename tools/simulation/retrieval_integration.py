@@ -1,6 +1,4 @@
-"""Retrieval Integration for Phase 8: Simulator Integration & UI
-
-Integrates retrieval system into simulator for enhanced scene understanding."""
+"""Retrieval Integration for Phase 8: Simulator Integration & UI Integrates retrieval system into simulator for enhanced scene understanding."""
 
 import torch
 from typing import Dict, List, Optional, Tuple
@@ -11,12 +9,7 @@ from ml.models.retrieval_heads_production import MultiVectorRetrievalHeads
 
 
 class RetrievalIntegration:
-    """Retrieval integration for simulator (Phase 8).
-    
-    Provides:
-    - Scene retrieval for similar contexts
-    - Knowledge-augmented responses
-    - Historical context access"""
+    """Retrieval integration for simulator (Phase 8). Provides: - Scene retrieval for similar contexts - Knowledge-augmented responses - Historical context access."""
     
     def __init__(
         self,
@@ -67,15 +60,14 @@ class RetrievalIntegration:
         query_embedding: torch.Tensor,
         top_k: int = 5
     ) -> List[Dict]:
-        """Retrieve similar scenes from index...."""
+        """Retrieve similar scenes from index."""
         if not self.index_loaded or self.stage1 is None:
             return []
         
         # Stage 1: ANN search.
         indices, distances = self.stage1(query_embedding.unsqueeze(0))
         
-        # Stage 2: Reranking (if needed)
-        # For now, return Stage 1 results.
+        # Stage 2: Reranking (if needed) For now, return Stage 1 results.
         results = []
         for i, (idx, dist) in enumerate(zip(indices[0][:top_k], distances[0][:top_k])):
             results.append({
@@ -91,7 +83,7 @@ class RetrievalIntegration:
         model_outputs: Dict[str, torch.Tensor],
         images: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
-        """Enhance model outputs with retrieval context...."""
+        """Enhance model outputs with retrieval context."""
         enhanced = model_outputs.copy()
         
         if not self.index_loaded:
@@ -115,6 +107,9 @@ class RetrievalIntegration:
             enhanced['retrieval_error'] = str(e)
         
         return enhanced
+
+
+
 
 
 

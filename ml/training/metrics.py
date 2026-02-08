@@ -131,7 +131,7 @@ class DetectionMetrics:
         gt_areas = gt_boxes[:, 2] * gt_boxes[:, 3] * (self.image_size[0] * self.image_size[1])
         
         def get_size_category_vectorized(areas: torch.Tensor) -> torch.Tensor:
-            """Vectorized size category: 0=small, 1=medium, 2=large"""
+            """Vectorized size category: 0=small, 1=medium, 2=large."""
             small = areas < (32 * 32)
             medium = (areas >= (32 * 32)) & (areas < (96 * 96))
             large = areas >= (96 * 96)
@@ -397,5 +397,8 @@ class DetectionMetrics:
     def compute_map_coco(self) -> Dict[str, float]:
         """COCO-style mAP dict; delegates to compute_coco_map."""
         return self.compute_coco_map()
+
+
+
 
 

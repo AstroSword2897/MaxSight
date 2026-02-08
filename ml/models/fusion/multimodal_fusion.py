@@ -1,6 +1,4 @@
-"""Multi-Modal Fusion for MaxSight 3.0
-
-Fuses vision, audio, depth, and haptic modalities using transformer-based fusion."""
+"""Multi-Modal Fusion for MaxSight 3.0 Fuses vision, audio, depth, and haptic modalities using transformer-based fusion."""
 
 import torch
 import torch.nn as nn
@@ -10,7 +8,7 @@ import math
 
 
 class EnhancedAudioEncoder(nn.Module):
-    """Enhanced audio encoder with spectrogram CNN and temporal attention...."""
+    """Enhanced audio encoder with spectrogram CNN and temporal attention."""
     
     def __init__(
         self,
@@ -49,7 +47,7 @@ class EnhancedAudioEncoder(nn.Module):
         audio_features: torch.Tensor,  # [B, T, F] or [B, F] (MFCC)
         stereo_channels: Optional[torch.Tensor] = None  # [B, T, 2] for directional.
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        """Forward pass through enhanced audio encoder...."""
+        """Forward pass through enhanced audio encoder."""
         B = audio_features.shape[0]
         
         # Handle different input formats.
@@ -80,13 +78,11 @@ class EnhancedAudioEncoder(nn.Module):
         # Directional processing (if stereo available)
         spatial_attention = None
         if stereo_channels is not None:
-            # Compute direction from stereo channels.
-            # Left - Right gives direction.
+            # Compute direction from stereo channels. Left - Right gives direction.
             direction = stereo_channels[:, :, 0] - stereo_channels[:, :, 1]  # [B, T].
             direction = direction.mean(dim=1)  # [B].
             
-            # Create spatial attention map (simplified)
-            # In practice, use a more sophisticated fusion strategy.
+            # Create spatial attention map (simplified) In practice, use a more sophisticated fusion strategy.
             spatial_attention = torch.ones(B, 14, 14, device=audio_features.device)
             # Could modulate based on direction here.
         
@@ -94,9 +90,7 @@ class EnhancedAudioEncoder(nn.Module):
 
 
 class MultimodalFusion(nn.Module):
-    """Multi-modal transformer fusion.
-    
-    Fuses vision, audio, depth, and haptic modalities using cross-modal attention."""
+    """Multi-modal transformer fusion. Fuses vision, audio, depth, and haptic modalities using cross-modal attention."""
     
     def __init__(
         self,
@@ -147,7 +141,7 @@ class MultimodalFusion(nn.Module):
         depth_features: Optional[torch.Tensor] = None,  # [B, depth_dim].
         haptic_features: Optional[torch.Tensor] = None   # [B, haptic_dim].
     ) -> torch.Tensor:
-        """Forward pass through multimodal fusion...."""
+        """Forward pass through multimodal fusion."""
         B = vision_features.shape[0]
         
         # Project all modalities to common dimension.
@@ -265,6 +259,9 @@ class HapticVisualAttention(nn.Module):
         attended_visual = self.norm(visual_proj + attended.expand(-1, visual_proj.shape[1], -1))
         attention_weights = attn_weights.squeeze(1)
         return attended_visual, attention_weights
+
+
+
 
 
 

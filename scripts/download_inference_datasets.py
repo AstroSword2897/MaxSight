@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Download all inference datasets for MaxSight evaluation.
-
-Downloads:
-- Open Images V6 (validation set for inference)
-- BDD100K (validation set for inference)
-- ADE20K (validation set for inference)"""
+"""Download all inference datasets for MaxSight evaluation. Downloads: - Open Images V6 (validation set for inference) - BDD100K (validation set for inference) - ADE20K (validation set for inference)"""
 
 import sys
 import argparse
@@ -23,7 +18,7 @@ sys.path.insert(0, str(ROOT))
 
 
 def download_file(url: str, dest: Path, resume: bool = True) -> bool:
-    """Download a file with progress bar and resume capability...."""
+    """Download a file with progress bar and resume capability."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     
     # Checks if file already exists.
@@ -93,7 +88,7 @@ def extract_zip(zip_path: Path, extract_to: Path) -> bool:
 
 
 def download_open_images_v6(data_dir: Path) -> bool:
-    """Download Open Images V6 validation set...."""
+    """Download Open Images V6 validation set."""
     print("\n" + "="*70)
     print("Downloading Open Images V6 (Validation Set)")
     print("="*70)
@@ -153,8 +148,7 @@ def download_open_images_v6(data_dir: Path) -> bool:
                 export_dir=str(data_dir),
                 dataset_type=fo.types.COCODetectionDataset,
             )
-            # Convert COCO format to Open Images CSV format if needed.
-            # For now, we'll download the CSV separately.
+            # Convert COCO format to Open Images CSV format if needed. For now, we'll download the CSV separately.
         except:
             pass
         
@@ -210,9 +204,7 @@ def download_open_images_v6(data_dir: Path) -> bool:
 
 
 def download_bdd100k(data_dir: Path) -> bool:
-    """Download BDD100K validation set.
-    
-    Note: Requires registration at bdd-data.berkeley.edu"""
+    """Download BDD100K validation set. Note: Requires registration at bdd-data.berkeley.edu."""
     print("\n" + "="*70)
     print("Downloading BDD100K (Validation Set)")
     print("="*70)
@@ -249,8 +241,7 @@ def download_bdd100k(data_dir: Path) -> bool:
         # Extract to temp location.
         temp_labels = data_dir / "temp_labels"
         if extract_zip(labels_zip, temp_labels):
-            # Find det_val.json in the extracted structure.
-            # Structure: bdd100k/labels/det_20/det_val.json.
+            # Find det_val.json in the extracted structure. Structure: bdd100k/labels/det_20/det_val.json.
             det_val_source = None
             for path in temp_labels.rglob("det_val.json"):
                 det_val_source = path
@@ -283,8 +274,7 @@ def download_bdd100k(data_dir: Path) -> bool:
         # Extract to temp location.
         temp_extract = data_dir / "temp_extract"
         if extract_zip(images_zip, temp_extract):
-            # Find val folder in extracted structure.
-            # Structure: bdd100k/images/100k/val/.
+            # Find val folder in extracted structure. Structure: bdd100k/images/100k/val/.
             val_source = None
             for path in temp_extract.rglob("val"):
                 if path.is_dir() and len(list(path.glob("*.jpg"))) > 0:
@@ -351,17 +341,14 @@ def download_bdd100k(data_dir: Path) -> bool:
 
 
 def download_ade20k(data_dir: Path) -> bool:
-    """Download ADE20K validation set.
-    
-    ADE20K is available from MIT Vision Group."""
+    """Download ADE20K validation set. ADE20K is available from MIT Vision Group."""
     print("\n" + "="*70)
     print("Downloading ADE20K (Validation Set)")
     print("="*70)
     
     data_dir.mkdir(parents=True, exist_ok=True)
     
-    # ADE20K download URLs (MIT Vision Group)
-    # Direct download links.
+    # ADE20K download URLs (MIT Vision Group) Direct download links.
     urls = {
         'validation_images': 'http://data.csail.mit.edu/places/ADEchallenge/ADEChallengeData2016.zip',
         # Zip contains both training and validation splits.
@@ -600,5 +587,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
 
 

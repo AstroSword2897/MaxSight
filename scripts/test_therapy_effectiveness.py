@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Therapy System Effectiveness Test..."""
+"""Therapy System Effectiveness Test."""
 
 import sys
 from pathlib import Path
@@ -22,7 +22,7 @@ from ml.therapy.therapy_integration import (
 
 
 def simulate_user_performance(difficulty: float, user_skill: float, fatigue: float) -> Dict:
-    """Simulate user performing a task with given difficulty and skill level...."""
+    """Simulate user performing a task with given difficulty and skill level."""
     # Success probability: higher skill and lower difficulty = more success.
     # Base formula: if skill >= difficulty, high success probability.
     skill_advantage = user_skill - difficulty
@@ -59,7 +59,7 @@ def run_therapy_session_simulation(
     initial_skill: float = 0.5,
     skill_improvement_rate: float = 0.02
 ) -> Dict:
-    """Simulate a complete therapy session...."""
+    """Simulate a complete therapy session."""
     print("\n" + "="*70)
     print("THERAPY SESSION SIMULATION")
     print("="*70)
@@ -321,8 +321,7 @@ def test_skill_progression():
     print(f"[ok] Success rate progression: {success_rates[0]:.2%} -> {success_rates[-1]:.2%}")
     print(f"[ok] Skill level progression: {skill_levels[0]:.2f} -> {skill_levels[-1]:.2f}")
     
-    # Verify improvement trend - key metric is skill improvement.
-    # Success rate may vary due to adaptive difficulty.
+    # Verify improvement trend - key metric is skill improvement. Success rate may vary due to adaptive difficulty.
     if skill_levels[-1] > skill_levels[0] and avg_improvement > 0.05:
         print("\nOK SYSTEM IS EFFECTIVE: User skill improved over sessions")
         print(f"   Skill increased by {skill_levels[-1] - skill_levels[0]:.2f} points")
@@ -602,5 +601,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
 
 

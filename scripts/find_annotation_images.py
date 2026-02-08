@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Find where images referenced in the val annotation JSON actually live on disk.
-Searches under a root (e.g. Drive) and reports path(s) for each filename, or 'NOT FOUND'.
-Usage (Colab):
-  !python scripts/find_annotation_images.py
-  !python scripts/find_annotation_images.py --search-root /content/drive/MyDrive --max-filenames 50
-"""
+"""Find where images referenced in the val annotation JSON actually live on disk."""
 
 import argparse
 import json
@@ -130,5 +125,8 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+
 
 

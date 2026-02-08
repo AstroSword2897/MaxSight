@@ -1,6 +1,4 @@
-"""Master Test Runner for All Phases (0-5)
-
-Runs comprehensive tests for all Phase 0-5 components."""
+"""Master Test Runner for All Phases (0-5) Runs comprehensive tests for all Phase 0-5 components."""
 
 import pytest
 import sys
@@ -64,6 +62,9 @@ def run_all_phase_tests():
 
 if __name__ == "__main__":
     exit(run_all_phase_tests())
+
+
+
 
 
 

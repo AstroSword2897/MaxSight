@@ -1,13 +1,11 @@
-"""Output authority hierarchy for MaxSight Web Simulator.
-Defines clear priority system to prevent conflicting feedback."""
+"""Output authority hierarchy for MaxSight Web Simulator. Defines clear priority system to prevent conflicting feedback."""
 from enum import IntEnum
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
 
 class OutputAuthority(IntEnum):
-    """Authority hierarchy for outputs (higher = more important).
-    Lower layers cannot override higher layers."""
+    """Authority hierarchy for outputs (higher = more important). Lower layers cannot override higher layers."""
     DESCRIPTIVE_NARRATION = 1  # Lowest: General scene descriptions.
     THERAPY_PROMPTS = 2  # Therapy task instructions.
     NAVIGATION_GUIDANCE = 3  # Navigation assistance.
@@ -29,15 +27,14 @@ class OutputRequest:
 
 
 class OutputAuthorityManager:
-    """Manages output authority hierarchy.
-    Ensures higher-priority outputs take precedence."""
+    """Manages output authority hierarchy. Ensures higher-priority outputs take precedence."""
     
     def __init__(self):
         self.current_output: Optional[OutputRequest] = None
         self.suppressed_outputs: list = []
     
     def request_output(self, request: OutputRequest) -> bool:
-        """Request an output, respecting authority hierarchy...."""
+        """Request an output, respecting authority hierarchy."""
         # Allow output when no current output is active.
         if self.current_output is None:
             self.current_output = request
@@ -75,6 +72,9 @@ class OutputAuthorityManager:
         """Reset manager state."""
         self.current_output = None
         self.suppressed_outputs.clear()
+
+
+
 
 
 

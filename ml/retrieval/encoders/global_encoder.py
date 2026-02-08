@@ -1,6 +1,4 @@
-"""Global Encoder for Multi-Vector Retrieval
-
-CLIP ViT-B/32 or DINOv2 for global scene embeddings."""
+"""Global Encoder for Multi-Vector Retrieval CLIP ViT-B/32 or DINOv2 for global scene embeddings."""
 
 import torch
 import torch.nn as nn
@@ -20,9 +18,7 @@ except ImportError:
 
 
 class GlobalEncoder(nn.Module):
-    """Global encoder using CLIP or DINOv2.
-    
-    Provides global scene-level embeddings for fast retrieval."""
+    """Global encoder using CLIP or DINOv2. Provides global scene-level embeddings for fast retrieval."""
     
     def __init__(
         self,
@@ -58,19 +54,12 @@ class GlobalEncoder(nn.Module):
             else:
                 self.proj = nn.Identity()
         else:
-            # DINOv2 (would need to install dinov2 package)
-            # For now, placeholder.
+            # DINOv2 (would need to install dinov2 package) For now, placeholder.
             self.encoder = None
             self.proj = nn.Linear(768, embed_dim)  # DINOv2 base dimension.
     
     def forward(self, images: torch.Tensor) -> torch.Tensor:
-        """Encode images to global embeddings.
-        
-        Args:
-            images: Input images [B, 3, H, W] (normalized)
-        
-        Returns:
-            Global embeddings [B, embed_dim]"""
+        """Encode images to global embeddings. Args: images: Input images [B, 3, H, W] (normalized) Returns: Global embeddings [B, embed_dim]."""
         if self.use_clip and self.encoder is not None:
             # CLIP forward pass.
             outputs = self.encoder(pixel_values=images)
@@ -91,6 +80,9 @@ class GlobalEncoder(nn.Module):
         global_emb = nn.functional.normalize(global_emb, p=2, dim=1)
         
         return global_emb
+
+
+
 
 
 

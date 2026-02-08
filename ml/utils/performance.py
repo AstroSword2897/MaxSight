@@ -1,6 +1,4 @@
-"""Performance monitoring utilities for MaxSight.
-
-Provides timing decorators and performance tracking for identifying bottlenecks."""
+"""Performance monitoring utilities for MaxSight. Provides timing decorators and performance tracking for identifying bottlenecks."""
 
 import time
 import functools
@@ -15,7 +13,7 @@ _performance_stats: dict[str, list[float]] = defaultdict(list)
 
 
 def timed(threshold: float = 0.1, log_level: int = logging.WARNING):
-    """Decorator to time function execution and log slow operations...."""
+    """Decorator to time function execution and log slow operations."""
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -38,10 +36,7 @@ def timed(threshold: float = 0.1, log_level: int = logging.WARNING):
 
 
 def get_performance_stats() -> dict[str, dict[str, float]]:
-    """Get performance statistics for all timed functions.
-    
-    Returns:
-        Dictionary mapping function names to stats (mean, max, min, count)"""
+    """Get performance statistics for all timed functions. Returns: Dictionary mapping function names to stats (mean, max, min, count)"""
     stats = {}
     for func_name, times in _performance_stats.items():
         if times:
@@ -56,16 +51,12 @@ def get_performance_stats() -> dict[str, dict[str, float]]:
 
 
 def reset_performance_stats() -> None:
-    """Reset all performance statistics"""
+    """Reset all performance statistics."""
     _performance_stats.clear()
 
 
 def log_slow_operations(threshold: float = 0.1) -> None:
-    """Log summary of slow operations.
-    
-    Arguments:
-        threshold: Minimum time to consider slow
-    """
+    """Log summary of slow operations. Arguments: threshold: Minimum time to consider slow."""
     stats = get_performance_stats()
     slow_ops = {
         name: s for name, s in stats.items()
@@ -78,6 +69,9 @@ def log_slow_operations(threshold: float = 0.1) -> None:
             logger.warning(
                 f"  {name}: mean={s['mean']:.3f}s, max={s['max']:.3f}s, count={s['count']}"
             )
+
+
+
 
 
 

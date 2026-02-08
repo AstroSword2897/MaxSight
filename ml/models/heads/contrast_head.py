@@ -10,8 +10,7 @@ class ContrastMapHead(nn.Module):
         self.motion_dim = motion_dim
         self.use_edge_aware = use_edge_aware
         
-        # FIXED: Motion-conditioned contrast estimation.
-        # Motion stability indicates reliable contrast regions.
+        # FIXED: Motion-conditioned contrast estimation. Motion stability indicates reliable contrast regions.
         if motion_dim > 0:
             self.motion_proj = nn.Conv2d(motion_dim, in_channels, kernel_size=1, bias=False)
         
@@ -30,8 +29,7 @@ class ContrastMapHead(nn.Module):
                 nn.GroupNorm(8, 32),  # More robust than BatchNorm for small batches.
                 nn.ReLU(inplace=True),
                 nn.Conv2d(32, 1, kernel_size=1),  # Single edge channel [B, 1, H, W].
-                # No sigmoid - clamp after scaling to avoid saturation.
-                # Edge map will be clamped to [0, 1] during forward pass.
+                # No sigmoid - clamp after scaling to avoid saturation. Edge map will be clamped to [0, 1] during forward pass.
             )
         
         # Contrast estimation network (now modulated by edges)
@@ -46,7 +44,7 @@ class ContrastMapHead(nn.Module):
         self._initialize_weights()
     
     def _initialize_weights(self):
-        """Initialize weights to prevent degenerate outputs...."""
+        """Initialize weights to prevent degenerate outputs."""
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -57,7 +55,7 @@ class ContrastMapHead(nn.Module):
                 nn.init.constant_(m.bias, 0)
     
     def get_edge_map(self, features: torch.Tensor) -> torch.Tensor:
-        """Get edge map computed during forward pass (for visualization/debugging)...."""
+        """Get edge map computed during forward pass (for visualization/debugging)."""
         if not self.use_edge_aware:
             return torch.zeros_like(features[:, :1])
         
@@ -68,7 +66,7 @@ class ContrastMapHead(nn.Module):
         features: torch.Tensor,
         motion_features: Optional[torch.Tensor] = None  # FIXED: Motion as temporal anchor.
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        """Forward pass with edge-aware modulation...."""
+        """Forward pass with edge-aware modulation."""
         # Validate input.
         if features.dim() != 4:
             raise ValueError(f"Expected 4D tensor [B, C, H, W], got {features.shape}")
@@ -80,8 +78,7 @@ class ContrastMapHead(nn.Module):
                 f"Ensure input features match head configuration."
             )
         
-        # FIXED: Motion-conditioned feature extraction.
-        # Motion stability indicates reliable contrast regions.
+        # FIXED: Motion-conditioned feature extraction. Motion stability indicates reliable contrast regions.
         if motion_features is not None and hasattr(self, 'motion_proj'):
             motion_proj = self.motion_proj(motion_features)
             if motion_proj.shape[2:] != features.shape[2:]:
@@ -125,7 +122,7 @@ class ContrastMapHead(nn.Module):
         target_contrast: torch.Tensor,
         edge_map: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
-        """Compute contrast loss using learned edge map...."""
+        """Compute contrast loss using learned edge map."""
         # Validate inputs.
         if pred_contrast.shape != target_contrast.shape:
             raise ValueError(
@@ -162,6 +159,9 @@ class ContrastMapHead(nn.Module):
             'loss': loss,
             'l1_loss': l1_loss,
         }
+
+
+
 
 
 

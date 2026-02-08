@@ -1,4 +1,4 @@
-"""Data pipeline for MaxSight training...."""
+"""Data pipeline for MaxSight training."""
 
 import torch
 from torch.utils.data import DataLoader, WeightedRandomSampler
@@ -12,9 +12,7 @@ from ml.utils.preprocessing import ImagePreprocessor
 
 
 def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
-    """Custom collate function for MaxSight batches.
-    
-    Handles variable-length sequences (objects, audio) and pads appropriately."""
+    """Custom collate function for MaxSight batches. Handles variable-length sequences (objects, audio) and pads appropriately."""
     # Separate images and targets.
     images = torch.stack([item['images'] for item in batch])
     
@@ -110,7 +108,7 @@ def create_data_loaders(
     use_weighted_sampling: bool = False,
     class_weights: Optional[Dict[int, float]] = None
 ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
-    """Create train/val/test data loaders for MaxSight training...."""
+    """Create train/val/test data loaders for MaxSight training."""
     # Auto-detect image directory if not provided.
     if image_dir is None:
         # Checks common locations.
@@ -227,10 +225,7 @@ def create_data_loaders(
 
 
 def compute_class_weights(annotation_file: Path) -> Dict[int, float]:
-    """Compute class weights from annotations for handling class imbalance.
-    
-    Returns:
-        Dictionary mapping class_idx -> weight (inverse frequency)"""
+    """Compute class weights from annotations for handling class imbalance. Returns: Dictionary mapping class_idx -> weight (inverse frequency)"""
     with open(annotation_file, 'r') as f:
         data = json.load(f)
     
@@ -265,10 +260,7 @@ def compute_class_weights(annotation_file: Path) -> Dict[int, float]:
 
 
 def get_data_info(loader: DataLoader) -> Dict[str, Any]:
-    """Get information about a data loader (dataset size, batch count, etc.).
-    
-    Returns:
-        Dictionary with dataset statistics"""
+    """Get information about a data loader (dataset size, batch count, etc.). Returns: Dictionary with dataset statistics."""
     dataset = loader.dataset
     batch_size = loader.batch_size
     
@@ -291,6 +283,9 @@ def get_data_info(loader: DataLoader) -> Dict[str, Any]:
         info['batch_shapes'] = 'Unable to sample batch'
     
     return info
+
+
+
 
 
 

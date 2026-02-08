@@ -1,10 +1,4 @@
-"""Mobile Efficiency Optimizations for Phase 7: Optimization & Mobile Deployment
-
-Includes:
-- Model pruning
-- Knowledge distillation for mobile
-- Dynamic head disabling
-- Memory-efficient inference"""
+"""Mobile Efficiency Optimizations for Phase 7: Optimization & Mobile Deployment Includes: - Model pruning - Knowledge distillation for mobile - Dynamic head disabling - Memory-efficient inference."""
 
 import torch
 import torch.nn as nn
@@ -14,13 +8,7 @@ import copy
 
 
 class MobileOptimizer:
-    """Mobile optimization utilities for Phase 7.
-    
-    Provides:
-    - Model pruning
-    - Head disabling for efficiency
-    - Memory-efficient inference
-    - Dynamic tier adjustment"""
+    """Mobile optimization utilities for Phase 7. Provides: - Model pruning - Head disabling for efficiency - Memory-efficient inference - Dynamic tier adjustment."""
     
     @staticmethod
     def prune_model(
@@ -28,7 +16,7 @@ class MobileOptimizer:
         pruning_ratio: float = 0.3,
         method: str = 'magnitude'
     ) -> nn.Module:
-        """Prune model weights for mobile deployment...."""
+        """Prune model weights for mobile deployment."""
         pruned_model = copy.deepcopy(model)
         pruned_model.eval()
         
@@ -67,7 +55,7 @@ class MobileOptimizer:
         model: nn.Module,
         heads_to_disable: List[str]
     ) -> nn.Module:
-        """Disable specific heads for efficiency...."""
+        """Disable specific heads for efficiency."""
         for name, module in model.named_modules():
             if any(head_name in name for head_name in heads_to_disable):
                 # Replace with identity.
@@ -78,10 +66,7 @@ class MobileOptimizer:
     
     @staticmethod
     def estimate_memory_usage(model: nn.Module, input_size: Tuple[int, ...]) -> Dict[str, float]:
-        """Estimate memory usage for mobile deployment.
-        
-        Returns:
-            Dictionary with memory estimates (MB)"""
+        """Estimate memory usage for mobile deployment. Returns: Dictionary with memory estimates (MB)"""
         # Model parameters.
         param_size = sum(p.numel() * p.element_size() for p in model.parameters())
         param_size_mb = param_size / (1024 ** 2)
@@ -116,7 +101,7 @@ class MobileOptimizer:
 
 
 class EdgeCloudHybrid:
-    """Edge-Cloud Hybrid Architecture for Phase 7...."""
+    """Edge-Cloud Hybrid Architecture for Phase 7."""
     
     def __init__(
         self,
@@ -132,7 +117,7 @@ class EdgeCloudHybrid:
         images: torch.Tensor,
         use_cloud: Optional[bool] = None
     ) -> Dict[str, torch.Tensor]:
-        """Hybrid forward pass...."""
+        """Hybrid forward pass."""
         use_cloud = use_cloud if use_cloud is not None else self.use_cloud
         
         # Edge inference (always runs)
@@ -160,12 +145,15 @@ class EdgeCloudHybrid:
         battery_level: float,
         network_available: bool = True
     ) -> bool:
-        """Determine if cloud processing should be used...."""
+        """Determine if cloud processing should be used."""
         if not network_available:
             return False
         
         # Use cloud for high urgency and good battery.
         return urgency > 0.7 and battery_level > 0.3
+
+
+
 
 
 

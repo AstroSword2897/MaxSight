@@ -1,5 +1,4 @@
-"""Error Handling, Fallback Logic, Kill Switches, and Ethical Safeguards for MaxSight
-Handles error propagation, runtime head control, and safety mechanisms."""
+"""Error Handling, Fallback Logic, Kill Switches, and Ethical Safeguards for MaxSight Handles error propagation, runtime head control, and safety mechanisms."""
 
 import torch
 import torch.nn as nn
@@ -38,7 +37,7 @@ def with_fallback(
     fallback_func: Optional[Callable] = None,
     log_error: bool = True
 ):
-    """Decorator to add fallback logic to functions...."""
+    """Decorator to add fallback logic to functions."""
     def decorator(func: Callable):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -61,10 +60,7 @@ def with_fallback(
 
 
 def with_timeout(timeout_ms: float = 1000.0):
-    """Decorator to add timeout to functions.
-    
-    Arguments:
-        timeout_ms: Timeout in milliseconds"""
+    """Decorator to add timeout to functions. Arguments: timeout_ms: Timeout in milliseconds."""
     def decorator(func: Callable):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -81,13 +77,7 @@ def with_timeout(timeout_ms: float = 1000.0):
 
 
 class HeadExecutionManager:
-    """Manages head execution with error handling and fallbacks.
-    
-    Handles:
-    - Dependency validation
-    - Error propagation
-    - Fallback execution
-    - Timeout management"""
+    """Manages head execution with error handling and fallbacks. Handles: - Dependency validation - Error propagation - Fallback execution - Timeout management."""
     
     def __init__(
         self,
@@ -108,7 +98,7 @@ class HeadExecutionManager:
         dependencies: List[str],
         fallback_func: Optional[Callable] = None
     ) -> Dict[str, Any]:
-        """Execute a head with error handling and fallbacks...."""
+        """Execute a head with error handling and fallbacks."""
         # Validate dependencies.
         missing_deps = [dep for dep in dependencies if dep not in inputs]
         if missing_deps:
@@ -222,7 +212,7 @@ class HeadExecutionManager:
         uncertainty: torch.Tensor,
         outputs: Dict[str, Any]
     ) -> bool:
-        """Check if uncertainty is high enough to trigger fallback...."""
+        """Check if uncertainty is high enough to trigger fallback."""
         if not self.enable_fallbacks:
             return False
         
@@ -267,7 +257,7 @@ def safe_head_execution(
     manager: Optional[HeadExecutionManager] = None,
     fallback_func: Optional[Callable] = None
 ) -> Dict[str, Any]:
-    """Safely execute a head with error handling...."""
+    """Safely execute a head with error handling."""
     if manager is None:
         manager = HeadExecutionManager()
     
@@ -695,6 +685,9 @@ def apply_ethical_guards(
         enable_safety_checks=enable_safety_checks
     )
     return guard.guard_outputs(outputs)
+
+
+
 
 
 

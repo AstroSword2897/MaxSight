@@ -1,4 +1,4 @@
-"""Cross-Modal Output Scheduler..."""
+"""Cross-Modal Output Scheduler."""
 
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
@@ -17,7 +17,7 @@ except ImportError:
 
 
 class OutputChannel(Enum):
-    """Output channel types for multimodal communication...."""
+    """Output channel types for multimodal communication."""
     AUDIO = "audio"
     HAPTIC = "haptic"
     VISUAL = "visual"
@@ -25,7 +25,7 @@ class OutputChannel(Enum):
 
 
 class AlertFrequency(Enum):
-    """Alert frequency levels for information density control...."""
+    """Alert frequency levels for information density control."""
     LOW = "low"      # Only hazards.
     MEDIUM = "medium"  # Hazards + important objects.
     HIGH = "high"     # Continuous narration.
@@ -33,7 +33,7 @@ class AlertFrequency(Enum):
 
 @dataclass
 class OutputConfig:
-    """Configuration for output scheduling...."""
+    """Configuration for output scheduling."""
     preferred_channel: OutputChannel = OutputChannel.AUDIO
     alert_frequency: AlertFrequency = AlertFrequency.MEDIUM
     audio_volume: float = 0.7
@@ -60,8 +60,7 @@ class ScheduledOutput:
 
 
 class CrossModalScheduler:
-    """Schedules outputs across audio, haptic, and visual channels.
-    Manages frequency, intensity, and prioritization based on user profile and model outputs."""
+    """Schedules outputs across audio, haptic, and visual channels. Manages frequency, intensity, and prioritization based on user profile and model outputs."""
     
     def __init__(self, config: OutputConfig):
         self.config = config
@@ -91,8 +90,7 @@ class CrossModalScheduler:
         critical_detections = [d for d in detections if d.get('urgency', 0) >= 3]
         normal_detections = [d for d in detections if d.get('urgency', 0) < 3]
         
-        # Get uncertainty - suppress if too high (only for normal detections)
-        # By ensuring only reliable information is presented.
+        # Get uncertainty - suppress if too high (only for normal detections) By ensuring only reliable information is presented.
         uncertainty = model_outputs.get('uncertainty', torch.tensor(0.0))
         if isinstance(uncertainty, torch.Tensor):
             uncertainty = uncertainty.item()
@@ -117,13 +115,11 @@ class CrossModalScheduler:
         # Sort by priority (highest first)
         filtered_detections.sort(key=lambda x: x.get('priority', 0), reverse=True)
         
-        # Limit number of outputs based on frequency.
-        # Supports Practical Usability & Safety Goals (counterproductive otherwise).
+        # Limit number of outputs based on frequency. Supports Practical Usability & Safety Goals (counterproductive otherwise).
         max_outputs = self._get_max_outputs()
         filtered_detections = filtered_detections[:max_outputs]
         
-        # Schedule each detection.
-        # Channels, timing, and descriptions.
+        # Schedule each detection. Channels, timing, and descriptions.
         for det in filtered_detections:
             output = self._create_output_for_detection(det, model_outputs, timestamp)
             if output:
@@ -133,8 +129,7 @@ class CrossModalScheduler:
         scene_outputs = self._create_scene_outputs(model_outputs, detections, timestamp)
         scheduled.extend(scene_outputs)
         
-        # Store history.
-        # WHY: Enables analysis of information patterns and supports future improvements.
+        # Store history. WHY: Enables analysis of information patterns and supports future improvements.
         self.output_history.extend(scheduled)
         if len(self.output_history) > 100:  # Keep last 100 outputs.
             self.output_history = self.output_history[-100:]
@@ -142,7 +137,7 @@ class CrossModalScheduler:
         return scheduled
     
     def _get_priority_threshold(self) -> int:
-        """Get priority threshold based on alert frequency"""
+        """Get priority threshold based on alert frequency."""
         thresholds = {
             AlertFrequency.LOW: 70,      # Only hazards + navigation.
             AlertFrequency.MEDIUM: 40,    # + useful objects.
@@ -151,7 +146,7 @@ class CrossModalScheduler:
         return thresholds.get(self.config.alert_frequency, 40)
     
     def _get_max_outputs(self) -> int:
-        """Get maximum number of outputs per frame based on frequency"""
+        """Get maximum number of outputs per frame based on frequency."""
         limits = {
             AlertFrequency.LOW: 3,
             AlertFrequency.MEDIUM: 5,
@@ -165,7 +160,7 @@ class CrossModalScheduler:
         model_outputs: Dict[str, torch.Tensor],
         timestamp: float
     ) -> Optional[ScheduledOutput]:
-        """Create output for a single detection"""
+        """Create output for a single detection."""
         priority = detection.get('priority', 0)
         class_name = detection.get('class_name', 'object')
         box = detection.get('box', [0.5, 0.5, 0.1, 0.1])
@@ -265,7 +260,7 @@ class CrossModalScheduler:
         return output
     
     def _should_suppress(self, class_name: str, timestamp: float, priority: int, channel: Optional[OutputChannel] = None) -> bool:
-        """Check if output should be suppressed due to rate limiting"""
+        """Check if output should be suppressed due to rate limiting."""
         # Emergency alerts (priority >= 90) always go through.
         if priority >= 90:
             return False
@@ -293,7 +288,7 @@ class CrossModalScheduler:
         return time_since < min_interval
     
     def _select_channel(self, priority: int, urgency: int) -> OutputChannel:
-        """Select output channel based on priority and user preference"""
+        """Select output channel based on priority and user preference."""
         # High priority/urgency -> use preferred channel or hybrid.
         if priority >= 90 or urgency >= 3:
             if self.config.preferred_channel == OutputChannel.HYBRID:
@@ -333,7 +328,7 @@ class CrossModalScheduler:
         return min(1.0, max(0.0, intensity))
     
     def _calculate_frequency(self, priority: int, urgency: int) -> float:
-        """Calculate output frequency in Hz"""
+        """Calculate output frequency in Hz."""
         # Higher priority/urgency = faster rhythm.
         if priority >= 90 or urgency >= 3:
             return 10.0  # Fast rhythm for hazards.
@@ -343,7 +338,7 @@ class CrossModalScheduler:
             return 2.0   # Slow rhythm for useful objects.
     
     def _calculate_duration(self, priority: int, urgency: int) -> float:
-        """Calculate output duration in seconds"""
+        """Calculate output duration in seconds."""
         # Higher priority = longer duration.
         if priority >= 90 or urgency >= 3:
             return 0.5  # Longer for hazards.
@@ -353,7 +348,7 @@ class CrossModalScheduler:
             return 0.1  # Short for useful objects.
     
     def _generate_content(self, detection: Dict, model_outputs: Dict) -> str:
-        """Generate content description for output using enhanced description generator"""
+        """Generate content description for output using enhanced description generator."""
         from .description_generator import DescriptionGenerator
         
         class_name = detection.get('class_name', 'object')
@@ -445,7 +440,7 @@ class CrossModalScheduler:
 
 
 def create_scheduler_from_profile(user_profile: Dict) -> CrossModalScheduler:
-    """Create scheduler from user profile"""
+    """Create scheduler from user profile."""
     config = OutputConfig(
         preferred_channel=OutputChannel(user_profile.get('preferred_output_channel', 'audio')),
         alert_frequency=AlertFrequency(user_profile.get('alert_frequency', 'medium')),
@@ -458,7 +453,7 @@ def create_scheduler_from_profile(user_profile: Dict) -> CrossModalScheduler:
 
 
 # RUNTIME OUTPUT CONTRACT (Patient Safety)
-"""Runtime Output Contract..."""
+"""Runtime Output Contract."""
 
 import re
 from enum import Enum
@@ -482,10 +477,7 @@ class Severity(Enum):
 
 @dataclass
 class RuntimeOutput:
-    """Strict runtime output contract.
-    
-    All user-facing messages must conform to this schema.
-    Patient mode only receives: mode, severity, message, confidence, cooldown_applied."""
+    """Strict runtime output contract. All user-facing messages must conform to this schema. Patient mode only receives: mode, severity, message, confidence, cooldown_applied."""
     mode: OutputMode
     severity: Severity
     message: str
@@ -528,8 +520,7 @@ class RuntimeOutput:
 
 
 class OutputValidator:
-    """Validates runtime outputs against the contract.
-    Rejects symbol characters and enforces schema constraints."""
+    """Validates runtime outputs against the contract. Rejects symbol characters and enforces schema constraints."""
     
     # Blocklist: checkmarks, arrows, geometric shapes (Unicode escapes to avoid emoji in source).
     FORBIDDEN_SYMBOLS_PATTERN = re.compile(
@@ -538,10 +529,7 @@ class OutputValidator:
     
     @classmethod
     def validate_message(cls, message: str, mode: OutputMode) -> tuple[bool, Optional[str]]:
-        """Validate a message string.
-        
-        Returns:
-            (is_valid, error_message)"""
+        """Validate a message string. Returns: (is_valid, error_message)"""
         # Check for forbidden symbols.
         if cls.FORBIDDEN_SYMBOLS_PATTERN.search(message):
             return False, "Message contains forbidden symbol characters"
@@ -566,10 +554,7 @@ class OutputValidator:
     
     @classmethod
     def validate_output(cls, output: RuntimeOutput) -> tuple[bool, Optional[str]]:
-        """Validate a complete RuntimeOutput.
-        
-        Returns:
-            (is_valid, error_message)"""
+        """Validate a complete RuntimeOutput. Returns: (is_valid, error_message)"""
         # Validate message.
         is_valid, error = cls.validate_message(output.message, output.mode)
         if not is_valid:
@@ -602,8 +587,7 @@ def create_patient_output(
     confidence: float,
     cooldown_applied: bool = False
 ) -> RuntimeOutput:
-    """Create a patient-safe output.
-    Automatically sanitizes message and validates."""
+    """Create a patient-safe output. Automatically sanitizes message and validates."""
     # Sanitize message.
     message = OutputValidator.sanitize_message(message)
     
@@ -681,8 +665,11 @@ def create_dev_output(
 
 # Backwards-compatible alias.
 class OutputScheduler(CrossModalScheduler):
-    """Backwards-compatible alias for CrossModalScheduler...."""
+    """Backwards-compatible alias for CrossModalScheduler."""
     pass
+
+
+
 
 
 

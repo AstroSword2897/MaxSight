@@ -1,4 +1,4 @@
-"""Comprehensive MaxSight Simulator..."""
+"""Comprehensive MaxSight Simulator."""
 
 import torch
 import torch.cuda  # For torch.cuda.synchronize()
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class ComprehensiveSimulator:
-    """Comprehensive simulator for MaxSight system with real-world data support...."""
+    """Comprehensive simulator for MaxSight system with real-world data support."""
     
     def __init__(
         self,
@@ -37,7 +37,7 @@ class ComprehensiveSimulator:
         device: Optional[str] = None,
         verbose: bool = True
     ):
-        """Initialize simulator...."""
+        """Initialize simulator."""
         self.verbose = verbose
         self.condition_mode = condition_mode
         
@@ -98,7 +98,7 @@ class ComprehensiveSimulator:
         output_path: Optional[str] = None,
         show_overlay: bool = True
     ) -> Dict[str, Any]:
-        """Process a single image file...."""
+        """Process a single image file."""
         if self.verbose:
             print(f"\nProcessing image: {image_path}")
         
@@ -191,7 +191,7 @@ class ComprehensiveSimulator:
         max_frames: Optional[int] = None,
         save_frames: bool = False
     ) -> Dict[str, Any]:
-        """Process a video file frame by frame...."""
+        """Process a video file frame by frame."""
         if self.verbose:
             print(f"\nProcessing video: {video_path}")
         
@@ -345,7 +345,7 @@ class ComprehensiveSimulator:
         output_dir: Optional[str] = None,
         max_images: Optional[int] = None
     ) -> Dict[str, Any]:
-        """Process all images in a directory...."""
+        """Process all images in a directory."""
         if self.verbose:
             print(f"\nProcessing directory: {directory}")
         
@@ -549,6 +549,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
 
 
 

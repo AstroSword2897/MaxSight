@@ -1,4 +1,4 @@
-"""Patch Extractor for Multi-Vector Retrieval..."""
+"""Patch Extractor for Multi-Vector Retrieval."""
 
 import torch
 import torch.nn as nn
@@ -12,7 +12,7 @@ except ImportError:
 
 
 class PatchExtractor(nn.Module):
-    """Fully differentiable patch extractor with attention-based clustering...."""
+    """Fully differentiable patch extractor with attention-based clustering."""
     
     def __init__(
         self,
@@ -62,7 +62,7 @@ class PatchExtractor(nn.Module):
         self,
         patch_tokens: torch.Tensor
     ) -> torch.Tensor:
-        """Attention-based pooling (fully differentiable, GPU-efficient)...."""
+        """Attention-based pooling (fully differentiable, GPU-efficient)."""
         B = patch_tokens.shape[0]
         
         # Project patches for better clustering.
@@ -84,7 +84,7 @@ class PatchExtractor(nn.Module):
         self,
         patch_tokens: torch.Tensor
     ) -> torch.Tensor:
-        """Soft KMeans clustering (fully differentiable alternative to hard KMeans)...."""
+        """Soft KMeans clustering (fully differentiable alternative to hard KMeans)."""
         B, N_patches, _ = patch_tokens.shape
         
         # Project patches.
@@ -93,8 +93,7 @@ class PatchExtractor(nn.Module):
         # Expand cluster centers.
         cluster_centers = self.soft_cluster_centers.expand(B, -1, -1)  # [B, num_clusters, embed_dim].
         
-        # Compute distances: [B, N_patches, num_clusters].
-        # Use cosine similarity (normalized) for better clustering.
+        # Compute distances: [B, N_patches, num_clusters]. Use cosine similarity (normalized) for better clustering.
         patch_norm = F.normalize(patch_tokens_proj, p=2, dim=2)  # [B, N_patches, embed_dim].
         center_norm = F.normalize(cluster_centers, p=2, dim=2)  # [B, num_clusters, embed_dim].
         
@@ -120,7 +119,7 @@ class PatchExtractor(nn.Module):
         images: torch.Tensor,
         vit_patch_tokens: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        """Extract and cluster patch tokens (fully differentiable, GPU-efficient)...."""
+        """Extract and cluster patch tokens (fully differentiable, GPU-efficient)."""
         B = images.shape[0]
         device = images.device
         
@@ -174,8 +173,7 @@ class PatchExtractor(nn.Module):
             else:
                 clustered_embeddings = self._attention_pooling(vit_patch_tokens)
         
-        # FIXED: Safe L2 normalization (handle zero vectors)
-        # Add small epsilon to prevent NaNs.
+        # FIXED: Safe L2 normalization (handle zero vectors) Add small epsilon to prevent NaNs.
         clustered_embeddings = F.normalize(
             clustered_embeddings + 1e-8,  # Prevent zero vectors.
             p=2,
@@ -193,10 +191,7 @@ class PatchExtractor(nn.Module):
         images: torch.Tensor,
         vit_patch_tokens: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        """Get attention weights for visualization/debugging.
-        
-        Returns:
-            Attention weights [B, num_clusters, N_patches]"""
+        """Get attention weights for visualization/debugging. Returns: Attention weights [B, num_clusters, N_patches]."""
         if vit_patch_tokens is None and self.vit_backbone is not None:
             _, vit_patch_tokens = self.vit_backbone(images, return_patch_tokens=True)
         
@@ -214,6 +209,9 @@ class PatchExtractor(nn.Module):
         )
         
         return attention_weights  # [B, num_clusters, N_patches].
+
+
+
 
 
 

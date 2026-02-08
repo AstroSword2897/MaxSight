@@ -1,4 +1,4 @@
-"""Enhanced Hybrid CNN + Vision Transformer Backbone for MaxSight 3.0..."""
+"""Enhanced Hybrid CNN + Vision Transformer Backbone for MaxSight 3.0."""
 
 import torch
 import torch.nn as nn
@@ -20,10 +20,7 @@ class SpatialAttentionPooling(nn.Module):
         self.scale = dim ** -0.5
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Args:
-            x: [B, N, D] sequence of features
-        Returns:
-            pooled: [B, D] single feature vector"""
+        """Args x: [B, N, D] sequence of features Returns: pooled: [B, D] single feature vector."""
         B, N, D = x.shape
         
         # Use mean as query, all patches as keys/values.
@@ -115,7 +112,7 @@ class CrossModalAttention(nn.Module):
 
 
 class HybridCNNViTBackbone(nn.Module):
-    """Production-ready Hybrid CNN + ViT backbone...."""
+    """Production-ready Hybrid CNN + ViT backbone."""
 
     def __init__(
         self,
@@ -197,8 +194,7 @@ class HybridCNNViTBackbone(nn.Module):
                 ) for _ in range(3)  # For P3, P4, P5.
             ])
             
-            # ViT to CNN: Spatially-aware projection (FIXED)
-            # Use attention pooling instead of naive mean.
+            # ViT to CNN: Spatially-aware projection (FIXED) Use attention pooling instead of naive mean.
             self.vit_spatial_pool = SpatialAttentionPooling(vit_embed_dim)
             
             # Project from ViT dim to CNN dim with proper conv.
@@ -297,10 +293,7 @@ class HybridCNNViTBackbone(nn.Module):
         cnn_features: List[torch.Tensor],
         vit_patches: torch.Tensor
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        """FIXED: Proper cross-layer information flow.
-        - Uses learnable Conv2d projections (no torch.eye)
-        - Spatially-aware ViT pooling
-        - Dynamic spatial handling"""
+        """FIXED: Proper cross-layer information flow. - Uses learnable Conv2d projections (no torch.eye) - Spatially-aware ViT pooling - Dynamic spatial handling."""
         B = vit_patches.shape[0]
         num_patches = vit_patches.shape[1]
         
@@ -336,8 +329,7 @@ class HybridCNNViTBackbone(nn.Module):
                 alpha = 0.1  # Default fallback.
             vit_patches = vit_patches + alpha * cnn_context
             
-            # === ViT → CNN: Add global ViT context to CNN features ===.
-            # Project ViT spatial features to CNN dimension (FIXED)
+            # === ViT → CNN: Add global ViT context to CNN features ===. Project ViT spatial features to CNN dimension (FIXED)
             vit_projected = self.vit_to_cnn_proj(vit_spatial)  # [B, cnn_dim, pH, pW].
             
             # Resize to match current CNN feature map.
@@ -361,7 +353,7 @@ class HybridCNNViTBackbone(nn.Module):
         vit_patches: Optional[torch.Tensor] = None,
         return_all_features: bool = False
     ) -> Tuple[torch.Tensor, Optional[Dict[str, torch.Tensor]]]:
-        """Forward pass with improved cross-layer interaction...."""
+        """Forward pass with improved cross-layer interaction."""
         B = x.shape[0]
         
         fpn_features, cnn_feats = self.extract_cnn_features(x)

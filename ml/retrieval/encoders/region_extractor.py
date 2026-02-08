@@ -1,6 +1,4 @@
-"""Region Extractor for Multi-Vector Retrieval
-
-Extracts object-level region embeddings using MaxSightCNN/DETR."""
+"""Region Extractor for Multi-Vector Retrieval Extracts object-level region embeddings using MaxSightCNN/DETR."""
 
 import torch
 import torch.nn as nn
@@ -10,9 +8,7 @@ import torchvision.transforms as T
 
 
 class RegionExtractor(nn.Module):
-    """Region extractor for object-level embeddings.
-    
-    Uses detection model to extract bounding boxes, then encodes regions."""
+    """Region extractor for object-level embeddings. Uses detection model to extract bounding boxes, then encodes regions."""
     
     def __init__(
         self,
@@ -50,15 +46,14 @@ class RegionExtractor(nn.Module):
         images: torch.Tensor,  # [B, 3, H, W].
         boxes: Optional[torch.Tensor] = None  # [B, N, 4] (x1, y1, x2, y2)
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Extract region embeddings...."""
+        """Extract region embeddings."""
         B, C, H, W = images.shape
         
         # Get boxes from detection model if not provided.
         if boxes is None and self.detection_model is not None:
             with torch.no_grad():
                 outputs = self.detection_model(images)
-                # Extract boxes from outputs (format depends on model)
-                # Placeholder: would need to adapt to actual model output format.
+                # Extract boxes from outputs (format depends on model) Placeholder: would need to adapt to actual model output format.
                 boxes = torch.zeros(B, self.max_regions, 4, device=images.device)
         
         if boxes is None:
@@ -150,6 +145,9 @@ class RegionExtractor(nn.Module):
             boxes.append(batch_boxes[:self.max_regions])
         
         return torch.tensor(boxes, device=device, dtype=torch.float32)
+
+
+
 
 
 

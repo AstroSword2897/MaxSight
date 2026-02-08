@@ -1,4 +1,4 @@
-"""Motion/Flow Head for MaxSight Therapy System..."""
+"""Motion/Flow Head for MaxSight Therapy System."""
 
 import torch
 import torch.nn as nn
@@ -7,7 +7,7 @@ from typing import Dict, Optional, Union, List
 
 
 class MotionHead(nn.Module):
-    """Scaled-up motion/flow head for therapy tasks and temporal understanding...."""
+    """Scaled-up motion/flow head for therapy tasks and temporal understanding."""
 
     def __init__(
         self,
@@ -132,7 +132,7 @@ class MotionHead(nn.Module):
         return_features: bool = False,
         return_multi_scale: bool = False
     ) -> Union[torch.Tensor, Dict[str, Union[torch.Tensor, None]]]:
-        """Forward pass to generate motion flow with scaled-up computation...."""
+        """Forward pass to generate motion flow with scaled-up computation."""
         # Unified processing path; no layer skipping or special-case hacks.
         # Process input to always produce [B, hidden_channels, H, W] for coarse_net.
         
@@ -247,7 +247,7 @@ class MotionHead(nn.Module):
         flow: torch.Tensor,
         image: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        """Edge-aware smoothness loss...."""
+        """Edge-aware smoothness loss."""
         # Flow gradients.
         flow_grad_x = torch.abs(flow[:, :, :, :-1] - flow[:, :, :, 1:])
         flow_grad_y = torch.abs(flow[:, :, :-1, :] - flow[:, :, 1:, :])
@@ -266,8 +266,7 @@ class MotionHead(nn.Module):
 
 
 class ChannelSpatialAttention(nn.Module):
-    """CBAM-style attention for refinement stages.
-    Channel attention + Spatial attention."""
+    """CBAM-style attention for refinement stages. Channel attention + Spatial attention."""
     def __init__(self, channels: int, reduction: int = 16):
         super().__init__()
         # Channel attention.
@@ -300,5 +299,8 @@ class ChannelSpatialAttention(nn.Module):
         x = x * spatial_att
         
         return x
+
+
+
 
 

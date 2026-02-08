@@ -5,11 +5,7 @@ from typing import Union, Any
 
 
 def clip_image_features_to_tensor(out: Any) -> torch.Tensor:
-    """Maps CLIP get_image_features() return value to a single tensor.
-
-    Hugging Face CLIP may return either a tensor or a BaseModelOutputWithPooling;
-    this normalizes to a tensor so callers can safely call .cpu() / .numpy().
-    """
+    """Maps CLIP get_image_features() return value to a single tensor."""
     if isinstance(out, torch.Tensor):
         return out
     pooler = getattr(out, "pooler_output", None)
@@ -19,5 +15,8 @@ def clip_image_features_to_tensor(out: Any) -> torch.Tensor:
     if last is not None:
         return last[:, 0]
     raise TypeError("CLIP image output has no pooler_output or last_hidden_state")
+
+
+
 
 

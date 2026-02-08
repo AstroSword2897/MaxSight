@@ -1,4 +1,4 @@
-"""Spatial Memory System for MaxSight..."""
+"""Spatial Memory System for MaxSight."""
 
 import torch
 from typing import Any, Dict, List, Optional, Tuple
@@ -17,7 +17,7 @@ except ImportError:
 
 @dataclass
 class SpatialObject:
-    """Represents an object in spatial memory...."""
+    """Represents an object in spatial memory."""
     class_name: str
     position: Tuple[float, float]  # (cx, cy) normalized.
     size: Tuple[float, float]  # (w, h) normalized.
@@ -32,8 +32,7 @@ class SpatialObject:
 
 
 class SpatialMemory:
-    """Maintains spatial memory of objects for cognitive mapping.
-    Tracks object positions over time to help users build mental models."""
+    """Maintains spatial memory of objects for cognitive mapping. Tracks object positions over time to help users build mental models."""
     
     def __init__(
         self,
@@ -41,7 +40,7 @@ class SpatialMemory:
         position_threshold: float = 0.1,  # Normalized distance for "same" position.
         stability_threshold: float = 0.7  # Minimum stability for "stable" objects.
     ):
-        """Initialize spatial memory...."""
+        """Initialize spatial memory."""
         self.memory_duration = memory_duration
         self.position_threshold = position_threshold
         self.stability_threshold = stability_threshold
@@ -65,7 +64,7 @@ class SpatialMemory:
         detections: List[Dict],
         timestamp: Optional[float] = None
     ) -> None:
-        """Update spatial memory with new detections...."""
+        """Update spatial memory with new detections."""
         with self._lock:
             if timestamp is None:
                 timestamp = time.time()
@@ -149,7 +148,7 @@ class SpatialMemory:
                 ]
     
     def _rebuild_spatial_index(self, class_name: str) -> None:
-        """Rebuild spatial index for a class using KDTree"""
+        """Rebuild spatial index for a class using KDTree."""
         if not SCIPY_AVAILABLE:
             return
         
@@ -174,7 +173,7 @@ class SpatialMemory:
         class_name: str,
         position: Tuple[float, float]
     ) -> Optional[SpatialObject]:
-        """Find object of same class near the given position using spatial indexing"""
+        """Find object of same class near the given position using spatial indexing."""
         if class_name not in self.objects or not self.objects[class_name]:
             return None
         
@@ -206,10 +205,7 @@ class SpatialMemory:
         return None
     
     def _calculate_stability_incremental(self, obj: SpatialObject) -> float:
-        """Calculate stability score using incremental statistics (O(1) instead of O(N)).
-        
-        Returns:
-            Stability score 0-1 (1 = very stable, 0 = moving)"""
+        """Calculate stability score using incremental statistics (O(1) instead of O(N)). Returns: Stability score 0-1 (1 = very stable, 0 = moving)"""
         if obj.seen_count < 2:
             return 0.5
         
@@ -222,8 +218,7 @@ class SpatialMemory:
         var_y = (obj.position_sq_sum[1] / n) - (mean_y ** 2)
         variance = var_x + var_y
         
-        # Convert variance to stability (lower variance = higher stability)
-        # Normalize to 0-1 range (assuming max variance of 0.1)
+        # Convert variance to stability (lower variance = higher stability) Normalize to 0-1 range (assuming max variance of 0.1)
         stability = max(0.0, 1.0 - min(1.0, variance / 0.1))
         
         return stability
@@ -233,10 +228,7 @@ class SpatialMemory:
         class_name: str,
         current_position: Tuple[float, float]
     ) -> float:
-        """Calculate stability score based on position history (legacy method).
-        
-        Returns:
-            Stability score 0-1 (1 = very stable, 0 = moving)"""
+        """Calculate stability score based on position history (legacy method). Returns: Stability score 0-1 (1 = very stable, 0 = moving)"""
         if class_name not in self.position_history:
             return 0.5
         
@@ -254,14 +246,13 @@ class SpatialMemory:
             for p in positions
         ) / len(positions)
         
-        # Convert variance to stability (lower variance = higher stability)
-        # Normalize to 0-1 range (assuming max variance of 0.1)
+        # Convert variance to stability (lower variance = higher stability) Normalize to 0-1 range (assuming max variance of 0.1)
         stability = max(0.0, 1.0 - min(1.0, variance / 0.1))
         
         return stability
     
     def _cleanup_old_objects(self, current_time: float) -> None:
-        """Remove objects that haven't been seen recently"""
+        """Remove objects that haven't been seen recently."""
         for class_name in list(self.objects.keys()):
             self.objects[class_name] = [
                 obj for obj in self.objects[class_name]
@@ -288,10 +279,7 @@ class SpatialMemory:
                     del self.position_history[class_name]
     
     def get_stable_objects(self) -> List[SpatialObject]:
-        """Get objects that are stable (not moving, frequently seen).
-        
-        Returns:
-            List of stable spatial objects"""
+        """Get objects that are stable (not moving, frequently seen). Returns: List of stable spatial objects."""
         with self._lock:
             stable = []
             for objects_list in self.objects.values():
@@ -303,13 +291,7 @@ class SpatialMemory:
             return stable
     
     def get_recent_objects(self, time_window: float = 5.0) -> List[SpatialObject]:
-        """Get objects seen within the time window.
-        
-        Arguments:
-            time_window: Time window in seconds
-        
-        Returns:
-            List of recent spatial objects"""
+        """Get objects seen within the time window. Arguments: time_window: Time window in seconds Returns: List of recent spatial objects."""
         with self._lock:
             current_time = time.time()
             recent = []
@@ -325,7 +307,7 @@ class SpatialMemory:
         self,
         current_detections: List[Dict]
     ) -> Optional[str]:
-        """Generate contextual reminder based on spatial memory...."""
+        """Generate contextual reminder based on spatial memory."""
         with self._lock:
             if not current_detections:
                 return None
@@ -375,10 +357,7 @@ class SpatialMemory:
             return None
     
     def get_spatial_summary(self) -> Dict[str, Any]:
-        """Get summary of spatial memory state.
-        
-        Returns:
-            Dictionary with memory statistics"""
+        """Get summary of spatial memory state. Returns: Dictionary with memory statistics."""
         with self._lock:
             total_objects = sum(len(objs) for objs in self.objects.values())
             stable_count = len(self.get_stable_objects())
@@ -394,8 +373,7 @@ class SpatialMemory:
 
 
 class SpatialMemorySystem(SpatialMemory):
-    """Alias for SpatialMemory used by MaxSightCNN.
-    Accepts image_size for compatibility with the model's constructor."""
+    """Alias for SpatialMemory used by MaxSightCNN. Accepts image_size for compatibility with the model's constructor."""
     def __init__(
         self,
         memory_duration: float = 30.0,
@@ -411,6 +389,9 @@ class SpatialMemorySystem(SpatialMemory):
             **kwargs,
         )
         self.image_size = image_size
+
+
+
 
 
 

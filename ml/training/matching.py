@@ -82,9 +82,7 @@ def compute_matching_cost(
     lambda_bbox: float = 5.0,
     lambda_giou: float = 2.0,
 ) -> torch.Tensor:
-    """Build cost matrix [num_pred, num_gt] for Hungarian assignment.
-    Cell [i,j] = cost of assigning prediction i to ground truth j.
-    """
+    """Build cost matrix [num_pred, num_gt] for Hungarian assignment. Cell [i,j] = cost of assigning prediction i to ground truth j."""
     pred_boxes = pred_boxes.clone().float()
     pred_logits = pred_logits.clone().float()
     gt_boxes = gt_boxes.clone().float()
@@ -361,5 +359,8 @@ def build_matched_pred_targets(
         "urgency": targets.get("urgency"),
     }
     return aligned_pred, aligned_target
+
+
+
 
 

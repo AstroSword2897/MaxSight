@@ -1,4 +1,4 @@
-"""Temporal Encoder Module for MaxSight 3.0..."""
+"""Temporal Encoder Module for MaxSight 3.0."""
 
 import torch
 import torch.nn as nn
@@ -14,7 +14,7 @@ except ImportError:
 
 
 class TemporalEncoder(nn.Module):
-    """Enhanced temporal encoder for video sequence processing...."""
+    """Enhanced temporal encoder for video sequence processing."""
     
     def __init__(
         self,
@@ -59,8 +59,7 @@ class TemporalEncoder(nn.Module):
                 nn.Tanh()  # Normalize to [-1, 1].
             )
         
-        # Temporal consistency head.
-        # Flatten before Linear so spatial dimensions are collapsed.
+        # Temporal consistency head. Flatten before Linear so spatial dimensions are collapsed.
         self.consistency_head = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(1),  # [B, C, 1, 1] -> [B, C].
@@ -81,7 +80,7 @@ class TemporalEncoder(nn.Module):
         feature_frames: torch.Tensor,  # RENAMED: frames -> feature_frames for clarity.
         vit_patch_tokens: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
-        """Forward pass through enhanced temporal encoder...."""
+        """Forward pass through enhanced temporal encoder."""
         B = feature_frames.shape[0]
         
         # Handle different input formats.
@@ -148,9 +147,7 @@ class TemporalEncoder(nn.Module):
 
 
 class TemporalBuffer:
-    """Buffer for maintaining temporal context across frames.
-    
-    Maintains a sliding window of recent frames for temporal processing."""
+    """Buffer for maintaining temporal context across frames. Maintains a sliding window of recent frames for temporal processing."""
     
     def __init__(self, buffer_size: int = 5):
         self.buffer_size = buffer_size
@@ -163,10 +160,7 @@ class TemporalBuffer:
             self.buffer.pop(0)
     
     def get_sequence(self) -> Optional[torch.Tensor]:
-        """Get the current sequence of frames.
-        
-        Returns:
-            Tensor [T, C, H, W] if buffer is full, None otherwise"""
+        """Get the current sequence of frames. Returns: Tensor [T, C, H, W] if buffer is full, None otherwise."""
         if len(self.buffer) < self.buffer_size:
             return None
         return torch.stack(self.buffer, dim=0)
@@ -174,6 +168,9 @@ class TemporalBuffer:
     def clear(self):
         """Clear the buffer."""
         self.buffer = []
+
+
+
 
 
 

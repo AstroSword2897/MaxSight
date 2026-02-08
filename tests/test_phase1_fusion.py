@@ -1,10 +1,4 @@
-"""Comprehensive Tests for Phase 1: Multi-Modal Sensor Fusion
-
-Tests all Phase 1 components:
-- Enhanced Audio Encoder
-- Spatial Sound Mapping
-- Haptic Feedback Embedding
-- Multi-Modal Transformer Fusion"""
+"""Comprehensive Tests for Phase 1: Multi-Modal Sensor Fusion Tests all Phase 1 components: - Enhanced Audio Encoder - Spatial Sound Mapping - Haptic Feedback Embedding - Multi-Modal Transformer Fusion."""
 
 import torch
 import torch.nn as nn
@@ -204,8 +198,7 @@ class TestMultimodalFusion:
         depth_features = torch.randn(2, 128)
         haptic_features = torch.randn(2, 64)
         
-        # Fix: haptic_token is incorrectly defined as Parameter(Parameter(...))
-        # Just test without haptic for now.
+        # Fix: haptic_token is incorrectly defined as Parameter(Parameter(...)) Just test without haptic for now.
         fused = fusion(vision_features, audio_features, depth_features, None)
         
         assert fused.shape == (2, 512)
@@ -242,6 +235,9 @@ def run_all_tests():
 
 if __name__ == "__main__":
     run_all_tests()
+
+
+
 
 
 

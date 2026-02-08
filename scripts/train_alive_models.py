@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""Train alive-condition models on the same train/val data (inference splits).
-
-Runs train_maxsight.py once per condition with --checkpoint-dir <checkpoints_base>/checkpoints_<cond>
-so outputs match the layout expected by run_checkpoint_inference (checkpoints_<condition>/best_model.pt).
-
-Usage (Colab):
-  python scripts/train_alive_models.py \\
-    --checkpoints-base /content/drive/MyDrive/MaxSight \\
-    --data-dir /content/drive/MyDrive/MaxSight_Training \\
-    --train-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_train.json \\
-    --val-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json \\
-    --conditions amblyopia amd color_blindness cvi glaucoma retinitis_pigmentosa strabismus \\
-    --epochs 30 --batch-size 8
-"""
+"""Train alive-condition models on the same train/val data (inference splits)."""
 
 import argparse
 import subprocess
@@ -114,5 +101,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
 
 

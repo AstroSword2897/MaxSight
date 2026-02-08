@@ -1,6 +1,4 @@
-"""Depth Extractor for Multi-Vector Retrieval
-
-Uses MiDaS for monocular depth estimation and encodes depth maps."""
+"""Depth Extractor for Multi-Vector Retrieval Uses MiDaS for monocular depth estimation and encodes depth maps."""
 
 import torch
 import torch.nn as nn
@@ -14,12 +12,7 @@ except ImportError:
 
 
 class DepthExtractor(nn.Module):
-    """Depth extractor using MiDaS.
-    
-    Architecture:
-    - MiDaS: Monocular depth estimation
-    - Depth encoder: CNN to encode depth maps
-    - Output: Depth embeddings"""
+    """Depth extractor using MiDaS. Architecture: - MiDaS: Monocular depth estimation - Depth encoder: CNN to encode depth maps - Output: Depth embeddings."""
     
     def __init__(
         self,
@@ -59,13 +52,7 @@ class DepthExtractor(nn.Module):
                 self.use_midas = False
     
     def forward(self, images: torch.Tensor) -> torch.Tensor:
-        """Extract depth embeddings.
-        
-        Args:
-            images: Input images [B, 3, H, W]
-        
-        Returns:
-            Depth embeddings [B, embed_dim]"""
+        """Extract depth embeddings. Args: images: Input images [B, 3, H, W] Returns: Depth embeddings [B, embed_dim]."""
         B = images.shape[0]
         
         # Estimate depth.
@@ -91,11 +78,13 @@ class DepthExtractor(nn.Module):
     
     def _synthetic_depth(self, images: torch.Tensor) -> torch.Tensor:
         """Generate synthetic depth map as fallback."""
-        # Simple depth estimation based on image intensity.
-        # Lower intensity = farther (simplified)
+        # Simple depth estimation based on image intensity. Lower intensity = farther (simplified)
         gray = images.mean(dim=1, keepdim=True)  # [B, 1, H, W].
         depth = 1.0 - gray  # Invert: darker = farther.
         return depth
+
+
+
 
 
 

@@ -1,19 +1,11 @@
-"""Memory Profiling Utilities for MaxSight
-
-Provides memory profiling tools for debugging and optimization."""
+"""Memory Profiling Utilities for MaxSight Provides memory profiling tools for debugging and optimization."""
 
 import torch
 from typing import Dict, Optional
 
 
 def report_memory(device: Optional[str] = None) -> Dict[str, float]:
-    """Report current memory usage.
-    
-    Args:
-        device: Device to check ('cuda', 'mps', 'cpu', or None for auto-detect)
-    
-    Returns:
-        Dictionary with memory statistics in MB"""
+    """Report current memory usage. Args: device: Device to check ('cuda', 'mps', 'cpu', or None for auto-detect) Returns: Dictionary with memory statistics in MB."""
     stats = {}
     
     if device is None:
@@ -67,6 +59,9 @@ def reset_peak_stats(device: Optional[str] = None):
     elif device == 'mps':
         # MPS doesn't have reset_peak_memory_stats, but we can track manually.
         pass
+
+
+
 
 
 

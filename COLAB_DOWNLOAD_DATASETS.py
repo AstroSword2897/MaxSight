@@ -1,6 +1,4 @@
-"""Single Colab cell to download all inference datasets for MaxSight.
-
-Copy-paste this entire cell into Colab and run it."""
+"""Single Colab cell to download all inference datasets for MaxSight. Copy-paste this entire cell into Colab and run it."""
 
 # CELL 1: Download Inference Datasets (Open Images V6, BDD100K, ADE20K)
 
@@ -356,5 +354,8 @@ for name, count, has_ann, target in datasets_status:
 
 print(f"\n All datasets saved to: {BASE_DIR}")
 print("\nOK Ready for inference evaluation!")
+
+
+
 
 

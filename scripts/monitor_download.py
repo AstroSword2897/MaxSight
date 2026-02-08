@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Monitor Open Images V6 download progress.
-"""
+"""Monitor Open Images V6 download progress."""
 
 import sys
 import time
@@ -78,5 +76,8 @@ def monitor_download():
 
 if __name__ == "__main__":
     monitor_download()
+
+
+
 
 

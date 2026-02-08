@@ -82,8 +82,7 @@ class MaxSightDataset(Dataset):
                 img_width = img_info.get('width', 224)
                 img_height = img_info.get('height', 224)
                 
-                # Convert to center format and normalize to [0, 1].
-                # Clamp bbox values to prevent invalid boxes.
+                # Convert to center format and normalize to [0, 1]. Clamp bbox values to prevent invalid boxes.
                 bbox_x = max(0, float(bbox[0]))
                 bbox_y = max(0, float(bbox[1]))
                 bbox_w = max(1e-3, float(bbox[2]))  # Minimum 1e-3 to avoid zero-width.
@@ -254,6 +253,9 @@ class MaxSightDataset(Dataset):
             result['condition_mode'] = self.condition_mode
         
         return result
+
+
+
 
 
 

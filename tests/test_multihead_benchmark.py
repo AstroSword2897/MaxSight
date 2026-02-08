@@ -1,5 +1,4 @@
-"""Multi-Head Latency Benchmark Tests
-Tests latency for different head combinations to identify bottlenecks."""
+"""Multi-Head Latency Benchmark Tests Tests latency for different head combinations to identify bottlenecks."""
 
 import torch
 import sys
@@ -58,8 +57,7 @@ def test_multihead_latency():
     
     print(f"\n  Optimal head configuration: {optimal_config}")
     
-    # Assert that at least core heads meet target.
-    # Try different key orderings (sorted vs unsorted)
+    # Assert that at least core heads meet target. Try different key orderings (sorted vs unsorted)
     core_key = 'classification+box_regression+objectness'
     if core_key not in results:
         # Try sorted version.
@@ -73,6 +71,9 @@ def test_multihead_latency():
 
 if __name__ == "__main__":
     test_multihead_latency()
+
+
+
 
 
 

@@ -1,6 +1,4 @@
-"""Dynamic Convolution Module for MaxSight 3.0
-
-Per-sample adaptive kernels based on lighting, occlusion, and motion."""
+"""Dynamic Convolution Module for MaxSight 3.0 Per-sample adaptive kernels based on lighting, occlusion, and motion."""
 
 import torch
 import torch.nn as nn
@@ -9,8 +7,7 @@ from typing import Optional
 
 
 class DynamicConv2d(nn.Module):
-    """Dynamic convolution where each sample uses a weighted combination
-    of multiple base kernels based on input conditions."""
+    """Dynamic convolution where each sample uses a weighted combination of multiple base kernels based on input conditions."""
 
     def __init__(
         self,
@@ -57,7 +54,7 @@ class DynamicConv2d(nn.Module):
             self.register_parameter('bias', None)
 
     def forward(self, x: torch.Tensor, attention: Optional[torch.Tensor] = None, motion: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """Forward pass with per-sample dynamic kernel...."""
+        """Forward pass with per-sample dynamic kernel."""
         B, C, H, W = x.shape
 
         # Compute per-sample conditions.
@@ -109,23 +106,22 @@ class DynamicConv2d(nn.Module):
 
     @staticmethod
     def compute_lighting_condition(x: torch.Tensor) -> torch.Tensor:
-        """Compute brightness and contrast for each sample.
-        Returns [B, 2]"""
+        """Compute brightness and contrast for each sample. Returns [B, 2]."""
         brightness = x.mean(dim=(1, 2, 3), keepdim=True)  # [B,1,1,1].
         contrast = x.std(dim=(1, 2, 3), keepdim=True)     # [B,1,1,1].
         return torch.cat([brightness, contrast], dim=1)   # [B,2].
 
     @staticmethod
     def compute_occlusion_score(attention: torch.Tensor) -> torch.Tensor:
-        """Compute occlusion score from attention map [B,H,W]
-        Returns [B,1]"""
+        """Compute occlusion score from attention map [B,H,W] Returns [B,1]."""
         return 1 - attention.mean(dim=(1, 2), keepdim=True)
 
     @staticmethod
     def compute_motion_condition(motion: torch.Tensor) -> torch.Tensor:
-        """
-        Return motion condition [B,1]
-        """
+        """Return motion condition [B,1]."""
         return motion
+
+
+
 
 

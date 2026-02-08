@@ -1,4 +1,4 @@
-"""Adaptive Assistance Module for MaxSight..."""
+"""Adaptive Assistance Module for MaxSight."""
 
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
@@ -7,7 +7,7 @@ import time
 
 @dataclass
 class PerformanceMetrics:
-    """Performance metrics for adaptive assistance...."""
+    """Performance metrics for adaptive assistance."""
     accuracy: float  # 0-1, object recognition accuracy.
     reaction_time: float  # Seconds, average reaction time.
     skill_progression: float  # -1 to 1, trend (positive = improving)
@@ -33,7 +33,7 @@ class AdaptiveAssistance:
         hazard_awareness_threshold_high: float = 0.8,
         hazard_awareness_threshold_low: float = 0.5
     ):
-        """Initialize adaptive assistance...."""
+        """Initialize adaptive assistance."""
         self.initial_verbosity = initial_verbosity
         self.min_verbosity = min_verbosity
         self.max_verbosity = max_verbosity
@@ -107,7 +107,7 @@ class AdaptiveAssistance:
         )
     
     def get_adaptive_verbosity(self, use_numeric: bool = False) -> Any:
-        """Get adaptive verbosity based on performance...."""
+        """Get adaptive verbosity based on performance."""
         if not self.performance_history:
             if use_numeric:
                 return {'brief': 0, 'normal': 1, 'detailed': 2, 'very_detailed': 3}.get(self.initial_verbosity, 1)
@@ -140,7 +140,7 @@ class AdaptiveAssistance:
         return 'normal'
     
     def get_adaptive_frequency(self) -> str:
-        """Get adaptive alert frequency based on performance...."""
+        """Get adaptive alert frequency based on performance."""
         if not self.performance_history:
             return 'medium'
         
@@ -158,7 +158,7 @@ class AdaptiveAssistance:
         return 'medium'
     
     def get_adaptive_hazard_threshold(self) -> int:
-        """Get adaptive hazard alert threshold based on performance...."""
+        """Get adaptive hazard alert threshold based on performance."""
         if not self.performance_history:
             return 1  # Default: alert to caution and above.
         
@@ -233,6 +233,9 @@ def create_adaptive_assistance_from_session(
             )
     
     return adaptive
+
+
+
 
 
 

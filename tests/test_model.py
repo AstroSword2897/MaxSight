@@ -1,5 +1,4 @@
-"""Unit Tests for MaxSight CNN Model
-Sprint 1 Validation"""
+"""Unit Tests for MaxSight CNN Model Sprint 1 Validation."""
 
 import sys
 from pathlib import Path
@@ -13,7 +12,7 @@ from ml.models.maxsight_cnn import create_model, MaxSightCNN, COCO_CLASSES
 
 
 def test_model_creation():
-    """Test basic model creation"""
+    """Test basic model creation."""
     model = create_model()
     assert model is not None
     assert isinstance(model, MaxSightCNN)
@@ -21,7 +20,7 @@ def test_model_creation():
 
 
 def test_forward_pass():
-    """Test forward pass with dummy data"""
+    """Test forward pass with dummy data."""
     model = create_model()
     model.eval()
     
@@ -49,7 +48,7 @@ def test_forward_pass():
 
 
 def test_audio_fusion():
-    """Test audio fusion mode"""
+    """Test audio fusion mode."""
     model = create_model(use_audio=True)
     model.eval()
     
@@ -69,7 +68,7 @@ def test_audio_fusion():
 
 
 def test_color_blindness_mode():
-    """Test color blindness condition mode"""
+    """Test color blindness condition mode."""
     model = create_model(condition_mode='color_blindness')
     model.eval()
     
@@ -87,7 +86,7 @@ def test_color_blindness_mode():
 
 
 def test_parameter_count():
-    """Test model parameter count"""
+    """Test model parameter count."""
     model = create_model()
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -100,7 +99,7 @@ def test_parameter_count():
 
 
 def test_gradient_flow():
-    """Test that gradients can flow through the model"""
+    """Test that gradients can flow through the model."""
     model = create_model()
     model.train()
     
@@ -161,6 +160,9 @@ if __name__ == "__main__":
     test_inference_mode()
     
     print("\nAll tests passed")
+
+
+
 
 
 

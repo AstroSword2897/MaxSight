@@ -1,4 +1,4 @@
-"""Session Manager..."""
+"""Session Manager."""
 
 from typing import Dict, List, Optional, Any, cast
 from datetime import datetime
@@ -15,13 +15,7 @@ class SessionManager:
         self.task_attempts = []
     
     def start_session(self, session_config: Optional[Dict[str, Any]] = None) -> str:
-        """Start a new therapy session.
-        
-        Arguments:
-            session_config: Optional session configuration
-        
-        Returns:
-            Session ID"""
+        """Start a new therapy session. Arguments: session_config: Optional session configuration Returns: Session ID."""
         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.current_session = {
             'session_id': session_id,
@@ -43,7 +37,7 @@ class SessionManager:
         task_config: Dict[str, Any],
         result: Dict[str, Any]
     ):
-        """Log a task attempt...."""
+        """Log a task attempt."""
         if not self.current_session:
             self.start_session()
         
@@ -71,10 +65,7 @@ class SessionManager:
             self.current_session['metrics']['total_time'] += result['reaction_time']
     
     def end_session(self) -> Dict[str, Any]:
-        """End current session and generate report.
-        
-        Returns:
-            Session report dictionary"""
+        """End current session and generate report. Returns: Session report dictionary."""
         if not self.current_session:
             return {}
         
@@ -142,6 +133,9 @@ class SessionManager:
         if self.current_session:
             with open(filepath, 'w') as f:
                 json.dump(self.current_session, f, indent=2)
+
+
+
 
 
 

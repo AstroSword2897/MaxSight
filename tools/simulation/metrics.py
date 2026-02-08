@@ -1,5 +1,4 @@
-"""Metrics and monitoring for MaxSight Web Simulator.
-Tracks performance, errors, and system health."""
+"""Metrics and monitoring for MaxSight Web Simulator. Tracks performance, errors, and system health."""
 import time
 from typing import Dict, Any, Optional
 from collections import defaultdict
@@ -116,10 +115,7 @@ metrics = SystemMetrics()
 
 
 def get_health_status() -> Dict[str, Any]:
-    """Get system health status.
-    
-    Returns:
-        Health status dictionary"""
+    """Get system health status. Returns: Health status dictionary."""
     summary = metrics.get_summary()
     
     # Determine health status.
@@ -136,6 +132,9 @@ def get_health_status() -> Dict[str, Any]:
         'timestamp': time.time(),
         'metrics': summary
     }
+
+
+
 
 
 

@@ -14,7 +14,7 @@ NMS_IOU_VALUES = [0.5, 0.6, 0.7, 0.8]
 
 
 def parse_map_from_output(output: str) -> float:
-    """Extract best mAP@0.5 from log lines like '  cvi: mAP=0.12 mAP@0.5=0.25 ...'."""
+    """Extract best mAP@0.5 from log lines like ' cvi: mAP=0.12 mAP@0.5=0.25 ...'."""
     best = -1.0
     for line in output.splitlines():
         # Prefer mAP@0.5 (primary metric)
@@ -144,5 +144,8 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+
 
 

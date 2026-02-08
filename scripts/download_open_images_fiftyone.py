@@ -60,8 +60,7 @@ def main():
         # Reorganize to expected structure.
         print("\n  Reorganizing files...")
         
-        # Find where FiftyOne stored the images.
-        # FiftyOne typically stores in: dataset_dir/open-images-v6-validation/.
+        # Find where FiftyOne stored the images. FiftyOne typically stores in: dataset_dir/open-images-v6-validation/.
         fo_dataset_paths = [
             data_dir.parent / "open-images-v6-validation",
             data_dir.parent / "open-images-v6" / "validation",
@@ -137,5 +136,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
 
 

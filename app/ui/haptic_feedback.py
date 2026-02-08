@@ -1,9 +1,4 @@
-"""Haptic Feedback
-
-Provides haptic feedback for therapy tasks.
-
-Phase 4: Overlay Engine & UX Guidance
-See docs/therapy_system_implementation_plan.md for implementation details."""
+"""Haptic Feedback Provides haptic feedback for therapy tasks. Phase 4: Overlay Engine & UX Guidance See docs/therapy_system_implementation_plan.md for implementation details."""
 
 from typing import Optional
 from enum import Enum
@@ -22,21 +17,13 @@ class HapticPattern(Enum):
 
 
 class HapticFeedback:
-    """Manages haptic feedback for therapy tasks.
-    
-    Patterns:
-    - Micro pulse: target found
-    - Longer pulse: wrong region"""
+    """Manages haptic feedback for therapy tasks. Patterns: - Micro pulse: target found - Longer pulse: wrong region."""
     
     def __init__(self, enabled: bool = True):
         self.enabled = enabled
     
     def trigger(self, pattern: HapticPattern, intensity: float = 0.5):
-        """Trigger haptic feedback pattern.
-        
-        Arguments:
-            pattern: HapticPattern enum value
-            intensity: Intensity [0, 1]"""
+        """Trigger haptic feedback pattern. Arguments: pattern: HapticPattern enum value intensity: Intensity [0, 1]."""
         if not self.enabled:
             return
         
@@ -58,6 +45,9 @@ class HapticFeedback:
     def failure_sequence(self):
         """Failure feedback sequence."""
         self.trigger(HapticPattern.FAILURE_SEQUENCE, 0.4)
+
+
+
 
 
 

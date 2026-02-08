@@ -1,5 +1,4 @@
-"""Comprehensive System Tests - Maximum Data & Classes
-Tests the complete MaxSight system with 347 classes for user guidance"""
+"""Comprehensive System Tests - Maximum Data & Classes Tests the complete MaxSight system with 347 classes for user guidance."""
 
 import torch
 import sys
@@ -17,7 +16,7 @@ from collections import Counter
 
 
 def test_class_system():
-    """Test comprehensive class system"""
+    """Test comprehensive class system."""
     print("Test 1: Comprehensive Class System")
     # Check for duplicates.
     duplicates = [item for item, count in Counter(COCO_CLASSES).items() if count > 1]
@@ -29,7 +28,7 @@ def test_class_system():
 
 
 def test_model_creation():
-    """Test model creation with comprehensive classes"""
+    """Test model creation with comprehensive classes."""
     print("Test 2: Model Creation")
     model = create_model()
     assert model.num_classes == len(COCO_CLASSES), f"Model classes {model.num_classes} != {len(COCO_CLASSES)}"
@@ -45,7 +44,7 @@ def test_model_creation():
 
 
 def test_forward_pass():
-    """Test forward pass with and without audio"""
+    """Test forward pass with and without audio."""
     print("Test 3: Forward Pass")
     model = create_model(use_audio=True)
     model.eval()
@@ -75,15 +74,14 @@ def test_forward_pass():
 
 
 def test_training_system():
-    """Test training system"""
+    """Test training system."""
     print("Test 4: Training System")
-    # Skip training system test - requires actual data loaders.
-    # Test requires real dataset setup to run fully.
+    # Skip training system test - requires actual data loaders. Test requires real dataset setup to run fully.
     pass
 
 
 def test_detections():
-    """Test detection system"""
+    """Test detection system."""
     print("Test 5: Detection System")
     model = create_model(use_audio=True)
     model.eval()
@@ -108,7 +106,7 @@ def test_detections():
 
 
 def test_visual_conditions():
-    """Test all visual condition modes"""
+    """Test all visual condition modes."""
     print("Test 6: Visual Condition Support")
     conditions = [
         'myopia', 'hyperopia', 'astigmatism', 'presbyopia', 'refractive_errors',
@@ -141,7 +139,7 @@ def test_visual_conditions():
 
 
 def test_data_sources():
-    """Test data source configuration"""
+    """Test data source configuration."""
     print("Test 7: Data Sources")
     # Verify class counts are correct (allow flexibility in actual counts)
     assert len(COCO_BASE_CLASSES) > 0, f"COCO base classes should exist, got {len(COCO_BASE_CLASSES)}"
@@ -179,6 +177,9 @@ if __name__ == "__main__":
         sys.exit(0)
     else:
         sys.exit(1)
+
+
+
 
 
 

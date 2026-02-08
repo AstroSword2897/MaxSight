@@ -1,4 +1,4 @@
-"""Depth/Focus Head..."""
+"""Depth/Focus Head."""
 
 import torch
 import torch.nn as nn
@@ -23,8 +23,7 @@ class DepthHead(nn.Module):
         self.use_multi_scale = use_multi_scale
         self.depth_activation = depth_activation
         
-        # FIXED: Motion-conditioned depth estimation.
-        # Motion provides temporal stability signal for depth.
+        # FIXED: Motion-conditioned depth estimation. Motion provides temporal stability signal for depth.
         if motion_dim > 0:
             self.motion_proj = nn.Conv2d(motion_dim, in_channels, kernel_size=1, bias=False)
         
@@ -101,11 +100,10 @@ class DepthHead(nn.Module):
         fpn_features: Optional[Dict[str, torch.Tensor]] = None,
         motion_features: Optional[torch.Tensor] = None  # FIXED: Motion as temporal anchor.
     ) -> Dict[str, torch.Tensor]:
-        """Forward pass...."""
+        """Forward pass."""
         B, C, H, W = features.shape
         
-        # FIXED: Motion-conditioned feature extraction.
-        # Motion provides temporal stability signal for depth estimation.
+        # FIXED: Motion-conditioned feature extraction. Motion provides temporal stability signal for depth estimation.
         if motion_features is not None and hasattr(self, 'motion_proj'):
             motion_proj = self.motion_proj(motion_features)
             if motion_proj.shape[2:] != features.shape[2:]:
@@ -171,5 +169,8 @@ class DepthHead(nn.Module):
             'uncertainty': uncertainty,  # [0, 1].
             'zones': zones  # Raw logits.
         }
+
+
+
 
 

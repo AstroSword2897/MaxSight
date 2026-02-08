@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""Direct download script for Open Images V6 validation set.
-
-Uses the CVDF GitHub repository downloader for reliable downloads."""
+"""Direct download script for Open Images V6 validation set. Uses the CVDF GitHub repository downloader for reliable downloads."""
 
 import sys
 import subprocess
@@ -191,5 +189,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
 
 

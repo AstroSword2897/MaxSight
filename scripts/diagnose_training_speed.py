@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""Diagnose training speed bottlenecks.
-
-Identifies slow operations during training epochs:
-- Data loading time
-- Forward pass time
-- Backward pass time
-- Validation time
-- Checkpoint saving time
-"""
+"""Diagnose training speed bottlenecks. Identifies slow operations during training epochs: - Data loading time - Forward pass time - Backward pass time - Validation time - Checkpoint saving time."""
 
 import time
 import torch
@@ -270,5 +262,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
 
 

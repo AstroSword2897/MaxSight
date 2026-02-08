@@ -1,4 +1,4 @@
-"""Structural Tests for Integration Features..."""
+"""Structural Tests for Integration Features."""
 
 import sys
 import ast
@@ -256,6 +256,9 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+
+
+
 
 
 

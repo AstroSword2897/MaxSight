@@ -10,7 +10,7 @@ from ml.models.maxsight_cnn import COCO_CLASSES, COCO_BASE_CLASSES
 
 
 def map_coco_to_environmental(coco_category_name: str) -> str:
-    """Map COCO category to environmental category in comprehensive class list...."""
+    """Map COCO category to environmental category in comprehensive class list."""
     normalized = coco_category_name.lower().strip()
     
     # Find exact match in comprehensive class list.
@@ -23,7 +23,7 @@ def map_coco_to_environmental(coco_category_name: str) -> str:
 
 
 def assign_urgency_score(category_name: str, box_size: float) -> int:
-    """Assign urgency score based on object category and size...."""
+    """Assign urgency score based on object category and size."""
     category_lower = category_name.lower()
     
     # Use sets for O(1) lookup instead of O(K) keyword matching.
@@ -58,7 +58,7 @@ def assign_urgency_score(category_name: str, box_size: float) -> int:
 
 
 def estimate_distance_zone(box_size: float, image_size: Tuple[int, int] = (224, 224)) -> int:
-    """Estimate distance zone from bounding box size...."""
+    """Estimate distance zone from bounding box size."""
     # Complexity: O(1) - three simple comparisons (if/elif/else)
     if box_size > 0.1:  # Large box = near (close to camera, occupies >10% of image)
         # Complexity: O(1) - simple return.
@@ -70,9 +70,7 @@ def estimate_distance_zone(box_size: float, image_size: Tuple[int, int] = (224, 
 
 
 def generate_scene_description(objects: List[Dict]) -> str:
-    """Generate scene description from detected objects with urgency and distance context.
-    
-    Enhanced to include urgency information and prioritize important objects."""
+    """Generate scene description from detected objects with urgency and distance context. Enhanced to include urgency information and prioritize important objects."""
     if not objects:
         return "Empty scene"
     
@@ -120,7 +118,7 @@ def generate_annotations_from_coco(
     val_split: float = 0.15,
     test_split: float = 0.15
 ) -> Tuple[Path, Path, Path]:
-    """Generate MaxSight annotations from COCO dataset...."""
+    """Generate MaxSight annotations from COCO dataset."""
     print(f"Loading COCO annotations from {coco_annotation_file}...")
     
     with open(coco_annotation_file, 'r') as f:
@@ -259,6 +257,9 @@ if __name__ == "__main__":
     print("\nAnnotation generation complete!")
     print(f"Training annotations: {train_file}")
     print(f"Validation annotations: {val_file}")
+
+
+
 
 
 

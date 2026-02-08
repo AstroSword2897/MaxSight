@@ -1,7 +1,4 @@
-"""Fusion MLP Training Script for Multi-Vector Retrieval
-
-Trains a fusion MLP that combines multiple embedding types.
-Based on provided script with enhancements."""
+"""Fusion MLP Training Script for Multi-Vector Retrieval Trains a fusion MLP that combines multiple embedding types. Based on provided script with enhancements."""
 
 import torch
 import torch.nn as nn
@@ -116,6 +113,9 @@ def train(
     
     torch.save(model.state_dict(), save_path)
     print(f"Model saved to {save_path}")
+
+
+
 
 
 

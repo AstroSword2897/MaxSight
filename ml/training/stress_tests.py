@@ -1,4 +1,4 @@
-"""MaxSight Stress Testing Infrastructure..."""
+"""MaxSight Stress Testing Infrastructure."""
 
 import torch
 import torch.nn as nn
@@ -59,9 +59,7 @@ class StressTestConfig:
 
 
 class HeadIsolationStressTest:
-    """Test 1: Head Isolation Stress Tests
-    
-    Detect gradient interference and silent head collapse."""
+    """Test 1: Head Isolation Stress Tests Detect gradient interference and silent head collapse."""
     
     def __init__(self, config: StressTestConfig):
         self.config = config
@@ -74,7 +72,7 @@ class HeadIsolationStressTest:
         device: str = 'cuda',
         epochs_per_variant: int = 5
     ) -> Dict[str, StressTestResult]:
-        """Run head isolation stress test...."""
+        """Run head isolation stress test."""
         results = {}
         
         # Save initial checkpoint.
@@ -128,8 +126,7 @@ class HeadIsolationStressTest:
                 images = batch[0].to(device)
                 outputs = model(images)
                 
-                # Track gradient norms per head.
-                # Enable per-head gradient monitoring and debugging.
+                # Track gradient norms per head. Enable per-head gradient monitoring and debugging.
                 
                 num_batches += 1
             
@@ -184,9 +181,7 @@ class HeadIsolationStressTest:
 
 
 class LossScalingStressTest:
-    """Test 2: Loss Surface Stress (Exploding / Vanishing)
-    
-    Ensure no loss term dominates training."""
+    """Test 2: Loss Surface Stress (Exploding / Vanishing) Ensure no loss term dominates training."""
     
     def __init__(self, config: StressTestConfig):
         self.config = config
@@ -224,8 +219,7 @@ class LossScalingStressTest:
         scale_factor: float
     ) -> nn.Module:
         """Create a loss function with scaled head loss."""
-        # Wrap the loss function to scale specific head losses.
-        # Simplified implementation.
+        # Wrap the loss function to scale specific head losses. Simplified implementation.
         return loss_fn
     
     def _test_scaling(
@@ -286,9 +280,7 @@ class LossScalingStressTest:
 
 
 class InputCorruptionStressTest:
-    """Test 3: Input Corruption Stress (Real-World Reality Check)
-    
-    Simulate bad cameras, motion blur, low light, occlusion."""
+    """Test 3: Input Corruption Stress (Real-World Reality Check) Simulate bad cameras, motion blur, low light, occlusion."""
     
     def __init__(self, config: StressTestConfig):
         self.config = config
@@ -417,9 +409,7 @@ class InputCorruptionStressTest:
 
 
 class TemporalStressTest:
-    """Test 4: Temporal Stress (Video Drift)
-    
-    Test stability across time."""
+    """Test 4: Temporal Stress (Video Drift) Test stability across time."""
     
     def __init__(self, config: StressTestConfig):
         self.config = config
@@ -492,9 +482,7 @@ class TemporalStressTest:
 
 
 class HeadDropoutStressTest:
-    """Test 6: Head Dropout Stress (Runtime Failures)
-    
-    Ensure graceful degradation."""
+    """Test 6: Head Dropout Stress (Runtime Failures) Ensure graceful degradation."""
     
     def __init__(self, config: StressTestConfig):
         self.config = config
@@ -573,9 +561,7 @@ class HeadDropoutStressTest:
 
 
 class StressTestSuite:
-    """Complete stress test suite.
-    
-    Runs all stress tests and generates a dashboard report."""
+    """Complete stress test suite. Runs all stress tests and generates a dashboard report."""
     
     def __init__(self, config: Optional[StressTestConfig] = None):
         self.config = config or StressTestConfig()
@@ -598,8 +584,7 @@ class StressTestSuite:
         # Test 1: Head Isolation.
         logger.info("Running Head Isolation Stress Tests...")
         isolation_test = HeadIsolationStressTest(self.config)
-        # Expensive; skip in quick tests.
-        # All_results['head_isolation'] = isolation_results.
+        # Expensive; skip in quick tests. All_results['head_isolation'] = isolation_results.
         
         # Test 2: Loss Scaling.
         logger.info("Running Loss Scaling Stress Tests...")
@@ -699,6 +684,9 @@ class StressTestSuite:
             json.dump(report, f, indent=2)
         
         logger.info(f"Stress test report saved to {filepath}")
+
+
+
 
 
 

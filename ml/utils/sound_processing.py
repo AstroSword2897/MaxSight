@@ -1,7 +1,4 @@
-"""Sound Processing Utilities for MaxSight
-Enhanced sound classification, directional detection, and prioritization.
-
-Sprint 3 Day 26: Advanced Sound Features"""
+"""Sound Processing Utilities for MaxSight Enhanced sound classification, directional detection, and prioritization. Sprint 3 Day 26: Advanced Sound Features."""
 
 from typing import Dict, List, Optional, Tuple
 import torch
@@ -39,9 +36,7 @@ class SoundDirection(Enum):
 
 
 class SoundProcessor:
-    """Enhanced sound processing with classification refinement, directional detection, and prioritization.
-    
-    Sprint 3 Day 26: Advanced Sound Features"""
+    """Enhanced sound processing with classification refinement, directional detection, and prioritization. Sprint 3 Day 26: Advanced Sound Features."""
     
     # Sound urgency mapping (0-3: safe, caution, warning, danger)
     SOUND_URGENCY_MAP = {
@@ -87,7 +82,7 @@ class SoundProcessor:
         directional_sensitivity: float = 0.2,
         enable_temporal_smoothing: bool = True
     ):
-        """Initialize sound processor...."""
+        """Initialize sound processor."""
         self.overlap_threshold = overlap_threshold
         self.directional_sensitivity = directional_sensitivity
         self.enable_temporal_smoothing = enable_temporal_smoothing
@@ -185,8 +180,7 @@ class SoundProcessor:
             else:
                 return SoundDirection.RIGHT
         else:
-            # Mono audio - cannot determine direction.
-            # Could use visual cues (object position) to infer direction.
+            # Mono audio - cannot determine direction. Could use visual cues (object position) to infer direction.
             return SoundDirection.UNKNOWN
     
     def prioritize_sounds(
@@ -248,7 +242,7 @@ class SoundProcessor:
         sound_detection: Dict,
         include_direction: bool = True
     ) -> str:
-        """Generate natural language description of sound...."""
+        """Generate natural language description of sound."""
         sound_class = sound_detection.get('class')
         if not isinstance(sound_class, SoundClass):
             return "Unknown sound"
@@ -281,6 +275,9 @@ class SoundProcessor:
             desc = f"Possible {desc.lower()}"
         
         return desc
+
+
+
 
 
 

@@ -26,10 +26,7 @@ class ObjectnessLoss(nn.Module):
 
 
 class ClassificationLoss(nn.Module):
-    """Classification head loss.
-    
-    Ground Truth: Class indices [0, num_classes-1] per location
-    Loss: Focal loss for class imbalance"""
+    """Classification head loss. Ground Truth: Class indices [0, num_classes-1] per location Loss: Focal loss for class imbalance."""
     
     def __init__(self, num_classes: int, alpha: float = 0.25, gamma: float = 2.0):
         super().__init__()
@@ -167,10 +164,7 @@ class DepthLoss(nn.Module):
         targets: torch.Tensor,
         uncertainty: torch.Tensor
     ) -> torch.Tensor:
-        """Args:
-            predictions: [B, H, W] predicted depth
-            targets: [B, H, W] ground truth depth
-            uncertainty: [B, H, W] depth uncertainty (for weighting)"""
+        """Args predictions: [B, H, W] predicted depth targets: [B, H, W] ground truth depth uncertainty: [B, H, W] depth uncertainty (for weighting)"""
         l1_loss = self.l1(predictions, targets)
         # Weight by inverse uncertainty (high uncertainty = low weight)
         weights = 1.0 / (uncertainty + 1e-6)
@@ -186,9 +180,7 @@ class MotionLoss(nn.Module):
         self.mse = nn.MSELoss()
     
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Args:
-            predictions: [B, 2, H, W] or [B, H, W] motion predictions
-            targets: [B, 2, H, W] or [B, H, W] ground truth motion"""
+        """Args predictions: [B, 2, H, W] or [B, H, W] motion predictions targets: [B, 2, H, W] or [B, H, W] ground truth motion."""
         return self.mse(predictions, targets)
 
 
@@ -207,10 +199,7 @@ class SceneDescriptionLoss(nn.Module):
 
 
 class OCRLoss(nn.Module):
-    """OCR head loss (Tier 3+).
-    
-    Ground Truth: Text detections with bounding boxes and text
-    Loss: Detection loss (boxes) + Recognition loss (text)"""
+    """OCR head loss (Tier 3+). Ground Truth: Text detections with bounding boxes and text Loss: Detection loss (boxes) + Recognition loss (text)"""
     
     def __init__(self, vocab_size: int):
         super().__init__()
@@ -235,10 +224,7 @@ class OCRLoss(nn.Module):
 
 
 class FatigueLoss(nn.Module):
-    """Fatigue head loss (Tier 5+).
-    
-    Ground Truth: Binary fatigue labels (0=not fatigued, 1=fatigued)
-    Loss: Binary cross-entropy"""
+    """Fatigue head loss (Tier 5+). Ground Truth: Binary fatigue labels (0=not fatigued, 1=fatigued) Loss: Binary cross-entropy."""
     
     def __init__(self):
         super().__init__()
@@ -284,7 +270,7 @@ class MultiHeadLoss(nn.Module):
         predictions: Dict[str, torch.Tensor],
         targets: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        """Compute losses for all heads...."""
+        """Compute losses for all heads."""
         losses = {}
         total_loss = 0.0
         
@@ -312,5 +298,8 @@ GROUND_TRUTH_SOURCES = {
     'ocr': 'Text detection datasets (ICDAR, COCO-Text)',
     'fatigue': 'User interaction logs (time-based, interaction patterns)',
 }
+
+
+
 
 

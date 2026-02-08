@@ -1,4 +1,4 @@
-"""Per-Class Metrics and Confusion Matrix Analysis..."""
+"""Per-Class Metrics and Confusion Matrix Analysis."""
 
 import torch
 import numpy as np
@@ -145,8 +145,7 @@ class ConfusionMatrix:
 
 
 class PerClassMetricsTracker:
-    """Comprehensive per-class metrics tracking.
-    Tracks performance across classes, scenarios, impairments, and urgency levels."""
+    """Comprehensive per-class metrics tracking. Tracks performance across classes, scenarios, impairments, and urgency levels."""
     
     def __init__(self, 
                  class_names: List[str],
@@ -193,7 +192,7 @@ class PerClassMetricsTracker:
                targets: torch.Tensor,
                confidences: Optional[torch.Tensor] = None,
                metadata: Optional[List[Dict]] = None):
-        """Update metrics with batch predictions...."""
+        """Update metrics with batch predictions."""
         batch_size = predictions.shape[0]
         
         # Update confusion matrix.
@@ -412,7 +411,7 @@ class PerClassMetricsTracker:
 def compute_map_per_class(predictions: List[Dict], 
                           targets: List[Dict],
                           iou_threshold: float = 0.5) -> Dict[str, float]:
-    """Compute mAP per class for object detection...."""
+    """Compute mAP per class for object detection."""
     # Collect all predictions and targets by class.
     class_predictions = defaultdict(list)
     class_targets = defaultdict(lambda: {'boxes': [], 'matched': []})
@@ -518,6 +517,9 @@ def compute_iou(box1: List[float], box2: List[float]) -> float:
     union = area1 + area2 - intersection
     
     return intersection / union if union > 0 else 0.0
+
+
+
 
 
 

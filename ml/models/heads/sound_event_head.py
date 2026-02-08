@@ -1,4 +1,4 @@
-"""Sound Event Classification Head for MaxSight 3.0 (v2)..."""
+"""Sound Event Classification Head for MaxSight 3.0 (v2)"""
 
 import torch
 import torch.nn as nn
@@ -7,7 +7,7 @@ from typing import Dict
 
 
 class SoundEventHead(nn.Module):
-    """Sound event classification head (v2)...."""
+    """Sound event classification head (v2)."""
     
     def __init__(
         self,
@@ -62,7 +62,7 @@ class SoundEventHead(nn.Module):
         )
     
     def forward(self, spectrogram: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """Forward pass through sound event head...."""
+        """Forward pass through sound event head."""
         B, T, freq_bins = spectrogram.shape
         
         # CNN.
@@ -98,5 +98,8 @@ class SoundEventHead(nn.Module):
             "priority": priority,
             "urgency": urgency,
         }
+
+
+
 
 

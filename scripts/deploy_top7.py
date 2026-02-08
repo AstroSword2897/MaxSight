@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and export the top 7 (alive) inference conditions for deployment.
-
-- Checks all 7 checkpoints exist and run a one-batch inference sanity check.
-- Exports each to an iOS-ready bundle (PTE + configs) under --output-dir/<condition>/.
-- Writes manifest.json for deployment.
-
-Run in under an hour (e.g. ~5 min per condition export on CPU).
-
-Usage:
-  python scripts/deploy_top7.py --checkpoints-base /path/to/checkpoints --output-dir exports/top7
-  python scripts/deploy_top7.py --checkpoints-base /content/drive/MyDrive/MaxSight --output-dir /content/drive/MyDrive/MaxSight/exports_top7 --validate-only
-"""
+"""Validate and export the top 7 (alive) inference conditions for deployment."""
 
 import argparse
 import json
@@ -289,5 +278,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
 
 
