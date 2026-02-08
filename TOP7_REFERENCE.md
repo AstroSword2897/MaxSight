@@ -19,6 +19,18 @@ Single reference for the **top 7** conditions. You can use either the **fixed li
 **As a list (for scripts):**  
 `amblyopia amd color_blindness cvi glaucoma retinitis_pigmentosa strabismus`
 
+**Why these 7:** They are the conditions with non-trivial objectness/detection (mean objectness clearly above zero). The others (astigmatism, cataracts, diabetic_retinopathy, hyperopia, myopia, presbyopia, refractive_errors) have mean objectness near zero and are excluded from the default “top 7” for deploy.
+
+| Condition (top 7)   | Mean objectness (approx) | Notes        |
+|---------------------|---------------------------|--------------|
+| retinitis_pigmentosa| 0.83                      | Strong       |
+| amd                 | 0.78                      | Strong       |
+| color_blindness     | 0.76                      | Good         |
+| glaucoma            | 0.70                      | Decent       |
+| strabismus          | 0.65                      | Moderate–good|
+| amblyopia           | 0.63                      | Okay         |
+| cvi                 | 0.61                      | Moderate     |
+
 **Top 7 by mAP:** To use the seven conditions with the highest validation mAP instead of this fixed list, run inference first (so `inference_data.json` exists), then pass `--top-by-map` to deploy or inference_and_deploy. See section 3 below.
 
 ---
@@ -41,6 +53,8 @@ export DATA_DIR=/content/drive/MyDrive/MaxSight_Training
 ---
 
 ## 3. Commands to run from here
+
+**Inference and deployment use only the top 7 conditions.** The scripts below run inference and/or deploy on no more than 7 models (either the fixed list or the top 7 by mAP). With `--top-by-map`, a one-time inference over all conditions is used only to rank and pick the top 7; then only those 7 are deployed.
 
 **A. Validate that all 7 checkpoints exist and pass one-batch inference**
 ```bash

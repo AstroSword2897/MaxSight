@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Run inference on the top 7 conditions, then deploy (export) all 7. Target: ~1 hour.
+"""Run inference and deployment for the top 7 conditions only. Target: ~1 hour.
 
-1. Inference: run improve_map_all_models for the 7 (optional, if --val-annotation + --image-dir given; use --max-batches to keep short).
-2. Deploy: export each to iOS bundle via deploy_top7.py.
+Inference and deployment are limited to the top 7 (fixed list or top 7 by mAP). No other conditions are inferred or deployed.
+
+1. Inference: optional, only for the top 7 (or all conditions once when --top-by-map, to rank by mAP).
+2. Deploy: export only those 7 to iOS bundles via deploy_top7.py.
 
 Usage:
   # Deploy only (~35–45 min)
