@@ -29,6 +29,7 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 try:
     REPO = Path(__file__).resolve().parents[1]
@@ -62,6 +63,21 @@ def main():
     p.add_argument("--quiet", action="store_true", help="Less output")
     args = p.parse_args()
 
+    def _is_placeholder(p: Optional[Path]) -> bool:
+        if p is None:
+            return True
+        s = str(p)
+        return "/path/to" in s or s == "/path/to" or "path/to" in s
+
+    if _is_placeholder(args.checkpoints_base):
+        args.checkpoints_base = None
+    if _is_placeholder(args.output_dir):
+        args.output_dir = None
+    if _is_placeholder(args.val_annotation):
+        args.val_annotation = None
+    if _is_placeholder(args.image_dir):
+        args.image_dir = None
+
     base = Path(args.checkpoints_base).resolve() if args.checkpoints_base else None
     if base is None:
         r = subprocess.run(
@@ -73,8 +89,12 @@ def main():
         else:
             base = None
         if base is None:
-            print("No checkpoints base found. Pass --checkpoints-base /path/to/MaxSight or set CHECKPOINTS_BASE.", file=sys.stderr)
-            print("Discover: python scripts/find_trained_checkpoints.py", file=sys.stderr)
+            print("No checkpoints base found.", file=sys.stderr)
+            if Path("/content/drive").exists():
+                print("On Colab use: --checkpoints-base /content/drive/MyDrive/MaxSight", file=sys.stderr)
+                print("(Mount Drive first: from google.colab import drive; drive.mount(\"/content/drive\"))", file=sys.stderr)
+            else:
+                print("Pass --checkpoints-base <dir> or set CHECKPOINTS_BASE. Discover: python scripts/find_trained_checkpoints.py", file=sys.stderr)
             return 1
     base = base.resolve()
     out_dir = Path(args.output_dir).resolve() if args.output_dir else (base / "exports_top7")

@@ -91,22 +91,30 @@ python scripts/run_inference_on_inference_datasets.py \
 
 ---
 
-## 4. Quick copy-paste (Colab, all in one cell)
+## 4. Quick copy-paste (Colab)
 
-```python
-# Set paths
-import os
-os.environ["REPO"] = "/content/2026-Prototype"
-os.environ["CHECKPOINTS_BASE"] = "/content/drive/MyDrive/MaxSight"
-os.environ["DATA_DIR"] = "/content/drive/MyDrive/MaxSight_Training"
+**Use these paths on Colab (do not use `/path/to/...` – that is a placeholder):**
 
-# Then in a shell cell:
-# %cd $REPO
-# !python scripts/deploy_top7.py --checkpoints-base $CHECKPOINTS_BASE --validate-only
-# !python scripts/deploy_top7.py --checkpoints-base $CHECKPOINTS_BASE --output-dir $CHECKPOINTS_BASE/exports_top7
+```bash
+cd /content/2026-Prototype
+# Deploy only (no inference). Checkpoints must already be on Drive.
+!python scripts/inference_and_deploy_top7.py \
+  --checkpoints-base /content/drive/MyDrive/MaxSight \
+  --output-dir /content/drive/MyDrive/MaxSight/exports_top7
 ```
 
-Or run the shell commands directly with the literal paths instead of env vars.
+With inference (if you have val data on Drive):
+```bash
+cd /content/2026-Prototype
+!python scripts/inference_and_deploy_top7.py \
+  --checkpoints-base /content/drive/MyDrive/MaxSight \
+  --output-dir /content/drive/MyDrive/MaxSight/exports_top7 \
+  --val-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json \
+  --image-dir /content/drive/MyDrive/MaxSight_Training \
+  --max-batches 8
+```
+
+Mount Drive first: `from google.colab import drive; drive.mount("/content/drive")`. If you omit `--checkpoints-base`, the script tries to find checkpoints (e.g. under `/content/drive/MyDrive/MaxSight`).
 
 ---
 

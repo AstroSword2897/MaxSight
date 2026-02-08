@@ -87,6 +87,13 @@ def main():
     )
     from ml.training.export import export_ios_bundle
 
+    def _is_placeholder(p) -> bool:
+        if p is None:
+            return True
+        s = str(p)
+        return "/path/to" in s or "path/to" in s
+    if _is_placeholder(args.checkpoints_base):
+        args.checkpoints_base = None
     base = Path(args.checkpoints_base).resolve() if args.checkpoints_base else None
     if base is None:
         base = _find_checkpoints_base()
