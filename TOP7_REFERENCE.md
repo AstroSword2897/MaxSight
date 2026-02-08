@@ -112,30 +112,47 @@ python scripts/run_inference_on_inference_datasets.py \
 
 ---
 
-## 4. Quick copy-paste (Colab)
+## 4. New Colab instance (copy-paste)
 
-**Use these paths on Colab (do not use `/path/to/...` – that is a placeholder):**
+Open a **new Colab notebook**, then run these in order.
 
-```bash
-cd /content/2026-Prototype
-# Deploy only (no inference). Checkpoints must already be on Drive.
+**Cell 1 – Mount Drive and clone repo**
+```python
+from google.colab import drive
+drive.mount("/content/drive")
+
+%cd /content
+!git clone -q -b feature/multimodal_refactor https://github.com/AstroSword2897/2026-Prototype.git
+%cd /content/2026-Prototype
+!git pull
+```
+
+**Cell 2 – Install deps (if needed)**
+```python
+!pip install -q torch torchvision  # Colab usually has these
+# !pip install -q -r requirements.txt   # if repo has one
+```
+
+**Cell 3a – Deploy only (top 7 fixed list)**  
+Checkpoints must already be on Drive at `MyDrive/MaxSight/checkpoints_<cond>/best_model.pt`.
+```python
 !python scripts/inference_and_deploy_top7.py \
   --checkpoints-base /content/drive/MyDrive/MaxSight \
   --output-dir /content/drive/MyDrive/MaxSight/exports_top7
 ```
 
-With inference (if you have val data on Drive):
-```bash
-cd /content/2026-Prototype
+**Cell 3b – Top 7 by mAP then deploy**  
+Runs inference on all conditions, picks the 7 with highest mAP, then exports them. Val data must be on Drive.
+```python
 !python scripts/inference_and_deploy_top7.py \
   --checkpoints-base /content/drive/MyDrive/MaxSight \
   --output-dir /content/drive/MyDrive/MaxSight/exports_top7 \
   --val-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json \
   --image-dir /content/drive/MyDrive/MaxSight_Training \
-  --max-batches 8
+  --top-by-map --max-batches 8
 ```
 
-Mount Drive first: `from google.colab import drive; drive.mount("/content/drive")`. If you omit `--checkpoints-base`, the script tries to find checkpoints (e.g. under `/content/drive/MyDrive/MaxSight`).
+**Paths:** Use `/content/drive/MyDrive/MaxSight` for checkpoints and `/content/drive/MyDrive/MaxSight_Training` for data; adjust if your Drive layout differs.
 
 ---
 
