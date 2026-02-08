@@ -25,6 +25,9 @@ Usage:
     --val-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json \\
     --image-dir /content/drive/MyDrive/MaxSight_Training \\
     --max-batches 8
+
+  # Aim for 0.5 mAP on inference (sweep confidence/NMS; slower)
+  python scripts/inference_and_deploy_top7.py ... --sweep-for-map --target-map 0.5
 """
 
 import argparse
@@ -79,6 +82,10 @@ def main():
                    help="Deploy the top 7 conditions by mAP (from inference_data.json or run inference over all conditions first)")
     p.add_argument("--inference-data", type=Path, default=None,
                    help="Path to inference_data.json (for --top-by-map; default repo inference_data.json)")
+    p.add_argument("--sweep-for-map", action="store_true",
+                   help="Sweep confidence/NMS to maximize mAP (slower; aims for higher mAP e.g. 0.5)")
+    p.add_argument("--target-map", type=float, default=None, metavar="F",
+                   help="When sweeping, extend search to try to reach at least this mAP@0.5 (e.g. 0.5)")
     p.add_argument("--quiet", action="store_true", help="Less output")
     args = p.parse_args()
 
@@ -128,21 +135,41 @@ def main():
         print("Warning: --image-dir required for inference; skipping inference.", file=sys.stderr)
         run_inference = False
 
+    sweep_for_map = getattr(args, "sweep_for_map", False)
+    target_map = getattr(args, "target_map", None)
+
     if top_by_map and not inference_data_path.exists() and run_inference:
-        print("Step 1/2: Inference (all conditions) to rank by mAP...")
-        cmd = [
-            sys.executable,
-            str(REPO / "scripts" / "run_checkpoint_inference.py"),
-            "--checkpoints-base", str(base),
-            "--val-annotation", str(args.val_annotation),
-            "--image-dir", str(args.image_dir),
-            "--output", str(inference_data_path),
-            "--max-batches", str(args.max_batches),
-            "--confidence", "0.05",
-        ]
-        if args.quiet:
-            cmd += ["--quiet"]
-        r = subprocess.run(cmd, cwd=str(REPO))
+        if sweep_for_map:
+            print("Step 1/2: Inference (all conditions, sweep for best mAP)...")
+            cmd = [
+                sys.executable,
+                str(REPO / "scripts" / "improve_map_all_models.py"),
+                "--checkpoints-base", str(base),
+                "--val-annotation", str(args.val_annotation),
+                "--image-dir", str(args.image_dir),
+                "--output", str(inference_data_path),
+                "--max-batches", str(args.max_batches),
+            ]
+            if target_map is not None:
+                cmd += ["--target-map", str(target_map)]
+            if args.quiet:
+                cmd.append("--quiet")
+            r = subprocess.run(cmd, cwd=str(REPO))
+        else:
+            print("Step 1/2: Inference (all conditions) to rank by mAP...")
+            cmd = [
+                sys.executable,
+                str(REPO / "scripts" / "run_checkpoint_inference.py"),
+                "--checkpoints-base", str(base),
+                "--val-annotation", str(args.val_annotation),
+                "--image-dir", str(args.image_dir),
+                "--output", str(inference_data_path),
+                "--max-batches", str(args.max_batches),
+                "--confidence", "auto",
+            ]
+            if args.quiet:
+                cmd += ["--quiet"]
+            r = subprocess.run(cmd, cwd=str(REPO))
         if r.returncode != 0:
             print("Inference step had errors; continuing to deploy with default top 7.", file=sys.stderr)
         else:
@@ -155,11 +182,15 @@ def main():
             "--checkpoints-base", str(base),
             "--val-annotation", str(args.val_annotation),
             "--image-dir", str(args.image_dir),
+            "--output", str(inference_data_path),
             "--conditions"] + TOP7 + [
             "--max-batches", str(args.max_batches),
-            "--skip-sweep",
-            "--confidence", "0.05",
         ]
+        if sweep_for_map:
+            if target_map is not None:
+                cmd += ["--target-map", str(target_map)]
+        else:
+            cmd += ["--skip-sweep", "--confidence", "auto"]
         if args.quiet:
             cmd.append("--quiet")
         r = subprocess.run(cmd, cwd=str(REPO))

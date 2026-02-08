@@ -51,6 +51,7 @@ CONDITIONS = [
 ]
 
 CONF_CANDIDATES = [0.3, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001]  # low values for weak/untrained checkpoints
+CONF_CANDIDATES_TARGET_MAP = [0.001, 0.0005]  # extra low when aiming for 0.5+ mAP
 NMS_IOU_CANDIDATES = [0.5, 0.6, 0.7, 0.8]
 
 
@@ -90,8 +91,9 @@ def main():
     parser.add_argument("--conditions", nargs="*", default=None, help="Limit to these conditions (default: all)")
     parser.add_argument("--max-batches", type=int, default=None, help="Cap batches per sweep run (faster sweep)")
     parser.add_argument("--skip-sweep", action="store_true", help="Skip sweep; run inference once with --confidence and --nms-iou")
-    parser.add_argument("--confidence", type=float, default=0.05, help="Used if --skip-sweep")
+    parser.add_argument("--confidence", type=str, default="0.05", help="Used if --skip-sweep: float or 'auto' for adaptive threshold")
     parser.add_argument("--nms-iou", type=float, default=0.5, help="Used if --skip-sweep")
+    parser.add_argument("--target-map", type=float, default=None, metavar="F", help="When sweeping, try to reach at least this mAP@0.5 (extends confidence candidates, may try 'auto')")
     parser.add_argument("--quiet", action="store_true", help="Minimal output: only best params and final result.")
     args = parser.parse_args()
 
@@ -114,13 +116,21 @@ def main():
         return 1
 
     conditions = args.conditions or CONDITIONS
-    best_conf, best_nms = args.confidence, args.nms_iou
+    try:
+        best_conf = float(args.confidence)
+    except ValueError:
+        best_conf = args.confidence  # e.g. "auto"
+    best_nms = args.nms_iou
     best_map = -1.0
 
+    conf_candidates = list(CONF_CANDIDATES)
+    if getattr(args, "target_map", None) is not None:
+        conf_candidates = list(conf_candidates) + list(CONF_CANDIDATES_TARGET_MAP) + ["auto"]
+
     if not args.skip_sweep:
-        total = len(CONF_CANDIDATES) * len(NMS_IOU_CANDIDATES)
+        total = len(conf_candidates) * len(NMS_IOU_CANDIDATES)
         n = 0
-        for conf, iou in itertools.product(CONF_CANDIDATES, NMS_IOU_CANDIDATES):
+        for conf, iou in itertools.product(conf_candidates, NMS_IOU_CANDIDATES):
             n += 1
             if not args.quiet:
                 print(f"\n[{n}/{total}] confidence={conf}, nms_iou={iou}")
@@ -130,7 +140,7 @@ def main():
                 "--val-annotation", str(val_ann),
                 "--image-dir", str(image_dir),
                 "--checkpoints-base", str(base),
-                "--confidence", str(conf),
+                "--confidence", str(conf) if not isinstance(conf, str) else conf,
                 "--nms-iou", str(iou),
             ]
             if conditions:
@@ -151,6 +161,10 @@ def main():
                 best_conf, best_nms = conf, iou
                 if not args.quiet:
                     print("  -> new best")
+            if getattr(args, "target_map", None) is not None and best_map >= args.target_map:
+                if not args.quiet:
+                    print(f"  Reached target mAP {args.target_map}; stopping sweep.")
+                break
 
         if not args.quiet:
             print("\nBEST RESULT")
