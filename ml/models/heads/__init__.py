@@ -9,7 +9,7 @@ from .motion_head import MotionHead
 from .roi_priority_head import ROIPriorityHead
 from .uncertainty_head import UncertaintyHead
 
-# Head registry for dynamic head creation
+# Head registry for dynamic head creation.
 HEAD_REGISTRY = {
     'contrast': ContrastMapHead,
     'depth': DepthHead,
@@ -48,3 +48,4 @@ __all__ = [
     'create_head',
     'list_available_heads',
 ]
+

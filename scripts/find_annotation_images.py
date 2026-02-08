@@ -11,7 +11,7 @@ import json
 import sys
 from pathlib import Path
 
-# Defaults for Colab
+# Defaults for Colab.
 DEFAULT_VAL_JSON = "/content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json"
 DEFAULT_SEARCH_ROOT = "/content/drive/MyDrive"
 
@@ -130,3 +130,4 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

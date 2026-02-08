@@ -13,9 +13,9 @@ from dataclasses import dataclass
 class PredictiveAlert:
     """Represents a predictive alert."""
     hazard_type: str
-    predicted_location: Tuple[float, float]  # (x, y) normalized
+    predicted_location: Tuple[float, float]  # (x, y) normalized.
     confidence: float
-    time_to_hazard: float  # seconds
+    time_to_hazard: float  # Seconds.
     recommended_action: str
 
 
@@ -33,14 +33,14 @@ class PredictiveAlertHead(nn.Module):
         
         self.num_hazard_types = num_hazard_types
         
-        # Motion prediction network
+        # Motion prediction network.
         self.motion_predictor = nn.Sequential(
             nn.Linear(motion_dim, 128),
             nn.ReLU(),
             nn.Linear(128, 4)  # (dx, dy, speed, direction)
         )
         
-        # Hazard prediction network
+        # Hazard prediction network.
         self.hazard_predictor = nn.Sequential(
             nn.Linear(input_dim + motion_dim, 256),
             nn.ReLU(),
@@ -48,14 +48,14 @@ class PredictiveAlertHead(nn.Module):
             nn.Softmax(dim=1)
         )
         
-        # Location predictor
+        # Location predictor.
         self.location_predictor = nn.Sequential(
             nn.Linear(input_dim + motion_dim, 128),
             nn.ReLU(),
-            nn.Linear(128, 2)  # (x, y) normalized coordinates
+            nn.Linear(128, 2)  # (x, y) normalized coordinates.
         )
         
-        # Time-to-hazard predictor
+        # Time-to-hazard predictor.
         self.time_predictor = nn.Sequential(
             nn.Linear(input_dim + motion_dim, 64),
             nn.ReLU(),
@@ -63,50 +63,50 @@ class PredictiveAlertHead(nn.Module):
             nn.ReLU()  # Time in seconds (non-negative)
         )
         
-        # Action recommendation network
+        # Action recommendation network.
         self.action_recommender = nn.Sequential(
             nn.Linear(input_dim + motion_dim + num_hazard_types, 128),
             nn.ReLU(),
-            nn.Linear(128, 5)  # 5 action types: stop, slow, left, right, continue
+            nn.Linear(128, 5)  # 5 action types: stop, slow, left, right, continue.
         )
     
     def forward(
         self,
-        scene_features: torch.Tensor,  # [B, input_dim]
-        motion_features: Optional[torch.Tensor] = None,  # [B, motion_dim]
+        scene_features: torch.Tensor,  # [B, input_dim].
+        motion_features: Optional[torch.Tensor] = None,  # [B, motion_dim].
         spatial_memory: Optional[torch.Tensor] = None  # [B, N_objects, 4] (boxes)
     ) -> Dict[str, torch.Tensor]:
         """Predict hazards and generate alerts...."""
         B = scene_features.shape[0]
         
-        # Default motion features if not provided
+        # Default motion features if not provided.
         if motion_features is None:
             motion_features = torch.zeros(B, 256, device=scene_features.device)
         
-        # Combine scene and motion features
-        combined = torch.cat([scene_features, motion_features], dim=1)  # [B, input_dim + motion_dim]
+        # Combine scene and motion features.
+        combined = torch.cat([scene_features, motion_features], dim=1)  # [B, input_dim + motion_dim].
         
-        # Motion prediction
-        motion_pred = self.motion_predictor(motion_features)  # [B, 4]
+        # Motion prediction.
+        motion_pred = self.motion_predictor(motion_features)  # [B, 4].
         
-        # Hazard prediction
-        hazard_probs = self.hazard_predictor(combined)  # [B, num_hazard_types]
+        # Hazard prediction.
+        hazard_probs = self.hazard_predictor(combined)  # [B, num_hazard_types].
         
-        # Location prediction
-        predicted_location = self.location_predictor(combined)  # [B, 2]
-        predicted_location = torch.sigmoid(predicted_location)  # Normalize to [0, 1]
+        # Location prediction.
+        predicted_location = self.location_predictor(combined)  # [B, 2].
+        predicted_location = torch.sigmoid(predicted_location)  # Normalize to [0, 1].
         
-        # Time-to-hazard prediction
-        time_to_hazard = self.time_predictor(combined)  # [B, 1]
+        # Time-to-hazard prediction.
+        time_to_hazard = self.time_predictor(combined)  # [B, 1].
         
-        # Action recommendation
-        action_input = torch.cat([combined, hazard_probs], dim=1)  # [B, input_dim + motion_dim + num_hazard_types]
-        action_logits = self.action_recommender(action_input)  # [B, 5]
+        # Action recommendation.
+        action_input = torch.cat([combined, hazard_probs], dim=1)  # [B, input_dim + motion_dim + num_hazard_types].
+        action_logits = self.action_recommender(action_input)  # [B, 5].
         action_probs = F.softmax(action_logits, dim=1)
-        recommended_action = action_logits.argmax(dim=1)  # [B]
+        recommended_action = action_logits.argmax(dim=1)  # [B].
         
-        # Confidence score
-        confidence = hazard_probs.max(dim=1)[0]  # [B]
+        # Confidence score.
+        confidence = hazard_probs.max(dim=1)[0]  # [B].
         
         return {
             'hazard_probs': hazard_probs,
@@ -117,5 +117,6 @@ class PredictiveAlertHead(nn.Module):
             'confidence': confidence,
             'motion_prediction': motion_pred
         }
+
 
 

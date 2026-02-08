@@ -6,7 +6,7 @@ import pytest
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -41,7 +41,7 @@ class TestVisionTransformerBackbone:
             img_size=224,
             patch_size=16,
             embed_dim=768,
-            num_layers=2  # Reduced for testing
+            num_layers=2  # Reduced for testing.
         )
         model.eval()
         
@@ -102,10 +102,10 @@ class TestHybridBackbone:
         try:
             output = model(x)
             assert output is not None
-            # Output can be tensor or dict depending on return_all_features
+            # Output can be tensor or dict depending on return_all_features.
             assert isinstance(output, (torch.Tensor, dict))
         except Exception as e:
-            # May fail due to shape issues, skip for now
+            # May fail due to shape issues, skip for now.
             pytest.skip(f"Hybrid backbone forward test skipped: {e}")
 
 
@@ -141,7 +141,7 @@ class TestDynamicConvolution:
             output = conv(x)
             assert output.shape == (2, 128, 32, 32)
         except Exception as e:
-            # May fail due to shape issues in dynamic kernel computation
+            # May fail due to shape issues in dynamic kernel computation.
             pytest.skip(f"Dynamic conv forward test skipped: {e}")
 
 
@@ -262,7 +262,7 @@ class TestTemporalModules:
         )
         conv_lstm.eval()
         
-        x = torch.randn(2, 8, 256, 32, 32)  # [B, T, C, H, W]
+        x = torch.randn(2, 8, 256, 32, 32)  # [B, T, C, H, W].
         output, (h, c) = conv_lstm(x)
         
         assert output.shape == (2, 8, 256, 32, 32)
@@ -276,18 +276,18 @@ class TestTemporalModules:
         timesformer = TimeSformer(
             embed_dim=768,
             num_heads=12,
-            num_layers=2,  # Reduced for testing
+            num_layers=2,  # Reduced for testing.
             num_frames=8
         )
         timesformer.eval()
         
-        # TimeSformer expects [B, T, N, D] where T matches num_frames
-        x = torch.randn(2, 8, 196, 768)  # [B, T, N_patches, embed_dim]
+        # TimeSformer expects [B, T, N, D] where T matches num_frames.
+        x = torch.randn(2, 8, 196, 768)  # [B, T, N_patches, embed_dim].
         try:
             output = timesformer(x)
             assert output.shape == (2, 768)
         except Exception as e:
-            # May fail due to tensor shape issues, skip for now
+            # May fail due to tensor shape issues, skip for now.
             pytest.skip(f"TimeSformer test skipped: {e}")
     
     def test_temporal_encoder_forward(self):
@@ -299,18 +299,18 @@ class TestTemporalModules:
             num_frames=8,
             hidden_dim=256,
             use_conv_lstm=True,
-            use_timesformer=False  # Disable for testing without ViT patches
+            use_timesformer=False  # Disable for testing without ViT patches.
         )
         encoder.eval()
         
-        # Temporal encoder expects [B, C, T, H, W] format
-        x = torch.randn(2, 256, 8, 32, 32)  # [B, C, T, H, W]
+        # Temporal encoder expects [B, C, T, H, W] format.
+        x = torch.randn(2, 256, 8, 32, 32)  # [B, C, T, H, W].
         try:
             output = encoder(x)
             assert isinstance(output, dict)
             assert 'motion' in output or 'motion_features' in output
         except Exception as e:
-            # May fail due to shape mismatches, skip for now
+            # May fail due to shape mismatches, skip for now.
             pytest.skip(f"Temporal encoder test skipped: {e}")
 
 
@@ -320,10 +320,11 @@ def run_all_tests():
     print("Phase 0: Advanced Backbone & Architecture Tests")
     print("=" * 60)
     
-    # Run pytest
+    # Run pytest.
     pytest.main([__file__, "-v"])
 
 
 if __name__ == "__main__":
     run_all_tests()
+
 

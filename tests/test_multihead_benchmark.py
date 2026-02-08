@@ -22,13 +22,13 @@ def test_multihead_latency():
     
     benchmark = MultiHeadBenchmark(model, device=device)
     
-    # Test input
+    # Test input.
     dummy_image = torch.randn(1, 3, 224, 224).to(device)
     
-    # Benchmark all head combinations
+    # Benchmark all head combinations.
     results = benchmark.benchmark_all_heads(dummy_image)
     
-    # Analyze bottlenecks
+    # Analyze bottlenecks.
     bottleneck_analysis = benchmark.identify_bottlenecks(target_latency_ms=500.0)
     
     print("\nBenchmark Results:")
@@ -50,7 +50,7 @@ def test_multihead_latency():
         for rec in bottleneck_analysis['recommendations']:
             print(f"    - {rec}")
     
-    # Get optimal configuration
+    # Get optimal configuration.
     optimal_config = benchmark.get_optimal_head_config(
         target_latency_ms=500.0,
         required_heads=['classification', 'box_regression', 'objectness']
@@ -58,11 +58,11 @@ def test_multihead_latency():
     
     print(f"\n  Optimal head configuration: {optimal_config}")
     
-    # Assert that at least core heads meet target
+    # Assert that at least core heads meet target.
     # Try different key orderings (sorted vs unsorted)
     core_key = 'classification+box_regression+objectness'
     if core_key not in results:
-        # Try sorted version
+        # Try sorted version.
         core_key = 'box_regression+classification+objectness'
     
     core_latency = results.get(core_key, {}).get('mean_ms', float('inf'))
@@ -73,4 +73,5 @@ def test_multihead_latency():
 
 if __name__ == "__main__":
     test_multihead_latency()
+
 

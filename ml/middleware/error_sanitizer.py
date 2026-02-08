@@ -13,14 +13,14 @@ def sanitize_error(error: Exception, debug: bool = None) -> Dict[str, Any]:
         debug = os.environ.get('DEBUG', '0').lower() in ('1', 'true', 'yes')
     
     if debug:
-        # Show full error in debug mode
+        # Show full error in debug mode.
         return {
             'error': str(error),
             'type': type(error).__name__,
             'traceback': traceback.format_exc()
         }
     else:
-        # Generic error in production
+        # Generic error in production.
         return {
             'error': 'An internal error occurred. Please try again or contact support.',
             'type': 'InternalError'
@@ -46,4 +46,5 @@ def log_error(error: Exception, context: Dict[str, Any] = None) -> None:
         error_info['context'] = context
     
     logger.error(f"Error occurred: {error_info}", exc_info=True)
+
 

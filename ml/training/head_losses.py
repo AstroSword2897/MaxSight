@@ -138,19 +138,19 @@ class MotionLoss(HeadLoss):
         flow_loss = self._charbonnier_loss(flow_error).mean()
         
         # Smoothness loss (edge-weighted if image provided)
-        # Compute flow gradients
-        flow_grad_x = pred_flow[:, :, :, :-1] - pred_flow[:, :, :, 1:]  # [B, 2, H, W-1]
-        flow_grad_y = pred_flow[:, :, :-1, :] - pred_flow[:, :, 1:, :]  # [B, 2, H-1, W]
+        # Compute flow gradients.
+        flow_grad_x = pred_flow[:, :, :, :-1] - pred_flow[:, :, :, 1:]  # [B, 2, H, W-1].
+        flow_grad_y = pred_flow[:, :, :-1, :] - pred_flow[:, :, 1:, :]  # [B, 2, H-1, W].
         
         # Edge-aware weighting (if image provided)
         image = targets.get('image')
         if self.use_edge_aware and image is not None:
-            # Compute image gradients for edge detection
+            # Compute image gradients for edge detection.
             img_grad_x = torch.abs(image[:, :, :, :-1] - image[:, :, :, 1:]).mean(dim=1, keepdim=True)
             img_grad_y = torch.abs(image[:, :, :-1, :] - image[:, :, 1:, :]).mean(dim=1, keepdim=True)
             
             # Weight smoothness inversely by image gradient (less penalty at edges)
-            edge_weight_x = torch.exp(-img_grad_x * 10.0)  # Scale factor for edge sensitivity
+            edge_weight_x = torch.exp(-img_grad_x * 10.0)  # Scale factor for edge sensitivity.
             edge_weight_y = torch.exp(-img_grad_y * 10.0)
             
             smoothness_x = (self._charbonnier_loss(flow_grad_x) * edge_weight_x).mean()
@@ -250,24 +250,24 @@ class DepthLoss(HeadLoss):
         target_depth = targets.get('depth_map')
         target_zones = targets.get('distance_zones')
         
-        # Initialize losses with correct dtype
+        # Initialize losses with correct dtype.
         depth_loss = torch.zeros((), device=device, dtype=dtype)
         zone_loss = torch.zeros((), device=device, dtype=dtype)
         
         # Uncertainty-weighted depth: L = |d - d_gt|*exp(-u) + u.
         if pred_depth is not None and target_depth is not None:
-            depth_error = torch.abs(pred_depth - target_depth)  # [B, H, W]
+            depth_error = torch.abs(pred_depth - target_depth)  # [B, H, W].
             
             if pred_uncertainty is not None:
-                # Clamp uncertainty away from exactly 0 or 1 for numerical stability
+                # Clamp uncertainty away from exactly 0 or 1 for numerical stability.
                 uncertainty = torch.clamp(pred_uncertainty, min=1e-6, max=1.0 - 1e-6)
                 
                 depth_loss = (depth_error * torch.exp(-uncertainty) + uncertainty).mean()
             else:
-                # Fallback: standard L1 loss if uncertainty not available
+                # Fallback: standard L1 loss if uncertainty not available.
                 depth_loss = depth_error.mean()
         
-        # Zone classification loss
+        # Zone classification loss.
         if pred_zones is not None and target_zones is not None:
             zone_loss = self.ce_loss(pred_zones, target_zones.long()) * self.zone_weight
         
@@ -307,7 +307,7 @@ class UncertaintyLoss(HeadLoss):
         }
 
 
-# Registry for head losses
+# Registry for head losses.
 HEAD_LOSS_REGISTRY = {
     'contrast': ContrastLoss,
     'fatigue': FatigueLoss,
@@ -341,4 +341,5 @@ __all__ = [
     'HEAD_LOSS_REGISTRY',
     'create_head_loss',
 ]
+
 

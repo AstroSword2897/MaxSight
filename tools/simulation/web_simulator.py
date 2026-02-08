@@ -21,14 +21,14 @@ import logging
 import uuid
 from collections import defaultdict
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-# Flask for web server
+# Flask for web server.
 from flask import Flask, render_template, request, jsonify, send_from_directory  # type: ignore
 from flask_cors import CORS  # type: ignore
 
-# Import ALL MaxSight components
+# Import ALL MaxSight components.
 from ml.models.maxsight_cnn import create_model
 from ml.utils.preprocessing import ImagePreprocessor
 from ml.utils.output_scheduler import CrossModalScheduler, OutputConfig
@@ -75,7 +75,7 @@ from .utils import get_device, preprocess_image, postprocess_outputs, run_infere
 from ml.utils.priority_filter import PriorityBudgetFilter
 from ml.utils.alert_cooldown import AlertCooldownFilter
 
-# Setup structured logging
+# Setup structured logging.
 logger = setup_structured_logging(config.log_level)
 api_logger = get_component_logger('api')
 session_logger = get_component_logger('session')
@@ -88,14 +88,14 @@ app = Flask(__name__,
 cors_origins = os.getenv('MAXSIGHT_CORS_ORIGINS', 'http://localhost:8002,http://127.0.0.1:8002').split(',')
 CORS(app, origins=cors_origins, supports_credentials=True)
 
-# Add security headers to all responses
+# Add security headers to all responses.
 @app.after_request
 def add_security_headers_after_request(response):
     """Add security headers to all Flask responses."""
     add_security_headers(response)
     return response
 
-# Rate limiters
+# Rate limiters.
 session_rate_limiter = RateLimiter(config.rate_limit_per_session)
 global_rate_limiter = GlobalRateLimiter(config.rate_limit_global)
 
@@ -197,10 +197,10 @@ class MaxSightSession:
         self.core = core
         self.output_mode = output_mode or config.default_output_mode
         
-        # Per-session lock for frame processing
+        # Per-session lock for frame processing.
         self.lock = threading.Lock()
         
-        # Per-session components
+        # Per-session components.
         self.preprocessor: Optional[ImagePreprocessor] = None
         self.spatial_memory = SpatialMemory()
         self.path_planner = PathPlanner()
@@ -250,7 +250,7 @@ class MaxSightSession:
         """Check if session has expired."""
         if timeout_seconds is None:
             timeout_seconds = config.session_timeout_seconds
-        assert timeout_seconds is not None  # Type narrowing for linter
+        assert timeout_seconds is not None  # Type narrowing for linter.
         return (time.time() - self.last_activity) > timeout_seconds
     
     def abort(self):
@@ -270,9 +270,9 @@ class MaxSightSession:
                 except Exception as e:
                     session_logger.warning(f"Error flushing haptic queue during abort: {str(e)}", 
                                           session_id=self.session_id)
-            # Clear output authority
+            # Clear output authority.
             self.output_authority.reset()
-            # Stop voice/haptic immediately
+            # Stop voice/haptic immediately.
             try:
                 self.voice_feedback.stop()
             except Exception as e:
@@ -291,7 +291,7 @@ class MaxSightSession:
         try:
             self.voice_queue.put((None, MessagePriority.LOW), block=False)
         except Exception:
-            pass  # Queue may be full, workers will stop on timeout
+            pass  # Queue may be full, workers will stop on timeout.
         try:
             self.haptic_queue.put((None, MessagePriority.LOW), block=False)
         except Exception:
@@ -320,10 +320,10 @@ class MaxSightSession:
                     if not self.degraded_state.is_degraded(DegradedMode.AUDIO_UNAVAILABLE):
                         try:
                             self.voice_feedback.speak_custom(message, priority=priority)
-                            consecutive_failures = 0  # Reset on success
+                            consecutive_failures = 0  # Reset on success.
                             backoff_seconds = 0.1
                         except (OSError, IOError) as e:
-                            # Hardware/system errors
+                            # Hardware/system errors.
                             consecutive_failures += 1
                             session_logger.error(f"Voice hardware error: {str(e)}", 
                                                 session_id=self.session_id)
@@ -344,13 +344,13 @@ class MaxSightSession:
                         session_logger.warning("Voice output suppressed - audio degraded", 
                                               session_id=self.session_id)
                 except Exception as e:
-                    # Queue errors - log but continue
-                    # Empty exception is expected on timeout, don't log as error
+                    # Queue errors - log but continue.
+                    # Empty exception is expected on timeout, don't log as error.
                     from queue import Empty
                     if not isinstance(e, (Empty, TimeoutError, AttributeError)):
                         session_logger.error(f"Voice queue error: {str(e)}", 
                                             session_id=self.session_id)
-                    time.sleep(0.1)  # Brief pause on error
+                    time.sleep(0.1)  # Brief pause on error.
         
         def haptic_worker():
             self._haptic_worker_running = True
@@ -372,10 +372,10 @@ class MaxSightSession:
                                 self.haptic_feedback.trigger(pattern, intensity=intensity)
                             else:
                                 self.haptic_feedback.trigger(message)
-                            consecutive_failures = 0  # Reset on success
+                            consecutive_failures = 0  # Reset on success.
                             backoff_seconds = 0.1
                         except (OSError, IOError) as e:
-                            # Hardware/system errors
+                            # Hardware/system errors.
                             consecutive_failures += 1
                             session_logger.error(f"Haptic hardware error: {str(e)}", 
                                                 session_id=self.session_id)
@@ -396,20 +396,20 @@ class MaxSightSession:
                         session_logger.warning("Haptic output suppressed - haptic degraded", 
                                             session_id=self.session_id)
                 except Exception as e:
-                    # Queue errors - log but continue
-                    # Empty exception is expected on timeout, don't log as error
+                    # Queue errors - log but continue.
+                    # Empty exception is expected on timeout, don't log as error.
                     from queue import Empty
                     if not isinstance(e, (Empty, TimeoutError, AttributeError)):
                         session_logger.error(f"Haptic queue error: {str(e)}", 
                                             session_id=self.session_id)
-                    time.sleep(0.1)  # Brief pause on error
+                    time.sleep(0.1)  # Brief pause on error.
         
         self.voice_thread = threading.Thread(target=voice_worker, daemon=True, name=f"Voice-{self.session_id}")
         self.haptic_thread = threading.Thread(target=haptic_worker, daemon=True, name=f"Haptic-{self.session_id}")
         self.voice_thread.start()
         self.haptic_thread.start()
     
-    # Forward all the processing methods from MaxSightSimulator
+    # Forward all the processing methods from MaxSightSimulator.
     # (We'll move them in the next step)
     
     def _preprocess_image(self, image: Image.Image) -> torch.Tensor:
@@ -426,7 +426,7 @@ class MaxSightSession:
         # Acquire inference semaphore (serializes model access)
         with INFERENCE_SEMAPHORE:
             inference_start = time.perf_counter()
-            with torch.no_grad():  # Critical: prevents graph construction and memory leaks
+            with torch.no_grad():  # Critical: prevents graph construction and memory leaks.
                 if audio_features is not None:
                     audio_tensor = torch.from_numpy(audio_features).unsqueeze(0).to(self.core.device)
                     outputs = self.core.model(image_tensor, audio_tensor)
@@ -473,14 +473,14 @@ class MaxSightSession:
     
     def _update_memory(self, detections_list: List[Dict[str, Any]]) -> None:
         """Update spatial memory with current detections, enforcing resource caps."""
-        # Check resource cap before updating
+        # Check resource cap before updating.
         if self._spatial_memory_count >= config.max_spatial_memory_entries:
-            # Prune oldest entries if at capacity
+            # Prune oldest entries if at capacity.
             try:
-                # Get memory size and prune if needed
+                # Get memory size and prune if needed.
                 memory_size = len(self.spatial_memory.memory) if hasattr(self.spatial_memory, 'memory') else 0
                 if memory_size >= config.max_spatial_memory_entries:
-                    # Prune oldest 10% of entries
+                    # Prune oldest 10% of entries.
                     prune_count = max(1, memory_size // 10)
                     if hasattr(self.spatial_memory, 'prune_oldest'):
                         self.spatial_memory.prune_oldest(prune_count)
@@ -505,7 +505,7 @@ class MaxSightSession:
                     detections=spatial_detections,
                     timestamp=time.time()
                 )
-                # Update resource tracking
+                # Update resource tracking.
                 self._spatial_memory_count = len(self.spatial_memory.memory) if hasattr(self.spatial_memory, 'memory') else self._spatial_memory_count + len(spatial_detections)
             except Exception as e:
                 session_logger.error(f"Error updating spatial memory: {str(e)}", 
@@ -573,7 +573,7 @@ class MaxSightSession:
         voice_announcements = []
         haptic_patterns = []
         
-        # Compute confidence metrics
+        # Compute confidence metrics.
         objectness = outputs.get('objectness', torch.zeros(1, 196))
         max_objectness = float(objectness.max().item()) if objectness.numel() > 0 else 0.0
         
@@ -587,10 +587,10 @@ class MaxSightSession:
         
         overall_confidence = max(max_objectness, urgency_confidence)
         
-        # Confidence gating for patient output
+        # Confidence gating for patient output.
         min_confidence = config.min_confidence_for_patient_output
         if self.output_mode == OutputMode.PATIENT and overall_confidence < min_confidence:
-            # Suppress low-confidence output for patients
+            # Suppress low-confidence output for patients.
             neutral_message = "Unable to confirm objects in view"
             request = OutputRequest(
                 authority=OutputAuthority.DESCRIPTIVE_NARRATION,
@@ -598,7 +598,7 @@ class MaxSightSession:
                 priority=0
             )
             if self.output_authority.request_output(request):
-                # Queue format: (message, priority) - PriorityQueue.put expects this
+                # Queue format: (message, priority) - PriorityQueue.put expects this.
                 self.voice_queue.put((neutral_message, MessagePriority.LOW))
                 voice_announcements.append(neutral_message)
             return voice_announcements, haptic_patterns
@@ -649,8 +649,8 @@ class MaxSightSession:
         frame_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Process a single frame through the complete MaxSight pipeline...."""
-        with self.lock:  # Per-session locking
-            # Check if aborted
+        with self.lock:  # Per-session locking.
+            # Check if aborted.
             if self._aborted:
                 session_logger.warning("Frame processing rejected - session aborted", 
                                       session_id=self.session_id)
@@ -674,7 +674,7 @@ class MaxSightSession:
                         }
                     self.last_processed_frame_id = frame_id
             
-            # Resource cap check
+            # Resource cap check.
             if self._spatial_memory_count >= config.max_spatial_memory_entries:
                 self.degraded_state.set_degraded(DegradedMode.MEMORY_FULL, 
                                                 f"Memory at capacity: {self._spatial_memory_count}")
@@ -685,7 +685,7 @@ class MaxSightSession:
             # Pipeline latency tracker (per-stage timing)
             tracker = PipelineLatencyTracker()
             
-            # 1. Preprocessing
+            # 1. Preprocessing.
             tracker.start_stage('preprocess')
             try:
                 image_tensor = self._preprocess_image(image)
@@ -697,7 +697,7 @@ class MaxSightSession:
                 return {'error': 'Image preprocessing failed', 'degraded_mode': 'vision_unstable'}
             tracker.end_stage()
             
-            # Check abort before expensive operations
+            # Check abort before expensive operations.
             if self._aborted:
                 return {'error': 'Session aborted', 'session_id': self.session_id}
             
@@ -713,11 +713,11 @@ class MaxSightSession:
                 return {'error': 'Model inference failed', 'degraded_mode': 'vision_unstable'}
             tracker.end_stage()
             
-            # Check abort after inference
+            # Check abort after inference.
             if self._aborted:
                 return {'error': 'Session aborted', 'session_id': self.session_id}
             
-            # 3. Post-process detections + priority budget + alert cooldown
+            # 3. Post-process detections + priority budget + alert cooldown.
             tracker.start_stage('postprocess')
             detections_list = self._postprocess_outputs(outputs, confidence_threshold=config.confidence_threshold)
             if not hasattr(self, 'priority_filter'):
@@ -727,22 +727,22 @@ class MaxSightSession:
             detections_list = self.alert_cooldown.filter_alerts(detections_list, frame_id=frame_id)
             tracker.end_stage()
             
-            # 4. OCR text detection
+            # 4. OCR text detection.
             ocr_results = self._run_ocr(image, outputs)
             
-            # 5. Description generation
+            # 5. Description generation.
             scene_description = self._generate_description(detections_list, outputs, ocr_results)
             
-            # 6. Spatial memory update
+            # 6. Spatial memory update.
             self._update_memory(detections_list)
             
-            # 7. Path planning
+            # 7. Path planning.
             path_info = self._plan_path(detections_list)
             
-            # 8. Output scheduling
+            # 8. Output scheduling.
             scheduled_outputs = self._schedule_outputs(detections_list, outputs)
             
-            # 9. Therapy integration
+            # 9. Therapy integration.
             therapy_feedback = None
             if self.session_active and detections_list and not self._aborted:
                 target_objects = [det.get('class_name', 'object') for det in detections_list[:3]]
@@ -752,7 +752,7 @@ class MaxSightSession:
                     difficulty=config.therapy_difficulty
                 )
             
-            # Check abort before generating outputs
+            # Check abort before generating outputs.
             if self._aborted:
                 return {'error': 'Session aborted', 'session_id': self.session_id}
             
@@ -781,7 +781,7 @@ class MaxSightSession:
             else:
                 overlay_image_b64 = None
             
-            # 11. Queue outputs (voice and haptic) - only if not aborted and not skipped
+            # 11. Queue outputs (voice and haptic) - only if not aborted and not skipped.
             if not self._aborted and not skip_non_critical:
                 tracker.start_stage('audio')
                 voice_announcements, haptic_patterns = self._queue_outputs(scene_description, outputs, detections_list)
@@ -798,7 +798,7 @@ class MaxSightSession:
                     session_id=self.session_id,
                 )
             
-            # Update statistics
+            # Update statistics.
             self.stats['frames_processed'] += 1
             self.stats['total_inference_time'] += inference_time
             self.stats['total_detections'] += len(detections_list)
@@ -807,11 +807,11 @@ class MaxSightSession:
             
             total_time = time.perf_counter() - start_time
             
-            # Extract 3 perspectives
+            # Extract 3 perspectives.
             reasoning_trace = self._extract_reasoning_trace(outputs, detections_list)
             final_judgment = self._extract_final_judgment(outputs, detections_list)
             
-            # Shape response based on output mode
+            # Shape response based on output mode.
             result = self._shape_response(
                 detections_list=detections_list,
                 outputs=outputs,
@@ -1028,7 +1028,7 @@ class MaxSightSession:
                 }
             }
         
-        else:  # DEV mode
+        else:  # DEV mode.
             return {
                 'mode': 'dev',
                 'severity': severity.value,
@@ -1110,7 +1110,7 @@ class SessionRegistry:
             self._janitor_running = True
             while self._janitor_running:
                 try:
-                    time.sleep(60)  # Check every minute
+                    time.sleep(60)  # Check every minute.
                     self.cleanup_expired_sessions()
                 except Exception as e:
                     logger.error(f"Janitor error: {e}")
@@ -1179,16 +1179,16 @@ class SessionRegistry:
 registry = SessionRegistry()
 
 
-# Helper Functions for Flask Routes
+# Helper Functions for Flask Routes.
 
 def get_session_id() -> Optional[str]:
     """Get session ID from request (header or JSON)."""
-    # Checks header first
+    # Checks header first.
     session_id = request.headers.get('X-Session-ID')
     if session_id:
         return session_id
     
-    # Checks JSON body
+    # Checks JSON body.
     if request.is_json and request.json:
         session_id = request.json.get('session_id')
         if session_id:
@@ -1202,7 +1202,7 @@ def require_session() -> MaxSightSession:
     session_id = get_session_id()
     
     if not config.multi_user_enabled:
-        # Single-user demo mode: use a default session
+        # Single-user demo mode: use a default session.
         session_id = session_id or 'default'
         session = registry.get_session(session_id)
         if not session:
@@ -1212,7 +1212,7 @@ def require_session() -> MaxSightSession:
                 raise RuntimeError("Failed to create default session")
         return session
     
-    # Multi-user mode: session ID is required
+    # Multi-user mode: session ID is required.
     if not session_id:
         raise ValueError("Session ID required. Send X-Session-ID header or session_id in JSON.")
     
@@ -1250,14 +1250,14 @@ class MaxSightSimulator:
         )
         logger.warning("Using deprecated MaxSightSimulator class. Consider migrating to MaxSightSession.")
         
-        # Output mode
+        # Output mode.
         self.output_mode = output_mode
         
         # Device setup (using utility function)
         self.device = get_device(device)
         logger.info(f"Device: {self.device}")
         
-        # Initialize model
+        # Initialize model.
         logger.info("Loading model...")
         try:
             self.model = create_model()
@@ -1274,9 +1274,9 @@ class MaxSightSimulator:
             logger.error(f"Error loading model: {e}", exc_info=True)
             raise RuntimeError(f"Failed to initialize model: {str(e)}") from e
         
-        # Initialize all components
+        # Initialize all components.
         logger.info("Initializing components...")
-        self.preprocessor = None  # Will be set per user condition
+        self.preprocessor = None  # Will be set per user condition.
         self.scheduler = CrossModalScheduler(OutputConfig())
         self.ocr = OCRIntegration()
         self.description_gen = DescriptionGenerator()
@@ -1289,12 +1289,12 @@ class MaxSightSimulator:
         self.voice_feedback = VoiceFeedback()
         self.haptic_feedback = HapticFeedback()
         
-        # User state
+        # User state.
         self.current_condition = None
         self.current_scenario = None
         self.session_active = False
         
-        # Statistics
+        # Statistics.
         self.stats = {
             'frames_processed': 0,
             'total_detections': 0,
@@ -1302,7 +1302,7 @@ class MaxSightSimulator:
             'total_inference_time': 0.0
         }
         
-        # Baseline output path for regression testing
+        # Baseline output path for regression testing.
         self.baseline_output_path = Path(__file__).parent / 'baseline_output.json'
         
         # Initialize async queues for voice and haptic feedback (thread safety)
@@ -1334,7 +1334,7 @@ class MaxSightSimulator:
         # Acquire inference semaphore (serializes model access)
         with INFERENCE_SEMAPHORE:
             inference_start = time.perf_counter()
-            with torch.no_grad():  # Critical: prevents graph construction and memory leaks
+            with torch.no_grad():  # Critical: prevents graph construction and memory leaks.
                 if audio_features is not None:
                     audio_tensor = torch.from_numpy(audio_features).unsqueeze(0).to(self.device)
                     outputs = self.model(image_tensor, audio_tensor)
@@ -1419,7 +1419,7 @@ class MaxSightSimulator:
                 target_direction='forward'
             )
             if path_result is not None:
-                # Convert PathSuggestion to dict if needed
+                # Convert PathSuggestion to dict if needed.
                 if hasattr(path_result, '__dict__'):
                     path_info = path_result.__dict__
                 else:
@@ -1441,7 +1441,7 @@ class MaxSightSimulator:
             model_outputs=model_outputs,
             timestamp=time.time()
         )
-        # Convert list to dict for consistency
+        # Convert list to dict for consistency.
         if isinstance(scheduled_outputs, list):
             return {'outputs': scheduled_outputs, 'count': len(scheduled_outputs)}
         return scheduled_outputs if isinstance(scheduled_outputs, dict) else {'outputs': scheduled_outputs}
@@ -1460,7 +1460,7 @@ class MaxSightSimulator:
                 text_regions=ocr_results
             )
             
-            # Convert to base64 for web display
+            # Convert to base64 for web display.
             buffered = BytesIO()
             overlay_image.save(buffered, format="PNG")
             img_str = base64.b64encode(buffered.getvalue()).decode()
@@ -1496,7 +1496,7 @@ class MaxSightSimulator:
                             break
                     self.voice_queue.task_done()
                 except Exception:
-                    pass  # Queue timeout or other non-critical errors
+                    pass  # Queue timeout or other non-critical errors.
         
         def haptic_worker():
             self._haptic_worker_running = True
@@ -1509,7 +1509,7 @@ class MaxSightSimulator:
                     if message is None:
                         break
                     try:
-                        # Message format: (pattern, intensity) tuple
+                        # Message format: (pattern, intensity) tuple.
                         if isinstance(message, tuple):
                             pattern, intensity = message
                             self.haptic_feedback.trigger(pattern, intensity=intensity)
@@ -1528,7 +1528,7 @@ class MaxSightSimulator:
                             break
                     self.haptic_queue.task_done()
                 except Exception:
-                    pass  # Queue timeout or other non-critical errors
+                    pass  # Queue timeout or other non-critical errors.
         
         # Start worker threads (daemon=True ensures they stop when main thread exits)
         self.voice_thread = threading.Thread(target=voice_worker, daemon=True)
@@ -1561,7 +1561,7 @@ class MaxSightSimulator:
         haptic_patterns = []
         
         if scene_description:
-            # Queue format: (message, priority) for PriorityQueue
+            # Queue format: (message, priority) for PriorityQueue.
             self.voice_queue.put((scene_description, MessagePriority.NORMAL))
             voice_announcements.append(scene_description)
         
@@ -1573,7 +1573,7 @@ class MaxSightSimulator:
                 # Queue format: (message, priority)
                 self.voice_queue.put((f"Warning: High urgency detected", MessagePriority.CRITICAL))
                 voice_announcements.append(f"Warning: High urgency detected")
-                # Haptic format: (message, priority) where message is (pattern, intensity) tuple
+                # Haptic format: (message, priority) where message is (pattern, intensity) tuple.
                 haptic_msg = (HapticPattern.LONG_PULSE, config.haptic_intensity_high)
                 self.haptic_queue.put((haptic_msg, MessagePriority.CRITICAL))
                 haptic_patterns.append({'pattern': 'long_pulse', 'intensity': config.haptic_intensity_high})
@@ -1594,17 +1594,17 @@ class MaxSightSimulator:
         start_time = time.perf_counter()
         tracker = PipelineLatencyTracker()
         
-        # 1. Preprocessing
+        # 1. Preprocessing.
         tracker.start_stage('preprocess')
         image_tensor = self._preprocess_image(image)
         tracker.end_stage()
         
-        # 2. Model inference
+        # 2. Model inference.
         tracker.start_stage('model')
         outputs, inference_time = self._run_inference(image_tensor, audio_features)
         tracker.end_stage()
         
-        # 3. Post-process detections + priority budget + alert cooldown
+        # 3. Post-process detections + priority budget + alert cooldown.
         tracker.start_stage('postprocess')
         detections_list = self._postprocess_outputs(outputs, confidence_threshold=config.confidence_threshold)
         if not hasattr(self, 'priority_filter'):
@@ -1614,22 +1614,22 @@ class MaxSightSimulator:
         detections_list = self.alert_cooldown.filter_alerts(detections_list, frame_id=None)
         tracker.end_stage()
         
-        # 4. OCR text detection
+        # 4. OCR text detection.
         ocr_results = self._run_ocr(image, outputs)
         
-        # 5. Description generation
+        # 5. Description generation.
         scene_description = self._generate_description(detections_list, outputs, ocr_results)
         
-        # 6. Spatial memory update
+        # 6. Spatial memory update.
         self._update_memory(detections_list)
         
-        # 7. Path planning
+        # 7. Path planning.
         path_info = self._plan_path(detections_list)
         
-        # 8. Output scheduling
+        # 8. Output scheduling.
         scheduled_outputs = self._schedule_outputs(detections_list, outputs)
         
-        # 9. Therapy integration
+        # 9. Therapy integration.
         therapy_feedback = None
         if self.session_active and detections_list:
             target_objects = [det.get('class_name', 'object') for det in detections_list[:3]]
@@ -1649,7 +1649,7 @@ class MaxSightSimulator:
         except Exception:
             pass
         
-        # 10. Generate overlays
+        # 10. Generate overlays.
         if not skip_non_critical:
             tracker.start_stage('overlay')
             overlay_image_b64 = self._render_overlay(image, detections_list, ocr_results, path_info)
@@ -1667,7 +1667,7 @@ class MaxSightSimulator:
         
         pipeline_breakdown = tracker.get_breakdown()
         
-        # Update statistics
+        # Update statistics.
         self.stats['frames_processed'] += 1
         self.stats['total_inference_time'] += inference_time
         self.stats['total_detections'] += len(detections_list)
@@ -1676,11 +1676,11 @@ class MaxSightSimulator:
         
         total_time = time.perf_counter() - start_time
         
-        # Extract 3 perspectives
+        # Extract 3 perspectives.
         reasoning_trace = self._extract_reasoning_trace(outputs, detections_list)
         final_judgment = self._extract_final_judgment(outputs, detections_list)
         
-        # Shape response based on output mode
+        # Shape response based on output mode.
         result = self._shape_response(
             detections_list=detections_list,
             outputs=outputs,
@@ -1716,7 +1716,7 @@ class MaxSightSimulator:
             'decision_path': []
         }
         
-        # Extract feature statistics
+        # Extract feature statistics.
         scene_emb = outputs.get('scene_embedding')
         if scene_emb is not None:
             trace['feature_extraction'] = {
@@ -1724,7 +1724,7 @@ class MaxSightSimulator:
                 'embedding_norm': float(scene_emb.norm().item()) if scene_emb.numel() > 0 else 0.0
             }
         
-        # Extract attention/confidence information
+        # Extract attention/confidence information.
         objectness = outputs.get('objectness', torch.zeros(1, 196))
         if objectness.numel() > 0:
             trace['confidence_scores'] = {
@@ -1733,7 +1733,7 @@ class MaxSightSimulator:
                 'num_high_confidence': int((objectness > 0.5).sum().item())
             }
         
-        # Extract urgency reasoning
+        # Extract urgency reasoning.
         urgency_scores = outputs.get('urgency_scores', torch.zeros(1, 4))
         if urgency_scores.numel() > 0:
             urgency_probs = torch.softmax(urgency_scores, dim=-1)[0]
@@ -1742,7 +1742,7 @@ class MaxSightSimulator:
                 'predicted_urgency': int(urgency_scores.argmax(dim=1).item())
             }
         
-        # Build decision path
+        # Build decision path.
         if detections_list:
             top_detections = sorted(detections_list, key=lambda x: x.get('confidence', 0), reverse=True)[:5]
             trace['decision_path'] = [
@@ -1763,7 +1763,7 @@ class MaxSightSimulator:
         
         Returns:
             Dictionary with final judgment information"""
-        # Compute weighted scores
+        # Compute weighted scores.
         urgency_scores = outputs.get('urgency_scores', torch.zeros(1, 4))
         urgency_level = int(urgency_scores.argmax(dim=1).item()) if urgency_scores.numel() > 0 else 0
         urgency_confidence = float(torch.softmax(urgency_scores, dim=-1)[0].max().item()) if urgency_scores.numel() > 0 else 0.0
@@ -1771,10 +1771,10 @@ class MaxSightSimulator:
         objectness = outputs.get('objectness', torch.zeros(1, 196))
         max_objectness = float(objectness.max().item()) if objectness.numel() > 0 else 0.0
         
-        # Weighted final score
+        # Weighted final score.
         final_score = (urgency_confidence * 0.6 + max_objectness * 0.4)
         
-        # Top detections with weights
+        # Top detections with weights.
         top_detections = sorted(detections_list, key=lambda x: x.get('confidence', 0), reverse=True)[:3]
         weighted_detections = [
             {
@@ -1818,11 +1818,11 @@ class MaxSightSimulator:
         Patient mode: minimal, actionable only
         Clinician mode: adds metrics and component breakdown
         Dev mode: full debug information"""
-        # Extract urgency for patient safety
+        # Extract urgency for patient safety.
         urgency_scores = outputs.get('urgency_scores', torch.zeros(1, 4))
         urgency_level = int(urgency_scores.argmax(dim=1).item()) if urgency_scores.numel() > 0 else 0
         
-        # Determine severity
+        # Determine severity.
         if urgency_level >= 3:
             severity = Severity.CRITICAL
         elif urgency_level >= 2:
@@ -1832,18 +1832,18 @@ class MaxSightSimulator:
         else:
             severity = Severity.INFO
         
-        # Compute confidence
+        # Compute confidence.
         objectness = outputs.get('objectness', torch.zeros(1, 196))
         avg_confidence = objectness.max().item() if objectness.numel() > 0 else 0.0
         
-        # Patient mode: minimal, calm, actionable
+        # Patient mode: minimal, calm, actionable.
         if self.output_mode == OutputMode.PATIENT:
-            # Only top hazard + one instruction
+            # Only top hazard + one instruction.
             top_hazards = [d for d in detections_list if d.get('urgency', 0) >= 2]
             if top_hazards:
                 message = f"{top_hazards[0]['class_name']} detected"
             elif scene_description:
-                # Truncate to first sentence
+                # Truncate to first sentence.
                 message = scene_description.split('.')[0] + '.'
             else:
                 message = "Scene clear"
@@ -1860,7 +1860,7 @@ class MaxSightSimulator:
                     'avg_latency_ms': self.stats['avg_latency_ms'],
                     'total_detections': len(detections_list)
                 },
-                # 3 Perspectives
+                # 3 Perspectives.
                 'perspectives': {
                     'user_view': {
                         'overlay_image': overlay_image_b64,
@@ -1872,7 +1872,7 @@ class MaxSightSimulator:
                 }
             }
         
-        # Clinician mode: adds metrics and breakdown
+        # Clinician mode: adds metrics and breakdown.
         elif self.output_mode == OutputMode.CLINICIAN:
             return {
                 'mode': 'clinician',
@@ -1881,7 +1881,7 @@ class MaxSightSimulator:
                 'confidence': round(avg_confidence, 2),
                 'cooldown_applied': False,
                 
-                # Clinician-specific fields
+                # Clinician-specific fields.
                 'latency_ms': round(inference_time_ms, 1),
                 'total_time_ms': round(total_time_ms, 1),
                 'inference_time_ms': round(inference_time_ms, 1),
@@ -1900,7 +1900,7 @@ class MaxSightSimulator:
                     'avg_latency_ms': self.stats['avg_latency_ms'],
                     'total_detections': self.stats['total_detections']
                 },
-                # 3 Perspectives
+                # 3 Perspectives.
                 'perspectives': {
                     'user_view': {
                         'overlay_image': overlay_image_b64,
@@ -1913,7 +1913,7 @@ class MaxSightSimulator:
                 }
             }
         
-        # Dev mode: full information
+        # Dev mode: full information.
         else:
             return {
                 'mode': 'dev',
@@ -1922,24 +1922,24 @@ class MaxSightSimulator:
                 'confidence': round(avg_confidence, 2),
                 'cooldown_applied': False,
                 
-                # Dev-specific fields
+                # Dev-specific fields.
                 'frame_number': self.stats['frames_processed'],
                 'timestamp': time.time(),
                 'processing_time_ms': total_time_ms,
                 'inference_time_ms': inference_time_ms,
                 
-                # Full model outputs
+                # Full model outputs.
                 'detections': detections_list,
                 'num_detections': len(detections_list),
                 'urgency_scores': urgency_scores[0].cpu().tolist(),
                 'distance_zones': outputs['distance_zones'][0].cpu().tolist(),
                 'scene_embedding': outputs['scene_embedding'][0].cpu().tolist(),
                 
-                # OCR results
+                # OCR results.
                 'text_regions': ocr_results,
                 'num_text_regions': len(ocr_results),
                 
-                # Generated content
+                # Generated content.
                 'scene_description': scene_description,
                 'scheduled_outputs': scheduled_outputs,
                 'voice_announcements': voice_announcements,
@@ -1948,16 +1948,16 @@ class MaxSightSimulator:
                 'therapy_feedback': therapy_feedback,
                 'overlay_image': overlay_image_b64,
                 
-                # Statistics
+                # Statistics.
                 'stats': self.stats.copy(),
                 
-                # Debug info
+                # Debug info.
                 'debug_info': {
                     'condition': self.current_condition,
                     'scenario': self.current_scenario,
                     'session_active': self.session_active
                 },
-                # 3 Perspectives
+                # 3 Perspectives.
                 'perspectives': {
                     'user_view': {
                         'overlay_image': overlay_image_b64,
@@ -1995,7 +1995,7 @@ class MaxSightSimulator:
 
 
 
-# Web Routes
+# Web Routes.
 
 @app.route('/')
 def index():
@@ -2007,11 +2007,11 @@ def index():
 def api_init():
     """Initialize/create a new session with user settings."""
     try:
-        # Apply global rate limiting
+        # Apply global rate limiting.
         client_ip = request.remote_addr or 'unknown'
         global_rate_limiter.check_rate_limit(client_ip)
         
-        # Validate input
+        # Validate input.
         data = request.json or {}
         validated_data = validate_init_request(data)
         
@@ -2019,7 +2019,7 @@ def api_init():
         scenario = validated_data['scenario']
         output_mode_str = validated_data['output_mode']
         
-        # Parse output mode
+        # Parse output mode.
         if output_mode_str == 'clinician':
             output_mode = OutputMode.CLINICIAN
         elif output_mode_str == 'dev':
@@ -2027,14 +2027,14 @@ def api_init():
         else:
             output_mode = OutputMode.PATIENT
         
-        # Create new session
+        # Create new session.
         session_id = registry.create_session(output_mode=output_mode)
         session = registry.get_session(session_id)
         
         if not session:
             return jsonify({'error': 'Failed to create session'}), 500
         
-        # Configure session
+        # Configure session.
         session.set_user_condition(condition)
         session.current_scenario = scenario
         session.session_active = validated_data.get('start_session', False)
@@ -2064,7 +2064,7 @@ def api_init():
 def api_process():
     """Process image through complete pipeline."""
     try:
-        # Apply global rate limiting
+        # Apply global rate limiting.
         client_ip = request.remote_addr or 'unknown'
         global_rate_limiter.check_rate_limit(client_ip)
         
@@ -2074,15 +2074,15 @@ def api_process():
         except ValueError as e:
             return jsonify({'error': str(e)}), 400
         
-        # Apply per-session rate limiting
+        # Apply per-session rate limiting.
         session_rate_limiter.check_rate_limit(session.session_id, client_ip)
         
-        # Get and validate image from request
+        # Get and validate image from request.
         image = None
         if 'image' in request.files:
             image_file = request.files['image']
             
-            # Check filename for format hints
+            # Check filename for format hints.
             filename = image_file.filename or ''
             if filename.lower().endswith(('.heic', '.heif')):
                 return jsonify({
@@ -2090,10 +2090,10 @@ def api_process():
                              'On Mac: Open in Preview > File > Export > Format: JPEG'
                 }), 400
             
-            # Ensure file pointer is at the beginning
+            # Ensure file pointer is at the beginning.
             image_file.seek(0)
             
-            # Read all bytes - ensure we get actual bytes
+            # Read all bytes - ensure we get actual bytes.
             try:
                 image_bytes = image_file.read()
             except Exception as e:
@@ -2101,13 +2101,13 @@ def api_process():
                     'error': f'Failed to read image file: {str(e)}'
                 }), 400
             
-            # Ensure we have actual bytes
+            # Ensure we have actual bytes.
             if not image_bytes:
                 return jsonify({'error': 'Empty image file received'}), 400
             
-            # Ensure it's bytes, not a BytesIO object
+            # Ensure it's bytes, not a BytesIO object.
             if hasattr(image_bytes, 'read'):
-                # It's a file-like object, read from it
+                # It's a file-like object, read from it.
                 image_bytes.seek(0)
                 image_bytes = image_bytes.read()
             
@@ -2116,12 +2116,12 @@ def api_process():
                     'error': f'Invalid image data type: {type(image_bytes).__name__}. Expected bytes.'
                 }), 400
             
-            # Validate and load image
+            # Validate and load image.
             try:
                 image = validate_image_file(image_bytes)
             except InvalidImageError as e:
                 return jsonify({'error': str(e)}), 400
-            # Convert to RGB if necessary
+            # Convert to RGB if necessary.
             if image.mode != 'RGB':
                 rgb_image = Image.new('RGB', image.size, (255, 255, 255))
                 if image.mode == 'RGBA':
@@ -2134,7 +2134,7 @@ def api_process():
         elif request.is_json and 'image_data' in request.json:
             image_data = request.json['image_data']
             image = validate_image_data(image_data)
-            # Convert to RGB if necessary
+            # Convert to RGB if necessary.
             if image.mode != 'RGB':
                 rgb_image = Image.new('RGB', image.size, (255, 255, 255))
                 if image.mode == 'RGBA':
@@ -2147,7 +2147,7 @@ def api_process():
         else:
             return jsonify({'error': 'No image provided. Send image file or image_data in JSON.'}), 400
         
-        # Get audio features if provided
+        # Get audio features if provided.
         audio_features = None
         if request.is_json and 'audio_features' in request.json:
             try:
@@ -2155,7 +2155,7 @@ def api_process():
             except Exception as e:
                 logger.warning(f"Error parsing audio features: {e}")
         
-        # Get frame_id for deterministic ordering
+        # Get frame_id for deterministic ordering.
         frame_id = None
         if request.is_json and 'frame_id' in request.json:
             try:
@@ -2172,11 +2172,11 @@ def api_process():
         try:
             result = session.process_frame(image, audio_features, frame_id=frame_id)
             
-            # Add degraded mode status to response
+            # Add degraded mode status to response.
             degraded_status = session.degraded_state.get_status()
             result['degraded_status'] = degraded_status
             
-            # Add resource usage info
+            # Add resource usage info.
             result['resource_usage'] = {
                 'spatial_memory_count': session._spatial_memory_count,
                 'memory_usage_mb': session._memory_usage_mb,
@@ -2194,8 +2194,8 @@ def api_process():
                 'error_type': type(e).__name__
             }), 500
         
-        # Overlay image is already in result from process_frame
-        # If overlay_image is None, fallback to original image
+        # Overlay image is already in result from process_frame.
+        # If overlay_image is None, fallback to original image.
         if not result.get('overlay_image'):
             try:
                 image_buffer = BytesIO()
@@ -2205,7 +2205,7 @@ def api_process():
             except Exception as e:
                 logger.warning(f"Error creating fallback overlay: {e}")
         
-        # Add original image for comparison
+        # Add original image for comparison.
         try:
             original_buffer = BytesIO()
             image.save(original_buffer, format='PNG')
@@ -2399,7 +2399,7 @@ def api_health():
     try:
         health_status = get_health_status()
         
-        # Add session registry status
+        # Add session registry status.
         with registry.lock:
             active_sessions = len(registry.sessions)
             expired_sessions = sum(1 for s in registry.sessions.values() if s.is_expired())
@@ -2410,7 +2410,7 @@ def api_health():
             'total': active_sessions + expired_sessions
         }
         
-        # Add core status
+        # Add core status.
         core = registry.get_core()
         health_status['core'] = {
             'device': str(core.device),
@@ -2418,7 +2418,7 @@ def api_health():
             'model_mode': 'eval' if core.model.training == False else 'train'
         }
         
-        # Determine overall status
+        # Determine overall status.
         overall_status = 'healthy'
         if expired_sessions > active_sessions * 0.5:
             overall_status = 'degraded'
@@ -2444,7 +2444,7 @@ def api_health():
 def api_sample():
     """Process a sample image from the dataset...."""
     try:
-        # Get dataset directories
+        # Get dataset directories.
         project_root = Path(__file__).parent.parent.parent
         dataset_dirs = {
             'test': project_root / 'datasets' / 'test' / 'images',
@@ -2453,11 +2453,11 @@ def api_sample():
         }
         
         if request.method == 'GET':
-            # Return list of available sample images
+            # Return list of available sample images.
             available_samples = {}
             for dataset_name, dataset_dir in dataset_dirs.items():
                 if dataset_dir.exists():
-                    images = sorted(list(dataset_dir.glob('*.jpg')))[:20]  # First 20
+                    images = sorted(list(dataset_dir.glob('*.jpg')))[:20]  # First 20.
                     available_samples[dataset_name] = [img.name for img in images]
             
             return jsonify({
@@ -2465,14 +2465,14 @@ def api_sample():
                 'total_datasets': len([d for d in dataset_dirs.values() if d.exists()])
             })
         
-        # POST: Process a sample image
-        # Get session
+        # POST: Process a sample image.
+        # Get session.
         try:
             session = require_session()
         except ValueError as e:
             return jsonify({'error': str(e)}), 400
         
-        # Get parameters
+        # Get parameters.
         if request.is_json:
             data = request.json
             image_name = data.get('image_name', 'test_000001.jpg')
@@ -2481,14 +2481,14 @@ def api_sample():
             image_name = request.form.get('image_name', 'test_000001.jpg')
             dataset = request.form.get('dataset', 'test')
         
-        # Validate dataset
+        # Validate dataset.
         if dataset not in dataset_dirs:
             return jsonify({'error': f'Invalid dataset: {dataset}. Must be one of: {list(dataset_dirs.keys())}'}), 400
         
-        # Load image from dataset
+        # Load image from dataset.
         image_path = dataset_dirs[dataset] / image_name
         if not image_path.exists():
-            # Find any image in the dataset
+            # Find any image in the dataset.
             available = list(dataset_dirs[dataset].glob('*.jpg'))
             if not available:
                 return jsonify({
@@ -2496,17 +2496,17 @@ def api_sample():
                     'dataset_path': str(dataset_dirs[dataset])
                 }), 404
             
-            # Use first available image
+            # Use first available image.
             image_path = available[0]
             image_name = image_path.name
             api_logger.info(f"Image {image_name} not found, using {image_name} instead")
         
-        # Read and validate image
+        # Read and validate image.
         try:
             with open(image_path, 'rb') as f:
                 image_bytes = f.read()
             image = validate_image_file(image_bytes)
-            # Convert to RGB
+            # Convert to RGB.
             if image.mode != 'RGB':
                 image = image.convert('RGB')
         except Exception as e:
@@ -2515,15 +2515,15 @@ def api_sample():
                 'image_path': str(image_path)
             }), 400
         
-        # Process frame
+        # Process frame.
         try:
             result = session.process_frame(image, audio_features=None, frame_id=None)
             
-            # Add degraded mode status
+            # Add degraded mode status.
             degraded_status = session.degraded_state.get_status()
             result['degraded_status'] = degraded_status
             
-            # Add resource usage info
+            # Add resource usage info.
             result['resource_usage'] = {
                 'spatial_memory_count': session._spatial_memory_count,
                 'memory_usage_mb': session._memory_usage_mb,
@@ -2531,7 +2531,7 @@ def api_sample():
                 'queue_dropped_haptic': session.haptic_queue.get_dropped_count()
             }
             
-            # Add sample image info
+            # Add sample image info.
             result['sample_info'] = {
                 'image_name': image_name,
                 'dataset': dataset,
@@ -2545,7 +2545,7 @@ def api_sample():
                 'error_type': type(e).__name__
             }), 500
         
-        # Ensure overlay image exists
+        # Ensure overlay image exists.
         if not result.get('overlay_image'):
             try:
                 image_buffer = BytesIO()
@@ -2555,7 +2555,7 @@ def api_sample():
             except Exception as e:
                 logger.warning(f"Error creating fallback overlay: {e}")
         
-        # Add original image for comparison
+        # Add original image for comparison.
         try:
             original_buffer = BytesIO()
             image.save(original_buffer, format='PNG')
@@ -2581,7 +2581,7 @@ def api_metrics():
     try:
         metrics_data = metrics.get_metrics()
         
-        # Add session-level metrics
+        # Add session-level metrics.
         with registry.lock:
             session_metrics = {}
             for session_id, session in registry.sessions.items():
@@ -2610,7 +2610,7 @@ def api_metrics():
         }), 500
 
 
-# Global error handlers for consistent error responses
+# Global error handlers for consistent error responses.
 @app.errorhandler(400)
 def bad_request(error):
     """Handle 400 Bad Request errors."""
@@ -2634,9 +2634,9 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     """Handle 500 Internal Server errors."""
-    # Log detailed error server-side
+    # Log detailed error server-side.
     log_error(error, {'endpoint': request.path, 'method': request.method})
-    # Return sanitized error to client
+    # Return sanitized error to client.
     error_response = sanitize_error(error, debug=config.debug)
     error_response['status_code'] = 500
     return jsonify(error_response), 500
@@ -2680,8 +2680,8 @@ if __name__ == '__main__':
     logger.info("Access the simulator at: http://localhost:8002")
     logger.info("Press Ctrl+C to stop")
     
-    # WARNING: Flask dev server is NOT production-safe for multi-user scenarios
-    # For production, use Gunicorn with 1 worker and proper WSGI configuration
+    # WARNING: Flask dev server is NOT production-safe for multi-user scenarios.
+    # For production, use Gunicorn with 1 worker and proper WSGI configuration.
     if config.multi_user_enabled:
         logger.warning(
             "⚠️  WARNING: Running multi-user mode with Flask dev server is unsafe. "
@@ -2694,4 +2694,5 @@ if __name__ == '__main__':
         logger.info("Shutting down...")
         registry.shutdown()
         logger.info("Shutdown complete")
+
 

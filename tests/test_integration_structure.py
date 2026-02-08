@@ -11,11 +11,11 @@ def test_gradnorm_import_structure():
     print("Testing GradNorm import structure...")
     
     try:
-        # Read the train_loop.py file
+        # Read the train_loop.py file.
         train_loop_path = Path(__file__).parent.parent / "ml" / "training" / "train_loop.py"
         content = train_loop_path.read_text()
         
-        # Check for GradNorm import
+        # Check for GradNorm import.
         has_import = "from ml.training.task_balancing import GradNormMultiHeadLoss" in content
         has_availability_check = "GRADNORM_AVAILABLE" in content
         
@@ -42,7 +42,7 @@ def test_gradnorm_parameters():
         train_loop_path = Path(__file__).parent.parent / "ml" / "training" / "train_loop.py"
         content = train_loop_path.read_text()
         
-        # Check for parameters
+        # Check for parameters.
         has_use_gradnorm = "use_gradnorm" in content
         has_gradnorm_alpha = "gradnorm_alpha" in content
         has_gradnorm_update_interval = "gradnorm_update_interval" in content
@@ -72,7 +72,7 @@ def test_gradnorm_integration_code():
         train_loop_path = Path(__file__).parent.parent / "ml" / "training" / "train_loop.py"
         content = train_loop_path.read_text()
         
-        # Check for integration code
+        # Check for integration code.
         has_initialization = "self.use_gradnorm" in content
         has_loss_computation = "gradnorm_loss" in content or "GradNorm" in content
         has_error_handling = "GRADNORM_AVAILABLE" in content and "warning" in content.lower()
@@ -102,7 +102,7 @@ def test_timing_import():
         model_path = Path(__file__).parent.parent / "ml" / "models" / "maxsight_cnn.py"
         content = model_path.read_text()
         
-        # Check for time import
+        # Check for time import.
         has_time_import = "import time" in content
         
         if has_time_import:
@@ -124,7 +124,7 @@ def test_timing_code():
         model_path = Path(__file__).parent.parent / "ml" / "models" / "maxsight_cnn.py"
         content = model_path.read_text()
         
-        # Check for timing code
+        # Check for timing code.
         has_timing_track = "stage_a_start_time" in content
         has_latency_check = "stage_a_latency_ms" in content
         has_early_exit = "skip_stage_b" in content and "latency" in content.lower()
@@ -157,7 +157,7 @@ def test_timing_threshold():
         model_path = Path(__file__).parent.parent / "ml" / "models" / "maxsight_cnn.py"
         content = model_path.read_text()
         
-        # Check for threshold
+        # Check for threshold.
         has_threshold = "200" in content and "latency" in content.lower()
         has_comment = "150ms" in content or "200ms" in content
         
@@ -170,7 +170,7 @@ def test_timing_threshold():
             print("⚠️ Timing threshold may not be clearly set")
             print(f"   - Threshold check: {has_threshold}")
             print(f"   - Documentation: {has_comment}")
-            return True  # Not a failure, just a warning
+            return True  # Not a failure, just a warning.
     except Exception as e:
         print(f"❌ Failed to check timing threshold: {e}")
         return False
@@ -184,7 +184,7 @@ def test_output_structure():
         model_path = Path(__file__).parent.parent / "ml" / "models" / "maxsight_cnn.py"
         content = model_path.read_text()
         
-        # Check for output keys
+        # Check for output keys.
         has_stage_a = "'stage_a_completed'" in content or '"stage_a_completed"' in content
         has_stage_b = "'stage_b_completed'" in content or '"stage_b_completed"' in content
         has_skip_reason = "'skip_stage_b_reason'" in content or '"skip_stage_b_reason"' in content
@@ -218,18 +218,18 @@ def main():
     
     results = []
     
-    # GradNorm tests
+    # GradNorm tests.
     results.append(("GradNorm Import", test_gradnorm_import_structure()))
     results.append(("GradNorm Parameters", test_gradnorm_parameters()))
     results.append(("GradNorm Integration", test_gradnorm_integration_code()))
     
-    # Timing tests
+    # Timing tests.
     results.append(("Timing Import", test_timing_import()))
     results.append(("Timing Code", test_timing_code()))
     results.append(("Timing Threshold", test_timing_threshold()))
     results.append(("Output Structure", test_output_structure()))
     
-    # Summary
+    # Summary.
     print("\n" + "=" * 60)
     print("Test Summary")
     print("=" * 60)
@@ -256,4 +256,5 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+
 

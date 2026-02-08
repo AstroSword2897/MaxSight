@@ -28,31 +28,31 @@ class StressTestResult:
 @dataclass
 class StressTestConfig:
     """Configuration for stress tests."""
-    # Head isolation
+    # Head isolation.
     head_isolation_variants: List[List[str]] = field(default_factory=lambda: [
-        ['detection'],  # A: Detection only
-        ['detection', 'depth'],  # B: Detection + Depth
-        ['detection', 'accessibility'],  # C: Detection + Accessibility
-        ['detection', 'navigation'],  # D: Detection + Navigation
-        ['all']  # E: All heads
+        ['detection'],  # A: Detection only.
+        ['detection', 'depth'],  # B: Detection + Depth.
+        ['detection', 'accessibility'],  # C: Detection + Accessibility.
+        ['detection', 'navigation'],  # D: Detection + Navigation.
+        ['all']  # E: All heads.
     ])
     
-    # Loss scaling
+    # Loss scaling.
     loss_scaling_factors: List[float] = field(default_factory=lambda: [0.1, 0.5, 1.0, 2.0, 5.0])
     
-    # Input corruption
+    # Input corruption.
     corruption_types: List[str] = field(default_factory=lambda: [
         'gaussian_blur', 'motion_blur', 'random_occlusion', 
         'contrast_reduction', 'jpeg_compression'
     ])
     
-    # Temporal stress
+    # Temporal stress.
     temporal_test_frames: int = 100
     
-    # Quantization
+    # Quantization.
     quantization_bits: List[int] = field(default_factory=lambda: [8, 16])
     
-    # Head dropout
+    # Head dropout.
     dropout_heads: List[str] = field(default_factory=lambda: [
         'depth', 'ocr', 'motion'
     ])
@@ -77,30 +77,30 @@ class HeadIsolationStressTest:
         """Run head isolation stress test...."""
         results = {}
         
-        # Save initial checkpoint
+        # Save initial checkpoint.
         checkpoint_path = Path('checkpoints/stress_test_base.pt')
         torch.save(model.state_dict(), checkpoint_path)
         
         for variant_idx, variant_heads in enumerate(self.config.head_isolation_variants):
-            variant_name = f"variant_{chr(65 + variant_idx)}"  # A, B, C, D, E
+            variant_name = f"variant_{chr(65 + variant_idx)}"  # A, B, C, D, E.
             
             logger.info(f"Running {variant_name} with heads: {variant_heads}")
             
-            # Load base checkpoint
+            # Load base checkpoint.
             model.load_state_dict(torch.load(checkpoint_path))
             
-            # Disable heads not in variant
+            # Disable heads not in variant.
             if 'all' not in variant_heads:
                 # FUTURE ENHANCEMENT: Implement head disabling logic for mobile optimization.
                 # Use MobileOptimizer.disable_heads() to selectively disable non-critical heads.
                 pass
             
-            # Train variant
+            # Train variant.
             variant_metrics = self._train_variant(
                 model, train_loader, val_loader, device, epochs_per_variant
             )
             
-            # Evaluate
+            # Evaluate.
             result = self._evaluate_variant(variant_name, variant_metrics)
             results[variant_name] = result
         
@@ -124,16 +124,16 @@ class HeadIsolationStressTest:
             num_batches = 0
             
             for batch_idx, batch in enumerate(train_loader):
-                # Forward pass
+                # Forward pass.
                 images = batch[0].to(device)
                 outputs = model(images)
                 
-                # Track gradient norms per head
+                # Track gradient norms per head.
                 # This would enable per-head gradient monitoring and debugging.
                 
                 num_batches += 1
             
-            # Average metrics
+            # Average metrics.
             for key, value in epoch_metrics.items():
                 metrics[key].append(value / num_batches if num_batches > 0 else 0.0)
         
@@ -148,22 +148,22 @@ class HeadIsolationStressTest:
         red_flags = []
         notes = []
         
-        # Check for detection mAP drop in variant E
+        # Check for detection mAP drop in variant E.
         if variant_name == 'variant_E':
             if 'detection_map' in metrics:
                 detection_map = metrics['detection_map'][-1]
-                if detection_map < 0.3:  # Threshold
+                if detection_map < 0.3:  # Threshold.
                     red_flags.append("Detection mAP dropped significantly in variant E")
         
-        # Check for depth MAE oscillation
+        # Check for depth MAE oscillation.
         if 'depth_mae' in metrics:
             depth_mae_values = metrics['depth_mae']
             if len(depth_mae_values) > 1:
                 variance = np.var(depth_mae_values)
-                if variance > 0.1:  # High variance threshold
+                if variance > 0.1:  # High variance threshold.
                     red_flags.append("Depth MAE oscillating wildly")
         
-        # Check for gradient norm collapse
+        # Check for gradient norm collapse.
         for head_name in ['depth', 'contrast', 'motion']:
             grad_norm_key = f'{head_name}_grad_norm'
             if grad_norm_key in metrics:
@@ -205,10 +205,10 @@ class LossScalingStressTest:
         for scale_factor in self.config.loss_scaling_factors:
             logger.info(f"Testing {head_name} loss scaling: {scale_factor}x")
             
-            # Create scaled loss function
+            # Create scaled loss function.
             scaled_loss_fn = self._create_scaled_loss(loss_fn, head_name, scale_factor)
             
-            # Run training for a few batches
+            # Run training for a few batches.
             result = self._test_scaling(
                 model, scaled_loss_fn, train_loader, device, head_name, scale_factor
             )
@@ -224,8 +224,8 @@ class LossScalingStressTest:
         scale_factor: float
     ) -> nn.Module:
         """Create a loss function with scaled head loss."""
-        # This would wrap the loss function to scale specific head losses
-        # Simplified implementation
+        # This would wrap the loss function to scale specific head losses.
+        # Simplified implementation.
         return loss_fn
     
     def _test_scaling(
@@ -244,8 +244,8 @@ class LossScalingStressTest:
         losses = []
         uncertainties = []
         
-        # Run a few batches
-        for batch_idx, batch in enumerate(train_loader[:10]):  # First 10 batches
+        # Run a few batches.
+        for batch_idx, batch in enumerate(train_loader[:10]):  # First 10 batches.
             images = batch[0].to(device)
             targets = batch[1] if len(batch) > 1 else {}
             
@@ -255,18 +255,18 @@ class LossScalingStressTest:
             
             losses.append(total_loss.item())
             
-            # Check uncertainty head
+            # Check uncertainty head.
             if 'uncertainty_score' in outputs:
                 uncertainties.append(outputs['uncertainty_score'].mean().item())
         
-        # Check for divergence
+        # Check for divergence.
         if len(losses) > 1:
-            if losses[-1] > losses[0] * 10:  # Loss exploded
+            if losses[-1] > losses[0] * 10:  # Loss exploded.
                 red_flags.append("Training diverged")
-            if losses[-1] < losses[0] * 0.01:  # Loss collapsed
+            if losses[-1] < losses[0] * 0.01:  # Loss collapsed.
                 red_flags.append("Loss collapsed (vanishing)")
         
-        # Check uncertainty saturation
+        # Check uncertainty saturation.
         if len(uncertainties) > 0:
             avg_uncertainty = np.mean(uncertainties)
             if avg_uncertainty > 0.9 or avg_uncertainty < 0.1:
@@ -327,15 +327,15 @@ class InputCorruptionStressTest:
         metrics = defaultdict(list)
         
         with torch.no_grad():
-            for batch_idx, batch in enumerate(val_loader[:50]):  # First 50 batches
+            for batch_idx, batch in enumerate(val_loader[:50]):  # First 50 batches.
                 images = batch[0].to(device)
                 
-                # Apply corruption
+                # Apply corruption.
                 corrupted_images = self._apply_corruption(images, corruption_type)
                 
                 outputs = model(corrupted_images)
                 
-                # Track metrics
+                # Track metrics.
                 if 'confidence' in outputs:
                     metrics['confidence'].append(outputs['confidence'].mean().item())
                 if 'uncertainty_score' in outputs:
@@ -343,20 +343,20 @@ class InputCorruptionStressTest:
                 if 'urgency' in outputs:
                     metrics['urgency'].append(outputs['urgency'].mean().item())
         
-        # Check critical conditions
+        # Check critical conditions.
         if 'confidence' in metrics and 'uncertainty' in metrics:
             avg_confidence = np.mean(metrics['confidence'])
             avg_uncertainty = np.mean(metrics['uncertainty'])
             
-            # Uncertainty rises when confidence drops
+            # Uncertainty rises when confidence drops.
             if avg_confidence < 0.5 and avg_uncertainty < 0.5:
                 red_flags.append("Uncertainty did not rise when confidence dropped")
         
-        # Check urgency false positives
+        # Check urgency false positives.
         if 'urgency' in metrics:
             urgency_values = metrics['urgency']
-            high_urgency_count = sum(1 for u in urgency_values if u > 2)  # Warning or danger
-            if high_urgency_count > len(urgency_values) * 0.3:  # >30% false positives
+            high_urgency_count = sum(1 for u in urgency_values if u > 2)  # Warning or danger.
+            if high_urgency_count > len(urgency_values) * 0.3:  # >30% false positives.
                 red_flags.append("High urgency false positive rate")
         
         passed = len(red_flags) == 0
@@ -376,11 +376,11 @@ class InputCorruptionStressTest:
     ) -> torch.Tensor:
         """Apply corruption to images."""
         if corruption_type == 'gaussian_blur':
-            # Apply Gaussian blur
+            # Apply Gaussian blur.
             kernel_size = 5
             sigma = 2.0
             kernel = self._gaussian_kernel(kernel_size, sigma, images.device)
-            # Simplified: would need proper convolution
+            # Simplified: would need proper convolution.
             return images
         
         elif corruption_type == 'motion_blur':
@@ -392,7 +392,7 @@ class InputCorruptionStressTest:
             B, C, H, W = images.shape
             occluded = images.clone()
             for b in range(B):
-                # Random rectangle occlusion
+                # Random rectangle occlusion.
                 x1 = np.random.randint(0, W // 2)
                 y1 = np.random.randint(0, H // 2)
                 x2 = x1 + np.random.randint(W // 4, W // 2)
@@ -401,7 +401,7 @@ class InputCorruptionStressTest:
             return occluded
         
         elif corruption_type == 'contrast_reduction':
-            # Reduce contrast
+            # Reduce contrast.
             return images * 0.5 + 0.5 * images.mean()
         
         elif corruption_type == 'jpeg_compression':
@@ -412,7 +412,7 @@ class InputCorruptionStressTest:
     
     def _gaussian_kernel(self, size: int, sigma: float, device: str) -> torch.Tensor:
         """Generate Gaussian kernel."""
-        # Simplified implementation
+        # Simplified implementation.
         return torch.ones(1, 1, size, size, device=device) / (size * size)
 
 
@@ -435,7 +435,7 @@ class TemporalStressTest:
         
         model.eval()
         
-        # Static scene test
+        # Static scene test.
         static_image = torch.randn(1, 3, 224, 224, device=device)
         
         with torch.no_grad():
@@ -446,36 +446,36 @@ class TemporalStressTest:
             for frame_idx in range(self.config.temporal_test_frames):
                 outputs = model(static_image)
                 
-                # Track urgency jitter
+                # Track urgency jitter.
                 if 'urgency' in outputs:
                     urgency = outputs['urgency'].item() if torch.is_tensor(outputs['urgency']) else outputs['urgency']
                     urgency_values.append(urgency)
                 
-                # Track distance variance
+                # Track distance variance.
                 if 'distance' in outputs:
                     distance = outputs['distance']
                     distance_values.append(distance)
                 
-                # Check frame-to-frame changes
+                # Check frame-to-frame changes.
                 if prev_outputs is not None:
-                    # Check for excessive changes
+                    # Check for excessive changes.
                     if 'urgency' in outputs and 'urgency' in prev_outputs:
                         urgency_diff = abs(urgency_values[-1] - urgency_values[-2] if len(urgency_values) > 1 else 0)
-                        if urgency_diff > 1:  # Flipped urgency level
+                        if urgency_diff > 1:  # Flipped urgency level.
                             red_flags.append("Frame-to-frame urgency flipping")
                 
                 prev_outputs = outputs
         
-        # Check stability
+        # Check stability.
         if len(urgency_values) > 10:
             urgency_variance = np.var(urgency_values)
-            if urgency_variance > 0.5:  # High variance
+            if urgency_variance > 0.5:  # High variance.
                 red_flags.append("Urgency jitter in static scene")
         
-        # Check distance stability
+        # Check distance stability.
         if len(distance_values) > 10:
             distance_variance = np.var([d.item() if torch.is_tensor(d) else d for d in distance_values])
-            if distance_variance > 0.1:  # High variance
+            if distance_variance > 0.1:  # High variance.
                 red_flags.append("Distance jumping frame-to-frame")
         
         passed = len(red_flags) == 0
@@ -518,7 +518,7 @@ class HeadDropoutStressTest:
         for head_name in self.config.dropout_heads:
             logger.info(f"Testing head dropout: {head_name}")
             
-            # Disable head
+            # Disable head.
             kill_switch_manager.disable_head(head_name)
             
             result = self._test_dropout(
@@ -527,7 +527,7 @@ class HeadDropoutStressTest:
             
             results[f"dropout_{head_name}"] = result
             
-            # Re-enable head
+            # Re-enable head.
             kill_switch_manager.enable_head(head_name)
         
         return results
@@ -546,12 +546,12 @@ class HeadDropoutStressTest:
             success_count = 0
             total_count = 0
             
-            for batch_idx, batch in enumerate(val_loader[:20]):  # First 20 batches
+            for batch_idx, batch in enumerate(val_loader[:20]):  # First 20 batches.
                 try:
                     images = batch[0].to(device)
                     outputs = model(images)
                     
-                    # Check if outputs are valid
+                    # Check if outputs are valid.
                     if outputs is not None:
                         success_count += 1
                     
@@ -559,7 +559,7 @@ class HeadDropoutStressTest:
                 except Exception as e:
                     red_flags.append(f"Pipeline crashed when {head_name} disabled: {e}")
             
-            if success_count < total_count * 0.9:  # <90% success rate
+            if success_count < total_count * 0.9:  # <90% success rate.
                 red_flags.append(f"System failed to degrade gracefully when {head_name} disabled")
         
         passed = len(red_flags) == 0
@@ -595,32 +595,32 @@ class StressTestSuite:
         
         all_results = {}
         
-        # Test 1: Head Isolation
+        # Test 1: Head Isolation.
         logger.info("Running Head Isolation Stress Tests...")
         isolation_test = HeadIsolationStressTest(self.config)
-        # Note: This is expensive, might want to skip in quick tests
-        # all_results['head_isolation'] = isolation_results
+        # Note: This is expensive, might want to skip in quick tests.
+        # All_results['head_isolation'] = isolation_results.
         
-        # Test 2: Loss Scaling
+        # Test 2: Loss Scaling.
         logger.info("Running Loss Scaling Stress Tests...")
         if loss_fn is not None:
             scaling_test = LossScalingStressTest(self.config)
             scaling_results = scaling_test.run(model, loss_fn, train_loader, device, 'depth')
             all_results['loss_scaling'] = scaling_results
         
-        # Test 3: Input Corruption
+        # Test 3: Input Corruption.
         logger.info("Running Input Corruption Stress Tests...")
         corruption_test = InputCorruptionStressTest(self.config)
         corruption_results = corruption_test.run(model, val_loader, device)
         all_results['input_corruption'] = corruption_results
         
-        # Test 4: Temporal Stability
+        # Test 4: Temporal Stability.
         logger.info("Running Temporal Stress Tests...")
         temporal_test = TemporalStressTest(self.config)
         temporal_result = temporal_test.run(model, device)
         all_results['temporal'] = {'temporal_stability': temporal_result}
         
-        # Test 6: Head Dropout
+        # Test 6: Head Dropout.
         logger.info("Running Head Dropout Stress Tests...")
         if kill_switch_manager is not None:
             dropout_test = HeadDropoutStressTest(self.config)
@@ -629,7 +629,7 @@ class StressTestSuite:
         
         self.results = all_results
         
-        # Generate dashboard
+        # Generate dashboard.
         dashboard = self.generate_dashboard()
         
         return {
@@ -649,7 +649,7 @@ class StressTestSuite:
             'tests': []
         }
         
-        # Flatten results
+        # Flatten results.
         for category, results in self.results.items():
             if isinstance(results, dict):
                 for test_name, result in results.items():
@@ -699,4 +699,5 @@ class StressTestSuite:
             json.dump(report, f, indent=2)
         
         logger.info(f"Stress test report saved to {filepath}")
+
 

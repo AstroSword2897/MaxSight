@@ -44,7 +44,7 @@ def decode_and_validate_image(base64_str: str, max_size_mb: int = 10, allowed_ty
         if size_mb > max_size_mb:
             return False, None, f"File too large: {size_mb:.2f}MB > {max_size_mb}MB"
         
-        # Validate file signature to prevent malicious uploads
+        # Validate file signature to prevent malicious uploads.
         if not validate_image_magic(decoded, allowed_types):
             return False, None, f"Invalid image format. Allowed: {allowed_types}"
         
@@ -52,4 +52,5 @@ def decode_and_validate_image(base64_str: str, max_size_mb: int = 10, allowed_ty
         
     except Exception as e:
         return False, None, f"Decoding error: {str(e)}"
+
 

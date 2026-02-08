@@ -16,7 +16,7 @@ class GradNormBalancer(nn.Module):
     def __init__(
         self,
         num_tasks: int,
-        alpha: float = 1.5,  # Restoring force hyperparameter
+        alpha: float = 1.5,  # Restoring force hyperparameter.
         initial_task_weights: Optional[List[float]] = None
     ):
         """Initialize GradNorm balancer...."""
@@ -41,20 +41,20 @@ class GradNormBalancer(nn.Module):
         task_losses: List[torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute gradient norms for each task...."""
-        # Apply learnable task weights to balance loss magnitudes
+        # Apply learnable task weights to balance loss magnitudes.
         weighted_losses = [
             self.task_weights[i] * loss 
             for i, loss in enumerate(task_losses)
         ]
         
-        # Compute gradient norms for each task
-        # retain_graph=True keeps computation graph alive for multiple backward passes
+        # Compute gradient norms for each task.
+        # Retain_graph=True keeps computation graph alive for multiple backward passes.
         gradient_norms = []
         for i, weighted_loss in enumerate(weighted_losses):
             model.zero_grad()
             weighted_loss.backward(retain_graph=True)
             
-            # Compute L2 norm of gradients on shared parameters
+            # Compute L2 norm of gradients on shared parameters.
             grad_norm = 0.0
             for param in shared_params:
                 if param.grad is not None:
@@ -62,7 +62,7 @@ class GradNormBalancer(nn.Module):
             grad_norm = grad_norm ** 0.5
             gradient_norms.append(grad_norm)
         
-        model.zero_grad()  # Clear gradients after computing norms
+        model.zero_grad()  # Clear gradients after computing norms.
         gradient_norms_tensor = torch.stack(gradient_norms)
         return torch.stack(weighted_losses), gradient_norms_tensor
     
@@ -73,33 +73,33 @@ class GradNormBalancer(nn.Module):
         iteration: int
     ) -> Dict[str, float]:
         """Update task weights using GradNorm algorithm...."""
-        # Initialize reference losses on first iteration
+        # Initialize reference losses on first iteration.
         if not self.initialized:
             self.initial_losses = torch.stack([loss.detach() for loss in task_losses])
             self.initialized = True
         
-        # Compute relative losses (current / initial) to track training progress per task
+        # Compute relative losses (current / initial) to track training progress per task.
         current_losses = torch.stack([loss.detach() for loss in task_losses])
         relative_losses = current_losses / (self.initial_losses + 1e-8)
         
         # Average gradient norm across all tasks (target for balancing)
         avg_grad_norm = gradient_norms.mean()
         
-        # Relative inverse training rates: tasks with higher relative loss need more learning
-        # alpha controls restoring force (higher = stronger rebalancing)
+        # Relative inverse training rates: tasks with higher relative loss need more learning.
+        # Alpha controls restoring force (higher = stronger rebalancing)
         relative_inverse_rates = relative_losses ** self.alpha
         
-        # Target gradient norms: tasks that are behind get larger gradient targets
+        # Target gradient norms: tasks that are behind get larger gradient targets.
         target_grad_norms = avg_grad_norm * relative_inverse_rates
         
-        # GradNorm loss: minimize difference between actual and target gradient norms
+        # GradNorm loss: minimize difference between actual and target gradient norms.
         gradnorm_loss = F.l1_loss(gradient_norms, target_grad_norms)
         
-        # Update task weights via gradient descent on gradnorm_loss
-        # This is done separately from main training loop
-        # In practice, you'd optimize task_weights with respect to gradnorm_loss
+        # Update task weights via gradient descent on gradnorm_loss.
+        # This is done separately from main training loop.
+        # In practice, you'd optimize task_weights with respect to gradnorm_loss.
         
-        # For now, return metrics for monitoring
+        # For now, return metrics for monitoring.
         metrics = {
             'gradnorm_loss': gradnorm_loss.item(),
             'avg_grad_norm': avg_grad_norm.item(),
@@ -135,13 +135,13 @@ class PCGradBalancer:
         for i, grad_i in enumerate(gradients):
             grad_i_proj = grad_i.clone()
             
-            # Project grad_i onto other gradients to resolve conflicts
+            # Project grad_i onto other gradients to resolve conflicts.
             for j, grad_j in enumerate(gradients):
                 if i != j:
-                    # Negative dot product indicates conflicting update directions
+                    # Negative dot product indicates conflicting update directions.
                     dot_product = (grad_i * grad_j).sum()
                     
-                    if dot_product < 0:  # Gradients point in opposite directions
+                    if dot_product < 0:  # Gradients point in opposite directions.
                         # Project grad_i onto plane orthogonal to grad_j (remove conflict component)
                         grad_i_proj = grad_i_proj - (dot_product / (grad_j.norm() ** 2 + 1e-8)) * grad_j
             
@@ -172,10 +172,10 @@ class PerHeadLossMonitor:
         for head_name, loss in head_losses.items():
             loss_val = loss.item() if torch.is_tensor(loss) else loss
             
-            # Add to history
+            # Add to history.
             self.loss_history[head_name].append(loss_val)
             
-            # Keep only window_size most recent
+            # Keep only window_size most recent.
             if len(self.loss_history[head_name]) > self.window_size:
                 self.loss_history[head_name].pop(0)
     
@@ -185,14 +185,14 @@ class PerHeadLossMonitor:
         Returns:
             Dictionary mapping issue types to affected heads"""
         issues = {
-            'dominant': [],  # Loss decaying too fast
-            'oscillating': [],  # Loss oscillating
-            'plateaued': [],  # Loss not improving
-            'conflicting': []  # Losses moving in opposite directions
+            'dominant': [],  # Loss decaying too fast.
+            'oscillating': [],  # Loss oscillating.
+            'plateaued': [],  # Loss not improving.
+            'conflicting': []  # Losses moving in opposite directions.
         }
         
         for head_name, history in self.loss_history.items():
-            if len(history) < 20:  # Need enough history
+            if len(history) < 20:  # Need enough history.
                 continue
             
             recent = history[-20:]
@@ -204,22 +204,22 @@ class PerHeadLossMonitor:
                 early_avg = sum(early) / len(early)
                 decay_rate = (early_avg - recent_avg) / (early_avg + 1e-8)
                 
-                if decay_rate > 0.5:  # Decayed by >50%
+                if decay_rate > 0.5:  # Decayed by >50%.
                     issues['dominant'].append(head_name)
             
-            # Check for oscillation
+            # Check for oscillation.
             if len(recent) > 10:
                 variance = sum((x - sum(recent)/len(recent))**2 for x in recent) / len(recent)
                 mean_val = sum(recent) / len(recent)
-                cv = (variance ** 0.5) / (mean_val + 1e-8)  # Coefficient of variation
+                cv = (variance ** 0.5) / (mean_val + 1e-8)  # Coefficient of variation.
                 
-                if cv > 0.3:  # High variance relative to mean
+                if cv > 0.3:  # High variance relative to mean.
                     issues['oscillating'].append(head_name)
             
-            # Check for plateau
+            # Check for plateau.
             if len(recent) > 10:
                 recent_trend = (recent[-1] - recent[0]) / (len(recent) - 1)
-                if abs(recent_trend) < 1e-6:  # No improvement
+                if abs(recent_trend) < 1e-6:  # No improvement.
                     issues['plateaued'].append(head_name)
         
         return issues
@@ -275,7 +275,7 @@ class GradNormMultiHeadLoss(nn.Module):
         self.initialized = False
         self.shared_params = shared_params
         self.iteration = 0
-        self._nan_warned_heads: set = set()  # debounce nan/inf warnings per head
+        self._nan_warned_heads: set = set()  # Debounce nan/inf warnings per head.
     
     def set_shared_params(self, shared_params: List[nn.Parameter]):
         """Set shared parameters for gradient norm computation."""
@@ -289,7 +289,7 @@ class GradNormMultiHeadLoss(nn.Module):
         'urgency': 'urgency_scores',
     }
     TARGET_KEY_MAP = {
-        'objectness': 'objectness',  # batch may not have; build from labels or skip
+        'objectness': 'objectness',  # Batch may not have; build from labels or skip.
         'classification': 'labels',
         'box': 'boxes',
         'distance': 'distance',
@@ -324,11 +324,11 @@ class GradNormMultiHeadLoss(nn.Module):
                     pred = aligned_pred.get('classification')
                     targ = aligned_target.get('labels')
                     if pred is not None and pred.numel() == 0:
-                        # Create zero loss with requires_grad=True for GradNorm compatibility
+                        # Create zero loss with requires_grad=True for GradNorm compatibility.
                         zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
                         head_loss_dicts[head_name] = {'loss': zero_loss}
                         continue
-                    # ClassificationLoss expects [B, N, C] and [B, N]; matched are [N, C] and [N]
+                    # ClassificationLoss expects [B, N, C] and [B, N]; matched are [N, C] and [N].
                     if pred is not None and targ is not None and pred.dim() == 2:
                         pred = pred.unsqueeze(0)
                         targ = targ.unsqueeze(0)
@@ -336,7 +336,7 @@ class GradNormMultiHeadLoss(nn.Module):
                     pred = aligned_pred.get('box')
                     targ = aligned_target.get('boxes')
                     if pred is not None and pred.numel() == 0:
-                        # Create zero loss with requires_grad=True for GradNorm compatibility
+                        # Create zero loss with requires_grad=True for GradNorm compatibility.
                         zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
                         head_loss_dicts[head_name] = {'loss': zero_loss}
                         continue
@@ -344,7 +344,7 @@ class GradNormMultiHeadLoss(nn.Module):
                     pred = aligned_pred.get('distance')
                     targ = aligned_target.get('distance')
                     if pred is not None and pred.numel() == 0:
-                        # Create zero loss with requires_grad=True for GradNorm compatibility
+                        # Create zero loss with requires_grad=True for GradNorm compatibility.
                         zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
                         head_loss_dicts[head_name] = {'loss': zero_loss}
                         continue
@@ -358,11 +358,11 @@ class GradNormMultiHeadLoss(nn.Module):
                     pred = outputs.get(out_key) if isinstance(outputs.get(out_key), torch.Tensor) else None
                     targ = targets.get(targ_key) if isinstance(targets.get(targ_key), torch.Tensor) else None
                 if pred is None or targ is None:
-                    # Create zero loss with requires_grad=True for GradNorm compatibility
+                    # Create zero loss with requires_grad=True for GradNorm compatibility.
                     zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
                     head_loss_dicts[head_name] = {'loss': zero_loss}
                     continue
-                # ObjectnessLoss expects logits; model may return sigmoid scores
+                # ObjectnessLoss expects logits; model may return sigmoid scores.
                 if head_name == 'objectness' and pred.dtype == torch.float32 and pred.min() >= 0 and pred.max() <= 1:
                     pred = torch.logit(torch.clamp(pred, 1e-4, 1.0 - 1e-4))
                 loss = loss_fn(pred, targ)
@@ -371,12 +371,12 @@ class GradNormMultiHeadLoss(nn.Module):
                 elif isinstance(loss, dict) and 'loss' in loss:
                     head_loss_dicts[head_name] = loss
                 else:
-                    # Create zero loss with requires_grad=True for GradNorm compatibility
+                    # Create zero loss with requires_grad=True for GradNorm compatibility.
                     zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
                     head_loss_dicts[head_name] = {'loss': zero_loss}
             except Exception as e:
                 logger.warning(f"Failed to compute loss for {head_name}: {e}")
-                # Create zero loss with requires_grad=True for GradNorm compatibility
+                # Create zero loss with requires_grad=True for GradNorm compatibility.
                 zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
                 head_loss_dicts[head_name] = {'loss': zero_loss}
         return head_loss_dicts
@@ -405,7 +405,7 @@ class GradNormMultiHeadLoss(nn.Module):
         weighted_losses = []
         for i, head_name in enumerate(self.head_names):
             loss = head_losses[head_name]
-            # Ensure loss requires grad for GradNorm computation
+            # Ensure loss requires grad for GradNorm computation.
             if torch.is_tensor(loss) and not loss.requires_grad:
                 loss = loss.detach().requires_grad_(True)
             weighted_loss = self.task_weights[i] * loss
@@ -415,7 +415,7 @@ class GradNormMultiHeadLoss(nn.Module):
         gradient_norms = []
         
         for i, weighted_loss in enumerate(weighted_losses):
-            # Ensure weighted_loss requires grad before backward pass
+            # Ensure weighted_loss requires grad before backward pass.
             if not weighted_loss.requires_grad:
                 logger.warning(f"Head {self.head_names[i]} loss does not require grad, skipping gradient norm computation")
                 gradient_norms.append(0.0)
@@ -440,7 +440,7 @@ class GradNormMultiHeadLoss(nn.Module):
             grad_norm = 0.0
             for param in self.shared_params:
                 if param.grad is not None:
-                    # Use detach() to avoid inplace operation issues
+                    # Use detach() to avoid inplace operation issues.
                     grad_norm += param.grad.detach().norm(p=2) ** 2
             grad_norm = grad_norm ** 0.5
             if torch.is_tensor(grad_norm):
@@ -533,7 +533,7 @@ class GradNormMultiHeadLoss(nn.Module):
             if loss is None:
                 loss = torch.tensor(0.0, device=device, requires_grad=True)
             elif torch.is_tensor(loss) and not loss.requires_grad:
-                # If loss doesn't require grad, create a new tensor that does
+                # If loss doesn't require grad, create a new tensor that does.
                 loss = loss.detach().requires_grad_(True)
             elif not torch.is_tensor(loss):
                 loss = torch.tensor(float(loss), device=device, requires_grad=True)
@@ -607,14 +607,14 @@ class GradNormStressIntegrator:
         """Compute total loss, update task weights, monitor head trends, and return metrics...."""
         self.iteration += 1
         
-        # Compute loss and update task weights via GradNorm
+        # Compute loss and update task weights via GradNorm.
         total_loss, metrics = self.loss_module(outputs, targets, model=model)
         
-        # Extract head losses for monitoring
+        # Extract head losses for monitoring.
         head_losses = metrics.get('head_losses', {})
         
-        # Convert to format expected by PerHeadLossMonitor
-        # PerHeadLossMonitor expects Dict[str, torch.Tensor]
+        # Convert to format expected by PerHeadLossMonitor.
+        # PerHeadLossMonitor expects Dict[str, torch.Tensor].
         monitor_losses = {}
         for head_name, loss_val in head_losses.items():
             if isinstance(loss_val, (int, float)):
@@ -624,17 +624,17 @@ class GradNormStressIntegrator:
             else:
                 continue
         
-        # Update monitor with current losses
+        # Update monitor with current losses.
         self.monitor.update(monitor_losses)
         
-        # Detect issues if enough history accumulated
+        # Detect issues if enough history accumulated.
         issues = self.monitor.detect_issues()
         
         # Handle detected issues (optional auto-dampening)
         if issues and self.auto_dampen:
             self._handle_issues(issues)
         
-        # Build dashboard metrics for MaxSight stress suite
+        # Build dashboard metrics for MaxSight stress suite.
         dashboard_metrics = {
             'iteration': self.iteration,
             'total_loss': total_loss.item() if torch.is_tensor(total_loss) else total_loss,
@@ -645,7 +645,7 @@ class GradNormStressIntegrator:
             'monitor_summary': self.monitor.get_summary()
         }
         
-        # Log critical alerts
+        # Log critical alerts.
         if any(issues.values()):
             alert = {
                 'iteration': self.iteration,
@@ -654,18 +654,18 @@ class GradNormStressIntegrator:
                 'gradient_norms': metrics.get('gradient_norms', {})
             }
             self.alert_history.append(alert)
-            # Keep only last 100 alerts
+            # Keep only last 100 alerts.
             if len(self.alert_history) > 100:
                 self.alert_history.pop(0)
             
-            # Log warning for critical issues
+            # Log warning for critical issues.
             for issue_type, heads in issues.items():
                 if heads:
                     logger.warning(
                         f"Iteration {self.iteration}: {issue_type} heads detected: {heads}"
                     )
         
-        # Merge dashboard metrics into main metrics
+        # Merge dashboard metrics into main metrics.
         metrics.update(dashboard_metrics)
         
         return total_loss, metrics
@@ -716,4 +716,5 @@ class GradNormStressIntegrator:
         self.alert_history.clear()
         self.iteration = 0
         logger.info("GradNorm stress monitoring reset")
+
 

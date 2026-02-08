@@ -12,7 +12,7 @@ def _object_id(det: Dict[str, Any]) -> str:
         return cls
     if hasattr(box, "tolist"):
         box = box.tolist()
-    # Round to reduce jitter
+    # Round to reduce jitter.
     if len(box) >= 4:
         key = (cls, round(box[0], 2), round(box[1], 2), round(box[2], 2), round(box[3], 2))
     else:
@@ -50,3 +50,4 @@ class AlertCooldownFilter:
                 result.append(det)
                 self._last_alert_frame[oid] = fid
         return result
+

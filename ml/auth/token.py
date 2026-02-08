@@ -14,7 +14,7 @@ from typing import Dict, Optional
 
 # Secret key from environment (must be set in production)
 SECRET = os.environ.get("MAXSIGHT_SECRET_KEY", "change_me_in_production")
-TTL = int(os.environ.get("MAXSIGHT_SESSION_TIMEOUT", 3600))  # Default 1 hour
+TTL = int(os.environ.get("MAXSIGHT_SESSION_TIMEOUT", 3600))  # Default 1 hour.
 
 
 def make_token(payload: Dict) -> str:
@@ -22,17 +22,17 @@ def make_token(payload: Dict) -> str:
     payload = dict(payload)
     payload['exp'] = int(time.time()) + TTL
     
-    # Encode payload as JSON
+    # Encode payload as JSON.
     payload_b = json.dumps(payload, separators=(',', ':')).encode()
     
-    # Generate HMAC signature
+    # Generate HMAC signature.
     sig = hmac.new(SECRET.encode(), payload_b, hashlib.sha256).digest()
     
-    # Encode both as URL-safe base64
+    # Encode both as URL-safe base64.
     token_payload = base64.urlsafe_b64encode(payload_b).rstrip(b'=')
     token_sig = base64.urlsafe_b64encode(sig).rstrip(b'=')
     
-    # Combine: payload.signature
+    # Combine: payload.signature.
     token = token_payload.decode() + '.' + token_sig.decode()
     
     return token
@@ -41,7 +41,7 @@ def make_token(payload: Dict) -> str:
 def verify_token(token: str) -> Dict:
     """Verify HMAC-signed token and return payload if valid...."""
     try:
-        # Split token into payload and signature
+        # Split token into payload and signature.
         parts = token.split('.')
         if len(parts) != 2:
             raise ValueError("Invalid token format")
@@ -54,15 +54,15 @@ def verify_token(token: str) -> Dict:
         # Decode signature (add padding if needed)
         sig = base64.urlsafe_b64decode(s_b + '==')
         
-        # Verify signature
+        # Verify signature.
         expected = hmac.new(SECRET.encode(), payload_b, hashlib.sha256).digest()
         if not hmac.compare_digest(expected, sig):
             raise ValueError("Bad signature - token tampered with")
         
-        # Decode payload
+        # Decode payload.
         payload = json.loads(payload_b)
         
-        # Check expiration
+        # Check expiration.
         if payload.get('exp', 0) < time.time():
             raise ValueError("Token expired")
         
@@ -70,4 +70,5 @@ def verify_token(token: str) -> Dict:
         
     except (ValueError, json.JSONDecodeError, base64.binascii.Error) as e:
         raise ValueError(f"Invalid token: {str(e)}") from e
+
 

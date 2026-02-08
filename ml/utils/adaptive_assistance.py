@@ -8,11 +8,11 @@ import time
 @dataclass
 class PerformanceMetrics:
     """Performance metrics for adaptive assistance...."""
-    accuracy: float  # 0-1, object recognition accuracy
-    reaction_time: float  # seconds, average reaction time
+    accuracy: float  # 0-1, object recognition accuracy.
+    reaction_time: float  # Seconds, average reaction time.
     skill_progression: float  # -1 to 1, trend (positive = improving)
-    hazard_awareness: float  # 0-1, how well user detects hazards
-    session_count: int  # Number of sessions completed
+    hazard_awareness: float  # 0-1, how well user detects hazards.
+    session_count: int  # Number of sessions completed.
 
 
 class AdaptiveAssistance:
@@ -39,12 +39,12 @@ class AdaptiveAssistance:
         self.max_verbosity = max_verbosity
         self.performance_history: List[PerformanceMetrics] = []
         
-        # EWMA smoothing
+        # EWMA smoothing.
         self.use_ewma = use_ewma
         self.ewma_alpha = ewma_alpha
         self.ewma_metrics: Optional[PerformanceMetrics] = None
         
-        # Configurable thresholds
+        # Configurable thresholds.
         self.accuracy_threshold_high = accuracy_threshold_high
         self.accuracy_threshold_low = accuracy_threshold_low
         self.reaction_time_threshold_fast = reaction_time_threshold_fast
@@ -71,12 +71,12 @@ class AdaptiveAssistance:
         )
         self.performance_history.append(metrics)
         
-        # Update EWMA metrics
+        # Update EWMA metrics.
         if self.use_ewma:
             if self.ewma_metrics is None:
                 self.ewma_metrics = metrics
             else:
-                # Exponential weighted moving average
+                # Exponential weighted moving average.
                 self.ewma_metrics = PerformanceMetrics(
                     accuracy=self.ewma_alpha * metrics.accuracy + (1 - self.ewma_alpha) * self.ewma_metrics.accuracy,
                     reaction_time=self.ewma_alpha * metrics.reaction_time + (1 - self.ewma_alpha) * self.ewma_metrics.reaction_time,
@@ -113,30 +113,30 @@ class AdaptiveAssistance:
                 return {'brief': 0, 'normal': 1, 'detailed': 2, 'very_detailed': 3}.get(self.initial_verbosity, 1)
             return self.initial_verbosity
         
-        # Use averaged metrics for stability
+        # Use averaged metrics for stability.
         metrics = self.get_average_metrics()
         
-        # High performance + improving = reduce verbosity
+        # High performance + improving = reduce verbosity.
         if metrics.accuracy > self.accuracy_threshold_high and metrics.skill_progression > self.skill_progression_threshold:
-            # User is skilled and improving - encourage independence
+            # User is skilled and improving - encourage independence.
             if use_numeric:
-                return 0  # brief
+                return 0  # Brief.
             if self.min_verbosity == 'brief':
                 return 'brief'
             return 'normal'
         
-        # Low performance or declining = increase verbosity
+        # Low performance or declining = increase verbosity.
         if metrics.accuracy < self.accuracy_threshold_low or metrics.skill_progression < -self.skill_progression_threshold:
-            # User is struggling - provide more support
+            # User is struggling - provide more support.
             if use_numeric:
-                return 3  # very_detailed
+                return 3  # Very_detailed.
             if self.max_verbosity == 'detailed':
                 return 'detailed'
             return 'normal'
         
-        # Medium performance = normal verbosity
+        # Medium performance = normal verbosity.
         if use_numeric:
-            return 1  # normal
+            return 1  # Normal.
         return 'normal'
     
     def get_adaptive_frequency(self) -> str:
@@ -144,36 +144,36 @@ class AdaptiveAssistance:
         if not self.performance_history:
             return 'medium'
         
-        # Use averaged metrics for stability
+        # Use averaged metrics for stability.
         metrics = self.get_average_metrics()
         
-        # High performance = reduce frequency
+        # High performance = reduce frequency.
         if metrics.accuracy > self.accuracy_threshold_high and metrics.reaction_time < self.reaction_time_threshold_fast:
-            return 'low'  # User is skilled - minimal interruption
+            return 'low'  # User is skilled - minimal interruption.
         
-        # Low performance = increase frequency
+        # Low performance = increase frequency.
         if metrics.accuracy < self.accuracy_threshold_low or metrics.reaction_time > self.reaction_time_threshold_slow:
-            return 'high'  # User needs more guidance
+            return 'high'  # User needs more guidance.
         
         return 'medium'
     
     def get_adaptive_hazard_threshold(self) -> int:
         """Get adaptive hazard alert threshold based on performance...."""
         if not self.performance_history:
-            return 1  # Default: alert to caution and above
+            return 1  # Default: alert to caution and above.
         
-        # Use averaged metrics for stability
+        # Use averaged metrics for stability.
         metrics = self.get_average_metrics()
         
-        # High hazard awareness = only high-urgency alerts
+        # High hazard awareness = only high-urgency alerts.
         if metrics.hazard_awareness > self.hazard_awareness_threshold_high:
-            return 2  # Only warning and danger
+            return 2  # Only warning and danger.
         
-        # Low hazard awareness = alert to all hazards
+        # Low hazard awareness = alert to all hazards.
         if metrics.hazard_awareness < self.hazard_awareness_threshold_low:
-            return 0  # Alert to all urgency levels
+            return 0  # Alert to all urgency levels.
         
-        return 1  # Default: caution and above
+        return 1  # Default: caution and above.
     
     def get_adaptive_config(self) -> Dict[str, any]:
         """Get complete adaptive configuration."""
@@ -191,10 +191,10 @@ def create_adaptive_assistance_from_session(
     """Create adaptive assistance from session manager."""
     adaptive = AdaptiveAssistance(initial_verbosity=initial_verbosity)
     
-    # Extract performance metrics from session manager
+    # Extract performance metrics from session manager.
     if session_manager.current_session and session_manager.task_attempts:
-        # Calculate metrics from recent tasks
-        recent_tasks = session_manager.task_attempts[-10:]  # Last 10 tasks
+        # Calculate metrics from recent tasks.
+        recent_tasks = session_manager.task_attempts[-10:]  # Last 10 tasks.
         
         if recent_tasks:
             successes = sum(1 for t in recent_tasks if t.get('result', {}).get('success', False))
@@ -222,7 +222,7 @@ def create_adaptive_assistance_from_session(
                 skill_progression = 0.0
             
             # Hazard awareness (placeholder - would need hazard-specific tasks)
-            hazard_awareness = accuracy  # Use general accuracy as proxy
+            hazard_awareness = accuracy  # Use general accuracy as proxy.
             
             adaptive.update_performance(
                 accuracy=accuracy,
@@ -233,4 +233,5 @@ def create_adaptive_assistance_from_session(
             )
     
     return adaptive
+
 

@@ -32,11 +32,12 @@ class SceneGraphRetrievalEncoder(nn.Module):
     
     def forward(
         self,
-        node_features: torch.Tensor,  # [N, node_dim]
-        edge_index: torch.Tensor,      # [2, E]
-        edge_attr: Optional[torch.Tensor] = None  # [E, edge_dim]
+        node_features: torch.Tensor,  # [N, node_dim].
+        edge_index: torch.Tensor,      # [2, E].
+        edge_attr: Optional[torch.Tensor] = None  # [E, edge_dim].
     ) -> torch.Tensor:
         """Encode scene graph...."""
         return self.gnn_encoder(node_features, edge_index, edge_attr)
+
 
 

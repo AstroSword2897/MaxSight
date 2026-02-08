@@ -11,7 +11,7 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader, Subset
 
-# Project path
+# Project path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model, TierConfig, CapabilityTier, COCO_CLASSES
@@ -88,7 +88,7 @@ def subset_dataset_stratified(dataset, fraction: float, seed: int):
 def main():
     parser = argparse.ArgumentParser(description="T5 Fast Training for Colab (2-3 h runs)")
     
-    # Data
+    # Data.
     parser.add_argument("--data-dir", required=True, help="Data root (COCO dir)")
     parser.add_argument("--checkpoint-dir", default="/content/drive/MyDrive/MaxSight/checkpoints")
     parser.add_argument("--train-annotation", type=Path, required=True, help="Train split JSON")
@@ -115,20 +115,20 @@ def main():
     parser.add_argument("--early-stopping-patience", type=int, default=10)
     parser.add_argument("--seed", type=int, default=42)
     
-    # Hardware
+    # Hardware.
     parser.add_argument("--device", default="cuda", choices=["cpu", "cuda"])
     
-    # Model
+    # Model.
     parser.add_argument("--num-classes", type=int, default=None)
     parser.add_argument("--use-audio", action="store_true")
     parser.add_argument("--condition-mode", choices=[None, "glaucoma", "amd", "cataracts", "color_blindness"], default=None)
     
-    # Resume
+    # Resume.
     parser.add_argument("--resume-from", type=str, default=None, help="Resume from checkpoint")
     
     args = parser.parse_args()
     
-    # Setup
+    # Setup.
     seed_everything(args.seed)
     device = args.device
     
@@ -192,7 +192,7 @@ def main():
     
     train_subset = subset_dataset_stratified(train_dataset, fraction, args.seed)
     
-    # Rebuild train loader with subset
+    # Rebuild train loader with subset.
     train_loader = DataLoader(
         train_subset,
         batch_size=args.batch_size,
@@ -206,7 +206,7 @@ def main():
     logger.info(f"Val: {len(val_loader.dataset)} samples (full validation set)")  # type: ignore[arg-type]
     logger.info(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
     
-    # Model: T5_TEMPORAL
+    # Model: T5_TEMPORAL.
     num_classes = args.num_classes or len(COCO_CLASSES)
     tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
     
@@ -219,10 +219,10 @@ def main():
     
     logger.info(f"Model: T5_TEMPORAL, {sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters")
     
-    # Loss
+    # Loss.
     loss_fn = create_loss_fn(num_classes, use_gradnorm=True)
     
-    # Trainer
+    # Trainer.
     resume_from = None
     if args.resume_from:
         p = Path(args.resume_from)
@@ -246,7 +246,7 @@ def main():
         num_epochs=args.epochs,
         checkpoint_dir=str(ckpt_dir),
         seed=args.seed,
-        use_mixed_precision=False,  # FP32 only
+        use_mixed_precision=False,  # FP32 only.
         gradient_clip_norm=args.grad_clip,
         gradient_accumulation_steps=args.grad_accumulation_steps,
         scheduler_type="cosine",
@@ -257,7 +257,7 @@ def main():
         use_gradnorm=True,
     )
     
-    # Train
+    # Train.
     try:
         logger.info(f"Starting T5 training: {args.epochs} epochs, warmup {args.warmup_epochs}, subset {fraction*100:.1f}%")
         results = trainer.train()
@@ -273,3 +273,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -27,7 +27,7 @@ class MultiHeadBenchmark:
         num_runs: int = 50
     ) -> Dict[str, float]:
         """Benchmark a combination of heads...."""
-        # Warmup
+        # Warmup.
         with torch.no_grad():
             for _ in range(num_warmup):
                 _ = self.model(input_tensor)
@@ -40,13 +40,13 @@ class MultiHeadBenchmark:
             for _ in range(num_runs):
                 start_total = time.perf_counter()
                 
-                # Full forward pass
+                # Full forward pass.
                 outputs = self.model(input_tensor)
                 
                 total_time = (time.perf_counter() - start_total) * 1000
                 total_timings.append(total_time)
         
-        # Calculate statistics
+        # Calculate statistics.
         stats = {
             'mean_ms': statistics.mean(total_timings),
             'median_ms': statistics.median(total_timings),
@@ -73,7 +73,7 @@ class MultiHeadBenchmark:
         # Core heads (always needed)
         core_heads = ['classification', 'box_regression', 'objectness']
         
-        # Optional heads
+        # Optional heads.
         optional_heads = [
             'text_region',
             'urgency',
@@ -85,16 +85,16 @@ class MultiHeadBenchmark:
             'uncertainty'
         ]
         
-        # Benchmark core only
+        # Benchmark core only.
         print("Benchmarking core heads...")
         self.benchmark_head_combination(core_heads, input_tensor)
         
-        # Benchmark core + each optional head
+        # Benchmark core + each optional head.
         for head in optional_heads:
             print(f"Benchmarking core + {head}...")
             self.benchmark_head_combination(core_heads + [head], input_tensor)
         
-        # Benchmark all heads
+        # Benchmark all heads.
         print("Benchmarking all heads...")
         self.benchmark_head_combination(core_heads + optional_heads, input_tensor)
         
@@ -117,7 +117,7 @@ class MultiHeadBenchmark:
                     'exceeds_target_by_ms': mean_latency - target_latency_ms
                 })
                 
-                # Recommendations
+                # Recommendations.
                 if 'uncertainty' in combination:
                     recommendations.append(f"Consider disabling uncertainty head for {combination}")
                 if 'findability' in combination:
@@ -150,14 +150,14 @@ class MultiHeadBenchmark:
         if required_heads is None:
             required_heads = ['classification', 'box_regression', 'objectness']
         
-        # Find best combination
+        # Find best combination.
         best_combination = None
         best_latency = float('inf')
         
         for combination, stats in self.results.items():
             heads = combination.split('+')
             
-            # Check if all required heads are present
+            # Check if all required heads are present.
             if all(req in heads for req in required_heads):
                 mean_latency = stats['mean_ms']
                 if mean_latency < target_latency_ms and mean_latency < best_latency:
@@ -167,6 +167,7 @@ class MultiHeadBenchmark:
         if best_combination:
             return best_combination
         else:
-            # Fallback to required heads only
+            # Fallback to required heads only.
             return required_heads
+
 

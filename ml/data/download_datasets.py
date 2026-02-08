@@ -10,7 +10,7 @@ from typing import List, Dict, Optional
 from ml.models.maxsight_cnn import COCO_CLASSES
 ENVIRONMENTAL_CLASSES = COCO_CLASSES
 
-# 15 Environmental Sound Classes
+# 15 Environmental Sound Classes.
 SOUND_CLASSES = [
     'fire alarm', 'smoke detector', 'doorbell',
     'siren', 'car horn', 'breaking glass',
@@ -36,20 +36,20 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco"), check_coco_raw: 
     # Checks both datasets/coco and datasets/coco_raw (common locations)
     coco_raw_dir = Path("datasets/coco_raw")
     if check_coco_raw and coco_raw_dir.exists():
-        # Uses coco_raw if it exists
+        # Uses coco_raw if it exists.
         actual_data_dir = coco_raw_dir
     else:
         actual_data_dir = data_dir
     
-    # Checks directories
+    # Checks directories.
     train_img_dir = actual_data_dir / "train2017"
     val_img_dir = actual_data_dir / "val2017"
     ann_dir = actual_data_dir / "annotations"
     
-    # Checks image directories
+    # Checks image directories.
     if train_img_dir.exists():
         img_count = len(list(train_img_dir.glob("*.jpg")))
-        status['train_images'] = img_count > 100000  # Expected ~118K images
+        status['train_images'] = img_count > 100000  # Expected ~118K images.
         if status['train_images']:
             print(f"Train images: {img_count} images found")
         else:
@@ -57,13 +57,13 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco"), check_coco_raw: 
     
     if val_img_dir.exists():
         img_count = len(list(val_img_dir.glob("*.jpg")))
-        status['val_images'] = img_count > 4000  # Expected ~5K images
+        status['val_images'] = img_count > 4000  # Expected ~5K images.
         if status['val_images']:
             print(f"Val images: {img_count} images found")
         else:
             print(f"⚠ Val images: Only {img_count} images found (expected ~5K)")
     
-    # Checks annotations
+    # Checks annotations.
     if ann_dir.exists():
         status['annotations'] = True
         train_ann = ann_dir / "instances_train2017.json"
@@ -122,14 +122,14 @@ def download_coco_dataset(data_dir: Path = Path("datasets/coco"), auto_download:
         import subprocess
         import shutil
         
-        # Use multiple download methods in order
+        # Use multiple download methods in order.
         download_methods = []
         
-        # Method 1: wget
+        # Method 1: wget.
         if shutil.which('wget'):
             download_methods.append(('wget', ['wget', '-c', '--progress=bar', '--tries=3']))
         
-        # Method 2: curl
+        # Method 2: curl.
         if shutil.which('curl'):
             download_methods.append(('curl', ['curl', '-L', '-C', '-', '--progress-bar', '--retry', '3']))
         
@@ -148,7 +148,7 @@ def download_coco_dataset(data_dir: Path = Path("datasets/coco"), auto_download:
             for name, info in urls.items():
                 filepath = data_dir / info['filename']
                 
-                # Skip if already exists
+                # Skip if already exists.
                 if filepath.exists():
                     print(f"✓ {name} already exists: {filepath}")
                     continue
@@ -160,7 +160,7 @@ def download_coco_dataset(data_dir: Path = Path("datasets/coco"), auto_download:
                 for method_name, method_cmd in download_methods:
                     try:
                         if method_name == 'requests':
-                            # Use requests for download with progress
+                            # Use requests for download with progress.
                             response = requests.get(info['url'], stream=True, timeout=30)
                             response.raise_for_status()
                             
@@ -176,11 +176,11 @@ def download_coco_dataset(data_dir: Path = Path("datasets/coco"), auto_download:
                                             percent = (downloaded / total_size) * 100
                                             print(f"\r  Progress: {percent:.1f}%", end='', flush=True)
                             
-                            print()  # New line after progress
+                            print()  # New line after progress.
                             success = True
                             break
                         else:
-                            # Use wget or curl
+                            # Use wget or curl.
                             cmd = method_cmd + [info['url'], '-O', str(filepath)]
                             result = subprocess.run(cmd, check=True, capture_output=True)
                             success = True
@@ -220,7 +220,7 @@ def download_coco_dataset(data_dir: Path = Path("datasets/coco"), auto_download:
     
     print(f"\nDataset directory: {data_dir}")
     
-    # Verifies if dataset already exists
+    # Verifies if dataset already exists.
     print("\nVerifying existing dataset...")
     status = verify_coco_dataset(data_dir)
     if all(status.values()):
@@ -300,8 +300,8 @@ def download_audioset(data_dir: Path = Path("datasets/audioset"), auto_download:
         print("Note: AudioSet requires YouTube-DL and API access")
         try:
             import subprocess
-            # AudioSet provides CSV files with YouTube video IDs
-            # Actual download requires youtube-dl and API keys
+            # AudioSet provides CSV files with YouTube video IDs.
+            # Actual download requires youtube-dl and API keys.
             print("AudioSet automatic download requires:")
             print("  1. AudioSet CSV files (from Google Research)")
             print("  2. youtube-dl or yt-dlp installed")
@@ -372,7 +372,7 @@ def create_synthetic_impairments():
             image = image.astype(np.float32) / 255.0
         elif image.max() > 1.0:
             image = image / 255.0
-        # Apply scaling and clamp to valid range
+        # Apply scaling and clamp to valid range.
         result = image * (1 - darken_mask * 0.7)
         return np.clip(result, 0.0, 1.0)
     
@@ -384,7 +384,7 @@ def create_synthetic_impairments():
         elif image.max() > 1.0:
             image = image / 255.0
         result = np.clip(image * brightness, 0.0, 1.0)
-        # Convert back to original dtype if needed
+        # Convert back to original dtype if needed.
         if original_dtype != np.float32 and original_dtype != np.float64:
             result = (result * 255.0).astype(original_dtype)
         return result
@@ -403,8 +403,8 @@ def create_synthetic_impairments():
             matrix = np.array([[0.625, 0.375, 0.0],
                              [0.7, 0.3, 0.0],
                              [0.0, 0.3, 0.7]])
-        else:  # tritanopia
-            # Blue-yellow color blindness
+        else:  # Tritanopia.
+            # Blue-yellow color blindness.
             matrix = np.array([[0.95, 0.05, 0.0],
                              [0.0, 0.433, 0.567],
                              [0.0, 0.475, 0.525]])
@@ -420,7 +420,7 @@ def create_synthetic_impairments():
         'diabetic_retinopathy': lambda img: apply_contrast_reduction(img, factor=0.6),
         'retinitis_pigmentosa': lambda img: apply_low_light(img, brightness=0.3),
         'color_blindness': lambda img: apply_color_shift(img, shift_type='protanopia'),
-        'amblyopia': lambda img: apply_blur(img, sigma=2.0)  # Mild blur for lazy eye
+        'amblyopia': lambda img: apply_blur(img, sigma=2.0)  # Mild blur for lazy eye.
     }
     
     print("\nSynthetic Impairment Functions Created:")
@@ -436,12 +436,12 @@ def save_class_mappings(data_dir: Path = Path("datasets")):
     """Save class mappings to files"""
     data_dir.mkdir(parents=True, exist_ok=True)
     
-    # Save environmental classes
+    # Save environmental classes.
     with open(data_dir / "environmental_classes.txt", "w") as f:
         for i, cls in enumerate(ENVIRONMENTAL_CLASSES):
             f.write(f"{i}: {cls}\n")
     
-    # Save sound classes
+    # Save sound classes.
     with open(data_dir / "sound_classes.txt", "w") as f:
         for i, cls in enumerate(SOUND_CLASSES):
             f.write(f"{i}: {cls}\n")
@@ -506,11 +506,11 @@ if __name__ == "__main__":
     print("MaxSight Comprehensive Dataset Acquisition")
     print("Maximum Data for 347-Class Training")
     
-    # Create dataset directories
+    # Create dataset directories.
     datasets_dir = Path("datasets")
     datasets_dir.mkdir(exist_ok=True)
     
-    # Show all available datasets
+    # Show all available datasets.
     print("\nAvailable Datasets for Maximum Training Data:")
     datasets_info = get_all_datasets_info()
     for key, info in datasets_info.items():
@@ -524,7 +524,7 @@ if __name__ == "__main__":
         print(f"  Size: {info['size']}")
         print(f"  URL: {info['url']}")
     
-    # Download instructions for all datasets
+    # Download instructions for all datasets.
     print("\nDataset Download Instructions:")
     
     download_coco_dataset()
@@ -539,13 +539,13 @@ if __name__ == "__main__":
     print("\n" + "-" * 70)
     download_audioset()
     
-    # Create synthetic impairment info
+    # Create synthetic impairment info.
     create_synthetic_impairments()
     
-    # Save class mappings
+    # Save class mappings.
     save_class_mappings()
     
-    # Final verification summary
+    # Final verification summary.
     print("\nDataset Verification Summary:")
     coco_status = verify_coco_dataset()
     if any(coco_status.values()):
@@ -563,4 +563,5 @@ if __name__ == "__main__":
     print("  - LVIS: 164K images, 2.2M+ instances")
     print("  - AudioSet: 2M+ audio clips")
     print("\n  TOTAL: 11M+ images, 70M+ instances for maximum training data")
+
 

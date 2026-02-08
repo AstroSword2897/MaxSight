@@ -19,13 +19,13 @@ class SystemMetrics:
     total_inference_time: float = 0.0
     total_processing_time: float = 0.0
     
-    # Error counts by type
+    # Error counts by type.
     error_counts: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
     
-    # Request counts by endpoint
+    # Request counts by endpoint.
     endpoint_counts: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
     
-    # Timestamps
+    # Timestamps.
     start_time: float = field(default_factory=time.time)
     last_request_time: Optional[float] = None
     
@@ -111,7 +111,7 @@ class SystemMetrics:
             self.last_request_time = None
 
 
-# Global metrics instance
+# Global metrics instance.
 metrics = SystemMetrics()
 
 
@@ -122,7 +122,7 @@ def get_health_status() -> Dict[str, Any]:
         Health status dictionary"""
     summary = metrics.get_summary()
     
-    # Determine health status
+    # Determine health status.
     error_rate = summary['error_rate_percent']
     if error_rate > 10:
         health = 'unhealthy'
@@ -136,4 +136,5 @@ def get_health_status() -> Dict[str, Any]:
         'timestamp': time.time(),
         'metrics': summary
     }
+
 

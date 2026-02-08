@@ -2,7 +2,7 @@
 """Download the two inference datasets (Open Images V6 + ADE20K), then run checkpoint inference on them.
 
 Usage (Colab):
-  # 1. Download the 2 datasets (Open Images V6 + ADE20K; BDD100K skipped), then run inference
+  # 1. Download the 2 datasets (Open Images V6 + ADE20K; BDD100K skipped), then run inference.
   python scripts/run_inference_on_inference_datasets.py \\
     --download \\
     --datasets-dir /content/drive/MyDrive/MaxSight_Training/datasets \\
@@ -10,7 +10,7 @@ Usage (Colab):
     --conditions cvi amd \\
     --max-samples 100
 
-  # 2. Skip download (datasets already present); run inference only
+  # 2. Skip download (datasets already present); run inference only.
   python scripts/run_inference_on_inference_datasets.py \\
     --datasets-dir ./datasets \\
     --checkpoints-base /content/drive/MyDrive/MaxSight \\
@@ -84,7 +84,7 @@ def main():
         else:
             print("Download step finished.")
 
-    # Step 2: Run inference on each dataset with each condition
+    # Step 2: Run inference on each dataset with each condition.
     from ml.data.inference_datasets import (
         create_inference_dataloader,
         run_inference_on_dataset,
@@ -185,3 +185,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

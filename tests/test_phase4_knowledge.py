@@ -11,7 +11,7 @@ import pytest
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -33,8 +33,8 @@ class TestSceneGraphEncoder:
         )
         encoder.eval()
         
-        boxes = torch.randn(5, 4)  # [N, 4]
-        object_embeddings = torch.randn(5, 256)  # [N, D]
+        boxes = torch.randn(5, 4)  # [N, 4].
+        object_embeddings = torch.randn(5, 256)  # [N, D].
         object_classes = ['person', 'chair', 'table', 'door', 'window']
         
         scene_graph = encoder(boxes, object_embeddings, object_classes)
@@ -85,19 +85,19 @@ class TestGNNEncoder:
             )
             encoder.eval()
             
-            # Create dummy graph
-            node_features = torch.randn(5, 256)  # [N, D]
+            # Create dummy graph.
+            node_features = torch.randn(5, 256)  # [N, D].
             edge_index = torch.tensor([
                 [0, 1, 2, 3],
                 [1, 2, 3, 4]
-            ], dtype=torch.long)  # [2, E]
-            edge_attr = torch.randn(4, 128)  # [E, D]
+            ], dtype=torch.long)  # [2, E].
+            edge_attr = torch.randn(4, 128)  # [E, D].
             
             graph_embedding = encoder(node_features, edge_index, edge_attr)
             
             assert graph_embedding.shape == (512,)
         except ImportError:
-            # torch-geometric not available, skip test
+            # Torch-geometric not available, skip test.
             pytest.skip("torch-geometric not available")
 
 
@@ -123,7 +123,7 @@ class TestKnowledgeAugment:
             )
             retrieval.eval()
             
-            # Create dummy inputs
+            # Create dummy inputs.
             visual_embedding = torch.randn(512)
             scene_graph = {
                 'node_features': torch.randn(5, 256),
@@ -134,7 +134,7 @@ class TestKnowledgeAugment:
                 kg_score = retrieval(visual_embedding, scene_graph)
                 assert kg_score is not None
             except Exception as e:
-                # May fail if GNN dependencies missing
+                # May fail if GNN dependencies missing.
                 pytest.skip(f"Knowledge augment test skipped: {e}")
         except ImportError:
             pytest.skip("torch-geometric not available")
@@ -151,4 +151,5 @@ def run_all_tests():
 
 if __name__ == "__main__":
     run_all_tests()
+
 

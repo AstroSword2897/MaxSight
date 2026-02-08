@@ -4,7 +4,7 @@
 import sys
 from pathlib import Path
 
-# Add project root to path
+# Add project root to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import torch
@@ -23,17 +23,17 @@ from ml.therapy.therapy_integration import (
 
 def simulate_user_performance(difficulty: float, user_skill: float, fatigue: float) -> Dict:
     """Simulate user performing a task with given difficulty and skill level...."""
-    # Success probability: higher skill and lower difficulty = more success
-    # Base formula: if skill >= difficulty, high success probability
+    # Success probability: higher skill and lower difficulty = more success.
+    # Base formula: if skill >= difficulty, high success probability.
     skill_advantage = user_skill - difficulty
-    fatigue_penalty = fatigue * 0.4  # Fatigue reduces performance by up to 40%
+    fatigue_penalty = fatigue * 0.4  # Fatigue reduces performance by up to 40%.
     
     success_prob = 0.5 + skill_advantage - fatigue_penalty
-    success_prob = max(0.05, min(0.95, success_prob))  # Clamp to [0.05, 0.95]
+    success_prob = max(0.05, min(0.95, success_prob))  # Clamp to [0.05, 0.95].
     
     success = np.random.random() < success_prob
     
-    # Reaction time increases with difficulty and fatigue
+    # Reaction time increases with difficulty and fatigue.
     base_reaction = 1.0 + difficulty * 2.0 + fatigue * 1.5
     reaction_time = base_reaction + np.random.normal(0, 0.3)
     reaction_time = max(0.5, reaction_time)
@@ -42,7 +42,7 @@ def simulate_user_performance(difficulty: float, user_skill: float, fatigue: flo
     num_points = int(5 + difficulty * 10 + fatigue * 5)
     gaze_path = [(np.random.random(), np.random.random()) for _ in range(num_points)]
     
-    # Misses/fails based on difficulty
+    # Misses/fails based on difficulty.
     misses = int(difficulty * 3 + fatigue * 2 + np.random.random() * 2)
     
     return {
@@ -67,7 +67,7 @@ def run_therapy_session_simulation(
     print(f"Initial skill level: {initial_skill:.2f}")
     print(f"Skill improvement rate: {skill_improvement_rate:.2f} per success")
     
-    # Initialize components
+    # Initialize components.
     session_mgr = SessionManager(user_id="test_user_123")
     task_gen = TaskGenerator(user_profile={'skill_level': initial_skill})
     
@@ -78,13 +78,13 @@ def run_therapy_session_simulation(
     
     print(f"\n✓ Session started: {session_id}")
     
-    # Simulate session
+    # Simulate session.
     user_skill = initial_skill
     fatigue = 0.0
     
     for task_num in range(session_duration):
-        # Generate task based on current state
-        uncertainty = max(0.0, 1.0 - user_skill)  # Uncertainty decreases as skill improves
+        # Generate task based on current state.
+        uncertainty = max(0.0, 1.0 - user_skill)  # Uncertainty decreases as skill improves.
         recent_performance = session_mgr.task_attempts[-5:] if len(session_mgr.task_attempts) >= 5 else session_mgr.task_attempts
         
         task = task_gen.generate_task(
@@ -93,34 +93,34 @@ def run_therapy_session_simulation(
             recent_performance=recent_performance
         )
         
-        # Simulate user performing task
+        # Simulate user performing task.
         result = simulate_user_performance(
             difficulty=task['difficulty'],
             user_skill=user_skill,
             fatigue=fatigue
         )
         
-        # Log attempt
+        # Log attempt.
         session_mgr.log_task_attempt(
             task_type=task['task_type'].value,
             task_config=task,
             result=result
         )
         
-        # Update task generator
+        # Update task generator.
         task_gen.update_performance({
             'task_type': task['task_type'],
             'difficulty': task['difficulty'],
             'failed': not result['success']
         })
         
-        # Update user state
+        # Update user state.
         if result['success']:
             user_skill = min(1.0, user_skill + skill_improvement_rate)
         
-        fatigue = min(1.0, fatigue + 0.05)  # Fatigue increases over time
+        fatigue = min(1.0, fatigue + 0.05)  # Fatigue increases over time.
         
-        # If rest task, reduce fatigue
+        # If rest task, reduce fatigue.
         if task['task_type'] == TaskType.FATIGUE_REST:
             fatigue = max(0.0, fatigue - 0.3)
             print(f"  Task {task_num+1:2d}: REST (fatigue reduced to {fatigue:.2f})")
@@ -128,7 +128,7 @@ def run_therapy_session_simulation(
             status = "✓" if result['success'] else "✗"
             print(f"  Task {task_num+1:2d}: {task['task_type'].value:20s} | Difficulty: {task['difficulty']:.2f} | {status} | Skill: {user_skill:.2f} | Fatigue: {fatigue:.2f}")
     
-    # End session and get report
+    # End session and get report.
     report = session_mgr.end_session()
     
     return {
@@ -147,7 +147,7 @@ def test_scene_based_therapy():
     
     integrator = create_therapy_integrator()
     
-    # Simulate scene descriptions
+    # Simulate scene descriptions.
     scenes = [
         {
             'description': 'A busy street with cars, pedestrians, and traffic lights',
@@ -172,7 +172,7 @@ def test_scene_based_therapy():
         print(f"\n--- Scene {i+1} ---")
         print(f"Description: {scene['description']}")
         
-        # Generate attention task
+        # Generate attention task.
         task = integrator.create_attention_task(
             scene_description=scene['description'],
             target_objects=scene['objects'][:2],
@@ -182,17 +182,17 @@ def test_scene_based_therapy():
         print(f"  Target objects: {task['target_objects']}")
         print(f"  Difficulty: {task['difficulty']}")
         
-        # Generate contrast task
+        # Generate contrast task.
         contrast_task = integrator.create_contrast_task(
             scene_description=scene['description'],
-            contrast_levels=[0.8, 0.4, 0.2],  # High, medium, low contrast
+            contrast_levels=[0.8, 0.4, 0.2],  # High, medium, low contrast.
             difficulty=0.6
         )
         print(f"\nContrast Task:")
         print(f"  Contrast levels: {contrast_task['contrast_levels']}")
         print(f"  Difficulty: {contrast_task['difficulty']}")
         
-        # Generate edge detection task
+        # Generate edge detection task.
         edge_task = integrator.create_edge_task(
             scene_description=scene['description'],
             edge_types=['door_edge', 'object_boundary'],
@@ -202,7 +202,7 @@ def test_scene_based_therapy():
         print(f"  Edge types: {edge_task['edge_types']}")
         print(f"  Difficulty: {edge_task['difficulty']}")
         
-        # Generate spatial task
+        # Generate spatial task.
         spatial_task = integrator.create_spatial_task(
             scene_description=scene['description'],
             spatial_relationships=['left_of', 'near', 'far'],
@@ -252,7 +252,7 @@ def test_adaptive_difficulty():
     assert task2['difficulty'] > 0.5, "Difficulty should be increased for excelling user"
     print("  ✓ Difficulty appropriately increased")
     
-    # Scenario 3: User is fatigued
+    # Scenario 3: User is fatigued.
     print("\nScenario 3: User is fatigued")
     task3 = task_gen.generate_task(uncertainty=0.5, fatigue_score=0.85, recent_performance=good_performance)
     print(f"  Task type: {task3['task_type'].value}")
@@ -268,14 +268,14 @@ def test_skill_progression():
     print("SKILL PROGRESSION TEST")
     print("="*70)
     
-    # Run multiple sessions with increasing skill
+    # Run multiple sessions with increasing skill.
     num_sessions = 5
     sessions_per_level = 10
     
     results = []
     
     for session_num in range(num_sessions):
-        # Skill improves over sessions
+        # Skill improves over sessions.
         initial_skill = 0.3 + (session_num * 0.1)
         
         print(f"\n--- Session {session_num + 1}/{num_sessions} ---")
@@ -289,7 +289,7 @@ def test_skill_progression():
         
         results.append(session_result)
         
-        # Print session summary
+        # Print session summary.
         summary = session_result['report']['summary']
         print(f"\n  Session Summary:")
         print(f"    Success rate: {summary['success_rate']:.2%}")
@@ -297,7 +297,7 @@ def test_skill_progression():
         print(f"    Final skill: {session_result['final_skill']:.2f}")
         print(f"    Skill improvement: {session_result['skill_improvement']:.2f}")
     
-    # Analyze overall progression
+    # Analyze overall progression.
     print("\n" + "="*70)
     print("OVERALL PROGRESSION ANALYSIS")
     print("="*70)
@@ -312,7 +312,7 @@ def test_skill_progression():
               f"{summary['avg_reaction_time']:<15.2f} "
               f"{result['skill_improvement']:<15.2f}")
     
-    # Check for improvement trend
+    # Check for improvement trend.
     success_rates = [r['report']['summary']['success_rate'] for r in results]
     skill_levels = [r['final_skill'] for r in results]
     avg_improvement = sum(r['skill_improvement'] for r in results) / len(results)
@@ -321,8 +321,8 @@ def test_skill_progression():
     print(f"✓ Success rate progression: {success_rates[0]:.2%} → {success_rates[-1]:.2%}")
     print(f"✓ Skill level progression: {skill_levels[0]:.2f} → {skill_levels[-1]:.2f}")
     
-    # Verify improvement trend - key metric is skill improvement
-    # Success rate may vary due to adaptive difficulty
+    # Verify improvement trend - key metric is skill improvement.
+    # Success rate may vary due to adaptive difficulty.
     if skill_levels[-1] > skill_levels[0] and avg_improvement > 0.05:
         print("\n✅ SYSTEM IS EFFECTIVE: User skill improved over sessions")
         print(f"   Skill increased by {skill_levels[-1] - skill_levels[0]:.2f} points")
@@ -339,7 +339,7 @@ def test_therapy_with_real_scene():
     print("REAL SCENE THERAPY INTEGRATION TEST")
     print("="*70)
     
-    # Simulate MaxSight detection output
+    # Simulate MaxSight detection output.
     scene_detections = [
         {'class': 'person', 'confidence': 0.95, 'bbox': [100, 150, 200, 300]},
         {'class': 'car', 'confidence': 0.88, 'bbox': [300, 200, 500, 400]},
@@ -352,10 +352,10 @@ def test_therapy_with_real_scene():
     print(f"\nScene: {scene_description}")
     print(f"Detected objects: {', '.join([d['class'] for d in scene_detections])}")
     
-    # Create therapy integrator
+    # Create therapy integrator.
     integrator = create_therapy_integrator()
     
-    # Generate different types of therapy tasks
+    # Generate different types of therapy tasks.
     task_types = [
         ('attention', lambda: integrator.create_attention_task(
             scene_description=scene_description,
@@ -456,7 +456,7 @@ def test_long_term_effectiveness():
         print(f"    Avg reaction time: {summary['avg_reaction_time']:.2f}s")
         print(f"    Final skill: {current_skill:.2f}")
     
-    # Analyze progression
+    # Analyze progression.
     print("\n" + "="*70)
     print("PROGRESSION SUMMARY")
     print("="*70)
@@ -467,7 +467,7 @@ def test_long_term_effectiveness():
         print(f"{s['session']:<10} {s['success_rate']:<15.2%} "
               f"{s['avg_reaction_time']:<15.2f} {s['skill_level']:<15.2f}")
     
-    # Calculate improvement
+    # Calculate improvement.
     first_session = session_summaries[0]
     last_session = session_summaries[-1]
     
@@ -480,12 +480,12 @@ def test_long_term_effectiveness():
     print(f"  Skill level: {first_session['skill_level']:.2f} → {last_session['skill_level']:.2f} (Δ {skill_improvement:+.2f})")
     print(f"  Reaction time: {first_session['avg_reaction_time']:.2f}s → {last_session['avg_reaction_time']:.2f}s (Δ {time_improvement:+.2f}s)")
     
-    # Effectiveness criteria
-    # NOTE: Success rate and reaction time may not improve linearly because
-    # difficulty adapts to skill level. The key metric is skill improvement.
+    # Effectiveness criteria.
+    # NOTE: Success rate and reaction time may not improve linearly because.
+    # Difficulty adapts to skill level. The key metric is skill improvement.
     effectiveness_checks = []
     
-    # Primary metric: Skill improvement
+    # Primary metric: Skill improvement.
     if skill_improvement > 0.15:
         print(f"\n  ✅ Skill level improved by {skill_improvement:.2f} (threshold: >0.15)")
         effectiveness_checks.append(True)
@@ -499,19 +499,19 @@ def test_long_term_effectiveness():
         effectiveness_checks.append(True)
     else:
         print(f"  ℹ️  Success rate change: {success_improvement:.1%} (may vary due to adaptive difficulty)")
-        # Don't fail test if skill improved but success rate didn't
+        # Don't fail test if skill improved but success rate didn't.
         effectiveness_checks.append(skill_improvement > 0.15)
     
-    # Reaction time may increase as difficulty increases
+    # Reaction time may increase as difficulty increases.
     if time_improvement >= 0:
         print(f"  ✅ Reaction time stable or improved: {time_improvement:+.2f}s")
         effectiveness_checks.append(True)
     else:
         print(f"  ℹ️  Reaction time change: {time_improvement:+.2f}s (expected with increased difficulty)")
-        # Don't fail if skill improved significantly
+        # Don't fail if skill improved significantly.
         effectiveness_checks.append(skill_improvement > 0.2)
     
-    return effectiveness_checks[0]  # Primary metric is skill improvement
+    return effectiveness_checks[0]  # Primary metric is skill improvement.
 
 
 def main():
@@ -527,7 +527,7 @@ def main():
     
     results = {}
     
-    # Test 1: Scene-based therapy
+    # Test 1: Scene-based therapy.
     try:
         results['scene_based'] = test_scene_based_therapy()
         print("\n✓ Scene-based therapy test PASSED")
@@ -537,7 +537,7 @@ def main():
         traceback.print_exc()
         results['scene_based'] = False
     
-    # Test 2: Adaptive difficulty
+    # Test 2: Adaptive difficulty.
     try:
         results['adaptive_difficulty'] = test_adaptive_difficulty()
         print("\n✓ Adaptive difficulty test PASSED")
@@ -547,7 +547,7 @@ def main():
         traceback.print_exc()
         results['adaptive_difficulty'] = False
     
-    # Test 3: Skill progression
+    # Test 3: Skill progression.
     try:
         results['skill_progression'] = test_skill_progression()
         print("\n✓ Skill progression test PASSED")
@@ -557,7 +557,7 @@ def main():
         traceback.print_exc()
         results['skill_progression'] = False
     
-    # Test 4: Long-term effectiveness
+    # Test 4: Long-term effectiveness.
     try:
         results['long_term'] = test_long_term_effectiveness()
         print("\n✓ Long-term effectiveness test PASSED")
@@ -567,7 +567,7 @@ def main():
         traceback.print_exc()
         results['long_term'] = False
     
-    # Final summary
+    # Final summary.
     print("\n" + "="*70)
     print("FINAL EFFECTIVENESS SUMMARY")
     print("="*70)
@@ -602,3 +602,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

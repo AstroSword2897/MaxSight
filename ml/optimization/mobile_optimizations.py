@@ -32,13 +32,13 @@ class MobileOptimizer:
         pruned_model = copy.deepcopy(model)
         pruned_model.eval()
         
-        # Collect all weights
+        # Collect all weights.
         weights = []
         for module in pruned_model.modules():
             if isinstance(module, (nn.Conv2d, nn.Linear)):
                 weights.append(module.weight.data)
         
-        # Calculate threshold
+        # Calculate threshold.
         all_weights = torch.cat([w.flatten() for w in weights])
         threshold_idx = int(len(all_weights) * pruning_ratio)
         
@@ -47,7 +47,7 @@ class MobileOptimizer:
         else:
             threshold = torch.median(torch.abs(all_weights))
         
-        # Prune weights
+        # Prune weights.
         pruned_count = 0
         total_count = 0
         
@@ -70,7 +70,7 @@ class MobileOptimizer:
         """Disable specific heads for efficiency...."""
         for name, module in model.named_modules():
             if any(head_name in name for head_name in heads_to_disable):
-                # Replace with identity
+                # Replace with identity.
                 if hasattr(module, 'forward'):
                     module.forward = lambda x: torch.zeros_like(x) if torch.is_tensor(x) else {}
         
@@ -82,11 +82,11 @@ class MobileOptimizer:
         
         Returns:
             Dictionary with memory estimates (MB)"""
-        # Model parameters
+        # Model parameters.
         param_size = sum(p.numel() * p.element_size() for p in model.parameters())
         param_size_mb = param_size / (1024 ** 2)
         
-        # Model buffers
+        # Model buffers.
         buffer_size = sum(b.numel() * b.element_size() for b in model.buffers())
         buffer_size_mb = buffer_size / (1024 ** 2)
         
@@ -142,14 +142,14 @@ class EdgeCloudHybrid:
             return edge_outputs
         
         # Cloud inference (if enabled)
-        # In production, this would make HTTP request to cloud endpoint
-        # For now, return edge outputs with cloud flag
+        # In production, this would make HTTP request to cloud endpoint.
+        # For now, return edge outputs with cloud flag.
         cloud_outputs = {
             'cloud_processed': False,
             'cloud_latency_ms': 0.0
         }
         
-        # Merge outputs
+        # Merge outputs.
         combined = {**edge_outputs, **cloud_outputs}
         
         return combined
@@ -164,6 +164,7 @@ class EdgeCloudHybrid:
         if not network_available:
             return False
         
-        # Use cloud for high urgency and good battery
+        # Use cloud for high urgency and good battery.
         return urgency > 0.7 and battery_level > 0.3
+
 

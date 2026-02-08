@@ -6,7 +6,7 @@ import pytest
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -40,7 +40,7 @@ def run_all_phase_tests():
             print(f"Error running {test_file}: {e}")
             results.append((test_file, False))
     
-    # Summary
+    # Summary.
     print("\n" + "=" * 80)
     print("Test Summary")
     print("=" * 80)
@@ -64,4 +64,5 @@ def run_all_phase_tests():
 
 if __name__ == "__main__":
     exit(run_all_phase_tests())
+
 

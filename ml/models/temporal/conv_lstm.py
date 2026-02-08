@@ -17,10 +17,10 @@ class ConvLSTMCell(nn.Module):
         
         self.hidden_dim = hidden_dim
         
-        # Convolutional gates: combines input and hidden state
+        # Convolutional gates: combines input and hidden state.
         self.conv = nn.Conv2d(
             input_dim + hidden_dim,
-            4 * hidden_dim,  # i, f, g, o gates
+            4 * hidden_dim,  # I, f, g, o gates.
             kernel_size,
             padding=kernel_size // 2,
             bias=True
@@ -28,31 +28,31 @@ class ConvLSTMCell(nn.Module):
     
     def forward(
         self,
-        x: torch.Tensor,  # [B, C, H, W]
+        x: torch.Tensor,  # [B, C, H, W].
         hidden: Tuple[torch.Tensor, torch.Tensor]  # (h, c)
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass through ConvLSTM cell...."""
         h_prev, c_prev = hidden
         
-        # Concatenate input and hidden state
-        combined = torch.cat([x, h_prev], dim=1)  # [B, C+hidden_dim, H, W]
+        # Concatenate input and hidden state.
+        combined = torch.cat([x, h_prev], dim=1)  # [B, C+hidden_dim, H, W].
         
-        # Convolutional gates
-        gates = self.conv(combined)  # [B, 4*hidden_dim, H, W]
+        # Convolutional gates.
+        gates = self.conv(combined)  # [B, 4*hidden_dim, H, W].
         
-        # Split into gates
+        # Split into gates.
         i, f, g, o = torch.chunk(gates, 4, dim=1)
         
-        # Apply activations
-        i = torch.sigmoid(i)  # Input gate
-        f = torch.sigmoid(f)  # Forget gate
-        g = torch.tanh(g)     # Candidate values
-        o = torch.sigmoid(o)  # Output gate
+        # Apply activations.
+        i = torch.sigmoid(i)  # Input gate.
+        f = torch.sigmoid(f)  # Forget gate.
+        g = torch.tanh(g)     # Candidate values.
+        o = torch.sigmoid(o)  # Output gate.
         
-        # Update cell state
+        # Update cell state.
         c_new = f * c_prev + i * g
         
-        # Update hidden state
+        # Update hidden state.
         h_new = o * torch.tanh(c_new)
         
         return h_new, c_new
@@ -75,7 +75,7 @@ class ConvLSTM(nn.Module):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         
-        # ConvLSTM cells
+        # ConvLSTM cells.
         self.cells = nn.ModuleList([
             ConvLSTMCell(
                 input_dim if i == 0 else hidden_dim,
@@ -87,13 +87,13 @@ class ConvLSTM(nn.Module):
     
     def forward(
         self,
-        x: torch.Tensor,  # [B, T, C, H, W] - sequence of frames
+        x: torch.Tensor,  # [B, T, C, H, W] - sequence of frames.
         hidden_state: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """Forward pass through ConvLSTM...."""
         B, T, C, H, W = x.shape
         
-        # Initialize hidden state if not provided
+        # Initialize hidden state if not provided.
         if hidden_state is None:
             h = torch.zeros(B, self.hidden_dim, H, W, device=x.device, dtype=x.dtype)
             c = torch.zeros(B, self.hidden_dim, H, W, device=x.device, dtype=x.dtype)
@@ -102,14 +102,14 @@ class ConvLSTM(nn.Module):
         
         outputs = []
         for t in range(T):
-            # Process through each layer - CRITICAL: feed each layer's output to the next
-            cur_input = x[:, t]  # [B, C, H, W]
+            # Process through each layer - CRITICAL: feed each layer's output to the next.
+            cur_input = x[:, t]  # [B, C, H, W].
             for layer_idx, cell in enumerate(self.cells):
                 h, c = cell(cur_input, (h, c))
-                cur_input = h  # Feed this layer's output to the next layer
+                cur_input = h  # Feed this layer's output to the next layer.
             outputs.append(h)
         
-        # Stack outputs: [B, T, hidden_dim, H, W]
+        # Stack outputs: [B, T, hidden_dim, H, W].
         output = torch.stack(outputs, dim=1)
         
         return output, (h, c)
@@ -159,13 +159,14 @@ class TimeSformer(nn.Module):
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, N, D = x.shape
-        # Add temporal embedding: [1, T, 1, D] -> [B, T, N, D]
-        temporal_embed = self.temporal_embed.unsqueeze(0).unsqueeze(2)  # [1, T, 1, D]
-        x = x + temporal_embed  # Broadcast to [B, T, N, D]
+        # Add temporal embedding: [1, T, 1, D] -> [B, T, N, D].
+        temporal_embed = self.temporal_embed.unsqueeze(0).unsqueeze(2)  # [1, T, 1, D].
+        x = x + temporal_embed  # Broadcast to [B, T, N, D].
         for block in self.blocks:
             x = block(x)
         x = self.norm(x)
-        x = x.mean(dim=(1, 2))  # [B, D]
+        x = x.mean(dim=(1, 2))  # [B, D].
         return x
+
 
 

@@ -31,7 +31,7 @@ def get_device(
     param_threshold: int = 10000
 ) -> torch.device:
     """Get the appropriate device for training based on model size...."""
-    # Explicit overrides take precedence
+    # Explicit overrides take precedence.
     if force_cpu:
         return torch.device("cpu")
     
@@ -43,7 +43,7 @@ def get_device(
             )
         return torch.device("cuda")
     
-    # Auto-select based on model size
+    # Auto-select based on model size.
     if num_parameters >= param_threshold:
         # Large model: require CUDA (cloud GPU)
         if torch.cuda.is_available():
@@ -66,12 +66,12 @@ def create_synthetic_batch(batch_size: int = 2, device: Optional[torch.device] =
         # Default to CPU for batch creation (device will be set later)
         device = torch.device("cpu")
     
-    # Images
+    # Images.
     images = torch.randn(batch_size, 3, 224, 224, device=device)
-    # Normalize to [0, 1] range
+    # Normalize to [0, 1] range.
     images = torch.clamp((images + 1) / 2, 0, 1)
     
-    # Return empty targets - will be created from model outputs
+    # Return empty targets - will be created from model outputs.
     return images, {}
 
 
@@ -94,7 +94,7 @@ def compute_losses(predictions: Dict, targets: Dict, loss_fns: Dict) -> Tuple[Di
     losses = {}
     total_loss = torch.tensor(0.0, device=list(predictions.values())[0].device if predictions else 'cpu')
     
-    # Simplified: Just compute what we can, skip complex dependencies
+    # Simplified: Just compute what we can, skip complex dependencies.
     # Loss weights (simplified for smoke test)
     weights = {
         'objectness': 1.0,
@@ -106,7 +106,7 @@ def compute_losses(predictions: Dict, targets: Dict, loss_fns: Dict) -> Tuple[Di
         'depth': 1.0,
     }
     
-    # Map model outputs to loss keys
+    # Map model outputs to loss keys.
     output_key_map = {
         'objectness': 'objectness',
         'classifications': 'classification',
@@ -126,14 +126,14 @@ def compute_losses(predictions: Dict, targets: Dict, loss_fns: Dict) -> Tuple[Di
                 if target is None:
                     continue
                 
-                # Handle shape mismatches gracefully
+                # Handle shape mismatches gracefully.
                 if pred.shape != target.shape:
-                    # Match shapes when possible
+                    # Match shapes when possible.
                     if pred.dim() == target.dim():
-                        # Same dims, different sizes - skip if too different
+                        # Same dims, different sizes - skip if too different.
                         if abs(pred.numel() - target.numel()) > pred.numel() * 0.5:
                             continue
-                        # Reshape target to match pred
+                        # Reshape target to match pred.
                         try:
                             target = target.view(pred.shape)
                         except:
@@ -141,9 +141,9 @@ def compute_losses(predictions: Dict, targets: Dict, loss_fns: Dict) -> Tuple[Di
                     else:
                         continue
                 
-                # Compute loss
+                # Compute loss.
                 if head_name == 'depth' and 'depth_uncertainty' in predictions:
-                    # Depth loss with uncertainty
+                    # Depth loss with uncertainty.
                     loss = loss_fns[head_name](
                         pred,
                         target,
@@ -162,12 +162,12 @@ def compute_losses(predictions: Dict, targets: Dict, loss_fns: Dict) -> Tuple[Di
                 losses[head_name] = float(loss.item() if hasattr(loss, 'item') else loss)
                 total_loss = total_loss + weighted_loss
             except Exception as e:
-                # Skip losses that fail - smoke test is about gradient flow, not perfect loss
+                # Skip losses that fail - smoke test is about gradient flow, not perfect loss.
                 pass
     
-    # Ensure we have at least one loss
+    # Ensure we have at least one loss.
     if len(losses) == 0:
-        # Fallback: simple MSE on a single output
+        # Fallback: simple MSE on a single output.
         first_key = list(predictions.keys())[0]
         first_pred = predictions[first_key]
         if first_pred.numel() > 0:
@@ -203,16 +203,16 @@ def smoke_train(
     print(f"  Learning rate: {learning_rate}")
     print(f"  Device: Will be auto-selected based on model size")
     
-    # Create model first to count parameters
+    # Create model first to count parameters.
     print(f"\nCreating model...")
     model = create_model(
         num_classes=91,
         use_audio=True,
         tier_config=TierConfig.for_tier(tier)
     )
-    model.eval()  # Set to eval for parameter counting
+    model.eval()  # Set to eval for parameter counting.
     
-    # Count parameters
+    # Count parameters.
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"  Parameters: {total_params:,} total, {trainable_params:,} trainable")
@@ -239,19 +239,19 @@ def smoke_train(
             print("  3. Reduce model size for local testing")
             return 1
     
-    # Move model to device
+    # Move model to device.
     model = model.to(device)
-    model.train()  # Set back to train mode
+    model.train()  # Set back to train mode.
     
-    # Create optimizer
+    # Create optimizer.
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
-    # Create loss functions
+    # Create loss functions.
     loss_fns = create_loss_functions()
     for loss_fn in loss_fns.values():
         loss_fn = loss_fn.to(device)
     
-    # Training loop
+    # Training loop.
     print(f"\nStarting training...")
     print("-"*60)
     
@@ -266,16 +266,16 @@ def smoke_train(
         print(f"\nEpoch {epoch + 1}/{num_epochs}")
         
         for batch_idx in range(num_batches):
-            # Create batch
+            # Create batch.
             images, _ = create_synthetic_batch(batch_size=batch_size, device=device)
             
-            # Forward pass
+            # Forward pass.
             optimizer.zero_grad()
             
             try:
                 outputs = model(images)
                 
-                # Create targets matching model outputs
+                # Create targets matching model outputs.
                 targets = {}
                 if 'objectness' in outputs:
                     targets['objectness'] = torch.randint(0, 2, outputs['objectness'].shape, device=device).float()
@@ -292,19 +292,19 @@ def smoke_train(
                 if 'depth_map' in outputs:
                     targets['depth'] = torch.rand_like(outputs['depth_map'])
                 
-                # Compute losses
+                # Compute losses.
                 losses, total_loss = compute_losses(outputs, targets, loss_fns)
                 
-                # Check for NaN
+                # Check for NaN.
                 if torch.isnan(total_loss if isinstance(total_loss, torch.Tensor) else torch.tensor(total_loss)):
                     print(f"  ❌ NaN detected in loss at batch {batch_idx}")
                     nan_detected = True
                     break
                 
-                # Backward pass
+                # Backward pass.
                 total_loss.backward()
                 
-                # Check for NaN gradients
+                # Check for NaN gradients.
                 for name, param in model.named_parameters():
                     if param.grad is not None and torch.isnan(param.grad).any():
                         print(f"  ❌ NaN gradient detected in {name}")
@@ -314,15 +314,15 @@ def smoke_train(
                 if nan_detected:
                     break
                 
-                # Gradient clipping
+                # Gradient clipping.
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 
-                # Optimizer step
+                # Optimizer step.
                 optimizer.step()
                 
                 epoch_loss += total_loss.item()
                 
-                # Print progress
+                # Print progress.
                 if batch_idx % 5 == 0:
                     print(f"  Batch {batch_idx:3d}/{num_batches} | Loss: {total_loss.item():.4f} | "
                           f"Obj: {losses.get('objectness', 0):.4f} | "
@@ -348,7 +348,7 @@ def smoke_train(
         print(f"    Time: {epoch_time:.2f}s")
         print(f"    Throughput: {num_batches * batch_size / epoch_time:.2f} samples/s")
     
-    # Final summary
+    # Final summary.
     print("\n" + "="*60)
     print("SMOKE TRAINING SUMMARY")
     print("="*60)
@@ -367,7 +367,7 @@ def smoke_train(
         print("\n❌ FAILED: Training stopped early")
         return 1
     
-    # Check if loss decreased
+    # Check if loss decreased.
     loss_decreased = epoch_losses[-1] < epoch_losses[0]
     
     print(f"\nLoss Progression:")
@@ -416,4 +416,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

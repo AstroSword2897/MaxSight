@@ -107,22 +107,22 @@ class PredictionMonitor:
         self.latency_threshold_ms = latency_threshold_ms
         self.confidence_threshold = confidence_threshold
         
-        # Rolling windows
+        # Rolling windows.
         self.predictions = deque(maxlen=window_size)
         self.confidences = deque(maxlen=window_size)
         self.latencies = deque(maxlen=window_size)
         self.correct = deque(maxlen=window_size)
         
-        # Historical baselines
+        # Historical baselines.
         self.baseline_accuracy = 0.0
         self.baseline_confidence = 0.0
         self.baseline_latency = 0.0
         
-        # Per-class tracking
+        # Per-class tracking.
         self.class_counts = defaultdict(int)
         self.class_correct = defaultdict(int)
         
-        # Alerts
+        # Alerts.
         self.alerts: List[Alert] = []
         self._lock = threading.Lock()
         
@@ -141,12 +141,12 @@ class PredictionMonitor:
                 if is_correct:
                     self.class_correct[log.prediction] += 1
                     
-            # Check for anomalies
+            # Check for anomalies.
             self._check_alerts(log)
             
     def _check_alerts(self, log: PredictionLog):
         """Check for alert conditions."""
-        # Low confidence alert
+        # Low confidence alert.
         if log.confidence < self.confidence_threshold:
             self._add_alert(
                 AlertSeverity.WARNING,
@@ -157,7 +157,7 @@ class PredictionMonitor:
                 self.confidence_threshold
             )
             
-        # High latency alert
+        # High latency alert.
         if log.latency_ms > self.latency_threshold_ms:
             self._add_alert(
                 AlertSeverity.WARNING,
@@ -168,7 +168,7 @@ class PredictionMonitor:
                 self.latency_threshold_ms
             )
             
-        # Accuracy drift detection
+        # Accuracy drift detection.
         if len(self.correct) >= 100:
             current_accuracy = sum(self.correct) / len(self.correct)
             if self.baseline_accuracy > 0:
@@ -187,12 +187,12 @@ class PredictionMonitor:
                    message: str, metric_name: Optional[str] = None,
                    metric_value: Optional[float] = None, threshold: Optional[float] = None):
         """Add alert with deduplication."""
-        # Check for recent duplicate
+        # Check for recent duplicate.
         cutoff = datetime.now() - timedelta(minutes=5)
         recent_alerts = [a for a in self.alerts 
                         if a.timestamp > cutoff and a.category == category]
         
-        if len(recent_alerts) < 3:  # Max 3 alerts per category per 5 minutes
+        if len(recent_alerts) < 3:  # Max 3 alerts per category per 5 minutes.
             self.alerts.append(Alert(
                 timestamp=datetime.now(),
                 severity=severity,
@@ -290,28 +290,28 @@ class ReadinessDashboard:
         self.checklist.clear()
         self.last_assessment = datetime.now()
         
-        # 1. Dataset Readiness
+        # 1. Dataset Readiness.
         self._assess_dataset(dataset_stats)
         
-        # 2. Model Performance
+        # 2. Model Performance.
         self._assess_performance(training_metrics)
         
-        # 3. Architecture & Training
+        # 3. Architecture & Training.
         self._assess_architecture(model, training_metrics)
         
-        # 4. Stress Testing
+        # 4. Stress Testing.
         self._assess_robustness(stress_test_results)
         
-        # 5. Class Balance
+        # 5. Class Balance.
         self._assess_class_balance(dataset_stats)
         
-        # 6. Deployment Readiness
+        # 6. Deployment Readiness.
         self._assess_deployment(benchmark_results)
         
-        # 7. Monitoring
+        # 7. Monitoring.
         self._assess_monitoring(monitoring_metrics)
         
-        # Calculate overall status
+        # Calculate overall status.
         status = self._calculate_overall_status()
         
         return {
@@ -324,7 +324,7 @@ class ReadinessDashboard:
         
     def _assess_dataset(self, stats: Dict):
         """Assess dataset readiness."""
-        # Size
+        # Size.
         train_size = stats.get('train_size', 0)
         self.checklist.append(ChecklistItem(
             name="Dataset Size",
@@ -336,7 +336,7 @@ class ReadinessDashboard:
             recommendation="Increase to 5000+ for production" if train_size < 5000 else None
         ))
         
-        # Diversity - scenarios
+        # Diversity - scenarios.
         num_scenarios = len(stats.get('scenarios', []))
         self.checklist.append(ChecklistItem(
             name="Scenario Diversity",
@@ -347,7 +347,7 @@ class ReadinessDashboard:
             threshold=8
         ))
         
-        # Impairments
+        # Impairments.
         num_impairments = len(stats.get('impairments', []))
         self.checklist.append(ChecklistItem(
             name="Impairment Coverage",
@@ -358,7 +358,7 @@ class ReadinessDashboard:
             threshold=10
         ))
         
-        # Lighting conditions
+        # Lighting conditions.
         num_lighting = len(stats.get('lighting_conditions', []))
         self.checklist.append(ChecklistItem(
             name="Lighting Conditions",
@@ -371,7 +371,7 @@ class ReadinessDashboard:
         
     def _assess_performance(self, metrics: Dict):
         """Assess model performance metrics."""
-        # Accuracy/mAP
+        # Accuracy/mAP.
         accuracy = metrics.get('accuracy', 0) or metrics.get('map', 0)
         self.checklist.append(ChecklistItem(
             name="Model Accuracy",
@@ -382,7 +382,7 @@ class ReadinessDashboard:
             threshold=0.7
         ))
         
-        # Precision
+        # Precision.
         precision = metrics.get('precision', 0)
         if precision > 0:
             self.checklist.append(ChecklistItem(
@@ -394,7 +394,7 @@ class ReadinessDashboard:
                 threshold=0.7
             ))
             
-        # Recall
+        # Recall.
         recall = metrics.get('recall', 0)
         if recall > 0:
             self.checklist.append(ChecklistItem(
@@ -406,7 +406,7 @@ class ReadinessDashboard:
                 threshold=0.7
             ))
             
-        # Loss convergence
+        # Loss convergence.
         final_loss = metrics.get('final_loss', float('inf'))
         self.checklist.append(ChecklistItem(
             name="Loss Convergence",
@@ -419,7 +419,7 @@ class ReadinessDashboard:
         
     def _assess_architecture(self, model: torch.nn.Module, metrics: Dict):
         """Assess architecture and training setup."""
-        # Parameter count
+        # Parameter count.
         num_params = sum(p.numel() for p in model.parameters()) / 1e6
         self.checklist.append(ChecklistItem(
             name="Model Capacity",
@@ -429,7 +429,7 @@ class ReadinessDashboard:
             value=num_params
         ))
         
-        # Regularization
+        # Regularization.
         has_dropout = any('dropout' in name.lower() for name, _ in model.named_modules())
         self.checklist.append(ChecklistItem(
             name="Dropout Regularization",
@@ -439,7 +439,7 @@ class ReadinessDashboard:
             recommendation="Add dropout for better generalization" if not has_dropout else None
         ))
         
-        # Weight decay
+        # Weight decay.
         weight_decay = metrics.get('weight_decay', 0)
         self.checklist.append(ChecklistItem(
             name="Weight Decay",
@@ -486,7 +486,7 @@ class ReadinessDashboard:
         """Assess class balance."""
         urgency_dist = stats.get('urgency_distribution', {})
         
-        # Check high-urgency representation
+        # Check high-urgency representation.
         total = sum(urgency_dist.values()) if urgency_dist else 1
         high_urgency = urgency_dist.get('2', 0) + urgency_dist.get('3', 0)
         high_urgency_ratio = high_urgency / total if total > 0 else 0
@@ -586,17 +586,17 @@ class ReadinessDashboard:
         """Generate prioritized recommendations."""
         recommendations = []
         
-        # Critical first
+        # Critical first.
         for item in self.checklist:
             if item.status == 'fail' and item.recommendation:
                 recommendations.append(f"[CRITICAL] {item.recommendation}")
                 
-        # Then warnings
+        # Then warnings.
         for item in self.checklist:
             if item.status == 'warning' and item.recommendation:
                 recommendations.append(f"[WARNING] {item.recommendation}")
                 
-        return recommendations[:10]  # Top 10
+        return recommendations[:10]  # Top 10.
         
     def _item_to_dict(self, item: ChecklistItem) -> Dict:
         """Convert checklist item to dict."""
@@ -612,7 +612,7 @@ class ReadinessDashboard:
         
     def export_dashboard(self, output_path: Path):
         """Export dashboard to file."""
-        # Simplified export for current state
+        # Simplified export for current state.
         data = {
             'timestamp': self.last_assessment.isoformat() if self.last_assessment else None,
             'checklist': [self._item_to_dict(item) for item in self.checklist],
@@ -639,7 +639,7 @@ class HealthChecker:
     """Health check system for MaxSight Tier 1 heads and system reliability.
     Run daily to catch issues before they impact users."""
     
-    # Critical thresholds for Tier 1 heads
+    # Critical thresholds for Tier 1 heads.
     TIER1_DETECTION_RATE_THRESHOLD = 0.85
     TIER1_MAP_THRESHOLD = 0.80
     TIER1_IOU_THRESHOLD = 0.70
@@ -661,13 +661,13 @@ class HealthChecker:
             'failures': []
         }
         
-        # Create dummy input
+        # Create dummy input.
         dummy_input = torch.randn(1, 3, 224, 224).to(self.device)
         
         with torch.no_grad():
             outputs = self.model(dummy_input)
         
-        # Check 1: Objectness head
+        # Check 1: Objectness head.
         if 'objectness' in outputs:
             obj_scores = outputs['objectness']
             detection_rate = (obj_scores > 0.5).float().mean().item()
@@ -683,7 +683,7 @@ class HealthChecker:
             results['status'] = 'FAIL'
             results['failures'].append("Objectness head output missing")
         
-        # Check 2: Classification head
+        # Check 2: Classification head.
         if 'classifications' in outputs:
             cls_logits = outputs['classifications']
             cls_probs = torch.softmax(cls_logits, dim=-1)
@@ -701,7 +701,7 @@ class HealthChecker:
             results['status'] = 'FAIL'
             results['failures'].append("Classification head output missing")
         
-        # Check 3: Box regression
+        # Check 3: Box regression.
         if 'boxes' in outputs:
             boxes = outputs['boxes']
             valid_boxes = ((boxes >= 0) & (boxes <= 1)).all(dim=-1).float().mean().item()
@@ -717,7 +717,7 @@ class HealthChecker:
             results['status'] = 'FAIL'
             results['failures'].append("Box regression head output missing")
         
-        # Check 4: Distance zones
+        # Check 4: Distance zones.
         if 'distance_zones' in outputs:
             distances = outputs['distance_zones']
             dist_probs = torch.softmax(distances, dim=-1)
@@ -731,20 +731,20 @@ class HealthChecker:
             results['status'] = 'FAIL'
             results['failures'].append("Distance zones output missing")
         
-        # Check 5: Urgency head
+        # Check 5: Urgency head.
         if 'urgency_scores' in outputs:
             urgency = outputs['urgency_scores']
             urgency_probs = torch.softmax(urgency, dim=-1)
-            safe_prob = urgency_probs[:, 0].mean().item()  # Assuming 0 = safe
+            safe_prob = urgency_probs[:, 0].mean().item()  # Assuming 0 = safe.
             results['checks']['urgency'] = {
                 'safe_prob': safe_prob,
-                'status': 'PASS' if safe_prob < 0.99 else 'WARN'  # Too confident = risky
+                'status': 'PASS' if safe_prob < 0.99 else 'WARN'  # Too confident = risky.
             }
         else:
             results['status'] = 'FAIL'
             results['failures'].append("Urgency head output missing")
         
-        # Check 6: Uncertainty head
+        # Check 6: Uncertainty head.
         if 'uncertainty' in outputs:
             uncertainty = outputs['uncertainty']
             avg_uncertainty = uncertainty.mean().item()
@@ -769,11 +769,11 @@ class HealthChecker:
         
         dummy_input = torch.randn(1, 3, 224, 224).to(self.device)
         
-        # Warmup
+        # Warmup.
         with torch.no_grad():
             _ = self.model(dummy_input)
         
-        # Measure latency
+        # Measure latency.
         import time
         latencies = []
         
@@ -781,7 +781,7 @@ class HealthChecker:
             start = time.time()
             with torch.no_grad():
                 outputs = self.model(dummy_input)
-            latencies.append((time.time() - start) * 1000)  # Convert to ms
+            latencies.append((time.time() - start) * 1000)  # Convert to ms.
         
         avg_latency = float(np.mean(latencies))
         min_latency = float(np.min(latencies))
@@ -793,7 +793,7 @@ class HealthChecker:
         results['min_ms'] = min_latency
         results['max_ms'] = max_latency
         
-        # Check thresholds
+        # Check thresholds.
         if avg_latency > self.STAGE_A_LATENCY_THRESHOLD_MS:
             results['status'] = 'FAIL'
             results['failures'] = [f"Average latency {avg_latency:.1f}ms > {self.STAGE_A_LATENCY_THRESHOLD_MS}ms"]
@@ -812,17 +812,17 @@ class HealthChecker:
         }
         
         for name, param in self.model.named_parameters():
-            # Check for NaN
+            # Check for NaN.
             if torch.isnan(param).any().item():
                 results['status'] = 'FAIL'
                 results['failures'].append(f"NaN detected in {name}")
             
-            # Check for Inf
+            # Check for Inf.
             if torch.isinf(param).any().item():
                 results['status'] = 'FAIL'
                 results['failures'].append(f"Inf detected in {name}")
             
-            # Check for extreme values
+            # Check for extreme values.
             if param.abs().max() > 1e6:
                 results['status'] = 'WARN'
                 if 'warnings' not in results:
@@ -840,21 +840,21 @@ class HealthChecker:
             'checks': {}
         }
         
-        # Tier 1 checks
+        # Tier 1 checks.
         logger.info("Checking Tier 1 heads...")
         tier1_results = self.check_tier1_heads()
         report['checks']['tier1'] = tier1_results
         if tier1_results['status'] == 'FAIL':
             report['overall_status'] = 'FAIL'
         
-        # Latency checks
+        # Latency checks.
         logger.info("Checking latency...")
         latency_results = self.check_latency()
         report['checks']['latency'] = latency_results
         if latency_results['status'] == 'FAIL':
             report['overall_status'] = 'FAIL'
         
-        # Model integrity
+        # Model integrity.
         logger.info("Checking model integrity...")
         integrity_results = self.check_model_integrity()
         report['checks']['integrity'] = integrity_results
@@ -862,4 +862,5 @@ class HealthChecker:
             report['overall_status'] = 'FAIL'
         
         return report
+
 

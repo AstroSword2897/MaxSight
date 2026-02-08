@@ -8,10 +8,10 @@ from dataclasses import dataclass
 class OutputAuthority(IntEnum):
     """Authority hierarchy for outputs (higher = more important).
     Lower layers cannot override higher layers."""
-    DESCRIPTIVE_NARRATION = 1  # Lowest: General scene descriptions
-    THERAPY_PROMPTS = 2  # Therapy task instructions
-    NAVIGATION_GUIDANCE = 3  # Navigation assistance
-    SAFETY_ALERTS = 4  # Highest: Critical safety warnings
+    DESCRIPTIVE_NARRATION = 1  # Lowest: General scene descriptions.
+    THERAPY_PROMPTS = 2  # Therapy task instructions.
+    NAVIGATION_GUIDANCE = 3  # Navigation assistance.
+    SAFETY_ALERTS = 4  # Highest: Critical safety warnings.
 
 
 @dataclass
@@ -19,8 +19,8 @@ class OutputRequest:
     """Represents an output request with authority level."""
     authority: OutputAuthority
     content: str
-    priority: int = 0  # Within same authority level
-    suppress_lower: bool = True  # Whether to suppress lower authority outputs
+    priority: int = 0  # Within same authority level.
+    suppress_lower: bool = True  # Whether to suppress lower authority outputs.
     metadata: Dict[str, Any] = None
     
     def __post_init__(self):
@@ -38,23 +38,23 @@ class OutputAuthorityManager:
     
     def request_output(self, request: OutputRequest) -> bool:
         """Request an output, respecting authority hierarchy...."""
-        # If no current output, allow this one
+        # If no current output, allow this one.
         if self.current_output is None:
             self.current_output = request
             return True
         
-        # Compare authority levels
+        # Compare authority levels.
         if request.authority > self.current_output.authority:
-            # Higher authority: suppress current, allow new
+            # Higher authority: suppress current, allow new.
             self.suppressed_outputs.append(self.current_output)
             self.current_output = request
             return True
         elif request.authority < self.current_output.authority:
-            # Lower authority: suppress this request
+            # Lower authority: suppress this request.
             self.suppressed_outputs.append(request)
             return False
         else:
-            # Same authority: compare priority
+            # Same authority: compare priority.
             if request.priority > self.current_output.priority:
                 self.suppressed_outputs.append(self.current_output)
                 self.current_output = request
@@ -75,4 +75,5 @@ class OutputAuthorityManager:
         """Reset manager state."""
         self.current_output = None
         self.suppressed_outputs.clear()
+
 

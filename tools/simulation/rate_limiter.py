@@ -16,7 +16,7 @@ class RateLimiter:
             window_seconds: Time window in seconds (default 60)"""
         self.requests_per_minute = requests_per_minute
         self.window_seconds = window_seconds
-        self.requests: Dict[str, list] = defaultdict(list)  # session_id -> timestamps
+        self.requests: Dict[str, list] = defaultdict(list)  # Session_id -> timestamps.
         self.lock = Lock()
     
     def check_rate_limit(self, session_id: str, identifier: Optional[str] = None) -> None:
@@ -25,17 +25,17 @@ class RateLimiter:
         now = time.time()
         
         with self.lock:
-            # Clean old requests outside window
+            # Clean old requests outside window.
             cutoff = now - self.window_seconds
             self.requests[key] = [ts for ts in self.requests[key] if ts > cutoff]
             
-            # Check limit
+            # Check limit.
             if len(self.requests[key]) >= self.requests_per_minute:
                 raise RateLimitError(
                     f"Rate limit exceeded: {self.requests_per_minute} requests per {self.window_seconds} seconds"
                 )
             
-            # Record this request
+            # Record this request.
             self.requests[key].append(now)
     
     def get_remaining(self, session_id: str, identifier: Optional[str] = None) -> int:
@@ -62,4 +62,5 @@ class GlobalRateLimiter:
     def get_remaining(self, identifier: str) -> int:
         """Get remaining global requests."""
         return self.limiter.get_remaining("global", identifier)
+
 

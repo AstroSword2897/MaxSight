@@ -47,7 +47,7 @@ def main():
                         help="Image root (default: data-dir)")
     parser.add_argument("--conditions", nargs="*", default=CONDITIONS_DEFAULT,
                         help=f"Conditions to train (default: {CONDITIONS_DEFAULT})")
-    # Training args passed through
+    # Training args passed through.
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--learning-rate", type=float, default=7.5e-5)
@@ -114,3 +114,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

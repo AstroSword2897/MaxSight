@@ -21,14 +21,14 @@ def download_with_cvdf_repo(data_dir: Path) -> bool:
     data_dir.mkdir(parents=True, exist_ok=True)
     validation_dir = data_dir / "validation"
     
-    # Checks if already downloaded
+    # Checks if already downloaded.
     if validation_dir.exists():
         img_count = len(list(validation_dir.rglob("*.jpg")))
-        if img_count > 1000:  # Reasonable threshold
+        if img_count > 1000:  # Reasonable threshold.
             print(f"  ✓ Open Images V6 already has {img_count} images")
             return True
     
-    # Clone or use CVDF repository
+    # Clone or use CVDF repository.
     temp_dir = ROOT / "temp_open_images_downloader"
     repo_url = "https://github.com/cvdfoundation/open-images-dataset.git"
     
@@ -53,10 +53,10 @@ def download_with_cvdf_repo(data_dir: Path) -> bool:
             print("  See: OPEN_IMAGES_V6_DOWNLOAD_GUIDE.md")
             return False
     
-    # Finds downloader script
+    # Finds downloader script.
     downloader_script = downloader_dir / "downloader.py"
     if not downloader_script.exists():
-        # Uses alternative location
+        # Uses alternative location.
         downloader_script = downloader_dir / "download.py"
     
     if not downloader_script.exists():
@@ -64,13 +64,13 @@ def download_with_cvdf_repo(data_dir: Path) -> bool:
         print("  Trying alternative method...")
         return download_with_fiftyone(data_dir)
     
-    # Run downloader for validation set
+    # Run downloader for validation set.
     print("\n  Step 2: Downloading validation images...")
     print("  This will download ~41K images (~2GB)")
     print("  This may take 30-60 minutes...")
     
     try:
-        # CVDF downloader command
+        # CVDF downloader command.
         cmd = [
             sys.executable,
             str(downloader_script),
@@ -85,7 +85,7 @@ def download_with_cvdf_repo(data_dir: Path) -> bool:
         if result.returncode == 0:
             print("  ✓ Download complete")
             
-            # Download annotations CSV
+            # Download annotations CSV.
             print("\n  Step 3: Downloading annotations...")
             csv_url = "https://storage.googleapis.com/openimages/v6/oidv6-validation-annotations-bbox.csv"
             csv_path = data_dir / "validation-annotations-bbox.csv"
@@ -107,7 +107,7 @@ def download_with_cvdf_repo(data_dir: Path) -> bool:
                 
                 print("  ✓ Annotations downloaded")
                 
-                # Verify
+                # Verify.
                 img_count = len(list(validation_dir.rglob("*.jpg")))
                 if img_count > 0 and csv_path.exists():
                     print(f"\n  ✅ Open Images V6 download complete!")
@@ -149,11 +149,11 @@ def download_with_fiftyone(data_dir: Path) -> bool:
         
         print(f"  ✓ Downloaded {len(dataset)} images")
         
-        # Reorganize files
+        # Reorganize files.
         validation_dir = data_dir / "validation"
         validation_dir.mkdir(parents=True, exist_ok=True)
         
-        # Download CSV
+        # Download CSV.
         csv_url = "https://storage.googleapis.com/openimages/v6/oidv6-validation-annotations-bbox.csv"
         csv_path = data_dir / "validation-annotations-bbox.csv"
         
@@ -180,7 +180,7 @@ def main():
     print("Open Images V6 Direct Downloader")
     print("="*70)
     
-    # Use CVDF method
+    # Use CVDF method.
     if download_with_cvdf_repo(data_dir):
         print("\n✅ Success!")
         return 0
@@ -191,3 +191,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

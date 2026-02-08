@@ -31,7 +31,7 @@ def _get_matplotlib():
 class SemanticGrouper:
     """Groups related objects semantically for concise scene descriptions."""
     
-    # Semantic categories for grouping
+    # Semantic categories for grouping.
     SEMANTIC_CATEGORIES = {
         'furniture': ['chair', 'table', 'couch', 'bed', 'desk', 'bench', 'stool'],
         'people': ['person', 'people', 'crowd'],
@@ -78,7 +78,7 @@ class SemanticGrouper:
             return []
         
         if group_by_category:
-            # Group by semantic category first
+            # Group by semantic category first.
             category_groups = defaultdict(list)
             for det in detections:
                 category = self.get_semantic_category(det.get('class_name', 'object'))
@@ -87,15 +87,15 @@ class SemanticGrouper:
             grouped = []
             for category, objects in category_groups.items():
                 if group_by_proximity:
-                    # Further group by spatial proximity within category
+                    # Further group by spatial proximity within category.
                     proximity_groups = self._group_by_proximity(objects)
                     for group in proximity_groups:
                         grouped.append(self._create_group_dict(group, category))
                 else:
-                    # Just group all objects of same category
+                    # Just group all objects of same category.
                     grouped.append(self._create_group_dict(objects, category))
             
-            # Add cross-category proximity clusters if enabled
+            # Add cross-category proximity clusters if enabled.
             if self.enable_cross_category and group_by_proximity:
                 cross_category_groups = self._group_cross_category_proximity(detections)
                 for group in cross_category_groups:
@@ -118,7 +118,7 @@ class SemanticGrouper:
             if i in used:
                 continue
             
-            # Start new group
+            # Start new group.
             group = [obj1]
             used.add(i)
             class_name = obj1.get('class_name', 'object')
@@ -127,7 +127,7 @@ class SemanticGrouper:
             if box1 is None:
                 continue
             
-            # Find nearby objects of same class
+            # Find nearby objects of same class.
             if isinstance(box1, torch.Tensor):
                 cx1, cy1 = box1[0].item(), box1[1].item()
             else:
@@ -149,7 +149,7 @@ class SemanticGrouper:
                 else:
                     cx2, cy2 = box2[0], box2[1]
                 
-                # Calculate distance
+                # Calculate distance.
                 distance = np.sqrt((cx1 - cx2)**2 + (cy1 - cy2)**2)
                 
                 if distance < self.spatial_threshold:
@@ -165,7 +165,7 @@ class SemanticGrouper:
         if not detections:
             return []
         
-        # Get category for each detection
+        # Get category for each detection.
         detections_with_category = [
             (det, self.get_semantic_category(det.get('class_name', 'object')))
             for det in detections
@@ -187,11 +187,11 @@ class SemanticGrouper:
             else:
                 cx1, cy1 = box1[0], box1[1]
             
-            # Start new cross-category group
+            # Start new cross-category group.
             group = [obj1]
             used.add(i)
             
-            # Find nearby objects from different categories
+            # Find nearby objects from different categories.
             for j, (obj2, cat2) in enumerate(detections_with_category):
                 if j in used or j == i or cat1 == cat2:
                     continue
@@ -205,7 +205,7 @@ class SemanticGrouper:
                 else:
                     cx2, cy2 = box2[0], box2[1]
                 
-                # Calculate distance
+                # Calculate distance.
                 distance = np.sqrt((cx1 - cx2)**2 + (cy1 - cy2)**2)
                 
                 # Use tighter threshold for cross-category (must be very close)
@@ -213,10 +213,10 @@ class SemanticGrouper:
                     group.append(obj2)
                     used.add(j)
             
-            # Only create group if it has multiple categories
+            # Only create group if it has multiple categories.
             if len(group) > 1:
                 categories = {self.get_semantic_category(obj.get('class_name', 'object')) for obj in group}
-                if len(categories) > 1:  # Multiple categories
+                if len(categories) > 1:  # Multiple categories.
                     groups.append(group)
         
         return groups
@@ -226,10 +226,10 @@ class SemanticGrouper:
         if not objects:
             return {}
         
-        # Use first object as representative
+        # Use first object as representative.
         representative = objects[0]
         
-        # Calculate group center and average confidence
+        # Calculate group center and average confidence.
         boxes = [obj.get('box') for obj in objects if obj.get('box') is not None]
         if boxes and boxes[0] is not None:
             if isinstance(boxes[0], torch.Tensor):
@@ -240,7 +240,7 @@ class SemanticGrouper:
             if centers:
                 avg_cx = sum(c[0] for c in centers) / len(centers)
                 avg_cy = sum(c[1] for c in centers) / len(centers)
-                group_box = [avg_cx, avg_cy, 0.1, 0.1]  # Approximate group size
+                group_box = [avg_cx, avg_cy, 0.1, 0.1]  # Approximate group size.
             else:
                 group_box = representative.get('box', [0.5, 0.5, 0.1, 0.1])
         else:
@@ -248,7 +248,7 @@ class SemanticGrouper:
         
         avg_confidence = sum(obj.get('confidence', 0.5) for obj in objects) / len(objects)
         max_confidence = max(obj.get('confidence', 0.5) for obj in objects)
-        avg_urgency = max(obj.get('urgency', 0) for obj in objects)  # Use max urgency
+        avg_urgency = max(obj.get('urgency', 0) for obj in objects)  # Use max urgency.
         
         # Confidence-weighted average (higher confidence objects have more weight)
         if self.use_confidence_weighting:
@@ -286,7 +286,7 @@ class SemanticGrouper:
         
         descriptions = []
         
-        # Sort by confidence if using confidence weighting
+        # Sort by confidence if using confidence weighting.
         if self.use_confidence_weighting:
             sorted_groups = sorted(
                 grouped_detections,
@@ -302,7 +302,7 @@ class SemanticGrouper:
             category = group.get('category', 'other')
             confidence = group.get('confidence', 0.5)
             
-            # Confidence-weighted prefix for high-confidence groups
+            # Confidence-weighted prefix for high-confidence groups.
             confidence_prefix = ""
             if self.use_confidence_weighting and confidence > 0.8:
                 confidence_prefix = "clearly visible "
@@ -317,7 +317,7 @@ class SemanticGrouper:
                     descriptions.append(desc)
                 elif verbosity == 'normal':
                     if category == 'mixed':
-                        # Cross-category group - describe as functional area
+                        # Cross-category group - describe as functional area.
                         categories = {self.get_semantic_category(obj.get('class_name', 'object')) 
                                     for obj in group.get('grouped_objects', [])}
                         if 'furniture' in categories:
@@ -337,7 +337,7 @@ class SemanticGrouper:
                         if confidence > 0.8:
                             desc = confidence_prefix + desc
                         descriptions.append(desc)
-                else:  # detailed
+                else:  # Detailed.
                     if category == 'mixed':
                         categories = {self.get_semantic_category(obj.get('class_name', 'object')) 
                                     for obj in group.get('grouped_objects', [])}
@@ -365,7 +365,7 @@ class SemanticGrouper:
             return ", ".join(descriptions[:3])
         elif verbosity == 'normal':
             return ", ".join(descriptions[:5])
-        else:  # detailed
+        else:  # Detailed.
             return ". ".join(descriptions) + "."
 
 
@@ -391,10 +391,10 @@ def visualize_semantic_groups(
         print("matplotlib not available, skipping visualization")
         return
     
-    # Convert image to numpy array
+    # Convert image to numpy array.
     if isinstance(image, torch.Tensor):
         if image.dim() == 4:
-            image = image[0]  # Remove batch dimension
+            image = image[0]  # Remove batch dimension.
         if image.dim() == 3:
             image = image.permute(1, 2, 0).cpu().numpy()
             if image.max() <= 1.0:
@@ -412,7 +412,7 @@ def visualize_semantic_groups(
     fig, ax = plt.subplots(1, 1, figsize=(12, 8))
     ax.imshow(image)
     
-    # Color map for categories
+    # Color map for categories.
     category_colors = {
         'furniture': 'blue',
         'people': 'red',
@@ -431,7 +431,7 @@ def visualize_semantic_groups(
         count = group.get('count', 1)
         confidence = group.get('confidence', 0.5)
         
-        # Convert normalized box to pixel coordinates
+        # Convert normalized box to pixel coordinates.
         h, w = image.shape[:2]
         if isinstance(box, torch.Tensor):
             cx, cy = box[0].item() * w, box[1].item() * h
@@ -443,7 +443,7 @@ def visualize_semantic_groups(
         x = cx - width / 2
         y = cy - height / 2
         
-        # Draw bounding box
+        # Draw bounding box.
         color = category_colors.get(category, 'gray')
         rect = patches.Rectangle(
             (x, y), width, height,
@@ -454,7 +454,7 @@ def visualize_semantic_groups(
         )
         ax.add_patch(rect)
         
-        # Add label
+        # Add label.
         label = f"{category} ({count})"
         if confidence < 0.5:
             label += " [low conf]"
@@ -478,4 +478,5 @@ def visualize_semantic_groups(
         plt.show()
     else:
         plt.close()
+
 

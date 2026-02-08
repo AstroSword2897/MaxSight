@@ -9,7 +9,7 @@ import sys
 from PIL import Image
 import numpy as np
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model
@@ -36,7 +36,7 @@ def test_condition_robustness():
     dummy_image_pil = Image.fromarray(dummy_image_np)
     dummy_image_tensor = torch.randn(1, 3, 224, 224).to(device)
     
-    # Baseline: normal image
+    # Baseline: normal image.
     print("\n1. Baseline (Normal Vision)")
     with torch.no_grad():
         baseline_outputs = model(dummy_image_tensor)
@@ -44,7 +44,7 @@ def test_condition_robustness():
     baseline_count = len(baseline_detections[0]) if baseline_detections else 0
     print(f"   Detections: {baseline_count}")
     
-    # All 13 conditions with their simulation methods
+    # All 13 conditions with their simulation methods.
     conditions = [
         # Refractive errors (group 1-3)
         ("Myopia (Nearsightedness)", "myopia", lambda img: apply_refractive_error_blur(img, sigma=4.0)),
@@ -55,16 +55,16 @@ def test_condition_robustness():
         ("Cataracts", "cataracts", lambda img: apply_cataract_contrast(img, contrast_factor=0.5)),
         ("Glaucoma (Tunnel Vision)", "glaucoma", lambda img: apply_glaucoma_vignette(img)),
         ("AMD (Central Vision Loss)", "amd", lambda img: apply_amd_central_darkening(img)),
-        ("Diabetic Retinopathy", "diabetic_retinopathy", lambda img: apply_cataract_contrast(img, contrast_factor=0.6)),  # Similar to cataracts
+        ("Diabetic Retinopathy", "diabetic_retinopathy", lambda img: apply_cataract_contrast(img, contrast_factor=0.6)),  # Similar to cataracts.
         ("Retinitis Pigmentosa (Night Blindness)", "retinitis_pigmentosa", lambda img: apply_low_light(img, brightness_factor=0.3)),
         
         # Color vision (9)
         ("Color Blindness (Red-Green)", "color_blindness", lambda img: apply_color_shift(img, shift_type='red_green')),
         
         # Brain-based (10-12)
-        ("CVI (Cortical Visual Impairment)", "cvi", lambda img: apply_cataract_contrast(img, contrast_factor=0.7)),  # Simplified
-        ("Amblyopia (Lazy Eye)", "amblyopia", lambda img: apply_refractive_error_blur(img, sigma=2.0)),  # Mild blur
-        ("Strabismus (Crossed Eyes)", "strabismus", lambda img: apply_refractive_error_blur(img, sigma=2.5)),  # Moderate blur
+        ("CVI (Cortical Visual Impairment)", "cvi", lambda img: apply_cataract_contrast(img, contrast_factor=0.7)),  # Simplified.
+        ("Amblyopia (Lazy Eye)", "amblyopia", lambda img: apply_refractive_error_blur(img, sigma=2.0)),  # Mild blur.
+        ("Strabismus (Crossed Eyes)", "strabismus", lambda img: apply_refractive_error_blur(img, sigma=2.5)),  # Moderate blur.
     ]
     
     results = []
@@ -79,30 +79,30 @@ def test_condition_robustness():
                 processed_tensor = processed_tensor.unsqueeze(0)
             processed_tensor = processed_tensor.to(device)
             
-            # Method 2: Fallback to direct function if preprocessor doesn't handle it
+            # Method 2: Fallback to direct function if preprocessor doesn't handle it.
             if condition_mode not in ['cataracts', 'glaucoma', 'amd', 'retinitis_pigmentosa', 
                                      'myopia', 'hyperopia', 'astigmatism', 'diabetic_retinopathy', 
                                      'color_blindness', 'cvi', 'amblyopia', 'strabismus']:
                 processed_tensor = transform_fn(dummy_image_tensor.clone())
             
-            # Run inference
+            # Run inference.
             with torch.no_grad():
                 impaired_outputs = model(processed_tensor)
             impaired_detections = model.get_detections(impaired_outputs, confidence_threshold=0.3)  # type: ignore
             impaired_count = len(impaired_detections[0]) if impaired_detections else 0
             
             # Calculate degradation (more lenient for severe impairments)
-            # If baseline has no detections, we can't measure degradation accurately
-            # In this case, just check that the model still runs without errors
+            # If baseline has no detections, we can't measure degradation accurately.
+            # In this case, just check that the model still runs without errors.
             if baseline_count > 0:
                 degradation = abs(baseline_count - impaired_count) / baseline_count * 100
             else:
-                # Baseline has no detections - just verify model runs
+                # Baseline has no detections - just verify model runs.
                 # If impaired also has no detections, that's fine (0% degradation)
-                # If impaired has detections, that's actually an improvement, so 0% degradation
-                degradation = 0.0  # Can't measure degradation when baseline is 0
+                # If impaired has detections, that's actually an improvement, so 0% degradation.
+                degradation = 0.0  # Can't measure degradation when baseline is 0.
             
-            # Acceptable degradation: <15% for severe conditions, <10% for mild
+            # Acceptable degradation: <15% for severe conditions, <10% for mild.
             severe_conditions = ['glaucoma', 'amd', 'retinitis_pigmentosa', 'diabetic_retinopathy', 'cvi']
             threshold = 15.0 if condition_mode in severe_conditions else 10.0
             passed = degradation < threshold
@@ -133,7 +133,7 @@ def test_condition_robustness():
                 'error': str(e)
             })
     
-    # Summary
+    # Summary.
     print("\n" + "="*60)
     print("SUMMARY")
     print("="*60)
@@ -144,7 +144,7 @@ def test_condition_robustness():
     print(f"Passed: {passed}/{total} conditions")
     print(f"Target: All conditions maintain <10-15% degradation")
     
-    # Detailed breakdown
+    # Detailed breakdown.
     print("\nDetailed Results:")
     for r in results:
         status = "PASS" if r.get('passed', False) else "FAIL"
@@ -161,4 +161,5 @@ def test_condition_robustness():
 
 if __name__ == "__main__":
     test_condition_robustness()
+
 

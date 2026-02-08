@@ -20,14 +20,14 @@ def validate_exported_model(
     """Validate exported model by comparing outputs with PyTorch model...."""
     model_pytorch.eval()
     
-    # Create test input
+    # Create test input.
     test_input = torch.randn(1, 3, 224, 224)
     
-    # Get PyTorch output
+    # Get PyTorch output.
     with torch.no_grad():
         pytorch_output = model_pytorch(test_input)
     
-    # Load and test exported model
+    # Load and test exported model.
     try:
         if format == 'jit':
             exported_model = torch.jit.load(str(exported_path))
@@ -36,11 +36,11 @@ def validate_exported_model(
                 exported_output = exported_model(test_input)
         
         elif format == 'executorch':
-            # ExecuTorch validation requires executorch runtime
+            # ExecuTorch validation requires executorch runtime.
             try:
                 import executorch
-                # Load and run executorch model
-                # Note: This is simplified - actual executorch loading is more complex
+                # Load and run executorch model.
+                # Note: This is simplified - actual executorch loading is more complex.
                 return {
                     'format': format,
                     'status': 'skipped',
@@ -54,15 +54,15 @@ def validate_exported_model(
                 }
         
         elif format == 'coreml':
-            # CoreML validation requires coremltools
+            # CoreML validation requires coremltools.
             try:
                 import coremltools as ct
                 coreml_model = ct.models.MLModel(str(exported_path))
-                # Convert input to CoreML format
+                # Convert input to CoreML format.
                 import PIL.Image
                 import numpy as np
                 
-                # CoreML expects PIL Image or numpy array
+                # CoreML expects PIL Image or numpy array.
                 img_array = (test_input[0].permute(1, 2, 0).numpy() * 255).astype(np.uint8)
                 img = PIL.Image.fromarray(img_array)
                 
@@ -109,7 +109,7 @@ def validate_exported_model(
                     'reason': 'CoreML tools not installed'
                 }
         
-        # Compare outputs
+        # Compare outputs.
         if isinstance(pytorch_output, dict) and isinstance(exported_output, dict):
             differences = {}
             max_diff = 0.0
@@ -135,7 +135,7 @@ def validate_exported_model(
                 'per_output_differences': differences
             }
         else:
-            # Fallback for non-dict outputs
+            # Fallback for non-dict outputs.
             if isinstance(pytorch_output, torch.Tensor) and isinstance(exported_output, torch.Tensor):
                 diff = torch.abs(pytorch_output.float() - exported_output.float())
                 rel_diff = diff / (torch.abs(pytorch_output.float()) + 1e-8)
@@ -166,17 +166,17 @@ def test_all_exports():
     """Test all export formats."""
     print("Model Export Validation")
     
-    # Create model
+    # Create model.
     model = create_model()
     model.eval()
     
-    # Export directory
+    # Export directory.
     export_dir = Path("exports")
     export_dir.mkdir(exist_ok=True)
     
     results = []
     
-    # Test JIT export
+    # Test JIT export.
     print("\n1. Testing JIT Export...")
     try:
         jit_path = export_to_jit(model, str(export_dir / "test_jit.pt"))
@@ -189,7 +189,7 @@ def test_all_exports():
         print(f"   Error: {e}")
         results.append({'format': 'jit', 'status': 'error', 'reason': str(e)})
     
-    # Test ExecuTorch export
+    # Test ExecuTorch export.
     print("\n2. Testing ExecuTorch Export...")
     try:
         executorch_path = export_to_executorch(model, str(export_dir / "test_executorch.pte"))
@@ -201,7 +201,7 @@ def test_all_exports():
         print(f"   Error: {e}")
         results.append({'format': 'executorch', 'status': 'error', 'reason': str(e)})
     
-    # Test CoreML export
+    # Test CoreML export.
     print("\n3. Testing CoreML Export...")
     try:
         coreml_path = export_to_coreml(model, str(export_dir / "test_coreml.mlpackage"))
@@ -215,7 +215,7 @@ def test_all_exports():
         print(f"   Error: {e}")
         results.append({'format': 'coreml', 'status': 'error', 'reason': str(e)})
     
-    # Summary
+    # Summary.
     print("\nSummary")
     
     passed = sum(1 for r in results if r.get('status') == 'passed')
@@ -267,4 +267,5 @@ def test_e2e_checkpoint_to_jit():
 
 if __name__ == "__main__":
     test_all_exports()
+
 

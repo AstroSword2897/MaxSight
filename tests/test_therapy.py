@@ -3,13 +3,13 @@
 import sys
 from pathlib import Path
 
-# Add project root to path
+# Add project root to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 import torch
 
-# Therapy modules
+# Therapy modules.
 from ml.therapy.session_manager import SessionManager
 from ml.therapy.task_generator import TaskGenerator, TaskType
 from ml.therapy.therapy_integration import (
@@ -19,7 +19,7 @@ from ml.therapy.therapy_integration import (
 )
 
 
-# SessionManager
+# SessionManager.
 
 def test_session_manager_start_and_end():
     """SessionManager starts a session and returns a valid session ID."""
@@ -85,7 +85,7 @@ def test_session_manager_skill_curve():
     assert curve[2]["cumulative_success_rate"] == pytest.approx(2.0 / 3.0)
 
 
-# TaskGenerator
+# TaskGenerator.
 
 def test_task_generator_fatigue_rest():
     """TaskGenerator returns FATIGUE_REST when fatigue is high."""
@@ -130,7 +130,7 @@ def test_task_generator_update_performance():
     assert len(gen.recent_failures) == 1
 
 
-# TherapyTaskIntegrator
+# TherapyTaskIntegrator.
 
 def test_therapy_integrator_attention_task():
     """TherapyTaskIntegrator creates attention task with scene description."""
@@ -266,10 +266,11 @@ def test_therapy_state_head_forward_motion_2d(therapy_head):
     """TherapyStateHead accepts 2D motion features (fatigue path)."""
     B, H, W = 2, 14, 14
     eye = torch.randn(B, 4)
-    motion_2d = torch.randn(B, 128)  # temporal_dim=128
+    motion_2d = torch.randn(B, 128)  # Temporal_dim=128.
     depth_feat = torch.randn(B, 256, H, W)
     contrast_feat = torch.randn(B, 256, H, W)
 
     out = therapy_head(eye, motion_2d, depth_feat, contrast_feat)
     assert out["fatigue_score"].shape == (B, 1)
     assert out["depth_map"].shape == (B, H, W)
+

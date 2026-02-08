@@ -1,4 +1,4 @@
-# MaxSight Utils Module - Data preprocessing and utility functions
+# MaxSight Utils Module - Data preprocessing and utility functions.
 
 from ml.utils.preprocessing import ImagePreprocessor, DistanceEstimator, TextRegionDetector
 from ml.utils.logging_config import setup_logging, get_logger
@@ -48,3 +48,4 @@ except ImportError:
         'setup_logging',
         'get_logger'
     ]
+

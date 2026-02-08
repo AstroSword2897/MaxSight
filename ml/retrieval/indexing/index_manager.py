@@ -50,10 +50,10 @@ class IndexManager:
         if metadata_path is None:
             metadata_path = self.index_dir / f"{self.index_name}_metadata.json"
         
-        # Load index
+        # Load index.
         self.index = faiss.read_index(str(index_path))
         
-        # Load metadata
+        # Load metadata.
         if Path(metadata_path).exists():
             with open(metadata_path, 'r') as f:
                 self.metadata = json.load(f)
@@ -74,7 +74,7 @@ class IndexManager:
         if metadata_path is None:
             metadata_path = self.index_dir / f"{self.index_name}_metadata.json"
         
-        # Move to CPU if on GPU
+        # Move to CPU if on GPU.
         if faiss.get_num_gpus() > 0:
             try:
                 cpu_index = faiss.index_gpu_to_cpu(index)
@@ -84,7 +84,7 @@ class IndexManager:
         else:
             faiss.write_index(index, str(index_path))
         
-        # Save metadata
+        # Save metadata.
         if metadata is None:
             metadata = {
                 'version': '1.0.0',
@@ -112,7 +112,7 @@ class IndexManager:
         vectors = vectors.astype('float32')
         self.index.add(vectors)
         
-        # Update metadata
+        # Update metadata.
         self.metadata['num_vectors'] = self.index.ntotal
         self.metadata['last_updated'] = datetime.now().isoformat()
     
@@ -121,8 +121,9 @@ class IndexManager:
         
         Note: FAISS doesn't support direct removal.
         This would require rebuilding the index."""
-        # FAISS doesn't support removal directly
-        # Would need to rebuild index without removed vectors
+        # FAISS doesn't support removal directly.
+        # Would need to rebuild index without removed vectors.
         raise NotImplementedError("FAISS doesn't support vector removal. Rebuild index instead.")
+
 
 

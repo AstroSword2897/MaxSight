@@ -26,19 +26,19 @@ def find_checkpoints(checkpoint_dir: Path) -> List[Tuple[Path, float]]:
     """Find all checkpoint files and their sizes."""
     checkpoints = []
     
-    # Find .pth, .pt files
+    # Find .pth, .pt files.
     for pattern in ['*.pth', '*.pt']:
         for ckpt in checkpoint_dir.glob(pattern):
             size_mb = get_size_mb(ckpt)
             checkpoints.append((ckpt, size_mb))
     
-    # Find checkpoint directories
+    # Find checkpoint directories.
     for ckpt_dir in checkpoint_dir.glob('checkpoint_*'):
         if ckpt_dir.is_dir():
             size_mb = get_size_mb(ckpt_dir)
             checkpoints.append((ckpt_dir, size_mb))
     
-    # Find automl trial directories
+    # Find automl trial directories.
     automl_dir = checkpoint_dir / 'checkpoints_automl'
     if automl_dir.exists():
         for trial_dir in automl_dir.glob('trial_*'):
@@ -70,7 +70,7 @@ def cleanup_checkpoints(
     print(f"\n📁 Found {len(checkpoints)} checkpoint(s) in {checkpoint_dir}")
     print("=" * 70)
     
-    # Identify what to keep
+    # Identify what to keep.
     to_keep = set()
     
     if keep_best:
@@ -85,14 +85,14 @@ def cleanup_checkpoints(
             to_keep.add(last_checkpoint)
             print(f"✅ KEEPING: {last_checkpoint.name} ({get_size_mb(last_checkpoint):.2f} MB)")
     
-    # Keep most recent N checkpoints
+    # Keep most recent N checkpoints.
     if keep_recent > 0:
         recent = sorted(checkpoints, key=lambda x: x[0].stat().st_mtime, reverse=True)[:keep_recent]
         for ckpt, size in recent:
             to_keep.add(ckpt)
             print(f"✅ KEEPING (recent): {ckpt.name} ({size:.2f} MB)")
     
-    # Identify what to delete
+    # Identify what to delete.
     to_delete = []
     total_size = 0.0
     
@@ -114,7 +114,7 @@ def cleanup_checkpoints(
         print(f"\n⚠️  DRY RUN - No files deleted. Run with --execute to actually delete.")
         return 0, total_size
     
-    # Confirm deletion
+    # Confirm deletion.
     print(f"\n⚠️  About to delete {len(to_delete)} file(s) ({total_size:.2f} MB)")
     response = input("Continue? (yes/no): ").strip().lower()
     
@@ -122,7 +122,7 @@ def cleanup_checkpoints(
         print("❌ Deletion cancelled")
         return 0, 0.0
     
-    # Delete files
+    # Delete files.
     deleted_count = 0
     deleted_size = 0.0
     
@@ -272,7 +272,7 @@ def main():
     total_deleted = 0
     total_freed = 0.0
     
-    # Clean checkpoints
+    # Clean checkpoints.
     deleted, freed = cleanup_checkpoints(
         args.checkpoint_dir,
         keep_best=args.keep_best,
@@ -283,13 +283,13 @@ def main():
     total_deleted += deleted
     total_freed += freed
     
-    # Clean logs
+    # Clean logs.
     if args.clean_logs:
         deleted, freed = cleanup_logs(dry_run=not args.execute)
         total_deleted += deleted
         total_freed += freed
     
-    # Clean temp files
+    # Clean temp files.
     if args.clean_temp:
         deleted, freed = cleanup_temp_files(dry_run=not args.execute)
         total_deleted += deleted
@@ -307,3 +307,4 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
+

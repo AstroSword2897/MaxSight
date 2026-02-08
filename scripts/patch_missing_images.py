@@ -10,7 +10,7 @@ import urllib.request
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Setup logging
+# Setup logging.
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class COCOImagePatcher:
     """Downloads missing COCO images to complete the dataset."""
     
-    # COCO image URLs
+    # COCO image URLs.
     TRAIN_URL = "http://images.cocodataset.org/train2017/"
     VAL_URL = "http://images.cocodataset.org/val2017/"
     
@@ -39,7 +39,7 @@ class COCOImagePatcher:
             
         Returns:
             (list of image filenames, list of expected paths)"""
-        # Load annotation file
+        # Load annotation file.
         ann_file = self.splits_dir / f"maxsight_{split}.json"
         if not ann_file.exists():
             logger.error(f"Annotation file not found: {ann_file}")
@@ -50,7 +50,7 @@ class COCOImagePatcher:
         
         logger.info(f"Loaded {len(data)} samples from {split} split")
         
-        # Check which images are missing
+        # Check which images are missing.
         missing_files = []
         missing_paths = []
         
@@ -66,7 +66,7 @@ class COCOImagePatcher:
     
     def download_image(self, filename: str, split: str, retries: int = 3) -> bool:
         """Download a single image from COCO servers...."""
-        # Determine URL and target directory
+        # Determine URL and target directory.
         if split == 'train':
             url = self.TRAIN_URL + filename
             target_dir = self.coco_raw_dir / "train2017"
@@ -76,14 +76,14 @@ class COCOImagePatcher:
         
         target_path = target_dir / filename
         
-        # Skip if already exists
+        # Skip if already exists.
         if target_path.exists():
             return True
         
-        # Create directory if needed
+        # Create directory if needed.
         target_dir.mkdir(parents=True, exist_ok=True)
         
-        # Download with retries
+        # Download with retries.
         for attempt in range(retries):
             try:
                 urllib.request.urlretrieve(url, target_path)
@@ -102,7 +102,7 @@ class COCOImagePatcher:
         """Download all missing images for a split...."""
         logger.info(f"Starting patch for {split} split...")
         
-        # Find missing images
+        # Find missing images.
         missing_files, _ = self.find_missing_images(split)
         
         if not missing_files:
@@ -111,18 +111,18 @@ class COCOImagePatcher:
         
         logger.info(f"Downloading {len(missing_files)} images with {max_workers} workers...")
         
-        # Download in parallel
+        # Download in parallel.
         success_count = 0
         fail_count = 0
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all download tasks
+            # Submit all download tasks.
             futures = {
                 executor.submit(self.download_image, filename, split): filename
                 for filename in missing_files
             }
             
-            # Process completions
+            # Process completions.
             for i, future in enumerate(as_completed(futures), 1):
                 filename = futures[future]
                 try:
@@ -135,7 +135,7 @@ class COCOImagePatcher:
                     logger.error(f"Exception downloading {filename}: {e}")
                     fail_count += 1
                 
-                # Progress update every 50 images
+                # Progress update every 50 images.
                 if i % 50 == 0:
                     logger.info(f"Progress: {i}/{len(missing_files)} "
                               f"(✓ {success_count}, ✗ {fail_count})")
@@ -178,14 +178,14 @@ def main():
     
     args = parser.parse_args()
     
-    # Initialize patcher
+    # Initialize patcher.
     patcher = COCOImagePatcher(args.root)
     
     logger.info("=" * 60)
     logger.info("COCO Image Patcher")
     logger.info("=" * 60)
     
-    # Patch requested splits
+    # Patch requested splits.
     if args.split == 'all':
         splits = ['train', 'val']
     else:
@@ -199,11 +199,11 @@ def main():
         total_success += success
         total_fail += fail
         
-        # Verify
+        # Verify.
         patcher.verify_completion(split)
         logger.info("")
     
-    # Final summary
+    # Final summary.
     logger.info("=" * 60)
     logger.info(f"SUMMARY: Downloaded {total_success} images, {total_fail} failed")
     logger.info("=" * 60)
@@ -218,3 +218,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

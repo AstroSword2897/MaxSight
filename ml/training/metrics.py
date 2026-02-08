@@ -110,12 +110,12 @@ class DetectionMetrics:
             self._handle_no_ground_truth(pred_boxes, pred_labels, pred_scores, condition)
             return
 
-        # Vectorized matching: compute IoU matrix and match efficiently
-        iou_matrix = compute_iou_matrix(pred_boxes, gt_boxes)  # [N_pred, M_gt]
+        # Vectorized matching: compute IoU matrix and match efficiently.
+        iou_matrix = compute_iou_matrix(pred_boxes, gt_boxes)  # [N_pred, M_gt].
         pred_classes = pred_labels.long()
         gt_classes = gt_labels.long()
         
-        # Filter valid classes
+        # Filter valid classes.
         valid_pred_mask = (pred_classes >= 0) & (pred_classes < self.num_classes)
         valid_gt_mask = (gt_classes >= 0) & (gt_classes < self.num_classes)
         
@@ -126,7 +126,7 @@ class DetectionMetrics:
         sorted_indices = torch.argsort(pred_scores, descending=True)
         matched_gt = torch.zeros(len(gt_boxes), dtype=torch.bool, device=self.device)
         
-        # Vectorized size category computation
+        # Vectorized size category computation.
         pred_areas = pred_boxes[:, 2] * pred_boxes[:, 3] * (self.image_size[0] * self.image_size[1])
         gt_areas = gt_boxes[:, 2] * gt_boxes[:, 3] * (self.image_size[0] * self.image_size[1])
         
@@ -150,10 +150,10 @@ class DetectionMetrics:
             pred_score = float(pred_scores[pred_idx].item())
             pred_box = pred_boxes[pred_idx]
             
-            # Find best matching GT of same class
+            # Find best matching GT of same class.
             class_match = (gt_classes == pred_class) & valid_gt_mask & (~matched_gt)
             if not class_match.any():
-                # FP: no matching GT
+                # FP: no matching GT.
                 self.class_fp[pred_class] += 1
                 if condition:
                     self.condition_metrics[condition]['fp'] += 1
@@ -166,7 +166,7 @@ class DetectionMetrics:
                     )
                 continue
             
-            # Get IoU with matching GTs
+            # Get IoU with matching GTs.
             matching_ious = iou_matrix[pred_idx, class_match]
             best_match_idx = torch.argmax(matching_ious)
             best_gt_idx = torch.where(class_match)[0][best_match_idx]
@@ -296,7 +296,7 @@ class DetectionMetrics:
                                                        for c in range(self.num_classes)])) 
                          for thresh in thresholds}
 
-        # Convert dict values to list for proper type inference
+        # Convert dict values to list for proper type inference.
         threshold_values = list(per_threshold.values()) if per_threshold else []
         mean_map = float(np.mean(threshold_values)) if threshold_values else 0.0
         result = {
@@ -330,7 +330,7 @@ class DetectionMetrics:
         results = {}
         for condition, counts in self.condition_metrics.items():
             tp, fp, fn = counts['tp'], counts['fp'], counts['fn']
-            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0  # Return 0.0 instead of nan
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0  # Return 0.0 instead of nan.
             recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
             f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
             results[condition] = {'precision': precision, 'recall': recall, 'f1': f1}
@@ -341,7 +341,7 @@ class DetectionMetrics:
         results = {}
         for size_cat, counts in self.size_metrics.items():
             tp, fp, fn = counts['tp'], counts['fp'], counts['fn']
-            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0  # Return 0.0 instead of nan
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0  # Return 0.0 instead of nan.
             recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
             f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
             results[size_cat] = {'precision': precision, 'recall': recall, 'f1': f1}
@@ -397,3 +397,4 @@ class DetectionMetrics:
     def compute_map_coco(self) -> Dict[str, float]:
         """COCO-style mAP dict; delegates to compute_coco_map."""
         return self.compute_coco_map()
+

@@ -44,7 +44,7 @@ def main() -> int:
     train_json = cleaned_dir / TRAIN_ANN
     val_json = cleaned_dir / VAL_ANN
 
-    # 1. Drive mounted
+    # 1. Drive mounted.
     if not Path(DRIVE_MOUNT).exists():
         log("Drive not mounted. Run: from google.colab import drive; drive.mount('/content/drive')", ok=False)
         return 1
@@ -56,12 +56,12 @@ def main() -> int:
         return 1
     log(f"Data dir: {data}")
 
-    # 3. cleaned_splits and JSONs
+    # 3. cleaned_splits and JSONs.
     cleaned_dir.mkdir(parents=True, exist_ok=True)
     log(f"Cleaned splits dir: {cleaned_dir}")
 
     if not train_json.exists() or not val_json.exists():
-        # Copy from repo when present
+        # Copy from repo when present.
         repo_splits = repo / "datasets" / "cleaned_splits"
         for name in [TRAIN_ANN, VAL_ANN]:
             src = repo_splits / name
@@ -69,7 +69,7 @@ def main() -> int:
             if src.exists():
                 shutil.copy(src, dst)
                 log(f"Copied {name} from repo to {cleaned_dir}")
-        # If still missing, write minimal empty JSONs so check passes
+        # If still missing, write minimal empty JSONs so check passes.
         annotations_empty = False
         if not train_json.exists():
             train_json.write_text("[]")
@@ -89,7 +89,7 @@ def main() -> int:
     else:
         log(f"Annotations found: {TRAIN_ANN}, {VAL_ANN}")
 
-    # 4. Repo
+    # 4. Repo.
     if not repo.exists():
         log(f"Repo not found: {repo}. Clone 2026-Prototype first.", ok=False)
         return 1
@@ -102,7 +102,7 @@ def main() -> int:
         return 1
     log("Train script found")
 
-    # 5. Optional: check image dir has some content
+    # 5. Optional: check image dir has some content.
     if image_dir.exists():
         try:
             next(image_dir.rglob("*.jpg"), None) or next(image_dir.rglob("*.jpeg"), None)
@@ -124,7 +124,7 @@ def main() -> int:
         print(f"    --num-workers {NUM_WORKERS} --checkpoint-interval 0 --use-gradnorm")
         return 0
 
-    # Run training
+    # Run training.
     os.chdir(repo)
     if MODE == "automl":
         cmd = [
@@ -162,3 +162,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

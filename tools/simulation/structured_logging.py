@@ -22,11 +22,11 @@ class StructuredFormatter(logging.Formatter):
             'line': record.lineno
         }
         
-        # Add exception info if present
+        # Add exception info if present.
         if record.exc_info:
             log_data['exception'] = self.formatException(record.exc_info)
         
-        # Add extra fields
+        # Add extra fields.
         if hasattr(record, 'session_id'):
             log_data['session_id'] = record.session_id
         if hasattr(record, 'user_id'):
@@ -34,7 +34,7 @@ class StructuredFormatter(logging.Formatter):
         if hasattr(record, 'request_id'):
             log_data['request_id'] = record.request_id
         
-        # Add any extra fields
+        # Add any extra fields.
         for key, value in record.__dict__.items():
             if key not in ['name', 'msg', 'args', 'created', 'filename', 'funcName',
                           'levelname', 'levelno', 'lineno', 'module', 'msecs',
@@ -117,10 +117,10 @@ def setup_structured_logging(log_level: str = None) -> logging.Logger:
     logger = logging.getLogger('maxsight_simulator')
     logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
     
-    # Remove existing handlers
+    # Remove existing handlers.
     logger.handlers.clear()
     
-    # Create console handler
+    # Create console handler.
     handler = logging.StreamHandler()
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(StructuredFormatter())
@@ -141,4 +141,5 @@ def get_component_logger(component: str) -> ComponentLogger:
         ComponentLogger instance"""
     base_logger = logging.getLogger('maxsight_simulator')
     return ComponentLogger(component, base_logger)
+
 

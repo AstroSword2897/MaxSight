@@ -17,7 +17,7 @@ from typing import Optional, Dict, Tuple
 import requests
 from tqdm import tqdm
 
-# Add project root to path
+# Add project root to path.
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -26,7 +26,7 @@ def download_file(url: str, dest: Path, resume: bool = True) -> bool:
     """Download a file with progress bar and resume capability...."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     
-    # Checks if file already exists
+    # Checks if file already exists.
     if dest.exists():
         print(f"  ✓ File already exists: {dest}")
         return True
@@ -40,7 +40,7 @@ def download_file(url: str, dest: Path, resume: bool = True) -> bool:
         except subprocess.CalledProcessError:
             pass
     
-    # Fallback to requests with progress
+    # Fallback to requests with progress.
     try:
         response = requests.get(url, stream=True, timeout=30)
         response.raise_for_status()
@@ -50,7 +50,7 @@ def download_file(url: str, dest: Path, resume: bool = True) -> bool:
         
         with open(dest, mode) as f:
             if resume and dest.exists():
-                # Resume download
+                # Resume download.
                 downloaded = dest.stat().st_size
                 headers = {'Range': f'bytes={downloaded}-'}
                 response = requests.get(url, headers=headers, stream=True, timeout=30)
@@ -102,69 +102,69 @@ def download_open_images_v6(data_dir: Path) -> bool:
     validation_dir = data_dir / "validation"
     csv_path = data_dir / "validation-annotations-bbox.csv"
     
-    # Checks if already downloaded
+    # Checks if already downloaded.
     if validation_dir.exists():
         img_count = len(list(validation_dir.rglob("*.jpg")))
         if img_count > 0 and csv_path.exists():
             print(f"  ✓ Open Images V6 already downloaded ({img_count} images)")
             return True
     
-    # Uses FiftyOne method when available
+    # Uses FiftyOne method when available.
     try:
         import fiftyone as fo
         print("\n  Using FiftyOne to download Open Images V6...")
         print("  This will download ~41K validation images (~2GB)")
         print("  This may take 30-60 minutes depending on your connection...")
         
-        # Download using FiftyOne
+        # Download using FiftyOne.
         dataset = fo.zoo.load_zoo_dataset(
             "open-images-v6",
             split="validation",
-            dataset_dir=str(data_dir.parent),  # FiftyOne will create open_images_v6 subdir
+            dataset_dir=str(data_dir.parent),  # FiftyOne will create open_images_v6 subdir.
             label_types=["detections"],
-            max_samples=None  # Download all validation images
+            max_samples=None  # Download all validation images.
         )
         
         print(f"  ✓ Downloaded {len(dataset)} images")
         
-        # Reorganize to expected structure
+        # Reorganize to expected structure.
         print("  Reorganizing files to expected structure...")
         
-        # FiftyOne stores images in its own structure, we need to reorganize
+        # FiftyOne stores images in its own structure, we need to reorganize.
         fo_dataset_dir = data_dir.parent / "open-images-v6-validation"
         if not fo_dataset_dir.exists():
-            # Uses alternative location
+            # Uses alternative location.
             fo_dataset_dir = data_dir.parent / "open-images-v6" / "validation"
         
         if fo_dataset_dir.exists():
-            # Move images to validation/
+            # Move images to validation/.
             validation_dir.mkdir(parents=True, exist_ok=True)
             for img_path in fo_dataset_dir.rglob("*.jpg"):
-                # Open Images uses subdirectories by image ID prefix
+                # Open Images uses subdirectories by image ID prefix.
                 img_id = img_path.stem
                 subdir = validation_dir / img_id[:2]
                 subdir.mkdir(exist_ok=True)
                 img_path.rename(subdir / img_path.name)
         
-        # Export annotations CSV
+        # Export annotations CSV.
         print("  Exporting annotations...")
         try:
             dataset.export(
                 export_dir=str(data_dir),
                 dataset_type=fo.types.COCODetectionDataset,
             )
-            # Convert COCO format to Open Images CSV format if needed
-            # For now, we'll download the CSV separately
+            # Convert COCO format to Open Images CSV format if needed.
+            # For now, we'll download the CSV separately.
         except:
             pass
         
-        # Download annotation CSV
+        # Download annotation CSV.
         csv_url = "https://storage.googleapis.com/openimages/v6/oidv6-validation-annotations-bbox.csv"
         print(f"  Downloading annotation CSV...")
         if download_file(csv_url, csv_path):
             print(f"  ✓ Annotation CSV downloaded")
         
-        # Verify
+        # Verify.
         img_count = len(list(validation_dir.rglob("*.jpg")))
         if img_count > 0 and csv_path.exists():
             print(f"\n  ✅ Open Images V6 download complete!")
@@ -183,7 +183,7 @@ def download_open_images_v6(data_dir: Path) -> bool:
         print(f"\n  FiftyOne download failed: {e}")
         print("  Falling back to manual download instructions...")
     
-    # Fallback: Manual download instructions
+    # Fallback: Manual download instructions.
     print("\n" + "="*70)
     print("Manual Download Instructions for Open Images V6")
     print("="*70)
@@ -197,7 +197,7 @@ def download_open_images_v6(data_dir: Path) -> bool:
     print("    4. Download: 'Validation Annotations' (validation-annotations-bbox.csv)")
     print("    5. Place CSV in: datasets/open_images_v6/")
     
-    # Download annotation CSV when possible
+    # Download annotation CSV when possible.
     csv_url = "https://storage.googleapis.com/openimages/v6/oidv6-validation-annotations-bbox.csv"
     print(f"\n  Attempting to download annotation CSV...")
     if download_file(csv_url, csv_path):
@@ -229,8 +229,8 @@ def download_bdd100k(data_dir: Path) -> bool:
     print("  No registration required - direct download available!")
     
     # BDD100K direct download URLs (from https://dl.cv.ethz.ch/bdd100k/data/)
-    # Correct URLs from the actual directory listing
-    images_url = "https://dl.cv.ethz.ch/bdd100k/data/100k_images_val.zip"  # 542MB - validation images only
+    # Correct URLs from the actual directory listing.
+    images_url = "https://dl.cv.ethz.ch/bdd100k/data/100k_images_val.zip"  # 542MB - validation images only.
     labels_url = "https://dl.cv.ethz.ch/bdd100k/data/bdd100k_det_20_labels_trainval.zip"  # 53MB - Detection 2020 labels (train+val)
     
     print(f"\n  Downloading from: https://dl.cv.ethz.ch/bdd100k/data/")
@@ -246,18 +246,18 @@ def download_bdd100k(data_dir: Path) -> bool:
     
     if download_file(labels_url, labels_zip):
         print(f"  ✓ Labels downloaded, extracting...")
-        # Extract to temp location
+        # Extract to temp location.
         temp_labels = data_dir / "temp_labels"
         if extract_zip(labels_zip, temp_labels):
-            # Find det_val.json in the extracted structure
-            # Structure: bdd100k/labels/det_20/det_val.json
+            # Find det_val.json in the extracted structure.
+            # Structure: bdd100k/labels/det_20/det_val.json.
             det_val_source = None
             for path in temp_labels.rglob("det_val.json"):
                 det_val_source = path
                 break
             
             if det_val_source and det_val_source.exists():
-                # Copy to expected location
+                # Copy to expected location.
                 shutil.copy(det_val_source, labels_path)
                 print(f"  ✓ Labels extracted to: {labels_path}")
                 labels_success = True
@@ -265,7 +265,7 @@ def download_bdd100k(data_dir: Path) -> bool:
                 print(f"  ⚠ Could not find det_val.json in extracted files")
                 labels_success = False
             
-            # Cleanup
+            # Cleanup.
             shutil.rmtree(temp_labels)
             labels_zip.unlink()
         else:
@@ -280,11 +280,11 @@ def download_bdd100k(data_dir: Path) -> bool:
     
     if download_file(images_url, images_zip):
         print(f"  ✓ Images downloaded, extracting...")
-        # Extract to temp location
+        # Extract to temp location.
         temp_extract = data_dir / "temp_extract"
         if extract_zip(images_zip, temp_extract):
-            # Find val folder in extracted structure
-            # Structure: bdd100k/images/100k/val/
+            # Find val folder in extracted structure.
+            # Structure: bdd100k/images/100k/val/.
             val_source = None
             for path in temp_extract.rglob("val"):
                 if path.is_dir() and len(list(path.glob("*.jpg"))) > 0:
@@ -302,7 +302,7 @@ def download_bdd100k(data_dir: Path) -> bool:
                 print(f"  ⚠ Could not find val folder with images")
                 images_success = False
             
-            # Cleanup
+            # Cleanup.
             shutil.rmtree(temp_extract)
             images_zip.unlink()
         else:
@@ -314,7 +314,7 @@ def download_bdd100k(data_dir: Path) -> bool:
     if images_success and labels_success:
         return True
     
-    # If download failed, provide manual instructions
+    # If download failed, provide manual instructions.
     if not images_success or not labels_success:
         print(f"\n" + "="*70)
         print(f"⚠️  BDD100K Download Failed")
@@ -361,10 +361,10 @@ def download_ade20k(data_dir: Path) -> bool:
     data_dir.mkdir(parents=True, exist_ok=True)
     
     # ADE20K download URLs (MIT Vision Group)
-    # Direct download links
+    # Direct download links.
     urls = {
         'validation_images': 'http://data.csail.mit.edu/places/ADEchallenge/ADEChallengeData2016.zip',
-        # Note: This zip contains both training and validation
+        # Note: This zip contains both training and validation.
     }
     
     print("\n  Downloading ADE20K dataset...")
@@ -372,31 +372,31 @@ def download_ade20k(data_dir: Path) -> bool:
     
     zip_path = data_dir / "ADEChallengeData2016.zip"
     
-    # Download the main zip file
+    # Download the main zip file.
     if download_file(urls['validation_images'], zip_path):
         print(f"  ✓ Download complete, extracting...")
         
-        # Extract to temp location first
+        # Extract to temp location first.
         temp_extract = data_dir / "temp_extract"
         if extract_zip(zip_path, temp_extract):
-            # Move to correct structure
+            # Move to correct structure.
             ade_data = temp_extract / "ADEChallengeData2016"
             if ade_data.exists():
-                # Move images
+                # Move images.
                 if (ade_data / "images").exists():
                     images_dest = data_dir / "images"
                     if images_dest.exists():
                         shutil.rmtree(images_dest)
                     shutil.move(str(ade_data / "images"), str(images_dest))
                 
-                # Move annotations
+                # Move annotations.
                 if (ade_data / "annotations").exists():
                     ann_dest = data_dir / "annotations"
                     if ann_dest.exists():
                         shutil.rmtree(ann_dest)
                     shutil.move(str(ade_data / "annotations"), str(ann_dest))
                 
-                # Cleanup
+                # Cleanup.
                 shutil.rmtree(temp_extract)
                 zip_path.unlink()
                 
@@ -541,7 +541,7 @@ def main():
             print("\n⚠️  Some datasets are incomplete. Run without --verify-only to download.")
             return 1
     
-    # Download datasets
+    # Download datasets.
     results = {}
     
     if not args.skip_open_images:
@@ -559,7 +559,7 @@ def main():
     else:
         print("\n⏭️  Skipping ADE20K")
     
-    # Summary
+    # Summary.
     print("\n" + "="*70)
     print("Download Summary")
     print("="*70)
@@ -600,3 +600,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

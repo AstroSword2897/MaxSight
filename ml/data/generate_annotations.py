@@ -13,12 +13,12 @@ def map_coco_to_environmental(coco_category_name: str) -> str:
     """Map COCO category to environmental category in comprehensive class list...."""
     normalized = coco_category_name.lower().strip()
     
-    # Find exact match in comprehensive class list
+    # Find exact match in comprehensive class list.
     for cls in COCO_CLASSES:
         if cls.lower() == normalized:
             return cls
     
-    # Fallback if no match found
+    # Fallback if no match found.
     return COCO_CLASSES[0] if COCO_CLASSES else 'person'
 
 
@@ -26,7 +26,7 @@ def assign_urgency_score(category_name: str, box_size: float) -> int:
     """Assign urgency score based on object category and size...."""
     category_lower = category_name.lower()
     
-    # Use sets for O(1) lookup instead of O(K) keyword matching
+    # Use sets for O(1) lookup instead of O(K) keyword matching.
     danger_categories = {
         'car', 'truck', 'bus', 'motorcycle', 'bicycle', 'vehicle', 'train', 'airplane',
         'fire', 'hazard', 'stop', 'traffic', 'traffic light', 'fire hydrant',
@@ -54,19 +54,19 @@ def assign_urgency_score(category_name: str, box_size: float) -> int:
         elif any(kw in category_lower for kw in ['person', 'animal', 'pet']):
             return 2 if box_size > 0.15 else 1
         else:
-            return 0  # Safe - no immediate threat
+            return 0  # Safe - no immediate threat.
 
 
 def estimate_distance_zone(box_size: float, image_size: Tuple[int, int] = (224, 224)) -> int:
     """Estimate distance zone from bounding box size...."""
     # Complexity: O(1) - three simple comparisons (if/elif/else)
     if box_size > 0.1:  # Large box = near (close to camera, occupies >10% of image)
-        # Complexity: O(1) - simple return
-        return 0  # Near
+        # Complexity: O(1) - simple return.
+        return 0  # Near.
     elif box_size > 0.05:
-        return 1  # Medium
+        return 1  # Medium.
     else:
-        return 2  # Far
+        return 2  # Far.
 
 
 def generate_scene_description(objects: List[Dict]) -> str:
@@ -78,12 +78,12 @@ def generate_scene_description(objects: List[Dict]) -> str:
     
     sorted_objects = sorted(objects, key=lambda x: x.get('urgency', 0), reverse=True)
     
-    # Get top 5 most urgent objects for description
+    # Get top 5 most urgent objects for description.
     top_objects = sorted_objects[:5]
     categories = [obj.get('category', 'object') for obj in top_objects]
-    unique_categories = list(dict.fromkeys(categories))  # Preserve order while removing duplicates
+    unique_categories = list(dict.fromkeys(categories))  # Preserve order while removing duplicates.
     
-    # Count objects by category for richer descriptions
+    # Count objects by category for richer descriptions.
     category_counts = {}
     for obj in top_objects:
         cat = obj.get('category', 'object')
@@ -96,7 +96,7 @@ def generate_scene_description(objects: List[Dict]) -> str:
             return f"Scene with {count} {cat}s"
         return f"Scene with {cat}"
     elif len(unique_categories) <= 3:
-        # Build description with counts
+        # Build description with counts.
         desc_parts = []
         for cat in unique_categories:
             count = category_counts.get(cat, 1)
@@ -106,7 +106,7 @@ def generate_scene_description(objects: List[Dict]) -> str:
                 desc_parts.append(cat)
         return f"Scene with {', '.join(desc_parts)}"
     else:
-        # Many object types - summarize with count and mention most urgent
+        # Many object types - summarize with count and mention most urgent.
         most_urgent = sorted_objects[0].get('category', 'objects') if sorted_objects else 'objects'
         return f"Scene with {len(unique_categories)} different objects including {most_urgent}"
 
@@ -153,11 +153,11 @@ def generate_annotations_from_coco(
             category_name = category_map.get(category_id, 'unknown')
             env_category = map_coco_to_environmental(category_name)
             
-            bbox = ann['bbox']  # [x, y, w, h] in pixels
+            bbox = ann['bbox']  # [x, y, w, h] in pixels.
             img_width = img_info.get('width', 224)
             img_height = img_info.get('height', 224)
             
-            # Convert to center format and normalize
+            # Convert to center format and normalize.
             cx = (bbox[0] + bbox[2] / 2) / img_width
             cy = (bbox[1] + bbox[3] / 2) / img_height
             w = bbox[2] / img_width
@@ -169,35 +169,35 @@ def generate_annotations_from_coco(
             scene_urgency = max(scene_urgency, urgency)
             
             objects.append({
-                'box': [cx, cy, w, h],  # Center format, normalized
+                'box': [cx, cy, w, h],  # Center format, normalized.
                 'category': env_category,
                 'urgency': urgency,
                 'distance': distance_zone
             })
         
-        # Generate scene description
+        # Generate scene description.
         scene_desc = generate_scene_description(objects)
         
-        # Create MaxSight annotation
+        # Create MaxSight annotation.
         maxsight_ann = {
             'image_id': image_id,
             'image_path': img_info.get('file_name', f'{image_id}.jpg'),
             'objects': objects,
             'urgency': scene_urgency,
-            'lighting': 'normal',  # Will be detected during training
+            'lighting': 'normal',  # Will be detected during training.
             'description': scene_desc,
-            'audio_path': None  # No audio in COCO
+            'audio_path': None  # No audio in COCO.
         }
         
         maxsight_annotations.append(maxsight_ann)
     
     random.shuffle(maxsight_annotations)
     
-    # Validate splits sum to 1.0
+    # Validate splits sum to 1.0.
     if abs(train_split + val_split + test_split - 1.0) > 1e-6:
         raise ValueError(f"Splits must sum to 1.0, got {train_split + val_split + test_split}")
     
-    # Calculate split indices
+    # Calculate split indices.
     total = len(maxsight_annotations)
     train_end = int(total * train_split)
     val_end = train_end + int(total * val_split)
@@ -244,10 +244,10 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Create output directory
+    # Create output directory.
     args.output.parent.mkdir(parents=True, exist_ok=True)
     
-    # Generate annotations
+    # Generate annotations.
     train_file, val_file = generate_annotations_from_coco(
         coco_annotation_file=args.coco_annotations,
         image_dir=args.image_dir,
@@ -259,4 +259,5 @@ if __name__ == "__main__":
     print("\nAnnotation generation complete!")
     print(f"Training annotations: {train_file}")
     print(f"Validation annotations: {val_file}")
+
 

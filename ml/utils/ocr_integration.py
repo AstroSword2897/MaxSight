@@ -28,9 +28,9 @@ class OCRIntegration:
         """Detect text regions from model's text_head output...."""
         text_regions = []
         
-        # Handle different input shapes
-        if text_scores.dim() == 2:  # [H, W] - spatial map
-            # Find regions above threshold
+        # Handle different input shapes.
+        if text_scores.dim() == 2:  # [H, W] - spatial map.
+            # Find regions above threshold.
             h, w = text_scores.shape
             y_coords, x_coords = torch.where(text_scores > self.text_threshold)
             
@@ -39,13 +39,13 @@ class OCRIntegration:
                 regions = self._cluster_text_pixels(x_coords, y_coords, h, w)
                 
                 for region_id, (x_min, y_min, x_max, y_max) in enumerate(regions):
-                    # Convert to center format and normalize
+                    # Convert to center format and normalize.
                     cx = ((x_min + x_max) / 2) / w
                     cy = ((y_min + y_max) / 2) / h
                     width = (x_max - x_min) / w
                     height = (y_max - y_min) / h
                     
-                    # Get average confidence
+                    # Get average confidence.
                     region_scores = text_scores[y_min:y_max+1, x_min:x_max+1]
                     confidence = float(region_scores.mean().item())
                     
@@ -56,7 +56,7 @@ class OCRIntegration:
                     })
         
         elif text_scores.dim() == 1 and boxes.shape[0] == text_scores.shape[0]:
-            # [N] scores with matching boxes
+            # [N] scores with matching boxes.
             text_mask = text_scores > self.text_threshold
             text_boxes = boxes[text_mask]
             text_confidences = text_scores[text_mask]
@@ -83,7 +83,7 @@ class OCRIntegration:
         if len(x_coords) == 0:
             return []
         
-        # Convert to numpy for easier processing
+        # Convert to numpy for easier processing.
         coords = torch.stack([x_coords, y_coords], dim=1).cpu().numpy()
         
         if use_dbscan:
@@ -95,16 +95,16 @@ class OCRIntegration:
                     "Install: pip install scikit-learn"
                 )
             
-            # Use DBSCAN for efficient clustering
-            # eps = cluster_distance in normalized coordinates
-            # min_samples = 2 (at least 2 pixels per cluster)
+            # Use DBSCAN for efficient clustering.
+            # Eps = cluster_distance in normalized coordinates.
+            # Min_samples = 2 (at least 2 pixels per cluster)
             dbscan = DBSCAN(eps=cluster_distance, min_samples=2, metric='euclidean')
             labels = dbscan.fit_predict(coords)
             
-            # Group pixels by cluster label
+            # Group pixels by cluster label.
             regions = []
             unique_labels = set(labels)
-            unique_labels.discard(-1)  # Remove noise label
+            unique_labels.discard(-1)  # Remove noise label.
             
             for label in unique_labels:
                 cluster_mask = labels == label
@@ -116,7 +116,7 @@ class OCRIntegration:
                     x_max = int(cluster_coords[:, 0].max())
                     y_max = int(cluster_coords[:, 1].max())
                     
-                    # Add padding
+                    # Add padding.
                     padding = 2
                     x_min = max(0, x_min - padding)
                     y_min = max(0, y_min - padding)
@@ -131,7 +131,7 @@ class OCRIntegration:
         try:
             from scipy.spatial import cKDTree  # type: ignore
             
-            # Build KD-tree for efficient nearest neighbor search
+            # Build KD-tree for efficient nearest neighbor search.
             tree = cKDTree(coords)
             regions = []
             used = set()
@@ -140,7 +140,7 @@ class OCRIntegration:
                 if i in used:
                     continue
                 
-                # Start new region
+                # Start new region.
                 cluster = [i]
                 used.add(i)
                 x_min, y_min, x_max, y_max = x, y, x, y
@@ -159,7 +159,7 @@ class OCRIntegration:
                     x_max = max(x_max, x2)
                     y_max = max(y_max, y2)
                 
-                # Add padding
+                # Add padding.
                 padding = 2
                 x_min = max(0, int(x_min) - padding)
                 y_min = max(0, int(y_min) - padding)
@@ -172,7 +172,7 @@ class OCRIntegration:
             return regions
             
         except ImportError:
-            # Fallback to simple O(N²) clustering if scipy not available
+            # Fallback to simple O(N²) clustering if scipy not available.
             regions = []
             used = set()
             
@@ -180,7 +180,7 @@ class OCRIntegration:
                 if i in used:
                     continue
                 
-                # Start new region
+                # Start new region.
                 cluster = [i]
                 used.add(i)
                 x_min, y_min, x_max, y_max = x, y, x, y
@@ -199,7 +199,7 @@ class OCRIntegration:
                         x_max = max(x_max, x2)
                         y_max = max(y_max, y2)
                 
-                # Add padding
+                # Add padding.
                 padding = 2
                 x_min = max(0, int(x_min) - padding)
                 y_min = max(0, int(y_min) - padding)
@@ -218,18 +218,18 @@ class OCRIntegration:
         use_vision_framework: bool = False
     ) -> Tuple[Optional[str], float]:
         """Extract text from a specific image region with confidence score...."""
-        # Crop region from image
+        # Crop region from image.
         # PIL Image.size is (width, height), not (height, width)
         w, h = image.size
         cx, cy, width, height = region_box
         
-        # Convert center format to corner format
+        # Convert center format to corner format.
         x1 = int((cx - width / 2) * w)
         y1 = int((cy - height / 2) * h)
         x2 = int((cx + width / 2) * w)
         y2 = int((cy + height / 2) * h)
         
-        # Clamp to image bounds
+        # Clamp to image bounds.
         x1 = max(0, min(x1, w))
         y1 = max(0, min(y1, h))
         x2 = max(0, min(x2, w))
@@ -238,29 +238,29 @@ class OCRIntegration:
         if x2 <= x1 or y2 <= y1:
             return (None, 0.0)
         
-        # Crop region
+        # Crop region.
         region_image = image.crop((x1, y1, x2, y2))
         
         if use_vision_framework:
-            # iOS Vision framework integration (for iOS app)
-            # This would call VNRecognizeTextRequest in Swift
+            # IOS Vision framework integration (for iOS app)
+            # This would call VNRecognizeTextRequest in Swift.
             return self._extract_text_vision_framework(region_image)
         else:
-            # Python fallback: OCR using pytesseract with confidence
+            # Python fallback: OCR using pytesseract with confidence.
             return self._extract_text_fallback(region_image)
     
     def _extract_text_vision_framework(self, image: Image.Image) -> Tuple[Optional[str], float]:
         """Extract text using iOS Vision framework...."""
-        # In iOS app, this would be:
-        # let request = VNRecognizeTextRequest { request, error in
-        #     guard let observations = request.results else { return }
-        #     // Extract text from observations with confidence
-        #     let confidence = observation.confidence
-        # }
-        # request.recognitionLevel = .accurate
-        # try? VNImageRequestHandler(cgImage: image.cgImage!).perform([request])
+        # In iOS app, this would be:.
+        # Let request = VNRecognizeTextRequest { request, error in.
+        # Guard let observations = request.results else { return }.
+        # // Extract text from observations with confidence.
+        # Let confidence = observation.confidence.
+        # }.
+        # Request.recognitionLevel = .accurate.
+        # Try? VNImageRequestHandler(cgImage: image.cgImage!).perform([request])
         
-        return (None, 0.0)  # Placeholder
+        return (None, 0.0)  # Placeholder.
     
     def _extract_text_fallback(
         self,
@@ -271,13 +271,13 @@ class OCRIntegration:
         try:
             import pytesseract  # type: ignore
             
-            # Preprocess image for better OCR
+            # Preprocess image for better OCR.
             gray = image.convert('L')
             
             if use_adaptive_threshold:
                 try:
                     import cv2  # type: ignore
-                    # Use adaptive thresholding for better results
+                    # Use adaptive thresholding for better results.
                     gray_array = np.array(gray)
                     adaptive = cv2.adaptiveThreshold(
                         gray_array, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -285,7 +285,7 @@ class OCRIntegration:
                     )
                     processed_image = Image.fromarray(adaptive)
                 except (ImportError, Exception):
-                    # Fallback to CLAHE or simple threshold
+                    # Fallback to CLAHE or simple threshold.
                     try:
                         import cv2  # type: ignore
                         gray_array = np.array(gray)
@@ -293,47 +293,47 @@ class OCRIntegration:
                         enhanced = clahe.apply(gray_array)
                         processed_image = Image.fromarray(enhanced)
                     except (ImportError, Exception):
-                        # Final fallback: simple threshold
+                        # Final fallback: simple threshold.
                         threshold = 128
                         def threshold_func(p: int) -> int:
                             return 255 if p > threshold else 0
                         processed_image = gray.point(threshold_func, mode='1')
             else:
-                # Simple threshold
+                # Simple threshold.
                 threshold = 128
                 def threshold_func(p: int) -> int:
                     return 255 if p > threshold else 0
                 processed_image = gray.point(threshold_func, mode='1')
             
-            # Extract text with confidence
+            # Extract text with confidence.
             try:
-                # Get confidence scores when available
+                # Get confidence scores when available.
                 ocr_data = pytesseract.image_to_data(
                     processed_image,
                     output_type=pytesseract.Output.DICT,
                     config='--psm 7'
                 )
                 
-                # Extract text and confidence
+                # Extract text and confidence.
                 texts = [t for t in ocr_data['text'] if t.strip()]
                 confidences = [c for c, t in zip(ocr_data['conf'], ocr_data['text']) if t.strip()]
                 
                 if texts:
                     text = ' '.join(texts)
                     avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
-                    # Normalize confidence to 0-1
+                    # Normalize confidence to 0-1.
                     confidence = max(0.0, min(1.0, avg_confidence / 100.0))
                     return (text.strip() if text.strip() else None, confidence)
                 else:
                     return (None, 0.0)
             
             except Exception:
-                # Fallback to simple extraction
+                # Fallback to simple extraction.
                 text = pytesseract.image_to_string(processed_image, config='--psm 7')
-                return (text.strip() if text.strip() else None, 0.5)  # Default confidence
+                return (text.strip() if text.strip() else None, 0.5)  # Default confidence.
         
         except ImportError:
-            # pytesseract not available - return placeholder
+            # Pytesseract not available - return placeholder.
             return ("[Text detected - install pytesseract for extraction]", 0.0)
         except Exception as e:
             print(f"OCR extraction error: {e}")
@@ -347,10 +347,10 @@ class OCRIntegration:
         max_regions: int = 10
     ) -> List[Dict]:
         """Complete OCR pipeline: detect regions and extract text...."""
-        # Detect text regions
+        # Detect text regions.
         text_regions = self.detect_text_regions_from_model(text_scores, boxes)
         
-        # Sort by confidence and limit
+        # Sort by confidence and limit.
         text_regions.sort(key=lambda x: x['confidence'], reverse=True)
         text_regions = text_regions[:max_regions]
         
@@ -369,14 +369,14 @@ class OCRIntegration:
                 try:
                     text, ocr_confidence = future.result(timeout=5.0)
                     if text:
-                        # Combine region detection confidence with OCR confidence
-                        # WHY: More meaningful confidence measure - both detection and extraction matter
+                        # Combine region detection confidence with OCR confidence.
+                        # WHY: More meaningful confidence measure - both detection and extraction matter.
                         combined_confidence = (region['confidence'] * 0.5 + ocr_confidence * 0.5)
                         
                         results.append({
                             'box': region['box'],
                             'text': text,
-                            'confidence': combined_confidence,  # Combined confidence
+                            'confidence': combined_confidence,  # Combined confidence.
                             'detection_confidence': region['confidence'],
                             'ocr_confidence': ocr_confidence,
                             'region_id': region['region_id']
@@ -394,7 +394,7 @@ def create_text_description(text_results: List[Dict], verbosity: str = 'normal')
         return "No text detected"
     
     # Group text by proximity (line/block grouping)
-    # WHY: Prevents splitting connected text into multiple regions
+    # WHY: Prevents splitting connected text into multiple regions.
     grouped_texts = _group_text_by_proximity(text_results)
     
     if verbosity == 'brief':
@@ -407,7 +407,7 @@ def create_text_description(text_results: List[Dict], verbosity: str = 'normal')
             texts = [g['text'] for g in grouped_texts[:3]]
             return f"Text detected: {', '.join(texts)}"
     
-    else:  # detailed
+    else:  # Detailed.
         descriptions = []
         for i, group in enumerate(grouped_texts[:5], 1):
             pos = "left" if group['box'][0] < 0.33 else ("right" if group['box'][0] > 0.67 else "center")
@@ -428,7 +428,7 @@ def _group_text_by_proximity(text_results: List[Dict], proximity_threshold: floa
         if i in used:
             continue
         
-        # Start new group
+        # Start new group.
         group = [result]
         used.add(i)
         box1 = result['box']
@@ -450,18 +450,18 @@ def _group_text_by_proximity(text_results: List[Dict], proximity_threshold: floa
                 group.append(other)
                 used.add(j)
         
-        # Combine text in group
+        # Combine text in group.
         combined_text = ' '.join([r['text'] for r in group])
         avg_confidence = sum(r['confidence'] for r in group) / len(group)
         
-        # Calculate group center
+        # Calculate group center.
         avg_cx = sum(r['box'][0] for r in group) / len(group)
         avg_cy = sum(r['box'][1] for r in group) / len(group)
         
         groups.append({
             'text': combined_text,
             'confidence': avg_confidence,
-            'box': [avg_cx, avg_cy, 0.1, 0.1],  # Approximate group size
+            'box': [avg_cx, avg_cy, 0.1, 0.1],  # Approximate group size.
             'region_count': len(group)
         })
     
@@ -476,7 +476,7 @@ def read_text_aloud(text: str) -> None:
         engine.say(text)
         engine.runAndWait()
     except ImportError:
-        # pyttsx3 not available - print text instead
+        # Pyttsx3 not available - print text instead.
         print(f"TTS: {text}")
     except Exception as e:
         print(f"TTS error: {e}")
@@ -484,20 +484,21 @@ def read_text_aloud(text: str) -> None:
 
 
 if __name__ == "__main__":
-    # Test OCR integration
+    # Test OCR integration.
     print("OCR Integration Module Test")
     print("=" * 50)
     
     ocr = OCRIntegration(text_threshold=0.5)
     
-    # Create dummy text detection output
-    dummy_text_scores = torch.rand(14, 14) * 0.3  # Low scores
-    dummy_text_scores[5:8, 5:8] = 0.8  # Text region
-    dummy_boxes = torch.tensor([[0.5, 0.5, 0.1, 0.1]])  # Center box
+    # Create dummy text detection output.
+    dummy_text_scores = torch.rand(14, 14) * 0.3  # Low scores.
+    dummy_text_scores[5:8, 5:8] = 0.8  # Text region.
+    dummy_boxes = torch.tensor([[0.5, 0.5, 0.1, 0.1]])  # Center box.
     
     regions = ocr.detect_text_regions_from_model(dummy_text_scores, dummy_boxes)
     print(f"Detected {len(regions)} text regions")
     
     for region in regions:
         print(f"  Region {region['region_id']}: confidence={region['confidence']:.2f}, box={region['box']}")
+
 

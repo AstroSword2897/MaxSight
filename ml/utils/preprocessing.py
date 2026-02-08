@@ -42,40 +42,40 @@ def _get_d65_white_point(device_type: str, dtype_str: str) -> torch.Tensor:
     dtype = getattr(torch, dtype_str)
     return torch.tensor([0.95047, 1.0, 1.08883], device=device, dtype=dtype)
 
-# Numerical stability constants
-EPS = 1e-10  # Epsilon for division operations
-EPS_LAB = 1e-8  # Epsilon for LAB conversions
+# Numerical stability constants.
+EPS = 1e-10  # Epsilon for division operations.
+EPS_LAB = 1e-8  # Epsilon for LAB conversions.
 
 def rgb_to_lab_tensor(rgb: torch.Tensor, eps: float = EPS_LAB) -> torch.Tensor:
     """Convert RGB tensor to LAB color space using PyTorch operations...."""
-    # Input validation
+    # Input validation.
     if rgb.dim() not in [3, 4]:
         raise ValueError(f"Expected 3D [C,H,W] or 4D [B,C,H,W] tensor, got {rgb.dim()}D")
     if rgb.shape[-3] != 3:
         raise ValueError(f"Expected 3 color channels, got {rgb.shape[-3]}")
     
-    # Clamp input to valid range for numerical stability
+    # Clamp input to valid range for numerical stability.
     rgb = torch.clamp(rgb, 0.0, 1.0)
     
-    # Convert RGB to XYZ
+    # Convert RGB to XYZ.
     mask = rgb > 0.04045
     rgb_linear = torch.where(
         mask,
-        torch.clamp(torch.pow((rgb + 0.055) / 1.055, 2.4), min=0.0),  # Clamp before pow
+        torch.clamp(torch.pow((rgb + 0.055) / 1.055, 2.4), min=0.0),  # Clamp before pow.
         rgb / 12.92
     )
     
     # Get cached transformation matrix (use device.type to avoid cache misses)
     device_type = rgb.device.type  # 'cpu' or 'cuda' (not 'cuda:0', 'cuda:1', etc.)
-    dtype_str = str(rgb.dtype).split('.')[-1]  # Extract dtype name
+    dtype_str = str(rgb.dtype).split('.')[-1]  # Extract dtype name.
     transform = _get_rgb_to_xyz_matrix(device_type, dtype_str)
     white_point = _get_d65_white_point(device_type, dtype_str)
     
-    if rgb.dim() == 3:  # [C, H, W]
+    if rgb.dim() == 3:  # [C, H, W].
         xyz = torch.einsum('ij,jhw->ihw', transform, rgb_linear)
         white_point = white_point.reshape(3, 1, 1)
         xyz = xyz / white_point
-    else:  # [B, C, H, W]
+    else:  # [B, C, H, W].
         xyz = torch.einsum('ij,bjhw->bihw', transform, rgb_linear)
         white_point = white_point.reshape(1, 3, 1, 1)
         xyz = xyz / white_point
@@ -83,7 +83,7 @@ def rgb_to_lab_tensor(rgb: torch.Tensor, eps: float = EPS_LAB) -> torch.Tensor:
     # XYZ to LAB (with numerical stability)
     def f(t: torch.Tensor) -> torch.Tensor:
         delta = 6.0 / 29.0
-        t_clamped = torch.clamp(t, min=eps)  # Clamp to avoid negative/zero values
+        t_clamped = torch.clamp(t, min=eps)  # Clamp to avoid negative/zero values.
         return torch.where(
             t_clamped > delta ** 3,
             torch.clamp(torch.pow(t_clamped, 1.0 / 3.0), min=0.0),
@@ -91,12 +91,12 @@ def rgb_to_lab_tensor(rgb: torch.Tensor, eps: float = EPS_LAB) -> torch.Tensor:
         )
     
     if xyz.dim() == 3:
-        # xyz already normalized by white point above
+        # Xyz already normalized by white point above.
         fx = f(xyz[0, :, :])
         fy = f(xyz[1, :, :])
         fz = f(xyz[2, :, :])
     else:
-        # xyz already normalized by white point above
+        # Xyz already normalized by white point above.
         fx = f(xyz[:, 0, :, :])
         fy = f(xyz[:, 1, :, :])
         fz = f(xyz[:, 2, :, :])
@@ -113,7 +113,7 @@ def rgb_to_lab_tensor(rgb: torch.Tensor, eps: float = EPS_LAB) -> torch.Tensor:
 
 def lab_to_rgb_tensor(lab: torch.Tensor, eps: float = EPS_LAB) -> torch.Tensor:
     """Convert LAB tensor to RGB color space using PyTorch operations...."""
-    # Input validation
+    # Input validation.
     if lab.dim() not in [3, 4]:
         raise ValueError(f"Expected 3D [C,H,W] or 4D [B,C,H,W] tensor, got {lab.dim()}D")
     if lab.shape[-3] != 3:
@@ -124,14 +124,14 @@ def lab_to_rgb_tensor(lab: torch.Tensor, eps: float = EPS_LAB) -> torch.Tensor:
     else:
         L, a, b = lab[:, 0], lab[:, 1], lab[:, 2]
     
-    # LAB to XYZ
+    # LAB to XYZ.
     fy = (L + 16.0) / 116.0
     fx = a / 500.0 + fy
     fz = fy - b / 200.0
     
     def f_inv(t: torch.Tensor) -> torch.Tensor:
         delta = 6.0 / 29.0
-        t_clamped = torch.clamp(t, min=eps)  # Clamp for numerical stability
+        t_clamped = torch.clamp(t, min=eps)  # Clamp for numerical stability.
         return torch.where(
             t_clamped > delta,
             torch.clamp(torch.pow(t_clamped, 3.0), min=0.0),
@@ -180,14 +180,14 @@ def apply_clahe_tensor_fast(
     else:
         squeeze = False
     
-    # Use built-in equalize if available, else simple contrast enhancement
+    # Use built-in equalize if available, else simple contrast enhancement.
     try:
         from torchvision.transforms.functional import equalize
-        # Convert to uint8 for equalize
+        # Convert to uint8 for equalize.
         image_uint8 = (image * 255.0).clamp(0, 255).to(torch.uint8)
         enhanced = equalize(image_uint8).float() / 255.0
     except (ImportError, AttributeError):
-        # Fallback: simple contrast enhancement
+        # Fallback: simple contrast enhancement.
         mean = image.mean(dim=(-2, -1), keepdim=True)
         enhanced = (image - mean) * 1.2 + mean
         enhanced = torch.clamp(enhanced, 0.0, 1.0)
@@ -209,18 +209,18 @@ def apply_clahe_tensor(
     
     # Original slow implementation (kept for compatibility)
     if image.dim() == 3:
-        image = image.unsqueeze(0)  # Add batch dimension
+        image = image.unsqueeze(0)  # Add batch dimension.
         squeeze_output = True
     else:
         squeeze_output = False
     
     B, C, H, W = image.shape
     
-    # Work on grayscale or L channel only
+    # Work on grayscale or L channel only.
     if C == 3:
-        # Convert to LAB, work on L channel
+        # Convert to LAB, work on L channel.
         lab = rgb_to_lab_tensor(image)
-        L = lab[:, 0:1, :, :]  # Extract L channel [B, 1, H, W]
+        L = lab[:, 0:1, :, :]  # Extract L channel [B, 1, H, W].
         a = lab[:, 1:2, :, :]
         b = lab[:, 2:3, :, :]
         is_lab = True
@@ -228,10 +228,10 @@ def apply_clahe_tensor(
         L = image
         is_lab = False
     
-    # Normalize L to [0, 255] for histogram processing
+    # Normalize L to [0, 255] for histogram processing.
     L_norm = (L * 255.0).clamp(0, 255).int()
     
-    # Tile-based processing
+    # Tile-based processing.
     tiles_y, tiles_x = tile_grid_size
     tile_h = H // tiles_y
     tile_w = W // tiles_x
@@ -245,26 +245,26 @@ def apply_clahe_tensor(
             x_start = tx * tile_w
             x_end = (tx + 1) * tile_w if tx < tiles_x - 1 else W
             
-            # Extract tile
+            # Extract tile.
             tile = L_norm[:, :, y_start:y_end, x_start:x_end]
             
-            # Compute histogram
+            # Compute histogram.
             hist = torch.zeros(B, 1, 256, device=image.device, dtype=torch.float32)
             for i in range(256):
                 hist[:, :, i] = (tile == i).float().sum(dim=(2, 3))
             
-            # Clip histogram
+            # Clip histogram.
             clip_value = clip_limit * tile.numel() / 256.0
             excess = torch.clamp(hist - clip_value, min=0).sum(dim=2, keepdim=True)
             hist = torch.clamp(hist, max=clip_value)
             hist = hist + excess / 256.0
             
-            # Cumulative distribution function
+            # Cumulative distribution function.
             cdf = hist.cumsum(dim=2)
             cdf_min = cdf[:, :, 0:1]
             cdf = (cdf - cdf_min) / (cdf[:, :, -1:] - cdf_min + 1e-8) * 255.0
             
-            # Apply mapping
+            # Apply mapping.
             tile_float = tile.float()
             tile_enhanced = torch.zeros_like(tile_float)
             for i in range(256):
@@ -273,7 +273,7 @@ def apply_clahe_tensor(
             
             enhanced_L[:, :, y_start:y_end, x_start:x_end] = tile_enhanced / 255.0
     
-    # Convert back to RGB if needed
+    # Convert back to RGB if needed.
     if is_lab:
         enhanced_lab = torch.cat([enhanced_L, a, b], dim=1)
         enhanced = lab_to_rgb_tensor(enhanced_lab)
@@ -302,13 +302,13 @@ class ImagePreprocessor:
         # Pre-compute sharpening kernel for edge enhancement (lazy init)
         self.sharpen_kernel: Optional[torch.Tensor] = None
         
-        # Standard ImageNet normalization for pretrained ResNet compatibility
+        # Standard ImageNet normalization for pretrained ResNet compatibility.
         self.normalize = transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],  # ImageNet RGB channel means
-            std=[0.229, 0.224, 0.225]   # ImageNet RGB channel standard deviations
+            mean=[0.485, 0.456, 0.406],  # ImageNet RGB channel means.
+            std=[0.229, 0.224, 0.225]   # ImageNet RGB channel standard deviations.
         )
         
-        # Base transform pipeline: resize -> tensor -> normalize
+        # Base transform pipeline: resize -> tensor -> normalize.
         self.base_transform = transforms.Compose([
             transforms.Resize(image_size),
             transforms.ToTensor(),
@@ -317,7 +317,7 @@ class ImagePreprocessor:
     
     def __call__(self, image: Image.Image) -> torch.Tensor:
         """Apply preprocessing with condition-specific visual enhancements...."""
-        # Apply condition-specific transforms based on condition_mode
+        # Apply condition-specific transforms based on condition_mode.
         if self.condition_mode == 'cataracts':
             image = self._enhance_contrast(image)
         elif self.condition_mode == 'retinitis_pigmentosa':
@@ -333,66 +333,66 @@ class ImagePreprocessor:
         elif self.condition_mode == 'color_blindness':
             image = self._simulate_color_blindness(image)
         
-        # Apply standard ImageNet preprocessing
+        # Apply standard ImageNet preprocessing.
         return self.base_transform(image)  # type: ignore
     
     def _enhance_contrast(self, image: Image.Image) -> Image.Image:
         """High-contrast enhancement for cataracts (reduced visual acuity compensation)...."""
-        # Convert PIL to tensor for PyTorch processing
-        # Meta AI-style: Work with tensors directly, GPU-friendly
-        img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1]
+        # Convert PIL to tensor for PyTorch processing.
+        # Meta AI-style: Work with tensors directly, GPU-friendly.
+        img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1].
         
-        # Apply CLAHE using PyTorch implementation
+        # Apply CLAHE using PyTorch implementation.
         enhanced_tensor = apply_clahe_tensor(img_tensor, clip_limit=2.0, tile_grid_size=(8, 8))
         
-        # Convert back to PIL Image
+        # Convert back to PIL Image.
         enhanced_tensor = torch.clamp(enhanced_tensor, 0.0, 1.0)
         return TF.to_pil_image(enhanced_tensor)
     
     def _low_light_enhancement(self, image: Image.Image) -> Image.Image:
         """Brightness enhancement for retinitis pigmentosa (night blindness/tunnel vision compensation)...."""
-        # Convert PIL Image to numpy array with float32 precision for calculations
-        #          Float32 provides sufficient precision while being memory-efficient.
-        # Complexity: O(H*W) - converts image format
-        # Relationship: Format conversion - prepares image for numerical operations
+        # Convert PIL Image to numpy array with float32 precision for calculations.
+        # Float32 provides sufficient precision while being memory-efficient.
+        # Complexity: O(H*W) - converts image format.
+        # Relationship: Format conversion - prepares image for numerical operations.
         img_array = np.array(image).astype(np.float32)
         
-        # Complexity: O(H*W) - element-wise power operation for all pixels
-        # Relationship: Brightness enhancement - first step in low-light compensation
-        gamma = 0.5  # Gamma < 1 brightens image
-        img_array = np.power(img_array / 255.0, gamma) * 255.0  # Normalize, apply gamma, scale back
+        # Complexity: O(H*W) - element-wise power operation for all pixels.
+        # Relationship: Brightness enhancement - first step in low-light compensation.
+        gamma = 0.5  # Gamma < 1 brightens image.
+        img_array = np.power(img_array / 255.0, gamma) * 255.0  # Normalize, apply gamma, scale back.
         
-        # Apply histogram stretching to maximize dynamic range
+        # Apply histogram stretching to maximize dynamic range.
         # Complexity: O(H*W) - finds min/max (O(H*W)) and scales all pixels (O(H*W))
         img_array = (img_array - img_array.min()) / (img_array.max() - img_array.min() + 1e-8) * 255.0
-        # Add epsilon (1e-8) to prevent division by zero if all pixels are same value
+        # Add epsilon (1e-8) to prevent division by zero if all pixels are same value.
         
-        # Convert back to uint8 and PIL Image format
-        # Complexity: O(H*W) - type conversion and PIL Image creation
-        # Relationship: Format conversion - returns image in expected format
+        # Convert back to uint8 and PIL Image format.
+        # Complexity: O(H*W) - type conversion and PIL Image creation.
+        # Relationship: Format conversion - returns image in expected format.
         return Image.fromarray(img_array.astype(np.uint8))
     
     def _analyze_lighting_condition(self, image: Image.Image) -> str:
         """Analyze image brightness and classify lighting condition...."""
-        # Convert to grayscale for brightness analysis - average RGB channels
-        # Complexity: O(H*W) - processes all pixels once
+        # Convert to grayscale for brightness analysis - average RGB channels.
+        # Complexity: O(H*W) - processes all pixels once.
         img_array = np.array(image).astype(np.float32)
         if len(img_array.shape) == 3:
-            # np.mean with axis returns 2D array, ensure it's float64
-            gray_image = np.mean(img_array, axis=2, dtype=np.float64)  # Average RGB channels to get grayscale
+            # Np.mean with axis returns 2D array, ensure it's float64.
+            gray_image = np.mean(img_array, axis=2, dtype=np.float64)  # Average RGB channels to get grayscale.
         else:
-            gray_image = img_array.astype(np.float64)  # Already grayscale, ensure float64
+            gray_image = img_array.astype(np.float64)  # Already grayscale, ensure float64.
         
-        # Calculate mean brightness - average of all pixel values
-        # Complexity: O(H*W) - sums all pixels, then divides
+        # Calculate mean brightness - average of all pixel values.
+        # Complexity: O(H*W) - sums all pixels, then divides.
         mean_brightness: float = float(np.mean(gray_image))
         
-        # Calculate standard deviation - measures brightness variation across image
-        # Complexity: O(H*W) - computes variance then square root
+        # Calculate standard deviation - measures brightness variation across image.
+        # Complexity: O(H*W) - computes variance then square root.
         std_brightness: float = float(np.std(gray_image))
         
-        # Classification based on brightness thresholds
-        # Thresholds chosen based on typical image brightness distributions:
+        # Classification based on brightness thresholds.
+        # Thresholds chosen based on typical image brightness distributions:.
         # - Bright: >180 (overexposed, sunny conditions)
         # - Normal: 120-180 (typical indoor/outdoor daylight)
         # - Dim: 60-120 (low light, evening, cloudy)
@@ -400,33 +400,33 @@ class ImagePreprocessor:
         if mean_brightness > 180 and std_brightness > 30:
             return 'bright'  # Overexposed, high contrast (sunny, bright indoor)
         elif 120 <= mean_brightness <= 180 and std_brightness > 20:
-            return 'normal'  # Typical daylight conditions
+            return 'normal'  # Typical daylight conditions.
         elif 60 <= mean_brightness < 120 or (mean_brightness >= 120 and std_brightness < 20):
             return 'dim'  # Low light, low contrast (evening, cloudy, dim indoor)
-        else:  # mean_brightness < 60
+        else:  # Mean_brightness < 60.
             return 'dark'  # Very low light (night, dark room)
     
     def _simulate_bright_lighting(self, image: Image.Image, brightness_factor: float = 1.5) -> Image.Image:
         """Simulate overexposed/bright lighting conditions...."""
         from PIL import ImageEnhance
         
-        # Use PIL's ImageEnhance for efficient brightness adjustment
-        # Complexity: O(H*W) - applies brightness multiplier to all pixels
+        # Use PIL's ImageEnhance for efficient brightness adjustment.
+        # Complexity: O(H*W) - applies brightness multiplier to all pixels.
         enhancer = ImageEnhance.Brightness(image)
-        brightened = enhancer.enhance(brightness_factor)  # Increase brightness by factor
+        brightened = enhancer.enhance(brightness_factor)  # Increase brightness by factor.
         
-        # Clamp values to valid range [0, 255] to prevent overflow
-        # Note: PIL handles clamping automatically, but explicit conversion ensures correctness
+        # Clamp values to valid range [0, 255] to prevent overflow.
+        # Note: PIL handles clamping automatically, but explicit conversion ensures correctness.
         return brightened
     
     def _simulate_dim_lighting(self, image: Image.Image, brightness_factor: float = 0.6) -> Image.Image:
         """Simulate dim lighting conditions...."""
         from PIL import ImageEnhance
         
-        # Use PIL's ImageEnhance for efficient brightness adjustment
-        # Complexity: O(H*W) - applies brightness multiplier to all pixels
+        # Use PIL's ImageEnhance for efficient brightness adjustment.
+        # Complexity: O(H*W) - applies brightness multiplier to all pixels.
         enhancer = ImageEnhance.Brightness(image)
-        dimmed = enhancer.enhance(brightness_factor)  # Reduce brightness by factor
+        dimmed = enhancer.enhance(brightness_factor)  # Reduce brightness by factor.
         
         return dimmed
     
@@ -434,29 +434,29 @@ class ImagePreprocessor:
         """Simulate very dark lighting conditions...."""
         from PIL import ImageEnhance
         
-        # First apply brightness reduction
-        # Complexity: O(H*W) - applies brightness multiplier
+        # First apply brightness reduction.
+        # Complexity: O(H*W) - applies brightness multiplier.
         enhancer = ImageEnhance.Brightness(image)
         darkened = enhancer.enhance(brightness_factor)
         
-        # Optionally apply gamma correction for more realistic dark lighting
-        # Gamma correction: output = (input/255)^gamma * 255
-        # Gamma > 1 darkens image, gamma < 1 brightens
-        # For dark simulation, we use gamma = 2.0 to further darken mid-tones
+        # Optionally apply gamma correction for more realistic dark lighting.
+        # Gamma correction: output = (input/255)^gamma * 255.
+        # Gamma > 1 darkens image, gamma < 1 brightens.
+        # For dark simulation, we use gamma = 2.0 to further darken mid-tones.
         img_array = np.array(darkened).astype(np.float32)
-        gamma = 2.0  # Darken mid-tones more aggressively
+        gamma = 2.0  # Darken mid-tones more aggressively.
         img_array = np.power(img_array / 255.0, gamma) * 255.0
-        img_array = np.clip(img_array, 0, 255)  # Clamp to valid range
+        img_array = np.clip(img_array, 0, 255)  # Clamp to valid range.
         
         return Image.fromarray(img_array.astype(np.uint8))
     
     def preprocess_with_lighting(self, image: Image.Image) -> Dict[str, Any]:
         """Preprocess image and return both tensor and lighting metadata...."""
-        # Complexity: O(H*W) - analyzes all pixels for brightness
+        # Complexity: O(H*W) - analyzes all pixels for brightness.
         lighting = self._analyze_lighting_condition(image)
         
         # Apply condition-specific transforms if needed (same as __call__)
-        # Complexity: O(H*W) - applies transforms to all pixels
+        # Complexity: O(H*W) - applies transforms to all pixels.
         if self.condition_mode == 'cataracts':
             image = self._enhance_contrast(image)
         elif self.condition_mode == 'retinitis_pigmentosa':
@@ -473,10 +473,10 @@ class ImagePreprocessor:
             image = self._simulate_color_blindness(image)
         
         # Apply base transforms (resize, to tensor, normalize)
-        # Complexity: O(H*W) - standard image transforms
+        # Complexity: O(H*W) - standard image transforms.
         tensor = self.base_transform(image)  # type: ignore
         
-        # Return both tensor and lighting metadata
+        # Return both tensor and lighting metadata.
         return {
             'image': tensor,
             'lighting': lighting
@@ -484,9 +484,9 @@ class ImagePreprocessor:
     
     def _simulate_refractive_error(self, image: Image.Image) -> Image.Image:
         """Simulate blurry vision from refractive errors (myopia, hyperopia, astigmatism, presbyopia)"""
-        # Meta AI-style: Pure PyTorch implementation
-        # Convert to tensor
-        img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1]
+        # Meta AI-style: Pure PyTorch implementation.
+        # Convert to tensor.
+        img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1].
         
         # Apply Gaussian blur using torchvision (GPU-friendly)
         sigma = 1.5
@@ -495,10 +495,10 @@ class ImagePreprocessor:
             kernel_size += 1
         blurred = TF.gaussian_blur(img_tensor, kernel_size=[kernel_size, kernel_size], sigma=[sigma, sigma])
         
-        # Enhance contrast to compensate for blur using PyTorch CLAHE
+        # Enhance contrast to compensate for blur using PyTorch CLAHE.
         enhanced = apply_clahe_tensor(blurred, clip_limit=2.0, tile_grid_size=(8, 8))
         
-        # Convert back to PIL
+        # Convert back to PIL.
         enhanced = torch.clamp(enhanced, 0.0, 1.0)
         return TF.to_pil_image(enhanced)
     
@@ -522,23 +522,23 @@ class ImagePreprocessor:
         norm_dist = dist_from_center / (max_dist + 1e-8)
         
         if boost_center:
-            # AMD: boost center region
+            # AMD: boost center region.
             return 1.0 + strength * (1.0 - norm_dist)
         else:
-            # Glaucoma: boost peripheral region
+            # Glaucoma: boost peripheral region.
             return 1.0 + (strength * 0.625) * norm_dist
     
     def _enhance_peripheral(self, image: Image.Image) -> Image.Image:
         """Enhance peripheral regions for glaucoma (peripheral vision loss).
         
         Meta AI-style: Pure PyTorch tensor operations, GPU-accelerated."""
-        # Convert to tensor
-        img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1]
+        # Convert to tensor.
+        img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1].
         
-        # Use extracted helper
+        # Use extracted helper.
         peripheral_mask = self._create_radial_mask(img_tensor, boost_center=False, strength=0.5)
         
-        # Apply mask to all channels
+        # Apply mask to all channels.
         enhanced = img_tensor * peripheral_mask.unsqueeze(0)
         enhanced = torch.clamp(enhanced, 0.0, 1.0)
         
@@ -548,13 +548,13 @@ class ImagePreprocessor:
         """Enhance central regions for AMD (central vision loss).
         
         Meta AI-style: Pure PyTorch tensor operations, GPU-accelerated."""
-        # Convert to tensor
-        img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1]
+        # Convert to tensor.
+        img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1].
         
-        # Use extracted helper
+        # Use extracted helper.
         central_mask = self._create_radial_mask(img_tensor, boost_center=True, strength=0.8)
         
-        # Apply mask to all channels
+        # Apply mask to all channels.
         enhanced = img_tensor * central_mask.unsqueeze(0)
         enhanced = torch.clamp(enhanced, 0.0, 1.0)
         
@@ -564,8 +564,8 @@ class ImagePreprocessor:
         """Enhance edges for diabetic retinopathy (spotty/blurry vision).
         
         Meta AI-style: Uses PyTorch convolution for edge enhancement, GPU-accelerated."""
-        # Convert to tensor
-        img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1]
+        # Convert to tensor.
+        img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1].
         
         # Lazy init sharpening kernel (pre-computed for performance)
         if self.sharpen_kernel is None:
@@ -574,22 +574,22 @@ class ImagePreprocessor:
                  [-1, 9, -1],
                  [-1, -1, -1]],
                 dtype=torch.float32
-            ).unsqueeze(0).unsqueeze(0)  # [1, 1, 3, 3]
+            ).unsqueeze(0).unsqueeze(0)  # [1, 1, 3, 3].
         
-        # Move kernel to same device/dtype as image
+        # Move kernel to same device/dtype as image.
         kernel = self.sharpen_kernel.to(device=img_tensor.device, dtype=img_tensor.dtype)
         
-        # Apply convolution to each channel
+        # Apply convolution to each channel.
         sharpened_channels = []
         for c in range(img_tensor.shape[0]):
-            channel = img_tensor[c:c+1, :, :].unsqueeze(0)  # [1, 1, H, W]
+            channel = img_tensor[c:c+1, :, :].unsqueeze(0)  # [1, 1, H, W].
             sharpened = F.conv2d(channel, kernel, padding=1)
             sharpened_channels.append(sharpened.squeeze(0).squeeze(0))
         
         sharpened = torch.stack(sharpened_channels, dim=0)
         sharpened = torch.clamp(sharpened, 0.0, 1.0)
         
-        # Blend with original to avoid over-sharpening
+        # Blend with original to avoid over-sharpening.
         enhanced = 0.7 * img_tensor + 0.3 * sharpened
         enhanced = torch.clamp(enhanced, 0.0, 1.0)
         
@@ -599,14 +599,14 @@ class ImagePreprocessor:
         """Simulate color blindness (red-green color confusion).
         
         Meta AI-style: Pure PyTorch tensor operations, GPU-accelerated."""
-        # Convert to tensor
-        img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1]
+        # Convert to tensor.
+        img_tensor = TF.to_tensor(image)  # [C, H, W] in range [0, 1].
         
-        # Red-green color blindness: mix red and green channels
+        # Red-green color blindness: mix red and green channels.
         r, g, b = img_tensor[0], img_tensor[1], img_tensor[2]
         mixed = (r + g) / 2
         
-        # Replace red and green with mixed value
+        # Replace red and green with mixed value.
         enhanced = torch.stack([mixed, mixed, b], dim=0)
         enhanced = torch.clamp(enhanced, 0.0, 1.0)
         
@@ -622,8 +622,8 @@ class AudioPreprocessor:
     
     def extract_mfcc(self, audio: np.ndarray) -> torch.Tensor:
         """Extract MFCC features from audio..."""
-        # TODO: Implement actual MFCC extraction using librosa or torchaudio
-        # For now, return dummy features
+        # TODO: Implement actual MFCC extraction using librosa or torchaudio.
+        # For now, return dummy features.
         if audio.ndim == 1:
             return torch.randn(self.n_mfcc)
         else:
@@ -635,8 +635,8 @@ class DistanceEstimator:
     """Enhanced distance estimation using monocular depth, object sizes, and ground plane detection...."""
     
     def __init__(self):
-        # Known object size references (in meters) for common COCO classes
-        # Enhanced with more objects and confidence scores
+        # Known object size references (in meters) for common COCO classes.
+        # Enhanced with more objects and confidence scores.
         self.object_sizes = {
             'person': (1.7, 0.9),  # (average_height, confidence)
             'car': (4.5, 0.85),
@@ -649,15 +649,15 @@ class DistanceEstimator:
             'dog': (0.5, 0.6),
             'cat': (0.3, 0.6),
             'door': (2.0, 0.8),
-            'stairs': (0.2, 0.7),  # Step height
+            'stairs': (0.2, 0.7),  # Step height.
             'table': (0.7, 0.75),
             'stop sign': (0.75, 0.85),
             'traffic light': (0.3, 0.8),
             'fire hydrant': (0.6, 0.85),
         }
         
-        # Ground plane detection parameters
-        self.ground_plane_threshold = 0.7  # Objects below this y-position are on ground
+        # Ground plane detection parameters.
+        self.ground_plane_threshold = 0.7  # Objects below this y-position are on ground.
         self.horizon_estimate = 0.4  # Estimated horizon position (normalized y)
     
     def estimate_distance_zones(
@@ -665,15 +665,15 @@ class DistanceEstimator:
         bbox: torch.Tensor,
         image_size: Tuple[int, int] = (224, 224),
         object_class: Optional[str] = None,
-        focal_length: float = 500.0  # Approximate focal length in pixels
+        focal_length: float = 500.0  # Approximate focal length in pixels.
     ) -> int:
         """Estimate distance zone from bounding box size and perspective cues..."""
         h, w = image_size
-        bbox_w = bbox[2] * w  # Width in pixels
-        bbox_h = bbox[3] * h  # Height in pixels
+        bbox_w = bbox[2] * w  # Width in pixels.
+        bbox_h = bbox[3] * h  # Height in pixels.
         
         # Method 1: Bbox area (simple heuristic)
-        area = bbox[2] * bbox[3]  # Normalized area
+        area = bbox[2] * bbox[3]  # Normalized area.
         
         # Method 2: Size-based estimation with monocular depth (if object class known)
         if object_class and object_class in self.object_sizes:
@@ -684,53 +684,53 @@ class DistanceEstimator:
                 real_size = size_info
                 confidence = 0.7
             
-            # Distance = (real_size * focal_length) / pixel_size
-            # Use larger dimension (height or width) as pixel_size
-            # Simplified: bbox_h/bbox_w are already scalars from tensor indexing
+            # Distance = (real_size * focal_length) / pixel_size.
+            # Use larger dimension (height or width) as pixel_size.
+            # Simplified: bbox_h/bbox_w are already scalars from tensor indexing.
             pixel_size = max(float(bbox_h), float(bbox_w))
             
             if pixel_size > 0:
                 estimated_distance = (real_size * focal_length) / pixel_size
                 
-                # Apply ground plane correction for more accuracy
-                y_center = bbox[1] + bbox[3] / 2  # Normalized y center
+                # Apply ground plane correction for more accuracy.
+                y_center = bbox[1] + bbox[3] / 2  # Normalized y center.
                 if y_center > self.ground_plane_threshold:
-                    # Object is on ground plane - apply perspective correction
-                    # Objects lower in image appear closer due to perspective
+                    # Object is on ground plane - apply perspective correction.
+                    # Objects lower in image appear closer due to perspective.
                     perspective_factor = 1.0 + (y_center - self.ground_plane_threshold) * 0.2
                     estimated_distance *= perspective_factor
                 
-                # Weight by confidence
+                # Weight by confidence.
                 if confidence < 0.7:
-                    # Less confident estimates - use wider zones
+                    # Less confident estimates - use wider zones.
                     if estimated_distance < 4.0:
-                        return 0  # near
+                        return 0  # Near.
                     elif estimated_distance < 9.0:
-                        return 1  # medium
+                        return 1  # Medium.
                     else:
-                        return 2  # far
+                        return 2  # Far.
                 else:
-                    # High confidence - use tighter zones
+                    # High confidence - use tighter zones.
                     if estimated_distance < 3.0:
-                        return 0  # near
+                        return 0  # Near.
                     elif estimated_distance < 7.0:
-                        return 1  # medium
+                        return 1  # Medium.
                     else:
-                        return 2  # far
+                        return 2  # Far.
         
         # Method 3: Position-based (objects lower in image are typically closer)
-        y_center = bbox[1] + bbox[3] / 2  # Normalized y center
-        position_factor = 1.0 - y_center  # Lower = higher factor
+        y_center = bbox[1] + bbox[3] / 2  # Normalized y center.
+        position_factor = 1.0 - y_center  # Lower = higher factor.
         
-        # Combined heuristic: area + position
+        # Combined heuristic: area + position.
         combined_score = area * (1.0 + position_factor * 0.3)
         
-        if combined_score > 0.3:  # Large box, low position = close
-            return 0  # near
-        elif combined_score > 0.1:  # Medium box
-            return 1  # medium
-        else:  # Small box, high position = far
-            return 2  # far
+        if combined_score > 0.3:  # Large box, low position = close.
+            return 0  # Near.
+        elif combined_score > 0.1:  # Medium box.
+            return 1  # Medium.
+        else:  # Small box, high position = far.
+            return 2  # Far.
     
     def estimate_precise_distance(
         self,
@@ -755,18 +755,18 @@ class DistanceEstimator:
         bbox_h = bbox[3] * h
         
         if bbox_h > 0:
-            # Basic distance calculation: distance = (real_size * focal_length) / pixel_size
+            # Basic distance calculation: distance = (real_size * focal_length) / pixel_size.
             distance = (real_size * focal_length) / bbox_h
             
-            # Apply ground plane correction for more accuracy
+            # Apply ground plane correction for more accuracy.
             if use_ground_plane:
-                y_center = bbox[1] + bbox[3] / 2  # Normalized y center
+                y_center = bbox[1] + bbox[3] / 2  # Normalized y center.
                 if y_center > self.ground_plane_threshold:
-                    # Object is on ground plane - apply perspective correction
-                    # Objects lower in image appear closer due to perspective
+                    # Object is on ground plane - apply perspective correction.
+                    # Objects lower in image appear closer due to perspective.
                     perspective_factor = 1.0 + (y_center - self.ground_plane_threshold) * 0.2
                     distance *= perspective_factor
-                    # Increase confidence for ground plane objects
+                    # Increase confidence for ground plane objects.
                     base_confidence = min(1.0, base_confidence + 0.1)
             
             # Adjust confidence based on bbox size (larger boxes = more confident)
@@ -803,19 +803,19 @@ class DistanceEstimator:
             box = det.get('box', [0.5, 0.5, 0.1, 0.1])
             
             if class_name in ground_classes and len(box) >= 4:
-                y_center = box[1] + box[3] / 2  # Normalized y center
-                y_bottom = box[1] + box[3]  # Bottom of bbox
+                y_center = box[1] + box[3] / 2  # Normalized y center.
+                y_bottom = box[1] + box[3]  # Bottom of bbox.
                 
-                # Ground objects have bottom edge below threshold
+                # Ground objects have bottom edge below threshold.
                 if y_bottom > self.ground_plane_threshold:
                     ground_objects.append(det)
                     y_positions.append(y_bottom)
         
         if len(y_positions) > 0:
-            # Estimate horizon as median of top edges of ground objects
+            # Estimate horizon as median of top edges of ground objects.
             # (simplified - more sophisticated would use vanishing points)
-            horizon_y = float(np.median(y_positions)) - 0.1  # Slightly above median
-            confidence = min(1.0, len(ground_objects) / 5.0)  # More objects = higher confidence
+            horizon_y = float(np.median(y_positions)) - 0.1  # Slightly above median.
+            confidence = min(1.0, len(ground_objects) / 5.0)  # More objects = higher confidence.
         else:
             horizon_y = self.horizon_estimate
             confidence = 0.3
@@ -856,54 +856,54 @@ class TextRegionDetector:
                 
                 for box in text_boxes:
                     if len(box) >= 4:
-                        # Handle both center and corner formats
+                        # Handle both center and corner formats.
                         if len(box) == 4:
                             x, y, box_w, box_h = box.tolist() if isinstance(box, torch.Tensor) else box
-                            # Assume center format if values are reasonable
+                            # Assume center format if values are reasonable.
                             if x < 1.0 and y < 1.0 and box_w < 1.0 and box_h < 1.0:
-                                # Normalized center format: convert to corner format
+                                # Normalized center format: convert to corner format.
                                 x1 = (x - box_w/2) / w
                                 y1 = (y - box_h/2) / h
                                 w_norm = box_w / w
                                 h_norm = box_h / h
                             else:
-                                # Pixel coordinates: normalize
+                                # Pixel coordinates: normalize.
                                 x1 = x / w
                                 y1 = y / h
                                 w_norm = box_w / w
                                 h_norm = box_h / h
                             
-                            # Filter by minimum size
+                            # Filter by minimum size.
                             if w_norm * w >= self.min_text_size and h_norm * h >= self.min_text_size:
                                 results.append([x1, y1, w_norm, h_norm])
                 
                 if results:
                     return results
         
-        # Enhanced fallback: edge-based detection using PyTorch
-        # Meta AI-style: Pure PyTorch edge detection for text-like regions
+        # Enhanced fallback: edge-based detection using PyTorch.
+        # Meta AI-style: Pure PyTorch edge detection for text-like regions.
         if isinstance(image, np.ndarray):
             img_tensor = torch.from_numpy(image).float() / 255.0
             if img_tensor.dim() == 3 and img_tensor.shape[2] == 3:
-                img_tensor = img_tensor.permute(2, 0, 1)  # [C, H, W]
+                img_tensor = img_tensor.permute(2, 0, 1)  # [C, H, W].
             elif img_tensor.dim() == 2:
-                img_tensor = img_tensor.unsqueeze(0)  # [1, H, W]
+                img_tensor = img_tensor.unsqueeze(0)  # [1, H, W].
         else:
             img_tensor = image
         
         if img_tensor.dim() == 3 and img_tensor.shape[0] == 3:
-            # Convert to grayscale
+            # Convert to grayscale.
             gray = 0.299 * img_tensor[0] + 0.587 * img_tensor[1] + 0.114 * img_tensor[2]
         else:
             gray = img_tensor.squeeze(0) if img_tensor.dim() == 3 else img_tensor
         
-        # Sobel edge detection using PyTorch
+        # Sobel edge detection using PyTorch.
         sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], 
                               device=gray.device, dtype=gray.dtype).unsqueeze(0).unsqueeze(0)
         sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], 
                               device=gray.device, dtype=gray.dtype).unsqueeze(0).unsqueeze(0)
         
-        gray_batch = gray.unsqueeze(0).unsqueeze(0)  # [1, 1, H, W]
+        gray_batch = gray.unsqueeze(0).unsqueeze(0)  # [1, 1, H, W].
         edges_x = F.conv2d(gray_batch, sobel_x, padding=1)
         edges_y = F.conv2d(gray_batch, sobel_y, padding=1)
         edges = torch.sqrt(edges_x**2 + edges_y**2).squeeze()
@@ -913,13 +913,13 @@ class TextRegionDetector:
         edges_binary = (edges > threshold_low).float()
         
         # Simple region detection (basic implementation)
-        # Note: Full contour detection would require more complex PyTorch operations
-        # For now, return empty list as this is a fallback method
-        # In production, use model's text_head output instead
+        # Note: Full contour detection would require more complex PyTorch operations.
+        # For now, return empty list as this is a fallback method.
+        # In production, use model's text_head output instead.
         return []
 
 
-# Synthetic Impairment Functions
+# Synthetic Impairment Functions.
 def apply_refractive_error_blur(image: torch.Tensor, sigma: float = 3.0) -> torch.Tensor:
     """Apply Gaussian blur for refractive errors"""
     kernel_size = int(2 * sigma * 2 + 1)
@@ -939,7 +939,7 @@ def apply_glaucoma_vignette(image: torch.Tensor, center_percent: float = 0.4) ->
     center_x, center_y = w // 2, h // 2
     radius = min(w, h) * center_percent
     
-    # Create circular mask
+    # Create circular mask.
     y, x = torch.meshgrid(
         torch.arange(h, device=image.device, dtype=torch.float32),
         torch.arange(w, device=image.device, dtype=torch.float32),
@@ -948,10 +948,10 @@ def apply_glaucoma_vignette(image: torch.Tensor, center_percent: float = 0.4) ->
     dist = torch.sqrt((x - center_x)**2 + (y - center_y)**2)
     mask = (dist < radius).float()
     
-    # Expand mask to match image dimensions
+    # Expand mask to match image dimensions.
     while mask.dim() < image.dim():
         mask = mask.unsqueeze(0)
-    # Ensure mask has same shape as image
+    # Ensure mask has same shape as image.
     if mask.shape != image.shape:
         mask = mask.expand_as(image)
     
@@ -964,7 +964,7 @@ def apply_amd_central_darkening(image: torch.Tensor, darken_factor: float = 0.3)
     center_x, center_y = w // 2, h // 2
     radius = float(min(w, h)) * 0.2
     
-    # Create circular darkening mask
+    # Create circular darkening mask.
     y, x = torch.meshgrid(
         torch.arange(h, device=image.device, dtype=torch.float32),
         torch.arange(w, device=image.device, dtype=torch.float32),
@@ -973,10 +973,10 @@ def apply_amd_central_darkening(image: torch.Tensor, darken_factor: float = 0.3)
     dist = torch.sqrt((x - center_x)**2 + (y - center_y)**2)
     mask = 1.0 - (dist < radius).float() * darken_factor
     
-    # Expand mask to match image dimensions
+    # Expand mask to match image dimensions.
     while mask.dim() < image.dim():
         mask = mask.unsqueeze(0)
-    # Ensure mask has same shape as image
+    # Ensure mask has same shape as image.
     if mask.shape != image.shape:
         mask = mask.expand_as(image)
     
@@ -990,7 +990,7 @@ def apply_low_light(image: torch.Tensor, brightness_factor: float = 0.3) -> torc
 
 def apply_color_shift(image: torch.Tensor, shift_type: str = 'red_green') -> torch.Tensor:
     """Apply color shifts for color blindness simulation using proper color space transformation...."""
-    # Validate input
+    # Validate input.
     if image.dim() == 4:
         if image.shape[1] != 3:
             return image
@@ -1004,23 +1004,23 @@ def apply_color_shift(image: torch.Tensor, shift_type: str = 'red_green') -> tor
         return image
     
     # Color blindness transformation matrices (LMS color space)
-    # These are proper color space transformations, not simple channel mixing
+    # These are proper color space transformations, not simple channel mixing.
     if shift_type == 'protanopia':
-        # Red-blind: L-cone missing, simulate by shifting L to M
+        # Red-blind: L-cone missing, simulate by shifting L to M.
         transform = torch.tensor([
             [0.0, 1.05118294, -0.05116099],
             [0.0, 1.0, 0.0],
             [0.0, 0.0, 1.0]
         ], device=image.device, dtype=image.dtype)
     elif shift_type == 'deuteranopia':
-        # Green-blind: M-cone missing, simulate by shifting M to L
+        # Green-blind: M-cone missing, simulate by shifting M to L.
         transform = torch.tensor([
             [1.0, 0.0, 0.0],
             [0.9513092, 0.0, 0.04866992],
             [0.0, 0.0, 1.0]
         ], device=image.device, dtype=image.dtype)
     elif shift_type == 'tritanopia':
-        # Blue-blind: S-cone missing, simulate by shifting S to L
+        # Blue-blind: S-cone missing, simulate by shifting S to L.
         transform = torch.tensor([
             [1.0, 0.0, 0.0],
             [0.0, 1.0, 0.0],
@@ -1038,23 +1038,23 @@ def apply_color_shift(image: torch.Tensor, shift_type: str = 'red_green') -> tor
             result = torch.stack([mixed, mixed, b], dim=0).unsqueeze(0)
         return result.squeeze(0) if not is_batch else result
     else:
-        # Unknown type, return original
+        # Unknown type, return original.
         return image.squeeze(0) if not is_batch else image
     
     # Convert RGB to LMS (Long/Medium/Short wavelength cones)
     transform = transform.to(device=image.device, dtype=image.dtype)
     
     if is_batch:
-        # Efficient einsum: [B, C, H, W] format
-        # transform: [3, 3], image: [B, 3, H, W] -> result: [B, 3, H, W]
+        # Efficient einsum: [B, C, H, W] format.
+        # Transform: [3, 3], image: [B, 3, H, W] -> result: [B, 3, H, W].
         result = torch.einsum('ij,bjhw->bihw', transform, image)
     else:
-        # [C, H, W] format
-        # transform: [3, 3], image: [3, H, W] -> result: [3, H, W]
+        # [C, H, W] format.
+        # Transform: [3, 3], image: [3, H, W] -> result: [3, H, W].
         result = torch.einsum('ij,jhw->ihw', transform, image)
-        result = result.unsqueeze(0)  # Add batch dim for consistency
+        result = result.unsqueeze(0)  # Add batch dim for consistency.
     
-    # Clamp to valid range
+    # Clamp to valid range.
     result = torch.clamp(result, 0.0, 1.0)
     return result.squeeze(0) if not is_batch else result
 
@@ -1068,15 +1068,15 @@ def apply_batch_transforms(
     if not images:
         raise ValueError("images list cannot be empty")
     
-    # Ensure all images have same shape
+    # Ensure all images have same shape.
     first_shape = images[0].shape
     if not all(img.shape == first_shape for img in images):
         raise ValueError("All images must have the same shape")
     
-    # Stack into batch
-    batch = torch.stack(images, dim=0)  # [B, C, H, W]
+    # Stack into batch.
+    batch = torch.stack(images, dim=0)  # [B, C, H, W].
     
-    # Apply transform to batch
+    # Apply transform to batch.
     transformed = transform_fn(batch, **kwargs)
     
     return transformed
@@ -1102,4 +1102,5 @@ if __name__ == "__main__":
     print("- Cached transformation matrices (3-5x speedup for RGB↔LAB)")
     print("- Optimized CLAHE with fast approximation")
     print("- Numerical stability improvements (eps, clamping)")
+
 

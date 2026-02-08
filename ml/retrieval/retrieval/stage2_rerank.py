@@ -50,13 +50,13 @@ class Stage2Reranker(nn.Module):
             for name in self.embedding_dims.keys():
                 if name in query_embeddings:
                     q_emb = query_embeddings[name]
-                    # If multi-dimensional, take mean or flatten appropriately
+                    # If multi-dimensional, take mean or flatten appropriately.
                     if q_emb.dim() > 1:
-                        # For region/patch embeddings, take mean across spatial dimensions
+                        # For region/patch embeddings, take mean across spatial dimensions.
                         q_emb = q_emb.mean(dim=0) if q_emb.dim() > 1 else q_emb
-                    # Ensure it matches expected dimension
+                    # Ensure it matches expected dimension.
                     if q_emb.numel() != self.embedding_dims[name]:
-                        # Reshape or project to expected dimension
+                        # Reshape or project to expected dimension.
                         if q_emb.numel() > self.embedding_dims[name]:
                             q_emb = q_emb.flatten()[:self.embedding_dims[name]]
                         else:
@@ -71,3 +71,4 @@ class Stage2Reranker(nn.Module):
         scores = torch.stack(scores)
         sorted_indices = torch.argsort(scores, descending=True)
         return scores[sorted_indices], sorted_indices
+

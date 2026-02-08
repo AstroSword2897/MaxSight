@@ -76,10 +76,10 @@ def validate_batch(
     else:
         raise ValueError(f"Unsupported batch format: {type(batch)}")
     
-    # Validate images
+    # Validate images.
     validate_model_inputs(images)
     
-    # Validate targets if required keys specified
+    # Validate targets if required keys specified.
     if required_keys:
         missing_keys = set(required_keys) - set(targets.keys())
         if missing_keys:
@@ -101,9 +101,10 @@ def validate_checkpoint(
         if missing_keys:
             raise ValueError(f"Missing checkpoint keys: {missing_keys}")
     
-    # Validate model_state_dict exists
+    # Validate model_state_dict exists.
     if 'model_state_dict' not in checkpoint:
         raise ValueError("Checkpoint must contain 'model_state_dict'")
     
     return True
+
 

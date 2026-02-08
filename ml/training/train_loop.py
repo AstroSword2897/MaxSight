@@ -49,7 +49,7 @@ except ImportError:
     GRADNORM_AVAILABLE = False
     GradNormMultiHeadLoss = None
 
-# Setup logging
+# Setup logging.
 logger = logging.getLogger(__name__)
 
 
@@ -63,7 +63,7 @@ def set_seed(seed: int = 42) -> None:
         torch.cuda.manual_seed_all(seed)
     # MPS support (Apple Silicon)
     if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        # MPS has no explicit seed API; manual_seed covers RNG
+        # MPS has no explicit seed API; manual_seed covers RNG.
         pass
     logger.debug(f"Random seed set to {seed}")
 
@@ -87,7 +87,7 @@ def parse_batch(batch: Any) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         images = batch[0]
         targets = batch[1] if len(batch) > 1 else {}
     elif isinstance(batch, dict):
-        # Support both 'images' and 'image' keys for flexibility
+        # Support both 'images' and 'image' keys for flexibility.
         # Check None explicitly (can't use 'or' with tensors - causes ambiguous boolean error)
         images = batch.get('images')
         if images is None:
@@ -98,7 +98,7 @@ def parse_batch(batch: Any) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     else:
         raise ValueError(f"Unsupported batch format: {type(batch)}")
     
-    # Validate image tensor shape
+    # Validate image tensor shape.
     if not torch.is_tensor(images):
         raise ValueError(f"Images must be a tensor, got {type(images)}")
     if images.dim() != 4:
@@ -126,7 +126,7 @@ class EMA:
         self.shadow = {}
         self.backup = {}
         
-        # Initialize shadow parameters
+        # Initialize shadow parameters.
         for name, param in model.named_parameters():
             if param.requires_grad:
                 self.shadow[name] = param.data.clone()
@@ -135,7 +135,7 @@ class EMA:
         """Update shadow parameters with bias correction."""
         self.global_step += 1
         
-        # Bias correction: adjust decay for early steps
+        # Bias correction: adjust decay for early steps.
         bias_correction = 1 - (self.decay ** self.global_step)
         effective_decay = self.decay / bias_correction if bias_correction > 0 else self.decay
         
@@ -155,7 +155,7 @@ class EMA:
         for name, param in model.named_parameters():
             if param.requires_grad and name in self.backup:
                 param.data.copy_(self.backup[name])
-        # Clear backup after restore
+        # Clear backup after restore.
         self.backup.clear()
     
     def state_dict(self) -> Dict[str, Any]:
@@ -234,9 +234,9 @@ class ProductionTrainLoop:
         ema_decay: float = 0.9999,
         scheduler_type: str = 'cosine',  # 'cosine', 'onecycle', 'cosine_restarts'
         warmup_epochs: int = 5,
-        learning_rate_backbone: Optional[float] = None,  # If set with learning_rate_head, use for param_groups
+        learning_rate_backbone: Optional[float] = None,  # If set with learning_rate_head, use for param_groups.
         learning_rate_head: Optional[float] = None,
-        num_classes: int = 80,  # For DetectionMetrics
+        num_classes: int = 80,  # For DetectionMetrics.
         checkpoint_interval: int = 0,  # Save an extra snapshot every N epochs (0 = only last/best)
         resume_from: Optional[str] = None,
         resume_model_only: bool = False,
@@ -245,9 +245,9 @@ class ProductionTrainLoop:
         early_stopping_patience: int = 10,
         early_stopping_min_delta: float = 0.0,
         early_stopping_metric: str = 'val_loss',  # 'val_loss' or 'val_map'
-        use_gradnorm: bool = False,  # Enable GradNorm task balancing
-        gradnorm_alpha: float = 1.5,  # GradNorm restoring force
-        gradnorm_update_interval: int = 100  # Update task weights every N iterations
+        use_gradnorm: bool = False,  # Enable GradNorm task balancing.
+        gradnorm_alpha: float = 1.5,  # GradNorm restoring force.
+        gradnorm_update_interval: int = 100  # Update task weights every N iterations.
     ):
         """Initialize production training loop...."""
         self.model = model.to(device)
@@ -293,7 +293,7 @@ class ProductionTrainLoop:
             warmup_epochs=warmup_epochs,
         )
         
-        # Setup logger
+        # Setup logger.
         self.logger = logger or logging.getLogger(__name__)
         if not self.logger.handlers:
             handler = logging.StreamHandler()
@@ -304,13 +304,13 @@ class ProductionTrainLoop:
             self.logger.addHandler(handler)
             self.logger.setLevel(logging.INFO)
         
-        # Set seed
+        # Set seed.
         set_seed(seed)
         
         # GradNorm integration (CRITICAL: Prevents gradient warfare with 20 heads)
         self.use_gradnorm = use_gradnorm and GRADNORM_AVAILABLE
         self.gradnorm_loss = None
-        self.original_loss_fn = loss_fn  # Store for fallback
+        self.original_loss_fn = loss_fn  # Store for fallback.
         
         if self.use_gradnorm:
             if not GRADNORM_AVAILABLE:
@@ -320,16 +320,16 @@ class ProductionTrainLoop:
                 self.logger.warning("GradNorm requires loss_fn to be provided, disabling GradNorm")
                 self.use_gradnorm = False
             else:
-                # Check if loss_fn is already a GradNormMultiHeadLoss or MultiHeadLoss
+                # Check if loss_fn is already a GradNormMultiHeadLoss or MultiHeadLoss.
                 if GRADNORM_AVAILABLE and GradNormMultiHeadLoss is not None and isinstance(loss_fn, GradNormMultiHeadLoss):
-                    # Already a GradNorm loss, use directly
+                    # Already a GradNorm loss, use directly.
                     self.gradnorm_loss = loss_fn
                     self.logger.info("Using provided GradNormMultiHeadLoss")
                 elif isinstance(loss_fn, nn.Module) and hasattr(loss_fn, 'loss_functions'):
-                    # MultiHeadLoss with dict of head losses - wrap with GradNorm
+                    # MultiHeadLoss with dict of head losses - wrap with GradNorm.
                     head_losses = getattr(loss_fn, 'loss_functions', {})
                     if isinstance(head_losses, dict) and len(head_losses) > 0:
-                        # Get shared parameters (backbone) for GradNorm
+                        # Get shared parameters (backbone) for GradNorm.
                         shared_params = list(self.backbone_params) if self.backbone_params else None
                         
                         if GRADNORM_AVAILABLE and GradNormMultiHeadLoss is not None:
@@ -347,8 +347,8 @@ class ProductionTrainLoop:
                         self.logger.warning("Loss function doesn't have valid head losses dict, disabling GradNorm")
                         self.use_gradnorm = False
                 else:
-                    # Single loss function - cannot use GradNorm directly
-                    # Log warning but don't fail - will use standard loss
+                    # Single loss function - cannot use GradNorm directly.
+                    # Log warning but don't fail - will use standard loss.
                     self.logger.warning(
                         "GradNorm requires MultiHeadLoss with dict of head losses. "
                         "Using standard loss computation. To enable GradNorm, provide a "
@@ -356,7 +356,7 @@ class ProductionTrainLoop:
                     )
                     self.use_gradnorm = False
         
-        # Mixed precision
+        # Mixed precision.
         self.use_mixed_precision = use_mixed_precision and AMP_AVAILABLE and (
             device == 'cuda' or str(device).startswith('cuda') or device == 'mps'
         )
@@ -372,14 +372,14 @@ class ProductionTrainLoop:
             if use_mixed_precision:
                 self.logger.warning("Mixed precision requested but not available, disabling")
         
-        # Optimizer setup with discriminative learning rates
+        # Optimizer setup with discriminative learning rates.
         self.backbone_params = []
         self.head_params = []
         
         for name, param in self.model.named_parameters():
             if not param.requires_grad:
                 continue
-            # Identify backbone vs head parameters
+            # Identify backbone vs head parameters.
             if any(bb_name in name for bb_name in ['backbone', 'resnet', 'conv1', 'bn1', 'layer1', 'layer2', 'layer3', 'layer4']):
                 self.backbone_params.append(param)
             else:
@@ -388,7 +388,7 @@ class ProductionTrainLoop:
         lr_backbone = learning_rate_backbone if learning_rate_backbone is not None else learning_rate * 0.1
         lr_head = learning_rate_head if learning_rate_head is not None else learning_rate
         if self.freeze_backbone and self.freeze_backbone_epochs > 0:
-            # Freeze backbone initially
+            # Freeze backbone initially.
             self._freeze_backbone()
             param_groups = [
                 {'params': self.head_params, 'lr': lr_head}
@@ -401,14 +401,14 @@ class ProductionTrainLoop:
         
         self.optimizer = AdamW(param_groups, weight_decay=weight_decay)
         
-        # Stability manager for auto-adjustment during training
-        self.stability_manager = None  # Will be initialized after scheduler
+        # Stability manager for auto-adjustment during training.
+        self.stability_manager = None  # Will be initialized after scheduler.
         
-        # Scheduler - Use official PyTorch schedulers
+        # Scheduler - Use official PyTorch schedulers.
         total_steps = len(train_loader) * num_epochs
         warmup_steps = warmup_epochs * len(train_loader) if warmup_epochs > 0 else 0
         
-        # Ensure warmup doesn't exceed total steps
+        # Ensure warmup doesn't exceed total steps.
         if warmup_steps >= total_steps:
             warmup_epochs = 0
             warmup_steps = 0
@@ -425,13 +425,13 @@ class ProductionTrainLoop:
         elif scheduler_type == 'cosine_restarts':
             self.scheduler = CosineAnnealingWarmRestarts(
                 self.optimizer,
-                T_0=len(train_loader) * 10,  # Restart every 10 epochs
+                T_0=len(train_loader) * 10,  # Restart every 10 epochs.
                 T_mult=2,
                 eta_min=learning_rate * 0.001
             )
         elif scheduler_type == 'cosine':
             if warmup_steps > 0:
-                # Warmup + Cosine
+                # Warmup + Cosine.
                 warmup_scheduler = LinearLR(
                     self.optimizer,
                     start_factor=0.1,
@@ -442,7 +442,7 @@ class ProductionTrainLoop:
                 cosine_scheduler = CosineAnnealingLR(
                     self.optimizer,
                     T_max=cosine_steps,
-                    eta_min=learning_rate * 0.001  # Lower min LR for finer convergence and lower final loss
+                    eta_min=learning_rate * 0.001  # Lower min LR for finer convergence and lower final loss.
                 )
                 self.scheduler = SequentialLR(
                     self.optimizer,
@@ -453,37 +453,37 @@ class ProductionTrainLoop:
                 self.scheduler = CosineAnnealingLR(
                     self.optimizer,
                     T_max=max(1, total_steps),
-                    eta_min=learning_rate * 0.001  # Lower min LR for finer convergence
+                    eta_min=learning_rate * 0.001  # Lower min LR for finer convergence.
                 )
         else:
-            # Default: constant LR
+            # Default: constant LR.
             self.scheduler = ConstantLR(self.optimizer, factor=1.0)
         
-        # EMA with bias correction
+        # EMA with bias correction.
         self.ema = EMA(model, decay=ema_decay, total_steps=total_steps) if ema_decay > 0 else None
         
-        # DetectionMetrics for validation
+        # DetectionMetrics for validation.
         self.detection_metrics = DetectionMetrics(
             num_classes=num_classes,
             iou_thresholds=[0.5, 0.75],
             device=torch.device(device)
         )
         
-        # Stability manager - auto-adjusts hyperparameters during training
+        # Stability manager - auto-adjusts hyperparameters during training.
         self.stability_manager = StabilityManager(
             optimizer=self.optimizer,
             scheduler=self.scheduler,
             gradnorm_loss=self.gradnorm_loss if self.use_gradnorm else None,
-            spike_threshold=0.3,  # 30% loss increase triggers adjustment
-            overfit_threshold=0.25,  # 25% val-train gap triggers regularization
-            lr_reduce_factor=0.5,  # Halve LR on spike
-            wd_increase_factor=1.5,  # 1.5x weight decay on overfit
+            spike_threshold=0.3,  # 30% loss increase triggers adjustment.
+            overfit_threshold=0.25,  # 25% val-train gap triggers regularization.
+            lr_reduce_factor=0.5,  # Halve LR on spike.
+            wd_increase_factor=1.5,  # 1.5x weight decay on overfit.
             max_wd=0.5,
             min_lr=1e-7,
-            log_every=1,  # Log stability every epoch
+            log_every=1,  # Log stability every epoch.
         )
         
-        # Training state
+        # Training state.
         self.current_epoch = 0
         self.global_step = 0
         self.best_val_loss = float('inf')
@@ -500,7 +500,7 @@ class ProductionTrainLoop:
             'learning_rates': []
         }
         
-        # Resume from checkpoint if provided
+        # Resume from checkpoint if provided.
         if resume_from:
             try:
                 self._load_checkpoint(resume_from, model_only=resume_model_only)
@@ -512,13 +512,13 @@ class ProductionTrainLoop:
         """Freeze backbone parameters safely using isinstance checks."""
         frozen_count = 0
         for name, module in self.model.named_modules():
-            # Check if this is a backbone module
+            # Check if this is a backbone module.
             if any(bb_name in name for bb_name in ['backbone', 'resnet', 'conv1', 'bn1', 'layer1', 'layer2', 'layer3', 'layer4']):
                 for param in module.parameters():
                     param.requires_grad = False
                     frozen_count += 1
                 
-                # Freeze BatchNorm stats if requested
+                # Freeze BatchNorm stats if requested.
                 if self.freeze_bn_stats and isinstance(module, (nn.BatchNorm2d, nn.BatchNorm1d)):
                     module.eval()
         
@@ -534,7 +534,7 @@ class ProductionTrainLoop:
                     param.requires_grad = True
                     unfrozen_count += 1
                 
-                # Unfreeze BatchNorm stats
+                # Unfreeze BatchNorm stats.
                 if isinstance(module, (nn.BatchNorm2d, nn.BatchNorm1d)):
                     module.train()
         
@@ -593,16 +593,16 @@ class ProductionTrainLoop:
                 if task_weights is not None:
                     self.logger.debug(f"GradNorm task weights: {task_weights}")
         elif self.loss_fn is not None:
-            # Standard loss computation
+            # Standard loss computation.
             loss_result = self.loss_fn(outputs, targets)
             
-            # Handle both dict and tensor returns
+            # Handle both dict and tensor returns.
             if isinstance(loss_result, dict):
                 loss_dict = loss_result
             elif torch.is_tensor(loss_result):
                 loss_dict = {'total_loss': loss_result}
             else:
-                # Try tuple (loss, dict) format
+                # Try tuple (loss, dict) format.
                 if isinstance(loss_result, tuple) and len(loss_result) == 2:
                     total_loss_val, loss_dict = loss_result
                     if 'total_loss' not in loss_dict:
@@ -622,7 +622,7 @@ class ProductionTrainLoop:
                 'objectness_loss': torch.tensor(0.0, device=self.device)
             }
         
-        # Safe access with defaults
+        # Safe access with defaults.
         total_loss = loss_dict.get('total_loss', torch.tensor(0.0, device=self.device))
         if not torch.is_tensor(total_loss):
             total_loss = torch.tensor(total_loss, device=self.device)
@@ -640,7 +640,7 @@ class ProductionTrainLoop:
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
         
         if self.scaler is not None:
-            # Unscale gradients before clipping
+            # Unscale gradients before clipping.
             self.scaler.unscale_(self.optimizer)
             if trainable_params:
                 torch.nn.utils.clip_grad_norm_(trainable_params, self.gradient_clip_norm)
@@ -723,10 +723,10 @@ class ProductionTrainLoop:
         self.model.train()
         total_loss = 0.0
         num_batches = 0
-        accum_steps = 0  # Track accumulation steps
-        epoch_losses = []  # Fix #1: track all batch losses for stability manager
+        accum_steps = 0  # Track accumulation steps.
+        epoch_losses = []  # Fix #1: track all batch losses for stability manager.
         
-        # Progress bar for training
+        # Progress bar for training.
         try:
             from tqdm import tqdm
             use_tqdm = True
@@ -736,14 +736,14 @@ class ProductionTrainLoop:
             pbar = self.train_loader
         
         for batch_idx, batch in enumerate(pbar):
-            # Parse and validate batch
+            # Parse and validate batch.
             try:
                 images, targets = parse_batch(batch)
             except (ValueError, KeyError) as e:
                 self.logger.warning(f"Skipping invalid batch {batch_idx}: {e}")
                 continue
             
-            if not self._validate_t5_batch(images, targets):  # Fix #6
+            if not self._validate_t5_batch(images, targets):  # Fix #6.
                 continue
             
             # Quick NaN/Inf check (silent - dimensions sanitized in collate_fn)
@@ -754,14 +754,14 @@ class ProductionTrainLoop:
                     num_obj = int(targets['num_objects'][b].item())
                     if num_obj > 0:
                         actual_boxes = targets['boxes'][b, :num_obj]
-                        # Silent check - only skip on critical NaN/Inf issues
+                        # Silent check - only skip on critical NaN/Inf issues.
                         if torch.isnan(actual_boxes).any() or torch.isinf(actual_boxes).any():
                             batch_valid = False
                             break
                 if not batch_valid:
-                    continue  # Skip silently - data already sanitized in collate
+                    continue  # Skip silently - data already sanitized in collate.
             
-            # Move to device
+            # Move to device.
             try:
                 images = images.to(self.device)
                 targets = move_targets_to_device(targets, self.device)
@@ -792,7 +792,7 @@ class ProductionTrainLoop:
                 self.logger.error(f"Forward pass failed at batch {batch_idx}: {e}")
                 continue
             
-            # Backward pass - SAFE scaler handling
+            # Backward pass - SAFE scaler handling.
             try:
                 if self.scaler is not None:
                     self.scaler.scale(loss).backward()
@@ -816,11 +816,11 @@ class ProductionTrainLoop:
                     self.optimizer.zero_grad()
                     continue
                 
-                # Step scheduler if per-step
+                # Step scheduler if per-step.
                 if isinstance(self.scheduler, (OneCycleLR, SequentialLR)):
                     self.scheduler.step()
                 
-                # Update EMA
+                # Update EMA.
                 if self.ema is not None:
                     self.ema.update(self.model)
                 
@@ -831,7 +831,7 @@ class ProductionTrainLoop:
             total_loss += batch_loss
             num_batches += 1
             
-            # Update progress bar
+            # Update progress bar.
             if use_tqdm:
                 current_lr = self.optimizer.param_groups[0]['lr']
                 pbar.set_postfix({
@@ -851,11 +851,11 @@ class ProductionTrainLoop:
         total_loss = 0.0
         num_batches = 0
         
-        # Apply EMA weights if available
+        # Apply EMA weights if available.
         if use_ema and self.ema is not None:
             self.ema.apply_shadow(self.model)
         
-        # Reset metrics
+        # Reset metrics.
         self.detection_metrics.reset()
         
         with torch.no_grad():
@@ -883,8 +883,8 @@ class ProductionTrainLoop:
                         )
                         continue
                     
-                    # Update DetectionMetrics using post-processed detections
-                    # Optimized: Process batch detections once instead of per-image
+                    # Update DetectionMetrics using post-processed detections.
+                    # Optimized: Process batch detections once instead of per-image.
                     if 'boxes' in outputs and 'classifications' in outputs and 'boxes' in targets:
                         try:
                             batch_size = images.shape[0]
@@ -895,7 +895,7 @@ class ProductionTrainLoop:
                                 confidence_threshold=0.3
                             )
                             
-                            # Process each image's detections from batch results
+                            # Process each image's detections from batch results.
                             for b in range(batch_size):
                                 gt_boxes_b = targets['boxes'][b]
                                 gt_labels_b = targets['labels'][b]
@@ -911,11 +911,11 @@ class ProductionTrainLoop:
                                 if len(gt_boxes_valid) == 0:
                                     continue
                                 
-                                # Get detections for this image from batch results
+                                # Get detections for this image from batch results.
                                 if batch_detections and len(batch_detections) > b and len(batch_detections[b]) > 0:
                                     detections_list = batch_detections[b]
                                     
-                                    # Extract predictions from detection dict format
+                                    # Extract predictions from detection dict format.
                                     pred_boxes_list = []
                                     pred_labels_list = []
                                     pred_scores_list = []
@@ -933,7 +933,7 @@ class ProductionTrainLoop:
                                         pred_labels = torch.tensor(pred_labels_list, device=self.device, dtype=torch.long)
                                         pred_scores = torch.tensor(pred_scores_list, device=self.device, dtype=torch.float32)
                                         
-                                        # Update metrics with post-processed predictions
+                                        # Update metrics with post-processed predictions.
                                         if gt_boxes_valid.dim() == 2 and gt_boxes_valid.shape[1] == 4:
                                             self.detection_metrics.update(
                                                 pred_boxes=pred_boxes,
@@ -950,12 +950,12 @@ class ProductionTrainLoop:
                     self.logger.error(f"Validation failed at batch {batch_idx}: {e}")
                     continue
         
-        # Restore original weights if EMA was used
+        # Restore original weights if EMA was used.
         if use_ema and self.ema is not None:
             self.ema.restore(self.model)
             self.ema.backup.clear()
         
-        # CRITICAL: Handle NaN/Inf cases and empty validation sets
+        # CRITICAL: Handle NaN/Inf cases and empty validation sets.
         if num_batches == 0:
             avg_loss = float('inf')
             self.logger.warning("No valid validation batches processed, returning inf loss")
@@ -968,7 +968,7 @@ class ProductionTrainLoop:
                 )
                 avg_loss = float('inf')
         
-        # Compute mAP and other metrics
+        # Compute mAP and other metrics.
         try:
             map_results = self.detection_metrics.compute_map(iou_threshold=0.5)
             map_50 = map_results.get('mAP@0.5', map_results.get('mAP', 0.0))
@@ -1065,18 +1065,18 @@ class ProductionTrainLoop:
             }
         }
         
-        # Add EMA state if available
+        # Add EMA state if available.
         if self.ema is not None:
             checkpoint['ema_state_dict'] = self.ema.state_dict()
         
-        # Save last checkpoint
+        # Save last checkpoint.
         last_checkpoint_path = self.checkpoint_dir / 'last_checkpoint.pt'
         try:
             torch.save(checkpoint, last_checkpoint_path)
         except Exception as e:
             self.logger.error(f"Failed to save checkpoint: {e}")
             return
-        # Write resume manifest for recovery on different GPU/machine
+        # Write resume manifest for recovery on different GPU/machine.
         resume_info = {
             'checkpoint_path': str(last_checkpoint_path.resolve()),
             'epoch': epoch,
@@ -1093,7 +1093,7 @@ class ProductionTrainLoop:
         except Exception as e:
             self.logger.debug(f"Could not write resume_info.json: {e}")
         
-        # Save best model
+        # Save best model.
         if is_best:
             best_checkpoint_path = self.checkpoint_dir / 'best_model.pt'
             try:
@@ -1105,7 +1105,7 @@ class ProductionTrainLoop:
             except Exception as e:
                 self.logger.error(f"Failed to save best model: {e}")
         
-        # Save final model
+        # Save final model.
         if epoch == self.num_epochs - 1:
             final_checkpoint_path = self.checkpoint_dir / 'final_model.pt'
             try:
@@ -1153,20 +1153,20 @@ class ProductionTrainLoop:
                         self.ema.global_step = checkpoint.get('ema_global_step', 0)
                 self.logger.info(f"Resumed from checkpoint: epoch {self.current_epoch}, step {self.global_step}")
             else:
-                self.global_step = 0  # Will be recomputed as we train
+                self.global_step = 0  # Will be recomputed as we train.
                 self.logger.info(
                     f"Resumed model only from checkpoint: epoch {self.current_epoch}. "
                     "Optimizer/scheduler use current config (new LRs, schedule)."
                 )
         except EOFError as e:
-            # Corrupted checkpoint (incomplete file write) - start fresh instead of crashing
+            # Corrupted checkpoint (incomplete file write) - start fresh instead of crashing.
             self.logger.error(f"Checkpoint {checkpoint_path} is corrupted (EOFError). Starting training from scratch.")
             self.current_epoch = 0
             self.best_val_loss = float('inf')
             self.best_val_map = 0.0
             return
         except Exception as e:
-            # Other errors (missing keys, device mismatch, etc.) - start fresh
+            # Other errors (missing keys, device mismatch, etc.) - start fresh.
             self.logger.error(f"Failed to load checkpoint {checkpoint_path}: {e}")
             self.logger.warning("Starting training from scratch due to checkpoint load failure.")
             self.current_epoch = 0
@@ -1259,37 +1259,37 @@ class ProductionTrainLoop:
             for epoch in range(self.current_epoch, self.num_epochs):
                 self.logger.info(f"\nEpoch {epoch+1}/{self.num_epochs}")
                 
-                # Unfreeze backbone after freeze_backbone_epochs
+                # Unfreeze backbone after freeze_backbone_epochs.
                 if self.freeze_backbone_epochs > 0 and epoch == self.freeze_backbone_epochs:
                     self._unfreeze_backbone()
                     
-                    # Preserve optimizer state when recreating
+                    # Preserve optimizer state when recreating.
                     old_optimizer_state = self.optimizer.state_dict() if self.optimizer else None
                     
-                    # Recreate optimizer with all parameters
+                    # Recreate optimizer with all parameters.
                     param_groups = [
                         {'params': self.backbone_params, 'lr': self.learning_rate * 0.1},
                         {'params': self.head_params, 'lr': self.learning_rate}
                     ]
                     self.optimizer = AdamW(param_groups, weight_decay=self.weight_decay)
                     
-                    # Transfer optimizer state (momentum, Adam buffers) for matching parameters
+                    # Transfer optimizer state (momentum, Adam buffers) for matching parameters.
                     if old_optimizer_state:
                         try:
-                            # Map old param IDs to new param IDs
+                            # Map old param IDs to new param IDs.
                             old_state = old_optimizer_state.get('state', {})
                             new_state = {}
                             
-                            # Create mapping from parameter IDs
+                            # Create mapping from parameter IDs.
                             old_param_id_map = {}
                             for group_idx, group in enumerate(old_optimizer_state.get('param_groups', [])):
                                 for param_idx, param_id in enumerate(group.get('params', [])):
                                     old_param_id_map[param_id] = (group_idx, param_idx)
                             
-                            # Transfer state for matching parameters
+                            # Transfer state for matching parameters.
                             for new_group_idx, new_group in enumerate(self.optimizer.param_groups):
                                 for new_param_idx, new_param in enumerate(new_group['params']):
-                                    # Find matching old parameter
+                                    # Find matching old parameter.
                                     # Simplified; full impl would match state dict by parameter name.
                                     if new_param_idx < len(old_optimizer_state.get('param_groups', [{}])[0].get('params', [])):
                                         old_param_id = old_optimizer_state['param_groups'][0]['params'][new_param_idx]
@@ -1303,7 +1303,7 @@ class ProductionTrainLoop:
                         except Exception as e:
                             self.logger.warning(f"Could not preserve optimizer state: {e}. Continuing with fresh optimizer.")
                     
-                    # Recreate scheduler
+                    # Recreate scheduler.
                     total_steps = len(self.train_loader) * (self.num_epochs - epoch)
                     if self.scheduler_type == 'cosine':
                         self.scheduler = CosineAnnealingLR(
@@ -1312,16 +1312,16 @@ class ProductionTrainLoop:
                             eta_min=self.learning_rate * 0.01
                         )
                     elif self.scheduler_type == 'onecycle':
-                        # OneCycleLR needs to be recreated with new optimizer
+                        # OneCycleLR needs to be recreated with new optimizer.
                         self.scheduler = OneCycleLR(
                             self.optimizer,
                             max_lr=self.learning_rate,
                             total_steps=total_steps,
                             pct_start=0.3
                         )
-                    # Note: Other schedulers will continue with existing state
+                    # Note: Other schedulers will continue with existing state.
                 
-                # Train
+                # Train.
                 train_metrics = self.train_epoch(epoch)
                 train_loss = train_metrics['loss']
                 epoch_losses: List[float] = train_metrics.get('all_losses', [])
@@ -1335,7 +1335,7 @@ class ProductionTrainLoop:
                 current_lr = self.optimizer.param_groups[0]['lr']
                 self.history['learning_rates'].append(current_lr)
                 
-                # Validate
+                # Validate.
                 if self.val_loader:
                     val_metrics = self.validate(epoch, use_ema=True)
                     val_loss = val_metrics.get('loss', float('inf'))
@@ -1370,7 +1370,7 @@ class ProductionTrainLoop:
                                 f"WD={stability_metrics.new_wd if stability_metrics.wd_adjusted else 'unchanged'}"
                             )
                     
-                    # Check if best model
+                    # Check if best model.
                     is_best = val_loss < self.best_val_loss or val_map > self.best_val_map
                     if val_loss < self.best_val_loss:
                         self.best_val_loss = val_loss
@@ -1380,9 +1380,9 @@ class ProductionTrainLoop:
                     if self._check_early_stopping(epoch, val_loss, val_map):
                         break
                     
-                    # Save checkpoint
+                    # Save checkpoint.
                     self._save_checkpoint(epoch, is_best=is_best)
-                    # Optional: save numbered snapshot every N epochs
+                    # Optional: save numbered snapshot every N epochs.
                     if self.checkpoint_interval > 0 and (epoch + 1) % self.checkpoint_interval == 0:
                         self._save_checkpoint(epoch, is_best=False, extra_path=self.checkpoint_dir / f"checkpoint_epoch_{epoch+1}.pt")
                     
@@ -1393,7 +1393,7 @@ class ProductionTrainLoop:
                         f"Precision: {val_precision:.4f}, Recall: {val_recall:.4f}, F1: {val_f1:.4f}"
                     )
                 else:
-                    # No validation, just save checkpoint
+                    # No validation, just save checkpoint.
                     self._save_checkpoint(epoch, is_best=False)
                     if self.checkpoint_interval > 0 and (epoch + 1) % self.checkpoint_interval == 0:
                         self._save_checkpoint(epoch, is_best=False, extra_path=self.checkpoint_dir / f"checkpoint_epoch_{epoch+1}.pt")
@@ -1416,7 +1416,7 @@ class ProductionTrainLoop:
         
         elapsed_time = time.time() - start_time
         
-        # Save training history
+        # Save training history.
         history_path = self.checkpoint_dir / 'training_history.json'
         try:
             with open(history_path, 'w') as f:
@@ -1424,14 +1424,14 @@ class ProductionTrainLoop:
         except Exception as e:
             self.logger.error(f"Failed to save training history: {e}")
         
-        # Also save as CSV for easy plotting with pandas
+        # Also save as CSV for easy plotting with pandas.
         try:
             import pandas as pd
             df = pd.DataFrame(self.history)
             csv_path = self.checkpoint_dir / 'training_history.csv'
             df.to_csv(csv_path, index=False)
         except ImportError:
-            pass  # pandas not available, skip CSV export
+            pass  # Pandas not available, skip CSV export.
         
         self.logger.info("\nTraining Complete!")
         self.logger.info(f"Best validation mAP: {self.best_val_map:.4f}")
@@ -1448,7 +1448,7 @@ class ProductionTrainLoop:
         }
 
 
-# Convenience function
+# Convenience function.
 def train_model(
     model: nn.Module,
     train_loader: DataLoader,
@@ -1465,3 +1465,4 @@ def train_model(
         **kwargs
     )
     return trainer.train()
+

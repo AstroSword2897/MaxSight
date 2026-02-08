@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model, COCO_CLASSES
@@ -39,7 +39,7 @@ class DetectionLoss(nn.Module):
         B = predictions['classifications'].shape[0]
         N = predictions['classifications'].shape[1]
         
-        # Convert list targets to batched tensors
+        # Convert list targets to batched tensors.
         # Labels: list of [num_objects] -> [B, N] (pad with -1 for no object)
         if 'labels' in targets:
             labels_list = targets['labels'] if isinstance(targets['labels'], list) else [targets['labels']]
@@ -68,7 +68,7 @@ class DetectionLoss(nn.Module):
         else:
             objectness_targets = None
         
-        # Objectness loss
+        # Objectness loss.
         if 'objectness' in predictions and objectness_targets is not None:
             losses['objectness'] = self.objectness_loss(
                 predictions['objectness'], 
@@ -77,13 +77,13 @@ class DetectionLoss(nn.Module):
         
         # Classification loss (only on valid locations)
         if 'classifications' in predictions and labels_batched is not None:
-            # Mask out invalid locations
+            # Mask out invalid locations.
             valid_mask = labels_batched >= 0
             if valid_mask.any():
-                valid_preds = predictions['classifications'][valid_mask]  # [num_valid, num_classes]
-                valid_labels = labels_batched[valid_mask]  # [num_valid]
+                valid_preds = predictions['classifications'][valid_mask]  # [num_valid, num_classes].
+                valid_labels = labels_batched[valid_mask]  # [num_valid].
                 losses['classification'] = self.classification_loss(
-                    valid_preds.unsqueeze(0),  # Add batch dim
+                    valid_preds.unsqueeze(0),  # Add batch dim.
                     valid_labels.unsqueeze(0)
                 )
             else:
@@ -91,19 +91,19 @@ class DetectionLoss(nn.Module):
         
         # Box regression loss (only on valid locations)
         if 'boxes' in predictions and boxes_batched is not None:
-            # Mask out invalid locations
+            # Mask out invalid locations.
             valid_mask = (labels_batched >= 0) if labels_batched is not None else torch.ones(B, N, dtype=torch.bool, device=predictions['boxes'].device)
             if valid_mask.any():
-                valid_preds = predictions['boxes'][valid_mask]  # [num_valid, 4]
-                valid_targets = boxes_batched[valid_mask]  # [num_valid, 4]
+                valid_preds = predictions['boxes'][valid_mask]  # [num_valid, 4].
+                valid_targets = boxes_batched[valid_mask]  # [num_valid, 4].
                 losses['box'] = self.box_loss(
-                    valid_preds.unsqueeze(0),  # Add batch dim
+                    valid_preds.unsqueeze(0),  # Add batch dim.
                     valid_targets.unsqueeze(0)
                 )
             else:
                 losses['box'] = torch.tensor(0.0, device=predictions['boxes'].device)
         
-        # Total loss
+        # Total loss.
         total_loss = sum(losses.values())
         losses['total_loss'] = total_loss
         
@@ -116,26 +116,26 @@ class DummyMaxSightDataset(Dataset):
     def __init__(self, num_samples: int = 10, image_size: tuple = (224, 224)):
         self.num_samples = num_samples
         self.image_size = image_size
-        self.num_classes = 80  # COCO classes
+        self.num_classes = 80  # COCO classes.
     
     def __len__(self):
         return self.num_samples
     
     def __getitem__(self, idx):
-        # Generate dummy image
+        # Generate dummy image.
         image = torch.randn(3, *self.image_size)
         
         # Generate dummy ground truth (normalized format: x, y, w, h)
         num_objects = int(torch.randint(1, 5, (1,)).item())
         
-        boxes = torch.rand(num_objects, 4)  # Normalized [0, 1]
-        boxes[:, 2:] = boxes[:, 2:] * 0.3 + 0.1  # Width/height between 0.1-0.4
-        boxes[:, :2] = boxes[:, :2] * 0.7  # Position in center 70% of image
+        boxes = torch.rand(num_objects, 4)  # Normalized [0, 1].
+        boxes[:, 2:] = boxes[:, 2:] * 0.3 + 0.1  # Width/height between 0.1-0.4.
+        boxes[:, :2] = boxes[:, :2] * 0.7  # Position in center 70% of image.
         
         labels = torch.randint(0, self.num_classes, (num_objects,))
         objectness = torch.ones(num_objects)
         
-        # Dummy scene-level targets
+        # Dummy scene-level targets.
         urgency_scores = torch.randint(0, 4, (4,)).float()
         distance_zones = torch.randint(0, 3, (num_objects, 3)).float()
         
@@ -156,11 +156,11 @@ def test_training_step():
     model = create_model()
     model.train()
     
-    # Create dummy data
+    # Create dummy data.
     batch_size = 2
     dummy_image = torch.randn(batch_size, 3, 224, 224)
     
-    # Forward pass
+    # Forward pass.
     outputs = model(dummy_image)
     
     # Create dummy ground truth (normalized format: x, y, w, h)
@@ -168,23 +168,23 @@ def test_training_step():
     gt_labels = []
     for _ in range(batch_size):
         num_objects = 3
-        boxes = torch.rand(num_objects, 4)  # Normalized [0, 1]
-        boxes[:, 2:] = boxes[:, 2:] * 0.3 + 0.1  # Width/height between 0.1-0.4
-        boxes[:, :2] = boxes[:, :2] * 0.7  # Position in center 70% of image
+        boxes = torch.rand(num_objects, 4)  # Normalized [0, 1].
+        boxes[:, 2:] = boxes[:, 2:] * 0.3 + 0.1  # Width/height between 0.1-0.4.
+        boxes[:, :2] = boxes[:, :2] * 0.7  # Position in center 70% of image.
         gt_boxes.append(boxes)
         gt_labels.append(torch.randint(0, 80, (num_objects,)))
     
-    # Create loss function
+    # Create loss function.
     detection_loss_fn = DetectionLoss(num_classes=len(COCO_CLASSES))
     
-    # Prepare targets in correct format
+    # Prepare targets in correct format.
     targets = {
         'labels': gt_labels,
         'boxes': gt_boxes,
         'num_objects': torch.tensor([len(boxes) for boxes in gt_boxes])
     }
     
-    # Compute loss
+    # Compute loss.
     predictions = {
         'classifications': outputs['classifications'],
         'boxes': outputs['boxes'],
@@ -194,10 +194,10 @@ def test_training_step():
     loss_dict = detection_loss_fn(predictions, targets)
     total_loss = loss_dict['total_loss']
     
-    # Backward pass
+    # Backward pass.
     total_loss.backward()
     
-    # Check gradients
+    # Check gradients.
     has_gradients = any(p.grad is not None for p in model.parameters())
     assert has_gradients, "No gradients computed"
     
@@ -211,13 +211,13 @@ def test_data_loader():
     print("\nTraining Pipeline Test 2: Data Loader")
     
     dataset = DummyMaxSightDataset(num_samples=20)
-    # Use collate_fn to handle variable-sized tensors
+    # Use collate_fn to handle variable-sized tensors.
     def collate_fn(batch):
         images = torch.stack([item['image'] for item in batch])
         return {
             'image': images,
-            'boxes': [item['boxes'] for item in batch],  # List, not stacked
-            'labels': [item['labels'] for item in batch],  # List, not stacked
+            'boxes': [item['boxes'] for item in batch],  # List, not stacked.
+            'labels': [item['labels'] for item in batch],  # List, not stacked.
             'objectness': [item['objectness'] for item in batch],
             'urgency_scores': torch.stack([item['urgency_scores'] for item in batch]),
             'distance_zones': [item['distance_zones'] for item in batch],
@@ -225,7 +225,7 @@ def test_data_loader():
     
     dataloader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=collate_fn)
     
-    # Test loading a batch
+    # Test loading a batch.
     batch = next(iter(dataloader))
     
     assert 'image' in batch, "Batch missing image"
@@ -264,24 +264,24 @@ def test_training_loop_iteration():
     
     detection_loss_fn = DetectionLoss(num_classes=len(COCO_CLASSES))
     
-    # One epoch
+    # One epoch.
     total_loss = 0.0
     num_batches = 0
     
     for batch in dataloader:
         images = batch['image']
         
-        # Forward
+        # Forward.
         outputs = model(images)
         
-        # Prepare targets
+        # Prepare targets.
         targets = {
             'labels': batch['labels'],
             'boxes': batch['boxes'],
             'num_objects': torch.tensor([len(boxes) for boxes in batch['boxes']])
         }
         
-        # Compute loss
+        # Compute loss.
         predictions = {
             'classifications': outputs['classifications'],
             'boxes': outputs['boxes'],
@@ -291,7 +291,7 @@ def test_training_loop_iteration():
         loss_dict = detection_loss_fn(predictions, targets)
         loss = loss_dict['total_loss']
         
-        # Backward
+        # Backward.
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -331,21 +331,21 @@ def test_gradient_accumulation():
     detection_loss_fn = DetectionLoss(num_classes=len(COCO_CLASSES))
     accumulation_steps = 2
     
-    # Training with gradient accumulation
+    # Training with gradient accumulation.
     optimizer.zero_grad()
     
     for i, batch in enumerate(dataloader):
         images = batch['image']
         outputs = model(images)
         
-        # Prepare targets
+        # Prepare targets.
         targets = {
             'labels': batch['labels'],
             'boxes': batch['boxes'],
             'num_objects': torch.tensor([len(boxes) for boxes in batch['boxes']])
         }
         
-        # Compute loss
+        # Compute loss.
         predictions = {
             'classifications': outputs['classifications'],
             'boxes': outputs['boxes'],
@@ -353,7 +353,7 @@ def test_gradient_accumulation():
         }
         
         loss_dict = detection_loss_fn(predictions, targets)
-        loss = loss_dict['total_loss'] / accumulation_steps  # Scale loss
+        loss = loss_dict['total_loss'] / accumulation_steps  # Scale loss.
         
         loss.backward()
         
@@ -398,4 +398,5 @@ if __name__ == "__main__":
     
     print("\n" + "=" * 50)
     print("All training pipeline tests passed!")
+
 

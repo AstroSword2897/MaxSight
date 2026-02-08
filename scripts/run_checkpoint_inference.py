@@ -455,7 +455,7 @@ def main():
             try:
                 siblings = sorted(p.name for p in parent.parent.iterdir())[:20]
                 hint = f" Parent {parent.parent} has: {siblings}."
-                # Suggest COCO layout when annotations/ and val2017/ exist
+                # Suggest COCO layout when annotations/ and val2017/ exist.
                 if "annotations" in siblings and "val2017" in siblings:
                     ann_dir = parent.parent / "annotations"
                     coco_val = ann_dir / "instances_val2017.json"
@@ -561,3 +561,4 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

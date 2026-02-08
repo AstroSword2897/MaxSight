@@ -9,7 +9,7 @@ from typing import Optional
 from enum import Enum
 import logging
 
-# Use structured logging instead of print
+# Use structured logging instead of print.
 logger = logging.getLogger(__name__)
 
 
@@ -48,7 +48,7 @@ class VoiceFeedback:
             return
         
         self.current_prompt = prompt
-        # Use logger instead of print
+        # Use logger instead of print.
         logger.info(f"Voice: {prompt.value}")
     
     def speak_custom(self, text: str, priority: int = 0):
@@ -61,10 +61,11 @@ class VoiceFeedback:
             return
         
         self.current_prompt = text
-        # Use logger instead of print
+        # Use logger instead of print.
         logger.info(f"Voice: {text}")
     
     def stop(self):
         """Stop current voice output."""
         self.current_prompt = None
+
 

@@ -2807,6 +2807,7 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 - **[architecture.md](docs/architecture.md)**: High-level architecture
 - **docs/training/**: Memory and optimization notes
 - **[REQUIREMENTS.md](REQUIREMENTS.md)**: Software, data, and hardware checklist
+- **[COMMENT_STYLE.md](docs/COMMENT_STYLE.md)**: Comment and docstring standard for the whole repo (intent, active voice, concise)
 - **[Hyperparameter Rationale](HYPERPARAMETER_RATIONALE.md)**: Detailed hyperparameter explanations
 - **Warnings & Critical Cautions** (below): ⚠️ Production deployment warnings and fixes (READ BEFORE DEPLOYING)
 

@@ -9,14 +9,14 @@ from typing import Optional
 from enum import Enum
 import logging
 
-# Use structured logging instead of print
+# Use structured logging instead of print.
 logger = logging.getLogger(__name__)
 
 
 class HapticPattern(Enum):
     """Haptic feedback patterns."""
-    MICRO_PULSE = "micro_pulse"  # Target found
-    LONG_PULSE = "long_pulse"  # Wrong region
+    MICRO_PULSE = "micro_pulse"  # Target found.
+    LONG_PULSE = "long_pulse"  # Wrong region.
     SUCCESS_SEQUENCE = "success_sequence"
     FAILURE_SEQUENCE = "failure_sequence"
 
@@ -40,7 +40,7 @@ class HapticFeedback:
         if not self.enabled:
             return
         
-        # Use logger instead of print
+        # Use logger instead of print.
         logger.info(f"Haptic {pattern.value} intensity: {intensity}")
     
     def micro_pulse(self, intensity: float = 0.3):
@@ -58,4 +58,5 @@ class HapticFeedback:
     def failure_sequence(self):
         """Failure feedback sequence."""
         self.trigger(HapticPattern.FAILURE_SEQUENCE, 0.4)
+
 

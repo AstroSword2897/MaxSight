@@ -23,7 +23,7 @@ class TierTransferManager:
         self.target_model = target_model
         self.config = transfer_config
         
-        # Validates source checkpoint exists
+        # Validates source checkpoint exists.
         if not self.source_checkpoint.exists():
             raise FileNotFoundError(f"Source checkpoint not found: {source_checkpoint}")
     
@@ -36,7 +36,7 @@ class TierTransferManager:
         
         checkpoint = torch.load(self.source_checkpoint, map_location='cpu')
         
-        # Checks required keys
+        # Checks required keys.
         required_keys = ['model_state_dict', 'epoch', 'val_loss']
         missing_keys = [k for k in required_keys if k not in checkpoint]
         if missing_keys:
@@ -48,7 +48,7 @@ class TierTransferManager:
         if epoch < 50:
             logger.warning(f"Source checkpoint only at epoch {epoch}, recommend ≥50")
         
-        # Checks for NaNs in state dict
+        # Checks for NaNs in state dict.
         state_dict = checkpoint['model_state_dict']
         for name, param in state_dict.items():
             if torch.isnan(param).any():
@@ -71,25 +71,25 @@ class TierTransferManager:
         
         # Components to transfer (spatial representation only)
         transfer_patterns = [
-            'backbone',  # CNN backbone
-            'fpn',  # FPN
-            'vit',  # ViT blocks
-            'se_attention',  # SE attention
-            'cbam_attention',  # CBAM attention
-            'dynamic_conv',  # Dynamic convolution
-            'detection_head',  # Detection head
-            'box_head',  # Box regression head
-            'classification_head',  # Classification head
-            'distance_head',  # Distance head
-            'urgency_head',  # Urgency head
+            'backbone',  # CNN backbone.
+            'fpn',  # FPN.
+            'vit',  # ViT blocks.
+            'se_attention',  # SE attention.
+            'cbam_attention',  # CBAM attention.
+            'dynamic_conv',  # Dynamic convolution.
+            'detection_head',  # Detection head.
+            'box_head',  # Box regression head.
+            'classification_head',  # Classification head.
+            'distance_head',  # Distance head.
+            'urgency_head',  # Urgency head.
         ]
         
         # Components to skip (coordination, not representation)
         skip_patterns = [
-            'temporal',  # Temporal modeling
-            'cross_task_attention',  # Cross-task attention
-            'cross_modal_attention',  # Cross-modal attention
-            'retrieval',  # Retrieval modules
+            'temporal',  # Temporal modeling.
+            'cross_task_attention',  # Cross-task attention.
+            'cross_modal_attention',  # Cross-modal attention.
+            'retrieval',  # Retrieval modules.
             'scene_graph',  # Scene graph (new in T5)
             'ocr_head',  # OCR (new in T5)
             'sound_event_head',  # Sound events (new in T5)
@@ -102,7 +102,7 @@ class TierTransferManager:
         shape_mismatch = 0
         
         for target_name, target_param in target_state.items():
-            # Checks whether this parameter is transferred
+            # Checks whether this parameter is transferred.
             should_transfer = any(pattern in target_name for pattern in transfer_patterns)
             should_skip = any(pattern in target_name for pattern in skip_patterns)
             
@@ -111,12 +111,12 @@ class TierTransferManager:
                 continue
             
             if should_transfer:
-                # Find matching source parameter
+                # Find matching source parameter.
                 source_name = target_name
                 if source_name in source_state:
                     source_param = source_state[source_name]
                     
-                    # Checks shape compatibility
+                    # Checks shape compatibility.
                     if source_param.shape == target_param.shape:
                         target_state[target_name] = source_param.clone()
                         transferred += 1
@@ -130,7 +130,7 @@ class TierTransferManager:
                 elif strict:
                     raise KeyError(f"Required key not found in source: {source_name}")
         
-        # Load updated state dict
+        # Load updated state dict.
         self.target_model.load_state_dict(target_state, strict=False)
         
         stats = {
@@ -154,13 +154,13 @@ class TierTransferManager:
         
         # Group 1: CNN backbone (lowest LR)
         cnn_params = []
-        cnn_lr = base_lr * 0.2  # More conservative
+        cnn_lr = base_lr * 0.2  # More conservative.
         
-        # Group 2: ViT backbone
+        # Group 2: ViT backbone.
         vit_params = []
-        vit_lr = base_lr * 0.5  # Needs more plasticity for temporal
+        vit_lr = base_lr * 0.5  # Needs more plasticity for temporal.
         
-        # Group 3: Detection/box heads
+        # Group 3: Detection/box heads.
         detection_params = []
         detection_lr = base_lr * 0.6
         
@@ -174,9 +174,9 @@ class TierTransferManager:
         
         # Group 6: New Tier-5 heads (highest LR)
         new_head_params = []
-        new_head_lr = base_lr * 1.3  # Must move fastest or lag permanently
+        new_head_lr = base_lr * 1.3  # Must move fastest or lag permanently.
         
-        # Categorize parameters
+        # Categorize parameters.
         for name, param in self.target_model.named_parameters():
             if 'backbone' in name and 'vit' not in name:
                 cnn_params.append(param)
@@ -194,10 +194,10 @@ class TierTransferManager:
             ]):
                 new_head_params.append(param)
             else:
-                # Default: put in detection group
+                # Default: put in detection group.
                 detection_params.append(param)
         
-        # Create parameter groups
+        # Create parameter groups.
         if cnn_params:
             param_groups.append({'params': cnn_params, 'lr': cnn_lr, 'name': 'cnn_backbone'})
         if vit_params:
@@ -230,14 +230,14 @@ class TierTransferManager:
             ])
             
             if epoch < 5:
-                # Epochs 0-5: Freeze CNN+ViT+detection, train new heads only
+                # Epochs 0-5: Freeze CNN+ViT+detection, train new heads only.
                 should_freeze = not is_new_head and any(x in name for x in [
                     'backbone', 'vit', 'transformer',
                     'detection_head', 'box_head', 'classification_head'
                 ])
             elif epoch < 15:
-                # Epochs 5-15: Unfreeze detection + classification
-                # Still freeze: CNN+ViT backbone
+                # Epochs 5-15: Unfreeze detection + classification.
+                # Still freeze: CNN+ViT backbone.
                 if is_new_head:
                     should_freeze = False
                 elif any(x in name for x in ['detection_head', 'classification_head']):
@@ -247,8 +247,8 @@ class TierTransferManager:
                         'backbone', 'vit', 'transformer'
                     ])
             elif epoch < 30:
-                # Epochs 15-30: Unfreeze top 40% of ViT
-                # Still freeze: CNN backbone, early ViT layers
+                # Epochs 15-30: Unfreeze top 40% of ViT.
+                # Still freeze: CNN backbone, early ViT layers.
                 if is_new_head:
                     should_freeze = False
                 elif 'backbone' in name and 'vit' not in name:
@@ -260,8 +260,8 @@ class TierTransferManager:
                 else:
                     should_freeze = False
             elif epoch < 45:
-                # Epochs 30-45: Unfreeze full ViT
-                # Still freeze: CNN backbone
+                # Epochs 30-45: Unfreeze full ViT.
+                # Still freeze: CNN backbone.
                 if is_new_head:
                     should_freeze = False
                 elif 'backbone' in name and 'vit' not in name:
@@ -302,7 +302,7 @@ class TierTransferManager:
     def get_loss_unlock_schedule(self, epoch: int) -> Dict[str, bool]:
         """Get loss unlock schedule based on epoch (aligned with representation readiness)...."""
         if epoch < 10:
-            # Phase 1: Detection only
+            # Phase 1: Detection only.
             return {
                 'detection': True,
                 'classification': True,
@@ -321,7 +321,7 @@ class TierTransferManager:
                 'predictive_alerts': False,
             }
         elif epoch < 25:
-            # Phase 2: + Navigation
+            # Phase 2: + Navigation.
             return {
                 'detection': True,
                 'classification': True,
@@ -340,7 +340,7 @@ class TierTransferManager:
                 'predictive_alerts': False,
             }
         elif epoch < 40:
-            # Phase 3: + Therapy/urgency
+            # Phase 3: + Therapy/urgency.
             return {
                 'detection': True,
                 'classification': True,
@@ -359,7 +359,7 @@ class TierTransferManager:
                 'predictive_alerts': False,
             }
         else:
-            # Phase 4: All tasks enabled
+            # Phase 4: All tasks enabled.
             return {
                 'detection': True,
                 'classification': True,
@@ -386,18 +386,19 @@ def create_transfer_optimizer(
 ) -> torch.optim.AdamW:
     """Create optimizer with parameter-grouped learning rates for transfer...."""
     transfer_mgr = TierTransferManager(
-        source_checkpoint=Path("dummy"),  # Not used for optimizer creation
+        source_checkpoint=Path("dummy"),  # Not used for optimizer creation.
         target_model=model,
         transfer_config={}
     )
     
     param_groups = transfer_mgr.create_parameter_groups(base_lr)
     
-    # Add weight decay to all groups
+    # Add weight decay to all groups.
     for group in param_groups:
         group['weight_decay'] = weight_decay
     
     optimizer = torch.optim.AdamW(param_groups)
     
     return optimizer
+
 

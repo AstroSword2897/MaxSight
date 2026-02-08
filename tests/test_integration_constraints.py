@@ -6,11 +6,11 @@ import pytest
 import sys
 import os
 
-# Add parent directory to path for imports
+# Add parent directory to path for imports.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'tools', 'simulation'))
 
-# Dependency checks
+# Dependency checks.
 HAS_SKLEARN = False
 try:
     import sklearn
@@ -32,7 +32,7 @@ try:
 except (ImportError, ModuleNotFoundError):
     pass
 
-# Mock flask for testing
+# Mock flask for testing.
 import unittest.mock
 with unittest.mock.patch('flask.Flask'), unittest.mock.patch('flask_cors.CORS'):
     from ml.models.maxsight_cnn import MaxSightCNN
@@ -51,11 +51,11 @@ def test_audio_attention_preserves_channels():
     audio_emb, _ = audio_encoder(audio_features)
     attention_map, _, _ = spatial_sound(audio_emb)
     
-    # Interpolate if needed
+    # Interpolate if needed.
     if attention_map.shape[2:] != features.shape[2:]:
         attention_map = F.interpolate(attention_map, size=features.shape[2:], mode='bilinear')
     
-    # Apply attention
+    # Apply attention.
     fused = features * (1.0 + torch.sigmoid(attention_map))
     
     assert fused.shape == features.shape, "Channel count must be preserved"
@@ -81,13 +81,13 @@ def test_temporal_spatial_alignment():
     """Assert temporal features match spatial resolution."""
     from ml.models.temporal.temporal_encoder import TemporalEncoder
     
-    # Use ConvLSTM only (no TimeSformer) to avoid missing dependency
+    # Use ConvLSTM only (no TimeSformer) to avoid missing dependency.
     temporal_encoder = TemporalEncoder(
         in_channels=256, 
         num_frames=8, 
         hidden_dim=256,
         use_conv_lstm=True,
-        use_timesformer=False  # Skip TimeSformer if not available
+        use_timesformer=False  # Skip TimeSformer if not available.
     )
     features = torch.randn(2, 256, 14, 14)
     temporal_features = torch.randn(2, 8, 256, 14, 14)
@@ -134,9 +134,9 @@ def test_personalization_normalized():
 def test_depth_vectorized():
     """Assert depth sampling uses grid_sample, not loops."""
     depth_map = torch.randn(2, 14, 14)
-    box_centers = torch.rand(2, 10, 2)  # [B, K, 2]
+    box_centers = torch.rand(2, 10, 2)  # [B, K, 2].
     
-    # Normalize
+    # Normalize.
     normalized = (box_centers / torch.tensor([14.0, 14.0])) * 2.0 - 1.0
     normalized = normalized.flip(-1).unsqueeze(2)
     
@@ -155,4 +155,5 @@ def test_depth_vectorized():
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
 

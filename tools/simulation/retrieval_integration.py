@@ -25,7 +25,7 @@ class RetrievalIntegration:
     ):
         self.embed_dim = embed_dim
         
-        # Initialize retrieval components
+        # Initialize retrieval components.
         self.global_encoder = GlobalEncoder(embed_dim=embed_dim)
         self.retrieval_heads = MultiVectorRetrievalHeads(
             global_dim=embed_dim,
@@ -33,8 +33,8 @@ class RetrievalIntegration:
             patch_dim=embed_dim
         )
         
-        # Initialize retrieval stages
-        self.stage1 = None  # Will be initialized when index is loaded
+        # Initialize retrieval stages.
+        self.stage1 = None  # Will be initialized when index is loaded.
         self.stage2 = Stage2Reranker(
             embedding_dims={'global': embed_dim},
             hidden_dim=128,
@@ -71,11 +71,11 @@ class RetrievalIntegration:
         if not self.index_loaded or self.stage1 is None:
             return []
         
-        # Stage 1: ANN search
+        # Stage 1: ANN search.
         indices, distances = self.stage1(query_embedding.unsqueeze(0))
         
         # Stage 2: Reranking (if needed)
-        # For now, return Stage 1 results
+        # For now, return Stage 1 results.
         results = []
         for i, (idx, dist) in enumerate(zip(indices[0][:top_k], distances[0][:top_k])):
             results.append({
@@ -98,11 +98,11 @@ class RetrievalIntegration:
             enhanced['retrieval_available'] = False
             return enhanced
         
-        # Extract global embedding
+        # Extract global embedding.
         try:
-            global_emb = self.global_encoder(images)  # [B, embed_dim]
+            global_emb = self.global_encoder(images)  # [B, embed_dim].
             
-            # Retrieve similar scenes
+            # Retrieve similar scenes.
             similar_scenes = []
             for b in range(global_emb.shape[0]):
                 scenes = self.retrieve_similar_scenes(global_emb[b])
@@ -115,4 +115,5 @@ class RetrievalIntegration:
             enhanced['retrieval_error'] = str(e)
         
         return enhanced
+
 

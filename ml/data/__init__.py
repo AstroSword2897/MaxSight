@@ -1,4 +1,4 @@
-# Usage: from ml.data.dataset import MaxSightDataset
+# Usage: from ml.data.dataset import MaxSightDataset.
 
 from ml.data.dataset import MaxSightDataset
 from ml.data.generate_annotations import generate_annotations_from_coco
@@ -10,9 +10,9 @@ from ml.data.data_pipeline import (
 )
 
 # Production accessibility dataset (therapy-oriented)
-# Note: AccessibilityDataset and related functions are available via direct import:
-# from ml.data.create_accessibility_dataset import AccessibilityDataset
-# They are not re-exported here to avoid unused import warnings
+# Note: AccessibilityDataset and related functions are available via direct import:.
+# From ml.data.create_accessibility_dataset import AccessibilityDataset.
+# They are not re-exported here to avoid unused import warnings.
 
 __all__ = [
     'MaxSightDataset',
@@ -22,4 +22,5 @@ __all__ = [
     'compute_class_weights',
     'get_data_info',
 ]
+
 

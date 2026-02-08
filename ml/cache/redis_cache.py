@@ -90,22 +90,23 @@ def cached(ttl: int = 60, redis_url: Optional[str] = None):
     def decorator(func: Callable) -> Callable:
         def wrapper(*args, **kwargs):
             if cache is None:
-                # Redis not available, just call function
+                # Redis not available, just call function.
                 return func(*args, **kwargs)
             
-            # Generate cache key
+            # Generate cache key.
             key = f"{func.__name__}:{cache_key(*args, **kwargs)}"
             
-            # Get from cache when present
+            # Get from cache when present.
             cached_value = cache.get(key)
             if cached_value is not None:
                 return cached_value
             
-            # Compute and cache
+            # Compute and cache.
             result = func(*args, **kwargs)
             cache.set(key, result, ttl=ttl)
             return result
         
         return wrapper
     return decorator
+
 

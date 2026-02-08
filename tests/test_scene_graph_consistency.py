@@ -21,13 +21,13 @@ def test_scene_graph_consistency():
         num_semantic_relations=10
     )
     
-    # Create test data
+    # Create test data.
     num_nodes = 5
     boxes = torch.randn(num_nodes, 4)
     object_embeddings = torch.randn(num_nodes, 256)
     object_classes = ['person', 'car', 'door', 'tree', 'sign']
     
-    # Extract relations
+    # Extract relations.
     relations, edge_index, edge_attr = encoder.extract_relations(
         boxes=boxes,
         object_embeddings=object_embeddings,
@@ -58,7 +58,7 @@ def test_scene_graph_consistency():
     edge_set = set(zip(edge_index[0].tolist(), edge_index[1].tolist()))
     relation_edges = set((rel.src, rel.dst) for rel in relations)
     
-    # All relation edges are in edge_index
+    # All relation edges are in edge_index.
     assert relation_edges.issubset(edge_set), \
         f"Relation edges {relation_edges - edge_set} not in edge_index"
     
@@ -80,14 +80,14 @@ def test_scene_graph_with_pruning():
     object_embeddings = torch.randn(num_nodes, 256)
     object_classes = ['person', 'car', 'door', 'tree', 'sign']
     
-    # Extract relations
+    # Extract relations.
     relations, edge_index, edge_attr = encoder.extract_relations(
         boxes=boxes,
         object_embeddings=object_embeddings,
         object_classes=object_classes
     )
     
-    # Simulate pruning: remove low-confidence relations
+    # Simulate pruning: remove low-confidence relations.
     pruned_relations = [r for r in relations if r.confidence > 0.5]
     
     # Rebuild edge_index from pruned relations (using explicit src/dst)
@@ -103,7 +103,7 @@ def test_scene_graph_with_pruning():
         edges = list(edge_map.keys())
         pruned_edge_index = torch.tensor(edges, dtype=torch.long).T.contiguous()
         
-        # Verifies consistency
+        # Verifies consistency.
         assert pruned_edge_index.shape[1] == len(edge_map), \
             f"Pruned edge_index ({pruned_edge_index.shape[1]}) != edge_map count ({len(edge_map)})"
         
@@ -128,4 +128,5 @@ if __name__ == "__main__":
         print(f"\n❌ TEST FAILED: {e}")
         print("   STOP THE PIPELINE - graph structure is broken")
         sys.exit(1)
+
 

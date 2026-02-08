@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Project root
+# Project root.
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -112,7 +112,7 @@ def main() -> int:
         print("Step 1: Skip download (--skip-download)")
         print()
 
-    # 2. Extract
+    # 2. Extract.
     if not args.skip_extract:
         print("Step 2: Extract COCO zips...")
         extract_script = _script_path("extract_coco.py")
@@ -207,3 +207,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

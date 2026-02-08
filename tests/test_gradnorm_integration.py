@@ -9,7 +9,7 @@ from typing import Dict
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.training.train_loop import ProductionTrainLoop
@@ -26,7 +26,7 @@ def create_dummy_loss_fn():
             """Return loss dict with per-head losses."""
             device = list(outputs.values())[0].device if outputs else torch.device('cpu')
             
-            # Extract losses for different heads
+            # Extract losses for different heads.
             loss_dict = {
                 'total_loss': torch.tensor(1.0, device=device, requires_grad=True),
                 'classification_loss': torch.tensor(0.5, device=device, requires_grad=True),
@@ -61,14 +61,14 @@ def test_gradnorm_initialization():
     try:
         from ml.training.task_balancing import GradNormMultiHeadLoss
         
-        # Create dummy head losses
+        # Create dummy head losses.
         head_losses = {
             'classification': nn.MSELoss(),
             'localization': nn.MSELoss(),
             'objectness': nn.BCELoss(),
         }
         
-        # Initialize GradNorm
+        # Initialize GradNorm.
         gradnorm = GradNormMultiHeadLoss(
             head_losses=head_losses,
             alpha=1.5,
@@ -92,23 +92,23 @@ def test_training_loop_with_gradnorm():
     print("\nTesting training loop with GradNorm parameters...")
     
     try:
-        # Create a small model
-        model = create_model(num_classes=10)  # Small for testing
+        # Create a small model.
+        model = create_model(num_classes=10)  # Small for testing.
         
-        # Create dummy data
+        # Create dummy data.
         images = torch.randn(4, 3, 224, 224)
         targets = {
             'classifications': torch.randint(0, 10, (4, 196)),
             'boxes': torch.rand(4, 196, 4),
             'objectness': torch.rand(4, 196),
         }
-        dataset = TensorDataset(images, torch.zeros(4))  # Dummy dataset
+        dataset = TensorDataset(images, torch.zeros(4))  # Dummy dataset.
         loader = DataLoader(dataset, batch_size=2)
         
-        # Create loss function
+        # Create loss function.
         loss_fn = create_dummy_loss_fn()
         
-        # Create training loop with GradNorm
+        # Create training loop with GradNorm.
         try:
             trainer = ProductionTrainLoop(
                 model=model,
@@ -117,7 +117,7 @@ def test_training_loop_with_gradnorm():
                 loss_fn=loss_fn,
                 device='cpu',
                 num_epochs=1,
-                use_gradnorm=True,  # Enable GradNorm
+                use_gradnorm=True,  # Enable GradNorm.
                 gradnorm_alpha=1.5,
                 gradnorm_update_interval=50
             )
@@ -145,7 +145,7 @@ def test_gradnorm_loss_computation():
     try:
         from ml.training.task_balancing import GradNormMultiHeadLoss
         
-        # Create dummy head losses
+        # Create dummy head losses.
         head_losses = {
             'classification': nn.MSELoss(),
             'localization': nn.MSELoss(),
@@ -154,10 +154,10 @@ def test_gradnorm_loss_computation():
         gradnorm = GradNormMultiHeadLoss(
             head_losses=head_losses,
             alpha=1.5,
-            update_interval=1  # Update every iteration for testing
+            update_interval=1  # Update every iteration for testing.
         )
         
-        # Create dummy outputs and targets
+        # Create dummy outputs and targets.
         outputs = {
             'classifications': torch.randn(2, 196, 10),
             'boxes': torch.randn(2, 196, 4),
@@ -167,10 +167,10 @@ def test_gradnorm_loss_computation():
             'boxes': torch.rand(2, 196, 4),
         }
         
-        # Create dummy model for gradient computation
+        # Create dummy model for gradient computation.
         model = nn.Linear(10, 10)
         
-        # Compute loss
+        # Compute loss.
         total_loss, metrics = gradnorm(outputs, targets, model=model)
         
         print("✅ GradNorm loss computation successful")
@@ -192,21 +192,21 @@ def main():
     
     results = []
     
-    # Test 1: Availability
+    # Test 1: Availability.
     results.append(("Availability", test_gradnorm_availability()))
     
-    # Test 2: Initialization
+    # Test 2: Initialization.
     init_success, gradnorm = test_gradnorm_initialization()
     results.append(("Initialization", init_success))
     
-    # Test 3: Training loop integration
+    # Test 3: Training loop integration.
     results.append(("Training Loop Integration", test_training_loop_with_gradnorm()))
     
-    # Test 4: Loss computation
+    # Test 4: Loss computation.
     if init_success:
         results.append(("Loss Computation", test_gradnorm_loss_computation()))
     
-    # Summary
+    # Summary.
     print("\n" + "=" * 60)
     print("Test Summary")
     print("=" * 60)
@@ -230,4 +230,5 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+
 

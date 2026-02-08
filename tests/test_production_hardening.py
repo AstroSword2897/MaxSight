@@ -45,7 +45,7 @@ class TestPriorityBudgetFilter:
         ]
         out = f.filter_alerts(dets)
         assert len(out) == 3
-        # Top 3 by priority (urgency * conf * 1/(dist_ord+1)): high urgency+near first
+        # Top 3 by priority (urgency * conf * 1/(dist_ord+1)): high urgency+near first.
         urgencies = [d["urgency"] for d in out]
         assert 3 in urgencies and 2 in urgencies
 
@@ -77,7 +77,7 @@ class TestStageATemporalSmoother:
         dets2 = [{"class_name": "car", "box": [0.52, 0.52, 0.1, 0.1], "confidence": 0.9}]
         out = s.smooth_detections(dets2)
         assert len(out) == 1
-        # EMA: 0.7 * 0.8 + 0.3 * 0.9 = 0.83
+        # EMA: 0.7 * 0.8 + 0.3 * 0.9 = 0.83.
         assert 0.82 <= out[0]["confidence"] <= 0.84
 
     def test_get_object_id_stable(self):
@@ -145,12 +145,13 @@ class TestSafetyBiasUrgency:
     def test_get_urgency_with_safety_bias(self):
         from ml.models.maxsight_cnn import MaxSightCNN
         model = MaxSightCNN(num_classes=80)
-        # Hazard class + confidence + large box -> at least warning
+        # Hazard class + confidence + large box -> at least warning.
         u = model._get_urgency('car', box_size=0.25, confidence=0.5)
         assert u >= 2
         # Non-hazard, small box: low urgency (0 or 1 depending on _urgency_map)
         u_safe = model._get_urgency('chair', box_size=0.01, confidence=0.9)
         assert u_safe <= 1
-        # Large/close object gets +1 urgency
+        # Large/close object gets +1 urgency.
         u_large = model._get_urgency('chair', box_size=0.3, confidence=0.5)
         assert u_large >= 1
+

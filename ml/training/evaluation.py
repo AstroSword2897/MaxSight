@@ -27,7 +27,7 @@ def generate_evaluation_report(metrics: Dict[str, float], save_path: Optional[Pa
     report.append(f"  F1 Score:  {metrics.get('f1', 0.0):.4f}")
     report.append(f"  mAP@0.5:   {metrics.get('map', 0.0):.4f}")
     
-    # Scene-level metrics
+    # Scene-level metrics.
     if 'urgency_accuracy' in metrics:
         report.append(f"  Urgency Accuracy: {metrics.get('urgency_accuracy', 0.0):.4f}")
     if 'distance_accuracy' in metrics:
@@ -48,11 +48,11 @@ def generate_evaluation_report(metrics: Dict[str, float], save_path: Optional[Pa
     report.append("Lighting Condition Performance:")
     report.append("-" * 70)
     
-    # Auto-detect lighting conditions from metrics keys
+    # Auto-detect lighting conditions from metrics keys.
     default_lighting_conditions = ['bright', 'normal', 'dim', 'dark']
     available_lightings = [l for l in default_lighting_conditions if any(f'{l}_{m}' in metrics for m in ['precision', 'recall', 'f1'])]
     if not available_lightings:
-        available_lightings = default_lighting_conditions  # Fallback to default
+        available_lightings = default_lighting_conditions  # Fallback to default.
     
     for lighting in available_lightings:
         p = metrics.get(f'{lighting}_precision', 0.0)
@@ -224,4 +224,5 @@ def export_metrics_json(metrics: Dict[str, float], save_path: Path) -> None:
     with open(save_path, 'w') as f:
         json.dump(json_metrics, f, indent=2)
     logger.info("Metrics exported to JSON: %s", save_path)
+
 

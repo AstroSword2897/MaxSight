@@ -21,8 +21,8 @@ class MAELoss(nn.Module):
     ) -> torch.Tensor:
         """Compute MAE reconstruction loss...."""
         loss = (recon - target) ** 2
-        loss = loss.mean(dim=-1)          # per-patch MSE
-        loss = (loss * mask.float()).sum() / (mask.sum().float() + 1e-8)  # Only masked patches
+        loss = loss.mean(dim=-1)          # Per-patch MSE.
+        loss = (loss * mask.float()).sum() / (mask.sum().float() + 1e-8)  # Only masked patches.
         return loss
 
 
@@ -42,25 +42,25 @@ class SimCLRLoss(nn.Module):
         """Compute NT-Xent contrastive loss...."""
         B = z1.size(0)
         
-        # Normalize embeddings
+        # Normalize embeddings.
         z1 = F.normalize(z1, dim=1)
         z2 = F.normalize(z2, dim=1)
         
-        # Concatenate all representations
-        representations = torch.cat([z1, z2], dim=0)  # [2*B, D]
+        # Concatenate all representations.
+        representations = torch.cat([z1, z2], dim=0)  # [2*B, D].
         
-        # Compute similarity matrix
-        similarity = torch.matmul(representations, representations.T) / self.temperature  # [2*B, 2*B]
+        # Compute similarity matrix.
+        similarity = torch.matmul(representations, representations.T) / self.temperature  # [2*B, 2*B].
         
-        # Create labels: positive pairs are (i, i+B) for i in [0, B-1]
+        # Create labels: positive pairs are (i, i+B) for i in [0, B-1].
         labels = torch.arange(B, device=z1.device)
-        labels = torch.cat([labels + B, labels])  # [2*B]
+        labels = torch.cat([labels + B, labels])  # [2*B].
         
         # Mask out self-similarity (diagonal)
         mask = torch.eye(2 * B, device=z1.device, dtype=torch.bool)
         similarity = similarity.masked_fill(mask, float("-inf"))
         
-        # Cross-entropy loss
+        # Cross-entropy loss.
         loss = F.cross_entropy(similarity, labels)
         return loss
 
@@ -80,13 +80,13 @@ class KnowledgeDistillationLoss(nn.Module):
         labels: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
         """Compute knowledge distillation loss...."""
-        # Teacher forward pass is frozen
+        # Teacher forward pass is frozen.
         with torch.no_grad():
             teacher_soft = F.softmax(
                 teacher_logits / self.temperature, dim=1
             )
         
-        # Student log probabilities
+        # Student log probabilities.
         student_log_soft = F.log_softmax(
             student_logits / self.temperature, dim=1
         )
@@ -98,10 +98,10 @@ class KnowledgeDistillationLoss(nn.Module):
             reduction="batchmean",
         ) * (self.temperature ** 2)
         
-        # Standard cross-entropy loss
+        # Standard cross-entropy loss.
         ce_loss = F.cross_entropy(student_logits, labels)
         
-        # Combined loss
+        # Combined loss.
         total = self.alpha * kd_loss + (1 - self.alpha) * ce_loss
         
         return {
@@ -132,12 +132,12 @@ class ElasticWeightConsolidation:
         self.model.eval()
         fisher = {}
         
-        # Initialize Fisher matrices
+        # Initialize Fisher matrices.
         for name, param in self.model.named_parameters():
             if param.requires_grad:
                 fisher[name] = torch.zeros_like(param)
         
-        # Accumulate Fisher information
+        # Accumulate Fisher information.
         num_samples = 0
         for batch in dataloader:
             self.model.zero_grad()
@@ -156,17 +156,17 @@ class ElasticWeightConsolidation:
             if targets is not None:
                 targets = targets.to(device)
             
-            # Forward pass
+            # Forward pass.
             outputs = self.model(inputs)
             
-            # Compute loss
+            # Compute loss.
             if targets is not None:
                 loss = loss_fn(outputs, targets)
             else:
-                # If no targets, assume outputs is loss dict
+                # If no targets, assume outputs is loss dict.
                 loss = outputs if isinstance(outputs, torch.Tensor) else outputs.get('loss', torch.tensor(0.0, device=device))
             
-            # Backward pass
+            # Backward pass.
             loss.backward()
             
             # Accumulate Fisher (gradient squared)
@@ -176,7 +176,7 @@ class ElasticWeightConsolidation:
             
             num_samples += 1
         
-        # Normalize Fisher by number of samples
+        # Normalize Fisher by number of samples.
         for name in fisher:
             fisher[name] /= max(num_samples, 1)
         
@@ -199,11 +199,12 @@ class ElasticWeightConsolidation:
         return self.lambda_ewc * loss
 
 
-# Backward compatibility aliases
+# Backward compatibility aliases.
 ReconstructionLoss = MAELoss
 MaskingSIM = SimCLRLoss
 KnowledgeDistillation = KnowledgeDistillationLoss
 
 # Test compatibility aliases (old class names)
-MAE = MAELoss  # For tests - but MAE should be a model, not a loss
-SimCLR = SimCLRLoss  # For tests - but SimCLR should be a model, not a loss
+MAE = MAELoss  # For tests - but MAE should be a model, not a loss.
+SimCLR = SimCLRLoss  # For tests - but SimCLR should be a model, not a loss.
+

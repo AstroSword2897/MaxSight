@@ -12,9 +12,9 @@ def main():
     print("Reorganizing Open Images V6")
     print("="*70)
     
-    # Source: FiftyOne
+    # Source: FiftyOne.
     fo_source = Path.home() / "fiftyone" / "open-images-v6" / "validation"
-    # Destination
+    # Destination.
     dest_dir = ROOT / "datasets" / "open_images_v6" / "validation"
     csv_dest = ROOT / "datasets" / "open_images_v6" / "validation-annotations-bbox.csv"
     
@@ -48,7 +48,7 @@ def main():
     
     print(f"✓ Moved {moved:,} images")
     
-    # Download CSV
+    # Download CSV.
     if not csv_dest.exists():
         print("\n📥 Downloading annotations CSV...")
         import requests
@@ -66,3 +66,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

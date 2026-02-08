@@ -26,7 +26,7 @@ def main():
     data_dir = ROOT / "datasets" / "open_images_v6"
     validation_dir = data_dir / "validation"
     
-    # Check if already downloaded
+    # Check if already downloaded.
     if validation_dir.exists():
         img_count = len(list(validation_dir.rglob("*.jpg")))
         if img_count > 1000:
@@ -46,22 +46,22 @@ def main():
     print("\n  Starting download... (this may take a while)")
     
     try:
-        # Download using FiftyOne
+        # Download using FiftyOne.
         dataset = fo.zoo.load_zoo_dataset(
             "open-images-v6",
             split="validation",
-            dataset_dir=str(data_dir.parent),  # FiftyOne creates subdirectory
+            dataset_dir=str(data_dir.parent),  # FiftyOne creates subdirectory.
             label_types=["detections"],
-            max_samples=None  # Download all validation images
+            max_samples=None  # Download all validation images.
         )
         
         print(f"\n✓ Downloaded {len(dataset)} images")
         
-        # Reorganize to expected structure
+        # Reorganize to expected structure.
         print("\n  Reorganizing files...")
         
-        # Find where FiftyOne stored the images
-        # FiftyOne typically stores in: dataset_dir/open-images-v6-validation/
+        # Find where FiftyOne stored the images.
+        # FiftyOne typically stores in: dataset_dir/open-images-v6-validation/.
         fo_dataset_paths = [
             data_dir.parent / "open-images-v6-validation",
             data_dir.parent / "open-images-v6" / "validation",
@@ -80,7 +80,7 @@ def main():
             print(f"  Moving images from {source_dir} to {validation_dir}...")
             validation_dir.mkdir(parents=True, exist_ok=True)
             
-            # Move images preserving subdirectory structure
+            # Move images preserving subdirectory structure.
             for img_path in source_dir.rglob("*.jpg"):
                 rel_path = img_path.relative_to(source_dir)
                 dest_path = validation_dir / rel_path
@@ -89,7 +89,7 @@ def main():
             
             print("  ✓ Files reorganized")
         
-        # Download annotation CSV
+        # Download annotation CSV.
         print("\n  Downloading annotations CSV...")
         csv_url = "https://storage.googleapis.com/openimages/v6/oidv6-validation-annotations-bbox.csv"
         csv_path = data_dir / "validation-annotations-bbox.csv"
@@ -110,7 +110,7 @@ def main():
         
         print("  ✓ Annotations downloaded")
         
-        # Verify
+        # Verify.
         img_count = len(list(validation_dir.rglob("*.jpg")))
         csv_size = csv_path.stat().st_size if csv_path.exists() else 0
         
@@ -121,7 +121,7 @@ def main():
         print(f"  Annotations: {csv_size / 1024 / 1024:.1f} MB")
         print(f"  Location: {validation_dir}")
         
-        if img_count > 1000 and csv_size > 100000:  # >100KB for CSV
+        if img_count > 1000 and csv_size > 100000:  # >100KB for CSV.
             print("\n✅ Open Images V6 is ready for inference!")
             return 0
         else:
@@ -137,3 +137,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

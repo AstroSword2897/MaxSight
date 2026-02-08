@@ -5,7 +5,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Distance ordinal for priority: near=0 -> higher priority, far=2 -> lower
+# Distance ordinal for priority: near=0 -> higher priority, far=2 -> lower.
 DISTANCE_ORDINAL = {"near": 0, "medium": 1, "far": 2}
 
 
@@ -18,7 +18,7 @@ def _distance_ordinal(d: Dict[str, Any]) -> int:
 
 def _priority_score(det: Dict[str, Any]) -> float:
     """Priority = urgency * confidence * (1 / (distance_ordinal + 1))."""
-    urgency = int(det.get("urgency", 0)) + 1  # 0-3 -> 1-4
+    urgency = int(det.get("urgency", 0)) + 1  # 0-3 -> 1-4.
     confidence = float(det.get("confidence", 0.5))
     do = _distance_ordinal(det) + 1
     return urgency * confidence * (1.0 / do)
@@ -37,7 +37,7 @@ class PriorityBudgetFilter:
             return []
         if len(detections) <= self.max_alerts_per_frame:
             return detections
-        # Score and sort descending
+        # Score and sort descending.
         scored = [(det, _priority_score(det)) for det in detections]
         scored.sort(key=lambda x: x[1], reverse=True)
         result = [det for det, _ in scored[: self.max_alerts_per_frame]]
@@ -49,3 +49,4 @@ class PriorityBudgetFilter:
                 self.max_alerts_per_frame,
             )
         return result
+

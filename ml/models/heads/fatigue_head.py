@@ -56,7 +56,7 @@ class FatigueHead(nn.Module):
             nn.Dropout(dropout)
         )
         
-        # Task-specific heads
+        # Task-specific heads.
         head_input_dim = hidden_dim // 2
         self.fatigue_head = self._make_head(head_input_dim)
         self.blink_rate_head = self._make_head(head_input_dim)
@@ -71,7 +71,7 @@ class FatigueHead(nn.Module):
             nn.Linear(input_dim, 16),
             nn.ReLU(inplace=True),
             nn.Linear(16, 1),
-            nn.Sigmoid()  # Output in [0, 1] range
+            nn.Sigmoid()  # Output in [0, 1] range.
         )
     
     def forward(
@@ -80,7 +80,7 @@ class FatigueHead(nn.Module):
         motion_features: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """Forward pass to generate fatigue and gaze predictions...."""
-        # Validate inputs
+        # Validate inputs.
         if eye_features.dim() != 2:
             raise ValueError(f"Expected 2D eye_features [B, eye_dim], got {eye_features.shape}")
         if motion_features.dim() != 2:
@@ -96,45 +96,46 @@ class FatigueHead(nn.Module):
         if motion_features.shape[1] != self.temporal_dim:
             raise ValueError(f"Expected motion_dim={self.temporal_dim}, got {motion_features.shape[1]}")
         
-        # FIXED: Motion as temporal anchor - fatigue uses motion stability
+        # FIXED: Motion as temporal anchor - fatigue uses motion stability.
         combined = torch.cat([eye_features, motion_features], dim=1)
         
-        # Initial feature extraction
-        initial_features = self.initial_net(combined)  # [B, hidden_dim]
+        # Initial feature extraction.
+        initial_features = self.initial_net(combined)  # [B, hidden_dim].
         
         # Apply LSTM if enabled (adds temporal context)
         if self.use_lstm and self.lstm is not None:
-            # Add sequence dimension: [B, hidden_dim] -> [B, 1, hidden_dim]
-            initial_seq = initial_features.unsqueeze(1)  # [B, 1, hidden_dim]
+            # Add sequence dimension: [B, hidden_dim] -> [B, 1, hidden_dim].
+            initial_seq = initial_features.unsqueeze(1)  # [B, 1, hidden_dim].
             
-            # LSTM forward pass
+            # LSTM forward pass.
             lstm_out, self.lstm_hidden = self.lstm(initial_seq, self.lstm_hidden)
             
-            # Remove sequence dimension: [B, 1, lstm_hidden_size] -> [B, lstm_hidden_size]
+            # Remove sequence dimension: [B, 1, lstm_hidden_size] -> [B, lstm_hidden_size].
             lstm_features = lstm_out.squeeze(1)
         else:
             lstm_features = initial_features
         
-        # Final shared feature extraction
+        # Final shared feature extraction.
         shared = self.shared_net(lstm_features)
         
-        # Validate shared features
+        # Validate shared features.
         if torch.isnan(shared).any() or torch.isinf(shared).any():
             raise RuntimeError(
                 "NaN/Inf detected in shared features. Check input features and model initialization."
             )
         
-        # Generate predictions
+        # Generate predictions.
         outputs = {
             'fatigue_score': self.fatigue_head(shared),
             'blink_rate': self.blink_rate_head(shared),
             'fixation_stability': self.fixation_stability_head(shared),
-            'shared_features': shared  # Useful for analysis/visualization
+            'shared_features': shared  # Useful for analysis/visualization.
         }
         
-        # Validate outputs
+        # Validate outputs.
         for key, value in outputs.items():
             if torch.isnan(value).any() or torch.isinf(value).any():
                 raise RuntimeError(f"NaN/Inf detected in {key}. Check model initialization.")
         
         return outputs
+

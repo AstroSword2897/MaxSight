@@ -8,7 +8,7 @@ when you want to deploy the best-performing models by validation mAP.
 Usage:
   python scripts/get_top7_by_map.py --inference-data inference_data.json
   python scripts/get_top7_by_map.py --inference-data inference_data.json --k 5
-  # Print one per line for shell:
+  # Print one per line for shell:.
   python scripts/get_top7_by_map.py --inference-data inference_data.json --print
 """
 
@@ -23,7 +23,7 @@ except NameError:
     REPO = Path.cwd()
 
 DEFAULT_K = 7
-MAP_KEY = "mAP_50"  # mAP @ IoU 0.5; fallback to "mAP"
+MAP_KEY = "mAP_50"  # MAP @ IoU 0.5; fallback to "mAP"
 
 
 def get_top_conditions_by_map(
@@ -46,7 +46,7 @@ def get_top_conditions_by_map(
             m = r.get(map_key) is not None and r.get(map_key) or r.get("mAP", 0.0)
             if cond is not None:
                 candidates.append((cond, float(m)))
-    # Sort by mAP descending, then take top k
+    # Sort by mAP descending, then take top k.
     candidates.sort(key=lambda x: -x[1])
     return [c[0] for c in candidates[:k]]
 
@@ -78,3 +78,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

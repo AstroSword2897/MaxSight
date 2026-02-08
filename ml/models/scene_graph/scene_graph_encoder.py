@@ -25,8 +25,8 @@ class SceneRelation:
     predicate: str
     object: str
     confidence: float
-    src: int = 0  # Source node index
-    dst: int = 0  # Destination node index
+    src: int = 0  # Source node index.
+    dst: int = 0  # Destination node index.
 
 
 class SceneGraphEncoder(nn.Module):
@@ -46,48 +46,48 @@ class SceneGraphEncoder(nn.Module):
         self.num_semantic_relations = num_semantic_relations
         self.mps_stable = mps_stable
 
-        # Trainable spatial classifier
+        # Trainable spatial classifier.
         self.spatial_classifier = nn.Sequential(
             nn.Linear(object_embed_dim * 2, 256),
             nn.ReLU(),
             nn.Linear(256, num_spatial_relations)
         )
 
-        # Trainable semantic classifier
+        # Trainable semantic classifier.
         self.semantic_classifier = nn.Sequential(
             nn.Linear(object_embed_dim * 2, 256),
             nn.ReLU(),
             nn.Linear(256, num_semantic_relations)
         )
 
-        # Relation embeddings
+        # Relation embeddings.
         self.relation_embedding = nn.Embedding(
             num_spatial_relations + num_semantic_relations,
             relation_embed_dim
         )
 
-        # Optional rule-based semantic overrides
+        # Optional rule-based semantic overrides.
         self.semantic_rules = semantic_rules if semantic_rules else {}
 
-        # Predicates
+        # Predicates.
         self.spatial_predicates = ['left', 'right', 'above', 'below', 'near', 'far']
 
     def extract_spatial_relations(
         self,
-        boxes: torch.Tensor,          # [N, 4]
-        object_embeddings: torch.Tensor  # [N, object_embed_dim]
+        boxes: torch.Tensor,          # [N, 4].
+        object_embeddings: torch.Tensor  # [N, object_embed_dim].
     ) -> List[SceneRelation]:
         N = boxes.shape[0]
         device = boxes.device
 
-        # Pairwise feature concatenation
+        # Pairwise feature concatenation.
         idx_i, idx_j = torch.triu_indices(N, N, offset=1, device=device)
-        emb_i = object_embeddings[idx_i]  # [num_pairs, dim]
+        emb_i = object_embeddings[idx_i]  # [num_pairs, dim].
         emb_j = object_embeddings[idx_j]
-        pair_features = torch.cat([emb_i, emb_j], dim=1)  # [num_pairs, 2*dim]
+        pair_features = torch.cat([emb_i, emb_j], dim=1)  # [num_pairs, 2*dim].
 
-        # Predict spatial relations
-        logits = self.spatial_classifier(pair_features)  # [num_pairs, num_relations]
+        # Predict spatial relations.
+        logits = self.spatial_classifier(pair_features)  # [num_pairs, num_relations].
         probs = F.softmax(logits, dim=1)
         pred_idx = probs.argmax(dim=1)
 
@@ -114,14 +114,14 @@ class SceneGraphEncoder(nn.Module):
         N = len(object_classes)
         device = object_embeddings.device
 
-        # Pairwise embeddings
+        # Pairwise embeddings.
         idx_i, idx_j = torch.triu_indices(N, N, offset=1, device=device)
         emb_i = object_embeddings[idx_i]
         emb_j = object_embeddings[idx_j]
         pair_features = torch.cat([emb_i, emb_j], dim=1)
 
-        # Predict semantic relations
-        logits = self.semantic_classifier(pair_features)  # [num_pairs, num_semantic_relations]
+        # Predict semantic relations.
+        logits = self.semantic_classifier(pair_features)  # [num_pairs, num_semantic_relations].
         probs = F.softmax(logits, dim=1)
         pred_idx = probs.argmax(dim=1)
 
@@ -129,7 +129,7 @@ class SceneGraphEncoder(nn.Module):
         for k in range(pred_idx.shape[0]):
             subj = object_classes[idx_i[k].item()]
             obj = object_classes[idx_j[k].item()]
-            # Check rule override
+            # Check rule override.
             rule_pred = self.semantic_rules.get((subj, obj), None)
             predicate = rule_pred if rule_pred else f"semantic_{pred_idx[k].item()}"
             confidence = 1.0 if rule_pred else probs[k, pred_idx[k]].item()
@@ -152,9 +152,9 @@ class SceneGraphEncoder(nn.Module):
         batch_offsets: Optional[torch.Tensor] = None
     ) -> tuple:
         """Extract both spatial and semantic relations, returning them with edge_index and edge_attr...."""
-        # Extract spatial and semantic relations
+        # Extract spatial and semantic relations.
         if boxes.dim() == 3:
-            # Batched input - flatten for processing
+            # Batched input - flatten for processing.
             B, K, _ = boxes.shape
             boxes_flat = boxes.reshape(-1, 4)
             embeddings_flat = object_embeddings.reshape(-1, object_embeddings.shape[-1])
@@ -171,23 +171,23 @@ class SceneGraphEncoder(nn.Module):
         semantic_relations = self.extract_semantic_relations(classes_flat, embeddings_flat)
         all_relations = spatial_relations + semantic_relations
         
-        # Build edge_index and edge_attr
+        # Build edge_index and edge_attr.
         if len(all_relations) > 0:
             edges = [(rel.src, rel.dst) for rel in all_relations]
             edge_index = torch.tensor(edges, dtype=torch.long, device=boxes.device).T.contiguous()
             
-            # Create edge attributes from relation embeddings
+            # Create edge attributes from relation embeddings.
             relation_indices = []
             for rel in all_relations:
                 # Find relation type index (spatial or semantic)
                 if rel in spatial_relations:
-                    # Find spatial predicate index
+                    # Find spatial predicate index.
                     try:
                         pred_idx = self.spatial_predicates.index(rel.predicate)
                     except ValueError:
                         pred_idx = 0
                 else:
-                    # Semantic relation - use num_spatial_relations + semantic index
+                    # Semantic relation - use num_spatial_relations + semantic index.
                     pred_idx = self.num_spatial_relations + hash(rel.predicate) % self.num_semantic_relations
                 relation_indices.append(pred_idx)
             
@@ -206,15 +206,15 @@ class SceneGraphEncoder(nn.Module):
         object_classes: List[str]
     ) -> Dict[str, object]:
         if boxes.dim() == 3:
-            # Batched input - process each scene separately
+            # Batched input - process each scene separately.
             batch_size = boxes.shape[0]
             all_spatial_relations = []
             all_semantic_relations = []
             all_relations = []
             
             for b in range(batch_size):
-                scene_boxes = boxes[b]  # [K, 4]
-                scene_embeddings = object_embeddings[b]  # [K, C]
+                scene_boxes = boxes[b]  # [K, 4].
+                scene_embeddings = object_embeddings[b]  # [K, C].
                 scene_classes = object_classes[b] if isinstance(object_classes[0], list) else object_classes
                 
                 spatial_rels = self.extract_spatial_relations(scene_boxes, scene_embeddings)
@@ -224,8 +224,8 @@ class SceneGraphEncoder(nn.Module):
                 all_semantic_relations.extend(semantic_rels)
                 all_relations.extend(spatial_rels + semantic_rels)
             
-            # Build edge_index and edge_attr for batched graphs
-            # For now, return simple structure - can be enhanced later
+            # Build edge_index and edge_attr for batched graphs.
+            # For now, return simple structure - can be enhanced later.
             edge_index = torch.empty((2, 0), dtype=torch.long, device=object_embeddings.device)
             edge_attr = torch.empty((0, self.relation_embed_dim), dtype=torch.float32, device=object_embeddings.device)
             batch = torch.arange(batch_size, device=object_embeddings.device).repeat_interleave(boxes.shape[1])
@@ -241,12 +241,12 @@ class SceneGraphEncoder(nn.Module):
                 'batch': batch
             }
         else:
-            # Single scene input
+            # Single scene input.
             spatial_relations = self.extract_spatial_relations(boxes, object_embeddings)
             semantic_relations = self.extract_semantic_relations(object_classes, object_embeddings)
             all_relations = spatial_relations + semantic_relations
             
-            # Build edge_index and edge_attr for single scene
+            # Build edge_index and edge_attr for single scene.
             edge_index = torch.empty((2, 0), dtype=torch.long, device=object_embeddings.device)
             edge_attr = torch.empty((0, self.relation_embed_dim), dtype=torch.float32, device=object_embeddings.device)
             batch = torch.zeros(boxes.shape[0], dtype=torch.long, device=object_embeddings.device)
@@ -312,4 +312,5 @@ else:
             super().__init__()
         def forward(self, *args, **kwargs):
             raise ImportError("torch-geometric is required for GNNEncoder")
+
 

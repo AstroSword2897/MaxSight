@@ -16,10 +16,10 @@ class StabilityMetrics:
     epoch: int
     train_loss: float
     val_loss: float
-    train_val_gap: float  # Overfitting indicator
-    loss_spike: bool  # Sudden loss increase
-    loss_unstable: bool  # NaN or Inf
-    task_imbalance: float  # GradNorm weight variance
+    train_val_gap: float  # Overfitting indicator.
+    loss_spike: bool  # Sudden loss increase.
+    loss_unstable: bool  # NaN or Inf.
+    task_imbalance: float  # GradNorm weight variance.
     lr_current: float
     weight_decay_current: float
     # Set when check_and_adjust applies an adjustment (for logging in train_loop)
@@ -37,16 +37,16 @@ class StabilityManager:
         optimizer: torch.optim.Optimizer,
         scheduler: Optional[Any] = None,
         gradnorm_loss: Optional[Any] = None,
-        # Thresholds
-        spike_threshold: float = 0.3,  # Loss increase > 30% = spike
-        overfit_threshold: float = 0.25,  # Val > train by 25% = overfit
-        task_imbalance_threshold: float = 3.0,  # Max/min weight ratio
-        # Adjustments
-        lr_reduce_factor: float = 0.5,  # Halve LR on spike
-        wd_increase_factor: float = 1.5,  # 1.5x weight decay on overfit
-        max_wd: float = 0.5,  # Cap weight decay
-        min_lr: float = 1e-7,  # Floor LR
-        # Logging
+        # Thresholds.
+        spike_threshold: float = 0.3,  # Loss increase > 30% = spike.
+        overfit_threshold: float = 0.25,  # Val > train by 25% = overfit.
+        task_imbalance_threshold: float = 3.0,  # Max/min weight ratio.
+        # Adjustments.
+        lr_reduce_factor: float = 0.5,  # Halve LR on spike.
+        wd_increase_factor: float = 1.5,  # 1.5x weight decay on overfit.
+        max_wd: float = 0.5,  # Cap weight decay.
+        min_lr: float = 1e-7,  # Floor LR.
+        # Logging.
         log_every: int = 1,
     ):
         """Initialize stability manager...."""
@@ -65,11 +65,11 @@ class StabilityManager:
         
         self.log_every = log_every
         
-        # History for spike detection
+        # History for spike detection.
         self.loss_history = []
         self.stability_history = []
         
-        # State
+        # State.
         self.adjustments_made = 0
         self.last_adjustment_epoch = -1
     
@@ -116,7 +116,7 @@ class StabilityManager:
             if train_loss_f > recent_avg * (1 + self.spike_threshold):
                 loss_spike = True
         
-        # Detect overfitting
+        # Detect overfitting.
         train_val_gap = (val_loss_f - train_loss_f) / (train_loss_f + 1e-8)
         overfitting = train_val_gap > self.overfit_threshold
         
@@ -143,10 +143,10 @@ class StabilityManager:
             weight_decay_current=wd_current,
         )
         
-        # Apply adjustments
+        # Apply adjustments.
         adjustments = []
         
-        # 1. Handle NaN/Inf: aggressive LR reduction
+        # 1. Handle NaN/Inf: aggressive LR reduction.
         if loss_unstable:
             new_lr = max(lr_current * 0.1, self.min_lr)
             self._set_lr(new_lr)
@@ -156,7 +156,7 @@ class StabilityManager:
             self.adjustments_made += 1
             self.last_adjustment_epoch = epoch
         
-        # 2. Handle loss spike: moderate LR reduction
+        # 2. Handle loss spike: moderate LR reduction.
         elif loss_spike and epoch > 5:  # Skip early epochs (warmup)
             new_lr = max(lr_current * self.lr_reduce_factor, self.min_lr)
             self._set_lr(new_lr)
@@ -169,7 +169,7 @@ class StabilityManager:
             self.adjustments_made += 1
             self.last_adjustment_epoch = epoch
         
-        # 3. Handle overfitting: increase weight decay
+        # 3. Handle overfitting: increase weight decay.
         if overfitting and epoch > 10:
             new_wd = min(wd_current * self.wd_increase_factor, self.max_wd)
             if new_wd > wd_current:
@@ -189,13 +189,13 @@ class StabilityManager:
                 "GradNorm will rebalance; monitor for improvement."
             )
         
-        # Log adjustments
+        # Log adjustments.
         if adjustments:
             logger.warning(f"Epoch {epoch} stability adjustments:")
             for adj in adjustments:
                 logger.warning(f"  - {adj}")
         
-        # Log stability metrics periodically
+        # Log stability metrics periodically.
         if epoch % self.log_every == 0:
             logger.info(
                 f"Stability check (epoch {epoch}): "
@@ -204,7 +204,7 @@ class StabilityManager:
                 f"adjustments_total={self.adjustments_made}"
             )
         
-        # Update history
+        # Update history.
         self.loss_history.append(train_loss_f)
         if len(self.loss_history) > 10:
             self.loss_history.pop(0)
@@ -231,3 +231,4 @@ class StabilityManager:
             'current_wd': self.optimizer.param_groups[0].get('weight_decay', 0.0),
             'history_length': len(self.stability_history),
         }
+

@@ -46,10 +46,10 @@ class GlobalEncoder(nn.Module):
             self.clip_model = CLIPModel.from_pretrained(model_name, **kwargs)
             self.clip_processor = CLIPProcessor.from_pretrained(model_name, **kwargs)
             
-            # CLIP image encoder
+            # CLIP image encoder.
             self.encoder = self.clip_model.vision_model
             
-            # Projection to target dimension if needed
+            # Projection to target dimension if needed.
             if embed_dim != self.clip_model.config.vision_config.hidden_size:
                 self.proj = nn.Linear(
                     self.clip_model.config.vision_config.hidden_size,
@@ -59,9 +59,9 @@ class GlobalEncoder(nn.Module):
                 self.proj = nn.Identity()
         else:
             # DINOv2 (would need to install dinov2 package)
-            # For now, placeholder
+            # For now, placeholder.
             self.encoder = None
-            self.proj = nn.Linear(768, embed_dim)  # DINOv2 base dimension
+            self.proj = nn.Linear(768, embed_dim)  # DINOv2 base dimension.
     
     def forward(self, images: torch.Tensor) -> torch.Tensor:
         """Encode images to global embeddings.
@@ -72,24 +72,25 @@ class GlobalEncoder(nn.Module):
         Returns:
             Global embeddings [B, embed_dim]"""
         if self.use_clip and self.encoder is not None:
-            # CLIP forward pass
+            # CLIP forward pass.
             outputs = self.encoder(pixel_values=images)
-            # Get CLS token or pooled output
+            # Get CLS token or pooled output.
             if hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
                 global_emb = outputs.pooler_output
             else:
-                global_emb = outputs.last_hidden_state[:, 0]  # CLS token
+                global_emb = outputs.last_hidden_state[:, 0]  # CLS token.
             
-            # Project to target dimension
+            # Project to target dimension.
             global_emb = self.proj(global_emb)
         else:
-            # Placeholder: simple projection
+            # Placeholder: simple projection.
             B = images.shape[0]
             global_emb = self.proj(torch.randn(B, 768, device=images.device))
         
-        # L2 normalize for cosine similarity
+        # L2 normalize for cosine similarity.
         global_emb = nn.functional.normalize(global_emb, p=2, dim=1)
         
         return global_emb
+
 
 

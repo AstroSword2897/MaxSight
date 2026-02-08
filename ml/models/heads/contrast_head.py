@@ -10,28 +10,28 @@ class ContrastMapHead(nn.Module):
         self.motion_dim = motion_dim
         self.use_edge_aware = use_edge_aware
         
-        # FIXED: Motion-conditioned contrast estimation
-        # Motion stability indicates reliable contrast regions
+        # FIXED: Motion-conditioned contrast estimation.
+        # Motion stability indicates reliable contrast regions.
         if motion_dim > 0:
             self.motion_proj = nn.Conv2d(motion_dim, in_channels, kernel_size=1, bias=False)
         
-        # Contrast estimation network
-        # WHY THIS ARCHITECTURE:
+        # Contrast estimation network.
+        # WHY THIS ARCHITECTURE:.
         # - Progressive channel reduction: 256 -> 128 -> 64 -> 1 (efficient computation)
-        # - 3x3 kernels: Capture local contrast relationships
-        # - 1x1 final layer: Efficiently maps to single contrast value per pixel
+        # - 3x3 kernels: Capture local contrast relationships.
+        # - 1x1 final layer: Efficiently maps to single contrast value per pixel.
         
         # Edge detection channel (computed from features, used as modulation signal)
         if use_edge_aware:
-            # Single 4D edge channel that modulates features during forward pass
-            # Using GroupNorm instead of BatchNorm for robustness to small batches
+            # Single 4D edge channel that modulates features during forward pass.
+            # Using GroupNorm instead of BatchNorm for robustness to small batches.
             self.edge_conv = nn.Sequential(
                 nn.Conv2d(in_channels, 32, kernel_size=3, padding=1, bias=False),
-                nn.GroupNorm(8, 32),  # More robust than BatchNorm for small batches
+                nn.GroupNorm(8, 32),  # More robust than BatchNorm for small batches.
                 nn.ReLU(inplace=True),
-                nn.Conv2d(32, 1, kernel_size=1),  # Single edge channel [B, 1, H, W]
-                # No sigmoid - clamp after scaling to avoid saturation
-                # Edge map will be clamped to [0, 1] during forward pass
+                nn.Conv2d(32, 1, kernel_size=1),  # Single edge channel [B, 1, H, W].
+                # No sigmoid - clamp after scaling to avoid saturation.
+                # Edge map will be clamped to [0, 1] during forward pass.
             )
         
         # Contrast estimation network (now modulated by edges)
@@ -39,10 +39,10 @@ class ContrastMapHead(nn.Module):
         self.bn1 = nn.BatchNorm2d(128)
         self.conv2 = nn.Conv2d(128, 64, kernel_size=3, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(64)
-        self.conv3 = nn.Conv2d(64, 1, kernel_size=1)  # Single channel contrast map
+        self.conv3 = nn.Conv2d(64, 1, kernel_size=1)  # Single channel contrast map.
         self.relu = nn.ReLU(inplace=True)
         
-        # Initialize weights properly
+        # Initialize weights properly.
         self._initialize_weights()
     
     def _initialize_weights(self):
@@ -61,15 +61,15 @@ class ContrastMapHead(nn.Module):
         if not self.use_edge_aware:
             return torch.zeros_like(features[:, :1])
         
-        return self.edge_conv(features)  # [B, 1, H, W]
+        return self.edge_conv(features)  # [B, 1, H, W].
     
     def forward(
         self, 
         features: torch.Tensor,
-        motion_features: Optional[torch.Tensor] = None  # FIXED: Motion as temporal anchor
+        motion_features: Optional[torch.Tensor] = None  # FIXED: Motion as temporal anchor.
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """Forward pass with edge-aware modulation...."""
-        # Validate input
+        # Validate input.
         if features.dim() != 4:
             raise ValueError(f"Expected 4D tensor [B, C, H, W], got {features.shape}")
         
@@ -80,8 +80,8 @@ class ContrastMapHead(nn.Module):
                 f"Ensure input features match head configuration."
             )
         
-        # FIXED: Motion-conditioned feature extraction
-        # Motion stability indicates reliable contrast regions
+        # FIXED: Motion-conditioned feature extraction.
+        # Motion stability indicates reliable contrast regions.
         if motion_features is not None and hasattr(self, 'motion_proj'):
             motion_proj = self.motion_proj(motion_features)
             if motion_proj.shape[2:] != features.shape[2:]:
@@ -90,12 +90,12 @@ class ContrastMapHead(nn.Module):
         
         # Compute edge map as modulation signal (if enabled)
         if self.use_edge_aware:
-            edge_logits = self.edge_conv(features)  # [B, 1, H, W] - raw logits
+            edge_logits = self.edge_conv(features)  # [B, 1, H, W] - raw logits.
             # Clamp to [0, 1] to avoid saturation (better than sigmoid for gradients)
             edge_map = torch.clamp(edge_logits, 0, 1)
-            # Modulate features with edge information: emphasize edge-relevant features
-            # Edge map acts as attention/importance weighting
-            modulated_features = features * (1.0 + edge_map)  # Boost edge regions
+            # Modulate features with edge information: emphasize edge-relevant features.
+            # Edge map acts as attention/importance weighting.
+            modulated_features = features * (1.0 + edge_map)  # Boost edge regions.
         else:
             edge_map = None
             modulated_features = features
@@ -104,11 +104,11 @@ class ContrastMapHead(nn.Module):
         x = self.relu(self.bn1(self.conv1(modulated_features)))
         x = self.relu(self.bn2(self.conv2(x)))
         
-        # Generate contrast map
+        # Generate contrast map.
         contrast_map = torch.sigmoid(self.conv3(x))
-        contrast_map = contrast_map.squeeze(1)  # [B, H, W]
+        contrast_map = contrast_map.squeeze(1)  # [B, H, W].
         
-        # Validate output
+        # Validate output.
         if torch.isnan(contrast_map).any() or torch.isinf(contrast_map).any():
             raise RuntimeError(
                 "NaN/Inf detected in contrast map. Check input features and model initialization."
@@ -116,7 +116,7 @@ class ContrastMapHead(nn.Module):
         
         # Return contrast map (and edge map if available, for loss computation)
         if self.use_edge_aware and edge_map is not None:
-            return contrast_map, edge_map.squeeze(1)  # Return both for loss
+            return contrast_map, edge_map.squeeze(1)  # Return both for loss.
         return contrast_map, None
     
     def compute_loss(
@@ -126,20 +126,20 @@ class ContrastMapHead(nn.Module):
         edge_map: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
         """Compute contrast loss using learned edge map...."""
-        # Validate inputs
+        # Validate inputs.
         if pred_contrast.shape != target_contrast.shape:
             raise ValueError(
                 f"Shape mismatch: pred {pred_contrast.shape} vs target {target_contrast.shape}"
             )
         
-        # Standard L1 loss
+        # Standard L1 loss.
         l1_loss = F.l1_loss(pred_contrast, target_contrast)
         
         # If edge map provided, use it for weighting (same edges as forward pass)
         if edge_map is not None and self.use_edge_aware:
-            # Ensure edge_map is normalized [0, 1] and matches shape
+            # Ensure edge_map is normalized [0, 1] and matches shape.
             if edge_map.shape != pred_contrast.shape:
-                # Resize if needed
+                # Resize if needed.
                 edge_map = F.interpolate(
                     edge_map.unsqueeze(1), 
                     size=pred_contrast.shape[1:], 
@@ -147,7 +147,7 @@ class ContrastMapHead(nn.Module):
                     align_corners=False
                 ).squeeze(1)
             
-            # Clamp edge map to [0, 1] for safe weighting
+            # Clamp edge map to [0, 1] for safe weighting.
             edge_map = edge_map.clamp(0, 1)
             
             # Weight loss by edge strength (detach to prevent double-counting gradients)
@@ -155,11 +155,12 @@ class ContrastMapHead(nn.Module):
             weighted_loss = pixel_loss * (1.0 + edge_map.detach())
             loss = weighted_loss.mean()
         else:
-            # Simple L1 loss if no edge map
+            # Simple L1 loss if no edge map.
             loss = l1_loss
         
         return {
             'loss': loss,
             'l1_loss': l1_loss,
         }
+
 

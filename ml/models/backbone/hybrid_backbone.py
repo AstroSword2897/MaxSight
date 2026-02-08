@@ -26,13 +26,13 @@ class SpatialAttentionPooling(nn.Module):
             pooled: [B, D] single feature vector"""
         B, N, D = x.shape
         
-        # Use mean as query, all patches as keys/values
-        q = self.query(x.mean(dim=1, keepdim=True))  # [B, 1, D]
-        k = self.key(x)  # [B, N, D]
-        v = self.value(x)  # [B, N, D]
+        # Use mean as query, all patches as keys/values.
+        q = self.query(x.mean(dim=1, keepdim=True))  # [B, 1, D].
+        k = self.key(x)  # [B, N, D].
+        v = self.value(x)  # [B, N, D].
         
-        attn = torch.softmax(q @ k.transpose(-2, -1) * self.scale, dim=-1)  # [B, 1, N]
-        out = (attn @ v).squeeze(1)  # [B, D]
+        attn = torch.softmax(q @ k.transpose(-2, -1) * self.scale, dim=-1)  # [B, 1, N].
+        out = (attn @ v).squeeze(1)  # [B, D].
         
         return out
 
@@ -53,7 +53,7 @@ class AdaptiveFeatureFusion(nn.Module):
             nn.GELU()
         )
         
-        # Learnable fusion weights with gating
+        # Learnable fusion weights with gating.
         self.fusion_gate = nn.Sequential(
             nn.Linear(fused_dim * 2, fused_dim),
             nn.GELU(),
@@ -70,9 +70,9 @@ class AdaptiveFeatureFusion(nn.Module):
         cnn_proj = self.cnn_proj(cnn_feat)
         vit_proj = self.vit_proj(vit_feat)
         
-        # Adaptive gating
+        # Adaptive gating.
         concat_feat = torch.cat([cnn_proj, vit_proj], dim=-1)
-        weights = self.fusion_gate(concat_feat)  # [B, 2]
+        weights = self.fusion_gate(concat_feat)  # [B, 2].
         
         fused = weights[:, 0:1] * cnn_proj + weights[:, 1:2] * vit_proj
         return self.output_proj(fused)
@@ -99,13 +99,13 @@ class CrossModalAttention(nn.Module):
         cnn_feat: torch.Tensor, 
         vit_feat: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        # CNN queries ViT
+        # CNN queries ViT.
         cnn_enhanced, _ = self.cnn_to_vit(
             query=cnn_feat, key=vit_feat, value=vit_feat
         )
         cnn_feat = self.norm1(cnn_feat + self.dropout(cnn_enhanced))
         
-        # ViT queries CNN
+        # ViT queries CNN.
         vit_enhanced, _ = self.vit_to_cnn(
             query=vit_feat, key=cnn_feat, value=cnn_feat
         )
@@ -131,11 +131,11 @@ class HybridCNNViTBackbone(nn.Module):
         dropout: float = 0.1,
         pretrained_cnn: bool = True,
         use_gradient_checkpointing: bool = False,
-        cross_layer_alpha: float = 0.1,  # Tunable residual scaling
+        cross_layer_alpha: float = 0.1,  # Tunable residual scaling.
     ):
         super().__init__()
         
-        # Validate dimensions
+        # Validate dimensions.
         assert img_size % patch_size == 0, \
             f"img_size ({img_size}) must be divisible by patch_size ({patch_size})"
         
@@ -151,26 +151,26 @@ class HybridCNNViTBackbone(nn.Module):
         self.use_gradient_checkpointing = use_gradient_checkpointing
         
         if isinstance(cross_layer_alpha, float):
-            # Fixed value: convert to parameter and constrain
+            # Fixed value: convert to parameter and constrain.
             self.cross_layer_alpha_raw = nn.Parameter(torch.tensor(cross_layer_alpha))
         else:
-            # Learnable: already a parameter
+            # Learnable: already a parameter.
             self.cross_layer_alpha_raw = cross_layer_alpha if cross_layer_alpha is not None else nn.Parameter(torch.tensor(0.1))
         
-        # === CNN Backbone: ResNet50 + FPN ===
+        # === CNN Backbone: ResNet50 + FPN ===.
         weights = ResNet50_Weights.IMAGENET1K_V2 if pretrained_cnn else None
         resnet = resnet50(weights=weights)
         
-        # Extract feature extraction stages
+        # Extract feature extraction stages.
         self.cnn_stem = nn.Sequential(
             resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool
         )
         self.cnn_layer1 = resnet.layer1  # 64 -> 256 channels (required before layer2)
-        self.cnn_layer2 = resnet.layer2  # C3: 512 channels
-        self.cnn_layer3 = resnet.layer3  # C4: 1024 channels
-        self.cnn_layer4 = resnet.layer4  # C5: 2048 channels
+        self.cnn_layer2 = resnet.layer2  # C3: 512 channels.
+        self.cnn_layer3 = resnet.layer3  # C4: 1024 channels.
+        self.cnn_layer4 = resnet.layer4  # C5: 2048 channels.
         
-        # Feature Pyramid Network
+        # Feature Pyramid Network.
         self.fpn = FeaturePyramidNetwork(
             in_channels_list=[512, 1024, 2048],
             out_channels=cnn_out_channels
@@ -186,29 +186,29 @@ class HybridCNNViTBackbone(nn.Module):
             dropout=dropout
         )
         
-        # === Cross-layer Connections (FIXED) ===
+        # === Cross-layer Connections (FIXED) ===.
         if use_cross_layer_connections:
-            # CNN to ViT: Proper learnable 1x1 convolutions
+            # CNN to ViT: Proper learnable 1x1 convolutions.
             self.cnn_to_vit_proj = nn.ModuleList([
                 nn.Sequential(
                     nn.Conv2d(cnn_out_channels, vit_embed_dim, kernel_size=1, bias=False),
                     nn.BatchNorm2d(vit_embed_dim),
                     nn.GELU()
-                ) for _ in range(3)  # For P3, P4, P5
+                ) for _ in range(3)  # For P3, P4, P5.
             ])
             
             # ViT to CNN: Spatially-aware projection (FIXED)
-            # Use attention pooling instead of naive mean
+            # Use attention pooling instead of naive mean.
             self.vit_spatial_pool = SpatialAttentionPooling(vit_embed_dim)
             
-            # Project from ViT dim to CNN dim with proper conv
+            # Project from ViT dim to CNN dim with proper conv.
             self.vit_to_cnn_proj = nn.Sequential(
                 nn.Conv2d(vit_embed_dim, cnn_out_channels, kernel_size=1, bias=False),
                 nn.BatchNorm2d(cnn_out_channels),
                 nn.GELU()
             )
         
-        total_cnn_dim = cnn_out_channels * 3  # From 3 FPN levels
+        total_cnn_dim = cnn_out_channels * 3  # From 3 FPN levels.
         
         if fusion_method == 'concat':
             self.fusion = nn.Sequential(
@@ -247,7 +247,7 @@ class HybridCNNViTBackbone(nn.Module):
         
         self.dropout = nn.Dropout(dropout)
         
-        # Initialize weights
+        # Initialize weights.
         self.apply(self._init_weights)
     
     def _init_weights(self, m):
@@ -285,7 +285,7 @@ class HybridCNNViTBackbone(nn.Module):
         else:
             c3, c4, c5 = run_cnn()
         
-        # Apply FPN
+        # Apply FPN.
         fpn_input = {'feat0': c3, 'feat1': c4, 'feat2': c5}
         fpn_output = self.fpn(fpn_input)
         fpn_features = [fpn_output['feat0'], fpn_output['feat1'], fpn_output['feat2']]
@@ -309,7 +309,7 @@ class HybridCNNViTBackbone(nn.Module):
         assert patch_h * patch_w == num_patches, \
             f"Number of patches ({num_patches}) must be a perfect square"
         
-        # Reshape ViT patches to spatial format
+        # Reshape ViT patches to spatial format.
         vit_spatial = vit_patches.transpose(1, 2).reshape(
             B, self.vit_embed_dim, patch_h, patch_w
         )
@@ -319,28 +319,28 @@ class HybridCNNViTBackbone(nn.Module):
         for i, (cnn_feat, cnn_to_vit_layer) in enumerate(
             zip(cnn_features, self.cnn_to_vit_proj)
         ):
-            # === CNN → ViT: Add local CNN context to ViT patches ===
-            cnn_projected = cnn_to_vit_layer(cnn_feat)  # [B, vit_embed_dim, H, W]
+            # === CNN → ViT: Add local CNN context to ViT patches ===.
+            cnn_projected = cnn_to_vit_layer(cnn_feat)  # [B, vit_embed_dim, H, W].
             
-            # Resize to match ViT patch grid
+            # Resize to match ViT patch grid.
             cnn_to_vit_resized = F.adaptive_avg_pool2d(
                 cnn_projected, (patch_h, patch_w)
             )
             
-            # Add to ViT patches as residual
-            cnn_context = cnn_to_vit_resized.flatten(2).transpose(1, 2)  # [B, N, D]
+            # Add to ViT patches as residual.
+            cnn_context = cnn_to_vit_resized.flatten(2).transpose(1, 2)  # [B, N, D].
             if hasattr(self, 'cross_layer_alpha_raw'):
                 raw = self.cross_layer_alpha_raw
                 alpha = torch.sigmoid(raw if isinstance(raw, torch.Tensor) else torch.tensor(float(raw), device=vit_patches.device, dtype=vit_patches.dtype))
             else:
-                alpha = 0.1  # Default fallback
+                alpha = 0.1  # Default fallback.
             vit_patches = vit_patches + alpha * cnn_context
             
-            # === ViT → CNN: Add global ViT context to CNN features ===
+            # === ViT → CNN: Add global ViT context to CNN features ===.
             # Project ViT spatial features to CNN dimension (FIXED)
-            vit_projected = self.vit_to_cnn_proj(vit_spatial)  # [B, cnn_dim, pH, pW]
+            vit_projected = self.vit_to_cnn_proj(vit_spatial)  # [B, cnn_dim, pH, pW].
             
-            # Resize to match current CNN feature map
+            # Resize to match current CNN feature map.
             vit_to_cnn_resized = F.interpolate(
                 vit_projected, 
                 size=cnn_feat.shape[2:], 
@@ -348,7 +348,7 @@ class HybridCNNViTBackbone(nn.Module):
                 align_corners=False
             )
             
-            # Add as residual
+            # Add as residual.
             raw = self.cross_layer_alpha_raw
             alpha = torch.sigmoid(raw if isinstance(raw, torch.Tensor) else torch.tensor(float(raw), device=cnn_feat.device, dtype=cnn_feat.dtype))
             enhanced_cnn.append(cnn_feat + alpha * vit_to_cnn_resized)
@@ -366,7 +366,7 @@ class HybridCNNViTBackbone(nn.Module):
         
         fpn_features, cnn_feats = self.extract_cnn_features(x)
         
-        # === Extract ViT features (if not provided) ===
+        # === Extract ViT features (if not provided) ===.
         if vit_patches is None:
             if self.use_gradient_checkpointing and self.training:
                 vit_cls, vit_patches = torch.utils.checkpoint.checkpoint(
@@ -377,37 +377,37 @@ class HybridCNNViTBackbone(nn.Module):
             else:
                 vit_cls, vit_patches = self.vit(x, return_patch_tokens=True)
         else:
-            # Use provided vit_patches, compute cls token from mean
-            vit_cls = vit_patches.mean(dim=1)  # [B, vit_embed_dim]
+            # Use provided vit_patches, compute cls token from mean.
+            vit_cls = vit_patches.mean(dim=1)  # [B, vit_embed_dim].
         
         # Ensure vit_patches is a tensor (type narrowing)
         assert vit_patches is not None, "vit_patches must not be None"
         
-        # === Cross-layer interaction ===
+        # === Cross-layer interaction ===.
         if self.use_cross_layer_connections:
             cnn_enhanced, vit_enhanced = self.cnn_vit_interaction(cnn_feats, vit_patches)
         else:
             cnn_enhanced, vit_enhanced = fpn_features, vit_patches
         
-        # Flatten FPN features and concatenate
-        fpn_flat = [f.flatten(2).mean(dim=2) for f in cnn_enhanced]  # [B, C] each
-        cnn_concat = torch.cat(fpn_flat, dim=1)  # [B, total_cnn_dim]
+        # Flatten FPN features and concatenate.
+        fpn_flat = [f.flatten(2).mean(dim=2) for f in cnn_enhanced]  # [B, C] each.
+        cnn_concat = torch.cat(fpn_flat, dim=1)  # [B, total_cnn_dim].
         
-        vit_global = vit_enhanced.mean(dim=1)  # [B, vit_embed_dim]
+        vit_global = vit_enhanced.mean(dim=1)  # [B, vit_embed_dim].
         
         if self.fusion_method == 'concat':
             fused = self.fusion(torch.cat([cnn_concat, vit_global], dim=1))
         elif self.fusion_method == 'weighted':
             fused = self.fusion(cnn_concat, vit_global)
         elif self.fusion_method == 'cross_attention':
-            # Add sequence dimension for MultiheadAttention
-            cnn_seq = self.cnn_query_proj(cnn_concat).unsqueeze(1)  # [B, 1, D]
-            vit_seq = self.vit_kv_proj(vit_global).unsqueeze(1)     # [B, 1, D]
+            # Add sequence dimension for MultiheadAttention.
+            cnn_seq = self.cnn_query_proj(cnn_concat).unsqueeze(1)  # [B, 1, D].
+            vit_seq = self.vit_kv_proj(vit_global).unsqueeze(1)     # [B, 1, D].
             
             attn_out, _ = self.cross_attn(cnn_seq, vit_seq, vit_seq)
             attn_out = self.fusion_norm(attn_out).squeeze(1)
             
-            # Feedforward
+            # Feedforward.
             fused = self.fusion_ffn(attn_out)
         else:
             raise ValueError(f"Unknown fusion method: {self.fusion_method}")
@@ -427,7 +427,7 @@ class HybridCNNViTBackbone(nn.Module):
 
 
 if __name__ == '__main__':
-    # Standard usage
+    # Standard usage.
     model = HybridCNNViTBackbone(
         img_size=224,
         patch_size=16,
@@ -438,7 +438,7 @@ if __name__ == '__main__':
         use_cross_layer_connections=True,
         pretrained_cnn=True,
         use_gradient_checkpointing=True,  # Now actually works!
-        cross_layer_alpha=0.1  # Tunable residual scaling
+        cross_layer_alpha=0.1  # Tunable residual scaling.
     )
     
     x = torch.randn(2, 3, 224, 224)
@@ -448,11 +448,11 @@ if __name__ == '__main__':
     print(f"FPN features: {[f.shape for f in aux['fpn_features']]}")
     print(f"ViT patches: {aux['vit_patches'].shape}")
     
-    # Test gradient checkpointing
+    # Test gradient checkpointing.
     model.train()
     loss = fused.sum()
     loss.backward()
     print("✓ Gradient checkpointing works!")
     
-    # Memory efficiency test
+    # Memory efficiency test.
     print(f"\nModel parameters: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M")

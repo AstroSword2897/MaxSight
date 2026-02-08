@@ -111,7 +111,7 @@ def main():
 
     rows.sort(key=sort_key)
 
-    # Print table
+    # Print table.
     print(f"\n{'Condition':<25} {'Best val loss':>14} {'Best val mAP':>14} {'Epoch':>8}")
     print("-" * 65)
     for r in rows:
@@ -129,3 +129,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

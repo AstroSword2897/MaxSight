@@ -58,8 +58,8 @@ def test_sanitize_boxes_nan():
     boxes = torch.tensor([[float('nan'), 0.5, 0.2, 0.3]])
     clean_boxes = sanitize_boxes(boxes)
     assert not torch.isnan(clean_boxes).any()
-    assert (clean_boxes[:, 2] > 0).all()  # Width positive
-    assert (clean_boxes[:, 3] > 0).all()  # Height positive
+    assert (clean_boxes[:, 2] > 0).all()  # Width positive.
+    assert (clean_boxes[:, 3] > 0).all()  # Height positive.
 
 
 def test_sanitize_boxes_zero_size():
@@ -103,7 +103,7 @@ def test_matching_valid_inputs():
     )
     
     assert indices.shape[0] == 2  # (pred_idx, gt_idx)
-    assert indices.shape[1] <= 2  # At most 2 matches
+    assert indices.shape[1] <= 2  # At most 2 matches.
     assert costs.shape[0] == indices.shape[1]
 
 
@@ -118,9 +118,9 @@ def test_matching_batch_mixed():
     gt_boxes = torch.zeros(batch_size, num_gt, 4)
     gt_labels = torch.zeros(batch_size, num_gt, dtype=torch.long)
     
-    # Make samples 0 and 2 valid
+    # Make samples 0 and 2 valid.
     gt_boxes[0, :3] = torch.rand(3, 4)
-    gt_boxes[0, :3, 2:] = gt_boxes[0, :3, 2:].clamp(min=0.1)  # Valid sizes
+    gt_boxes[0, :3, 2:] = gt_boxes[0, :3, 2:].clamp(min=0.1)  # Valid sizes.
     gt_labels[0, :3] = torch.randint(1, 91, (3,))
     
     gt_boxes[2, :2] = torch.rand(2, 4)
@@ -144,8 +144,8 @@ def test_validate_and_sanitize_batch():
     batch = {
         'images': torch.rand(2, 3, 224, 224),
         'boxes': torch.tensor([
-            [[0.3, 0.3, 0.2, 0.2], [0.7, 0.7, 0.0, 0.15]],  # Second box has zero width
-            [[0.5, 0.5, 0.1, 0.1], [float('nan'), 0.3, 0.1, 0.1]]  # Second box has NaN
+            [[0.3, 0.3, 0.2, 0.2], [0.7, 0.7, 0.0, 0.15]],  # Second box has zero width.
+            [[0.5, 0.5, 0.1, 0.1], [float('nan'), 0.3, 0.1, 0.1]]  # Second box has NaN.
         ]),
         'labels': torch.tensor([[1, 2], [3, 4]]),
         'urgency': torch.tensor([0, 1])
@@ -157,12 +157,12 @@ def test_validate_and_sanitize_batch():
     
     assert is_valid, f"Batch should be sanitized: {msg}"
     assert not torch.isnan(clean_batch['boxes']).any()
-    assert (clean_batch['boxes'][:, :, 2] > 0).all()  # All widths positive
-    assert (clean_batch['boxes'][:, :, 3] > 0).all()  # All heights positive
+    assert (clean_batch['boxes'][:, :, 2] > 0).all()  # All widths positive.
+    assert (clean_batch['boxes'][:, :, 3] > 0).all()  # All heights positive.
 
 
 if __name__ == '__main__':
-    # Run tests
+    # Run tests.
     test_validate_boxes_valid()
     test_validate_boxes_nan()
     test_validate_boxes_inf()
@@ -175,3 +175,4 @@ if __name__ == '__main__':
     test_validate_and_sanitize_batch()
     
     print("✅ All Hungarian matcher robustness tests passed!")
+

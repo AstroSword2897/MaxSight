@@ -12,7 +12,7 @@ from pathlib import Path
 import json
 import sys
 
-# Add parent directory to path for imports
+# Add parent directory to path for imports.
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
@@ -41,16 +41,16 @@ class QuantizationValidator:
         fp32_out = fp32_out.detach().float().cpu()
         int8_out = int8_out.detach().float().cpu()
         
-        # Absolute error
+        # Absolute error.
         abs_diff = (fp32_out - int8_out).abs()
         
         # Relative error (avoiding division by zero)
         rel_diff = abs_diff / (fp32_out.abs() + 1e-8)
         
-        # Mean Squared Error
+        # Mean Squared Error.
         mse = ((fp32_out - int8_out) ** 2).mean().item()
         
-        # Mean Absolute Error
+        # Mean Absolute Error.
         mae = abs_diff.mean().item()
         
         # Signal-to-Noise Ratio (with proper edge case handling)
@@ -80,31 +80,31 @@ class QuantizationValidator:
     ) -> Dict[str, float]:
         """Validate classification head with accuracy metrics.
         MaxSight format: [B, num_locations, num_classes]"""
-        # Shape validation
+        # Shape validation.
         if fp32_logits.shape != int8_logits.shape:
             raise ValueError(f"Shape mismatch: FP32 {fp32_logits.shape} vs INT8 {int8_logits.shape}")
         
-        # Flatten for per-location classification
+        # Flatten for per-location classification.
         B, num_locations, num_classes = fp32_logits.shape
         fp32_flat = fp32_logits.reshape(-1, num_classes)
         int8_flat = int8_logits.reshape(-1, num_classes)
         
-        # Output error
+        # Output error.
         output_error = self.compute_relative_error(fp32_flat, int8_flat)
         
         results = {
             **{f'logits_{k}': v for k, v in output_error.items()}
         }
         
-        # If targets available, compute accuracy
+        # If targets available, compute accuracy.
         if targets is not None:
-            # Targets format: [B, max_objects] with class indices
-            # For MaxSight, we need to match predictions to ground truth
-            # This is simplified - full matching requires IoU computation
+            # Targets format: [B, max_objects] with class indices.
+            # For MaxSight, we need to match predictions to ground truth.
+            # This is simplified - full matching requires IoU computation.
             fp32_preds = fp32_flat.argmax(dim=1)
             int8_preds = int8_flat.argmax(dim=1)
             
-            # Agreement between FP32 and INT8 predictions
+            # Agreement between FP32 and INT8 predictions.
             agreement = (fp32_preds == int8_preds).float().mean().item()
             results['prediction_agreement'] = agreement
         
@@ -118,7 +118,7 @@ class QuantizationValidator:
     ) -> Dict[str, Any]:
         """Validate bounding box head (regression).
         MaxSight format: [B, num_locations, 4] (cx, cy, w, h normalized)"""
-        # Shape validation
+        # Shape validation.
         if fp32_bbox.shape != int8_bbox.shape:
             return {'_bbox_error': f"Shape mismatch: FP32 {fp32_bbox.shape} vs INT8 {int8_bbox.shape}"}
         
@@ -131,11 +131,11 @@ class QuantizationValidator:
             'bbox_snr_db': output_error['snr_db']
         }
         
-        # If ground truth available, compute IoU approximation
+        # If ground truth available, compute IoU approximation.
         if targets_bbox is not None:
             # MaxSight uses center format (cx, cy, w, h)
             def compute_iou_center_format(pred, target):
-                # Convert to corner format
+                # Convert to corner format.
                 def center_to_corner(boxes):
                     cx, cy, w, h = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
                     x1 = cx - w / 2
@@ -147,7 +147,7 @@ class QuantizationValidator:
                 pred_corners = center_to_corner(pred)
                 target_corners = center_to_corner(target)
                 
-                # Intersection
+                # Intersection.
                 x1 = torch.max(pred_corners[:, 0], target_corners[:, 0])
                 y1 = torch.max(pred_corners[:, 1], target_corners[:, 1])
                 x2 = torch.min(pred_corners[:, 2], target_corners[:, 2])
@@ -155,7 +155,7 @@ class QuantizationValidator:
                 
                 inter_area = torch.clamp(x2 - x1, min=0) * torch.clamp(y2 - y1, min=0)
                 
-                # Union
+                # Union.
                 pred_area = (pred_corners[:, 2] - pred_corners[:, 0]) * (pred_corners[:, 3] - pred_corners[:, 1])
                 target_area = (target_corners[:, 2] - target_corners[:, 0]) * (target_corners[:, 3] - target_corners[:, 1])
                 union_area = pred_area + target_area - inter_area
@@ -164,7 +164,7 @@ class QuantizationValidator:
                 return iou.mean().item()
             
             try:
-                # Flatten for comparison
+                # Flatten for comparison.
                 fp32_flat = fp32_bbox.reshape(-1, 4)
                 int8_flat = int8_bbox.reshape(-1, 4)
                 targets_flat = targets_bbox.reshape(-1, 4)
@@ -190,18 +190,18 @@ class QuantizationValidator:
     ) -> Dict[str, float]:
         """Validate embedding head with cosine similarity.
         MaxSight format: [B, embedding_dim] (scene_embedding)"""
-        # Shape validation
+        # Shape validation.
         if fp32_embed.shape != int8_embed.shape:
             raise ValueError(f"Shape mismatch: FP32 {fp32_embed.shape} vs INT8 {int8_embed.shape}")
         
-        # Normalize embeddings
+        # Normalize embeddings.
         fp32_norm = torch.nn.functional.normalize(fp32_embed, p=2, dim=1)
         int8_norm = torch.nn.functional.normalize(int8_embed, p=2, dim=1)
         
-        # Cosine similarity between FP32 and INT8 embeddings
+        # Cosine similarity between FP32 and INT8 embeddings.
         cos_sim = (fp32_norm * int8_norm).sum(dim=1)
         
-        # L2 distance
+        # L2 distance.
         l2_dist = torch.norm(fp32_embed - int8_embed, p=2, dim=1)
         
         output_error = self.compute_relative_error(fp32_embed, int8_embed)
@@ -222,7 +222,7 @@ class QuantizationValidator:
     ) -> Dict[str, float]:
         """Validate urgency classification head.
         MaxSight format: [B, num_urgency_levels] (typically 4)"""
-        # Shape validation
+        # Shape validation.
         if fp32_urgency.shape != int8_urgency.shape:
             raise ValueError(f"Shape mismatch: FP32 {fp32_urgency.shape} vs INT8 {int8_urgency.shape}")
         
@@ -234,11 +234,11 @@ class QuantizationValidator:
             'urgency_snr_db': output_error['snr_db']
         }
         
-        # Classification accuracy
+        # Classification accuracy.
         fp32_preds = fp32_urgency.argmax(dim=1)
         int8_preds = int8_urgency.argmax(dim=1)
         
-        # Agreement between FP32 and INT8
+        # Agreement between FP32 and INT8.
         agreement = (fp32_preds == int8_preds).float().mean().item()
         results['urgency_prediction_agreement'] = agreement
         
@@ -259,7 +259,7 @@ class QuantizationValidator:
     ) -> Dict[str, float]:
         """Validate objectness head.
         MaxSight format: [B, num_locations]"""
-        # Shape validation
+        # Shape validation.
         if fp32_obj.shape != int8_obj.shape:
             raise ValueError(f"Shape mismatch: FP32 {fp32_obj.shape} vs INT8 {int8_obj.shape}")
         
@@ -306,13 +306,13 @@ class QuantizationValidator:
                         
                     inputs = inputs.to(self.device)
                     
-                    # Forward pass
+                    # Forward pass.
                     fp32_out = self.model_fp32(inputs)
                     int8_out = self.model_int8(inputs)
                     
                     # Validate each head (MaxSight output format)
                     if isinstance(fp32_out, dict):
-                        # Classification head
+                        # Classification head.
                         if 'classifications' in fp32_out:
                             class_targets = targets.get('labels') if isinstance(targets, dict) else None
                             if class_targets is not None and torch.is_tensor(class_targets):
@@ -327,7 +327,7 @@ class QuantizationValidator:
                             except Exception as e:
                                 print(f"Warning: Classification validation failed: {e}")
                         
-                        # Bounding box head
+                        # Bounding box head.
                         if 'boxes' in fp32_out:
                             bbox_targets = targets.get('boxes') if isinstance(targets, dict) else None
                             if bbox_targets is not None and torch.is_tensor(bbox_targets):
@@ -342,7 +342,7 @@ class QuantizationValidator:
                             except Exception as e:
                                 print(f"Warning: Bbox validation failed: {e}")
                         
-                        # Scene embedding head
+                        # Scene embedding head.
                         if 'scene_embedding' in fp32_out:
                             try:
                                 metrics = self.validate_embedding_head(
@@ -353,7 +353,7 @@ class QuantizationValidator:
                             except Exception as e:
                                 print(f"Warning: Embedding validation failed: {e}")
                         
-                        # Urgency head
+                        # Urgency head.
                         if 'urgency_scores' in fp32_out:
                             urgency_targets = targets.get('urgency') if isinstance(targets, dict) else None
                             if urgency_targets is not None and torch.is_tensor(urgency_targets):
@@ -368,7 +368,7 @@ class QuantizationValidator:
                             except Exception as e:
                                 print(f"Warning: Urgency validation failed: {e}")
                         
-                        # Objectness head
+                        # Objectness head.
                         if 'objectness' in fp32_out:
                             try:
                                 metrics = self.validate_objectness_head(
@@ -381,7 +381,7 @@ class QuantizationValidator:
                         
                         num_batches += 1
                         
-                        # Progress indication
+                        # Progress indication.
                         if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == total_batches:
                             progress = (batch_idx + 1) / total_batches * 100
                             print(f"  Processed {batch_idx + 1}/{total_batches} batches ({progress:.1f}%)")
@@ -389,9 +389,9 @@ class QuantizationValidator:
                 except Exception as e:
                     import warnings
                     warnings.warn(f"Batch {batch_idx} failed: {e}")
-                    continue  # Skip failed batch, don't crash entire validation
+                    continue  # Skip failed batch, don't crash entire validation.
         
-        # Aggregate metrics
+        # Aggregate metrics.
         aggregated = {}
         for head_name, metrics_list in all_metrics.items():
             if not metrics_list:
@@ -399,7 +399,7 @@ class QuantizationValidator:
             
             head_agg = {}
             
-            # Average all numeric metrics
+            # Average all numeric metrics.
             all_keys = set()
             for m in metrics_list:
                 all_keys.update(m.keys())
@@ -443,30 +443,30 @@ class ModelBenchmark:
         model = model.eval().to(device)
         test_inputs = [x.to(device) for x in test_inputs]
         
-        # Warmup
+        # Warmup.
         with torch.no_grad():
             for _ in range(warmup_runs):
                 for x in test_inputs:
                     _ = model(x)
-            # Synchronize GPU operations before benchmarking
+            # Synchronize GPU operations before benchmarking.
             if device.startswith('cuda') and torch.cuda.is_available():
                 torch.cuda.synchronize()
         
-        # Benchmark
+        # Benchmark.
         timings = []
         with torch.no_grad():
             for _ in range(num_runs):
-                # Synchronize before timing
+                # Synchronize before timing.
                 if device.startswith('cuda') and torch.cuda.is_available():
                     torch.cuda.synchronize()
                 t0 = time.perf_counter()
                 for x in test_inputs:
                     _ = model(x)
-                # Synchronize after inference to ensure completion
+                # Synchronize after inference to ensure completion.
                 if device.startswith('cuda') and torch.cuda.is_available():
                     torch.cuda.synchronize()
                 t1 = time.perf_counter()
-                timings.append((t1 - t0) / len(test_inputs) * 1000)  # ms per input
+                timings.append((t1 - t0) / len(test_inputs) * 1000)  # Ms per input.
         
         timings = np.array(timings)
         
@@ -506,7 +506,7 @@ class ModelBenchmark:
         }
 
 
-# CLI usage
+# CLI usage.
 if __name__ == "__main__":
     import argparse
     
@@ -530,7 +530,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Load model architecture
+    # Load model architecture.
     import importlib.util
     spec = importlib.util.spec_from_file_location("model_def", args.model_file)
     if spec is None:
@@ -547,7 +547,7 @@ if __name__ == "__main__":
     model_fp32 = mod.build_model()
     model_int8 = mod.build_model()
     
-    # Load weights
+    # Load weights.
     model_fp32.load_state_dict(torch.load(args.fp32_model, map_location='cpu'))
     model_int8.load_state_dict(torch.load(args.int8_model, map_location='cpu'))
     
@@ -559,11 +559,11 @@ if __name__ == "__main__":
     )
     test_loader = DataLoader(test_data, batch_size=args.batch_size)
     
-    # Run validation
+    # Run validation.
     validator = QuantizationValidator(model_fp32, model_int8, test_loader, args.device)
     validation_results = validator.run_full_validation()
     
-    # Run benchmark if requested
+    # Run benchmark if requested.
     if args.benchmark:
         test_inputs = [torch.randn(1, 3, 224, 224) for _ in range(10)]
         benchmark_results = ModelBenchmark.compare_models(
@@ -571,14 +571,14 @@ if __name__ == "__main__":
         )
         validation_results['benchmark'] = benchmark_results
     
-    # Save results
+    # Save results.
     output_path = Path(args.output_file)
     with open(output_path, 'w') as f:
         json.dump(validation_results, f, indent=2)
     
     print(f"\nResults saved to: {output_path}")
     
-    # Print summary
+    # Print summary.
     print("\nVALIDATION SUMMARY")
     
     for head, metrics in validation_results.items():
@@ -596,4 +596,5 @@ if __name__ == "__main__":
         print(f"  INT8 latency: {bench['int8']['mean_ms']:.2f} ms")
         print(f"  Speedup: {bench['speedup']:.2f}x")
         print(f"  Latency reduction: {bench['latency_reduction_percent']:.1f}%")
+
 

@@ -18,7 +18,7 @@ class FusionDataset(Dataset):
     def __init__(self, data_dir: str):
         self.root = Path(data_dir)
         
-        # Load embeddings
+        # Load embeddings.
         self.vision = np.load(self.root / "vision.npy")
         self.text = np.load(self.root / "text.npy")
         self.ocr = np.load(self.root / "ocr.npy")
@@ -57,7 +57,7 @@ class FusionMLP(nn.Module):
             nn.Linear(hidden, out_dim)
         )
         
-        self.classifier = nn.Linear(out_dim, 1000)  # Adjust num_classes as needed
+        self.classifier = nn.Linear(out_dim, 1000)  # Adjust num_classes as needed.
     
     def forward(self, v, t, o):
         """Forward pass."""
@@ -101,10 +101,10 @@ def train(
             
             fused_vec, logits = model(v, t, o)
             
-            # Multi-task loss
+            # Multi-task loss.
             loss1 = ce_loss(logits, label)
             target = torch.ones(len(v)).to(device)
-            loss2 = cos_loss(fused_vec, v, target)  # Keep fused close to vision
+            loss2 = cos_loss(fused_vec, v, target)  # Keep fused close to vision.
             
             loss = loss1 + 0.1 * loss2
             loss.backward()
@@ -116,5 +116,6 @@ def train(
     
     torch.save(model.state_dict(), save_path)
     print(f"Model saved to {save_path}")
+
 
 

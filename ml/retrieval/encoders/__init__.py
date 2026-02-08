@@ -1,6 +1,6 @@
 """Retrieval encoders for multi-vector retrieval."""
 
-# Make imports optional to handle missing dependencies gracefully
+# Make imports optional to handle missing dependencies gracefully.
 try:
     from .global_encoder import GlobalEncoder
 except (ImportError, ModuleNotFoundError):
@@ -45,5 +45,6 @@ __all__ = [
     'AudioEncoder',
     'SceneGraphRetrievalEncoder',
 ]
+
 
 

@@ -119,7 +119,7 @@ def compare_model_sizes(
     output_dir: Optional[Path] = None
 ) -> Dict[str, Any]:
     """Compare FP32 vs INT8 sizes and optionally write to disk. Helps ensure assistive models fit on phones and wearables for on-device inference."""
-    # Count parameters
+    # Count parameters.
     total_params = sum(p.numel() for p in model_fp32.parameters())
     trainable_params = sum(p.numel() for p in model_fp32.parameters() if p.requires_grad)
     
@@ -145,18 +145,18 @@ def compare_model_sizes(
         results['meets_target'] = int8_size_mb < 50.0
         results['size_reduction'] = f"{((fp32_size_mb - int8_size_mb) / fp32_size_mb * 100):.1f}%"
     
-    # Measure actual disk sizes if requested
+    # Measure actual disk sizes if requested.
     if save_models and output_dir is not None:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save FP32 model
+        # Save FP32 model.
         fp32_path = output_dir / "model_fp32.pth"
         torch.save(model_fp32.state_dict(), fp32_path)
         fp32_disk_size = fp32_path.stat().st_size / (1024 * 1024)
         results['disk_sizes']['fp32'] = f"{fp32_disk_size:.2f} MB"
         
-        # Save INT8 model if available
+        # Save INT8 model if available.
         if model_int8 is not None:
             int8_path = output_dir / "model_int8.pth"
             torch.save(model_int8.state_dict(), int8_path)
@@ -193,7 +193,7 @@ def validate_quantized_model(
     if len(all_results) == 1:
         return all_results[0]
     else:
-        # Average metrics across inputs
+        # Average metrics across inputs.
         aggregated = {
             'num_test_inputs': len(all_results),
             'max_relative_difference': max(r['max_relative_difference'] for r in all_results),
@@ -273,7 +273,7 @@ def _compute_tensor_differences(
     t1_float = tensor1.float()
     t2_float = tensor2.float()
     
-    # Relative difference
+    # Relative difference.
     diff = torch.abs(t1_float - t2_float)
     rel_diff = diff / (torch.abs(t1_float) + 1e-8)
     max_rel_diff = rel_diff.max().item()
@@ -418,3 +418,4 @@ def quantize_and_validate(
         'validation': validation,
         'ready_for_export': ready_for_export,
     }
+

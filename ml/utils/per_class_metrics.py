@@ -110,8 +110,8 @@ class ConfusionMatrix:
             for j in range(self.num_classes):
                 if i != j and self.matrix[i, j] > 0:
                     confused.append((
-                        self.class_names[i],  # True class
-                        self.class_names[j],  # Predicted class
+                        self.class_names[i],  # True class.
+                        self.class_names[j],  # Predicted class.
                         int(self.matrix[i, j])
                     ))
                     
@@ -124,7 +124,7 @@ class ConfusionMatrix:
         
         class_scores = []
         for name, m in metrics.items():
-            if m.support > 0:  # Only include classes with samples
+            if m.support > 0:  # Only include classes with samples.
                 score = getattr(m, metric)
                 class_scores.append((name, score))
                 
@@ -159,32 +159,32 @@ class PerClassMetricsTracker:
         self.impairment_names = impairment_names or []
         self.urgency_levels = urgency_levels
         
-        # Main confusion matrix
+        # Main confusion matrix.
         self.confusion_matrix = ConfusionMatrix(self.num_classes, class_names)
         
-        # Per-class metrics
+        # Per-class metrics.
         self.class_metrics: Dict[str, ClassMetrics] = {
             name: ClassMetrics() for name in class_names
         }
         
-        # Per-scenario metrics
+        # Per-scenario metrics.
         self.scenario_metrics: Dict[str, Dict[str, ClassMetrics]] = {
             scenario: {name: ClassMetrics() for name in class_names}
             for scenario in self.scenario_names
         }
         
-        # Per-impairment metrics
+        # Per-impairment metrics.
         self.impairment_metrics: Dict[str, Dict[str, ClassMetrics]] = {
             imp: {name: ClassMetrics() for name in class_names}
             for imp in self.impairment_names
         }
         
-        # Per-urgency metrics
+        # Per-urgency metrics.
         self.urgency_metrics: Dict[int, ClassMetrics] = {
             level: ClassMetrics() for level in range(urgency_levels)
         }
         
-        # Prediction logging
+        # Prediction logging.
         self.predictions_log: List[Dict] = []
         self.misclassifications_log: List[Dict] = []
         
@@ -196,10 +196,10 @@ class PerClassMetricsTracker:
         """Update metrics with batch predictions...."""
         batch_size = predictions.shape[0]
         
-        # Update confusion matrix
+        # Update confusion matrix.
         self.confusion_matrix.update(predictions, targets)
         
-        # Update per-class metrics
+        # Update per-class metrics.
         preds = predictions.cpu().numpy()
         targs = targets.cpu().numpy()
         confs = confidences.cpu().numpy() if confidences is not None else [None] * batch_size
@@ -212,7 +212,7 @@ class PerClassMetricsTracker:
             pred_name = self.class_names[pred] if pred < len(self.class_names) else f"class_{pred}"
             target_name = self.class_names[target] if target < len(self.class_names) else f"class_{target}"
             
-            # Update class metrics
+            # Update class metrics.
             if target_name in self.class_metrics:
                 if pred == target:
                     self.class_metrics[target_name].true_positives += 1
@@ -224,7 +224,7 @@ class PerClassMetricsTracker:
             if pred_name in self.class_metrics and pred != target:
                 self.class_metrics[pred_name].false_positives += 1
                 
-            # Log prediction
+            # Log prediction.
             log_entry = {
                 'prediction': pred_name,
                 'target': target_name,
@@ -232,12 +232,12 @@ class PerClassMetricsTracker:
                 'confidence': conf
             }
             
-            # Add metadata
+            # Add metadata.
             if metadata and i < len(metadata):
                 meta = metadata[i]
                 log_entry.update(meta)
                 
-                # Update scenario metrics
+                # Update scenario metrics.
                 scenario = meta.get('scenario')
                 if scenario and scenario in self.scenario_metrics:
                     if pred == target:
@@ -245,7 +245,7 @@ class PerClassMetricsTracker:
                     else:
                         self.scenario_metrics[scenario][target_name].false_negatives += 1
                         
-                # Update impairment metrics
+                # Update impairment metrics.
                 impairment = meta.get('impairment')
                 if impairment and impairment in self.impairment_metrics:
                     if pred == target:
@@ -253,7 +253,7 @@ class PerClassMetricsTracker:
                     else:
                         self.impairment_metrics[impairment][target_name].false_negatives += 1
                         
-                # Update urgency metrics
+                # Update urgency metrics.
                 urgency = meta.get('urgency')
                 if urgency is not None and urgency in self.urgency_metrics:
                     if pred == target:
@@ -268,19 +268,19 @@ class PerClassMetricsTracker:
                 
     def get_summary(self) -> Dict:
         """Get comprehensive metrics summary."""
-        # Per-class summary
+        # Per-class summary.
         class_summary = {}
         for name, metrics in self.class_metrics.items():
             if metrics.support > 0:
                 class_summary[name] = metrics.to_dict()
                 
-        # Worst classes
+        # Worst classes.
         worst_classes = self.confusion_matrix.get_worst_classes('f1', 10)
         
-        # Most confused pairs
+        # Most confused pairs.
         confused_pairs = self.confusion_matrix.get_most_confused_pairs(10)
         
-        # Aggregate metrics
+        # Aggregate metrics.
         total_tp = sum(m.true_positives for m in self.class_metrics.values())
         total_fp = sum(m.false_positives for m in self.class_metrics.values())
         total_fn = sum(m.false_negatives for m in self.class_metrics.values())
@@ -293,7 +293,7 @@ class PerClassMetricsTracker:
         micro_recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0
         micro_f1 = 2 * micro_precision * micro_recall / (micro_precision + micro_recall) if (micro_precision + micro_recall) > 0 else 0
         
-        # Per-scenario summary
+        # Per-scenario summary.
         scenario_summary = {}
         for scenario, metrics in self.scenario_metrics.items():
             total_correct = sum(m.true_positives for m in metrics.values())
@@ -303,7 +303,7 @@ class PerClassMetricsTracker:
                 'samples': total_samples
             }
             
-        # Per-impairment summary
+        # Per-impairment summary.
         impairment_summary = {}
         for imp, metrics in self.impairment_metrics.items():
             total_correct = sum(m.true_positives for m in metrics.values())
@@ -313,7 +313,7 @@ class PerClassMetricsTracker:
                 'samples': total_samples
             }
             
-        # Per-urgency summary
+        # Per-urgency summary.
         urgency_summary = {}
         for level, metrics in self.urgency_metrics.items():
             urgency_summary[f"urgency_{level}"] = {
@@ -355,11 +355,11 @@ class PerClassMetricsTracker:
         for log in self.misclassifications_log:
             urgency = log.get('urgency', 0)
             
-            # High urgency misclassifications
+            # High urgency misclassifications.
             if urgency >= 2:
                 critical['high_urgency_misses'].append(log)
                 
-            # Safety-critical categories
+            # Safety-critical categories.
             safety_classes = ['stairs', 'exit_sign', 'fire_hydrant', 'stop sign', 
                             'traffic light', 'car', 'truck', 'bus', 'person']
             if log['target'] in safety_classes:
@@ -413,7 +413,7 @@ def compute_map_per_class(predictions: List[Dict],
                           targets: List[Dict],
                           iou_threshold: float = 0.5) -> Dict[str, float]:
     """Compute mAP per class for object detection...."""
-    # Collect all predictions and targets by class
+    # Collect all predictions and targets by class.
     class_predictions = defaultdict(list)
     class_targets = defaultdict(lambda: {'boxes': [], 'matched': []})
     
@@ -439,7 +439,7 @@ def compute_map_per_class(predictions: List[Dict],
             })
             class_targets[label]['matched'].append(False)
             
-    # Compute AP per class
+    # Compute AP per class.
     ap_per_class = {}
     
     for class_id in set(class_predictions.keys()) | set(class_targets.keys()):
@@ -455,7 +455,7 @@ def compute_map_per_class(predictions: List[Dict],
             ap_per_class[class_id] = 0.0
             continue
             
-        # Match predictions to targets
+        # Match predictions to targets.
         tp = []
         fp = []
         matched = [False] * len(targets_info['boxes'])
@@ -483,14 +483,14 @@ def compute_map_per_class(predictions: List[Dict],
                 tp.append(0)
                 fp.append(1)
                 
-        # Compute precision-recall curve
+        # Compute precision-recall curve.
         tp_cumsum = np.cumsum(tp)
         fp_cumsum = np.cumsum(fp)
         
         recalls = tp_cumsum / len(targets_info['boxes'])
         precisions = tp_cumsum / (tp_cumsum + fp_cumsum)
         
-        # Compute AP using 11-point interpolation
+        # Compute AP using 11-point interpolation.
         ap = 0
         for t in np.arange(0, 1.1, 0.1):
             prec_at_recall = [p for p, r in zip(precisions, recalls) if r >= t]
@@ -518,4 +518,5 @@ def compute_iou(box1: List[float], box2: List[float]) -> float:
     union = area1 + area2 - intersection
     
     return intersection / union if union > 0 else 0.0
+
 

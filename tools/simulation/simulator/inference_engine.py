@@ -73,21 +73,21 @@ class InferenceMetrics:
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for circuit breaker triggers."""
-    # Latency thresholds
+    # Latency thresholds.
     p95_latency_threshold_ms: float = 200.0
     max_latency_threshold_ms: float = 500.0
     
-    # Uncertainty thresholds
+    # Uncertainty thresholds.
     avg_uncertainty_threshold: float = 0.7
     max_uncertainty_threshold: float = 0.9
     
-    # Failure thresholds
-    fallback_rate_threshold: float = 0.3  # 30% fallback rate triggers degradation
-    failure_rate_threshold: float = 0.1   # 10% failure rate triggers halt
+    # Failure thresholds.
+    fallback_rate_threshold: float = 0.3  # 30% fallback rate triggers degradation.
+    failure_rate_threshold: float = 0.1   # 10% failure rate triggers halt.
     
-    # Warmup settings
-    warmup_frames: int = 5  # Number of frames before stable
-    stabilization_window: int = 3  # Frames to stabilize before alerts
+    # Warmup settings.
+    warmup_frames: int = 5  # Number of frames before stable.
+    stabilization_window: int = 3  # Frames to stabilize before alerts.
 
 
 class ThermalThrottleDetector:
@@ -102,15 +102,15 @@ class ThermalThrottleDetector:
     def check_thermal_throttle(self, current_latency: float) -> bool:
         now = time.time()
         self.latency_history.append((now, current_latency))
-        # Prune old entries
+        # Prune old entries.
         cutoff = now - self.window_size
         self.latency_history = [(t, L) for t, L in self.latency_history if t >= cutoff]
         if len(self.latency_history) < 10:
             return False
-        # Baseline = avg of first 5
+        # Baseline = avg of first 5.
         if self.baseline_latency is None:
             self.baseline_latency = sum(L for _, L in self.latency_history[:5]) / 5.0
-        # Current = avg of last 10
+        # Current = avg of last 10.
         recent = self.latency_history[-10:]
         current_avg = sum(L for _, L in recent) / len(recent)
         if self.baseline_latency <= 0:
@@ -141,11 +141,11 @@ class InferenceEngine:
         self.condition_mode = condition_mode
         self.circuit_breaker_config = circuit_breaker_config or CircuitBreakerConfig()
         
-        # State
+        # State.
         self.state = InferenceState.INIT
         self.metrics = InferenceMetrics()
         
-        # Device setup
+        # Device setup.
         if device is None:
             if torch.cuda.is_available():
                 self.device = torch.device('cuda')
@@ -163,7 +163,7 @@ class InferenceEngine:
         self.preprocessor = None
         self.head_manager = HeadExecutionManager(enable_fallbacks=True)
         
-        # Warmup/stabilization tracking
+        # Warmup/stabilization tracking.
         self.warmup_count = 0
         self.in_stabilization = True
         self.thermal_detector = ThermalThrottleDetector(window_size_seconds=30.0)
@@ -177,7 +177,7 @@ class InferenceEngine:
 
         logger.info("Initializing model and preprocessor...")
 
-        # Load model
+        # Load model.
         self.model = create_model(condition_mode=self.condition_mode)
         if self.checkpoint_path and Path(self.checkpoint_path).exists():
             ckpt = torch.load(self.checkpoint_path, map_location="cpu", weights_only=True)
@@ -187,10 +187,10 @@ class InferenceEngine:
         self.model = self.model.to(self.device)
         self.model.eval()
 
-        # Load preprocessor
+        # Load preprocessor.
         self.preprocessor = ImagePreprocessor(condition_mode=self.condition_mode)
         
-        # Warmup
+        # Warmup.
         self._warmup()
         
         self.state = InferenceState.WARMUP
@@ -221,7 +221,7 @@ class InferenceEngine:
             self.initialize()
         assert self.model is not None  # Narrow type after initialize()
         
-        # Run inference with timing
+        # Run inference with timing.
         device = next(self.model.parameters()).device
         if device.type == 'cuda':
             torch.cuda.synchronize()
@@ -237,7 +237,7 @@ class InferenceEngine:
                 else:
                     outputs = self.model(image)
             
-            # CRITICAL: Synchronize GPU after inference to ensure completion
+            # CRITICAL: Synchronize GPU after inference to ensure completion.
             if device.type == 'cuda':
                 torch.cuda.synchronize()
             elif device.type == 'mps':
@@ -245,10 +245,10 @@ class InferenceEngine:
             
             latency_ms = (time.perf_counter() - start_time) * 1000
             
-            # Compute uncertainty
+            # Compute uncertainty.
             uncertainty = self._compute_uncertainty(outputs)
             
-            # Record metrics
+            # Record metrics.
             self.metrics.add_inference(
                 latency_ms=latency_ms,
                 uncertainty=uncertainty,
@@ -256,16 +256,16 @@ class InferenceEngine:
                 fallback_used=False
             )
             
-            # Thermal throttling: sustained degradation -> DEGRADED
+            # Thermal throttling: sustained degradation -> DEGRADED.
             if self.thermal_detector.check_thermal_throttle(latency_ms):
                 if self.state == InferenceState.STABLE:
                     logger.warning("Thermal throttling detected, transitioning to DEGRADED")
                     self.state = InferenceState.DEGRADED
             
-            # Check state transitions
+            # Check state transitions.
             self._check_state_transition()
             
-            # Check circuit breaker
+            # Check circuit breaker.
             self._check_circuit_breaker()
             
             metadata = {
@@ -279,7 +279,7 @@ class InferenceEngine:
             
         except Exception as e:
             logger.error(f"Inference failed: {e}")
-            # Synchronize GPU even on error to get accurate timing
+            # Synchronize GPU even on error to get accurate timing.
             if device.type == 'cuda':
                 torch.cuda.synchronize()
             elif device.type == 'mps':
@@ -313,37 +313,37 @@ class InferenceEngine:
                 logger.info("Transitioned to STABLE state")
         
         if self.state == InferenceState.STABLE:
-            # Check if stabilization window complete
+            # Check if stabilization window complete.
             if self.warmup_count >= self.circuit_breaker_config.stabilization_window:
                 self.in_stabilization = False
     
     def _check_circuit_breaker(self):
         """Check circuit breaker triggers and degrade/halt if needed."""
         if self.metrics.total_inferences < 5:
-            return  # Need some history first
+            return  # Need some history first.
         
-        # Check failure rate
+        # Check failure rate.
         failure_rate = self.metrics.failed_inferences / self.metrics.total_inferences
         if failure_rate > self.circuit_breaker_config.failure_rate_threshold:
             logger.error(f"Failure rate {failure_rate:.2%} exceeds threshold, HALTING")
             self.state = InferenceState.HALTED
             return
         
-        # Check fallback rate
+        # Check fallback rate.
         fallback_rate = self.metrics.fallbacks_used / self.metrics.total_inferences
         if fallback_rate > self.circuit_breaker_config.fallback_rate_threshold:
             if self.state == InferenceState.STABLE:
                 logger.warning(f"Fallback rate {fallback_rate:.2%} exceeds threshold, DEGRADING")
                 self.state = InferenceState.DEGRADED
         
-        # Check latency
+        # Check latency.
         p95_latency = self.metrics.get_p95_latency()
         if p95_latency > self.circuit_breaker_config.p95_latency_threshold_ms:
             if self.state == InferenceState.STABLE:
                 logger.warning(f"P95 latency {p95_latency:.1f}ms exceeds threshold, DEGRADING")
                 self.state = InferenceState.DEGRADED
         
-        # Check uncertainty
+        # Check uncertainty.
         avg_uncertainty = self.metrics.get_avg_uncertainty()
         if avg_uncertainty > self.circuit_breaker_config.avg_uncertainty_threshold:
             if self.state == InferenceState.STABLE:
@@ -385,3 +385,4 @@ class InferenceEngine:
         self.metrics = InferenceMetrics()
         self.warmup_count = 0
         self.in_stabilization = True
+

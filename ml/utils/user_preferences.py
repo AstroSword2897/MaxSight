@@ -13,31 +13,31 @@ import time
 @dataclass
 class UserPreferences:
     """User preferences for MaxSight customization."""
-    # Verbosity settings
-    verbosity_level: int = 1  # 0-3: brief, normal, detailed, very_detailed
-    detection_verbosity: int = 1  # Per-feature verbosity
+    # Verbosity settings.
+    verbosity_level: int = 1  # 0-3: brief, normal, detailed, very_detailed.
+    detection_verbosity: int = 1  # Per-feature verbosity.
     ocr_verbosity: int = 1
     navigation_verbosity: int = 1
     
-    # Alert frequency
+    # Alert frequency.
     alert_frequency: str = "medium"  # "low", "medium", "high"
     
-    # Output channel preferences
+    # Output channel preferences.
     preferred_channel: str = "audio"  # "audio", "visual", "haptic", "hybrid"
-    audio_volume: float = 0.7  # 0.0-1.0
-    haptic_intensity: float = 0.7  # 0.0-1.0
+    audio_volume: float = 0.7  # 0.0-1.0.
+    haptic_intensity: float = 0.7  # 0.0-1.0.
     
-    # Condition-specific settings
+    # Condition-specific settings.
     condition_mode: Optional[str] = None  # Vision condition (glaucoma, AMD, etc.)
     
-    # Custom labels
-    custom_labels: Dict[str, str] = None  # {object_id: "custom_name"}
+    # Custom labels.
+    custom_labels: Dict[str, str] = None  # {object_id: "custom_name"}.
     
-    # Adaptive assistance
+    # Adaptive assistance.
     enable_adaptive_assistance: bool = True
-    adaptive_thresholds: Dict[str, float] = None  # Custom thresholds
+    adaptive_thresholds: Dict[str, float] = None  # Custom thresholds.
     
-    # Timestamp
+    # Timestamp.
     last_updated: float = 0.0
     
     def __post_init__(self):
@@ -61,7 +61,7 @@ class UserPreferencesManager:
         Arguments:
             preferences_file: Path to preferences JSON file (default: ~/.maxsight/preferences.json)"""
         if preferences_file is None:
-            # Default location
+            # Default location.
             home_dir = Path.home()
             prefs_dir = home_dir / ".maxsight"
             prefs_dir.mkdir(exist_ok=True)
@@ -80,14 +80,14 @@ class UserPreferencesManager:
                 with open(self.preferences_file, 'r') as f:
                     data = json.load(f)
                 
-                # Convert to UserPreferences
+                # Convert to UserPreferences.
                 prefs = UserPreferences(**data)
                 self.preferences = prefs
                 return prefs
             except Exception as e:
                 print(f"Failed to load preferences: {e}, using defaults")
         
-        # Return defaults
+        # Return defaults.
         self.preferences = UserPreferences()
         return self.preferences
     
@@ -100,13 +100,13 @@ class UserPreferencesManager:
             return False
         
         try:
-            # Update timestamp
+            # Update timestamp.
             preferences.last_updated = time.time()
             
-            # Ensure directory exists
+            # Ensure directory exists.
             self.preferences_file.parent.mkdir(parents=True, exist_ok=True)
             
-            # Save to file
+            # Save to file.
             with open(self.preferences_file, 'w') as f:
                 json.dump(asdict(preferences), f, indent=2)
             
@@ -197,4 +197,5 @@ class UserPreferencesManager:
         if self.preferences is None:
             self.load_preferences()
         return self.preferences
+
 

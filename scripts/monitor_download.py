@@ -17,7 +17,7 @@ def monitor_download():
     print("Open Images V6 Download Monitor")
     print("="*70)
     
-    # Check FiftyOne download location
+    # Check FiftyOne download location.
     fo_dir = Path.home() / "fiftyone" / "open-images-v6" / "validation"
     expected_dir = ROOT / "datasets" / "open_images_v6" / "validation"
     
@@ -28,10 +28,10 @@ def monitor_download():
     
     try:
         while True:
-            # Check FiftyOne directory
+            # Check FiftyOne directory.
             if fo_dir.exists():
                 img_count = len(list(fo_dir.rglob("*.jpg")))
-                total_size = sum(f.stat().st_size for f in fo_dir.rglob("*.jpg") if f.is_file()) / (1024**2)  # MB
+                total_size = sum(f.stat().st_size for f in fo_dir.rglob("*.jpg") if f.is_file()) / (1024**2)  # MB.
                 
                 print(f"\r[{time.strftime('%H:%M:%S')}] Downloaded: {img_count:,} images ({total_size:.1f} MB)", end="", flush=True)
                 
@@ -40,13 +40,13 @@ def monitor_download():
                     print(f"\n\n✅ Download appears complete! ({img_count:,} images)")
                     print("\n  Moving files to expected location...")
                     
-                    # Move files
+                    # Move files.
                     expected_dir.mkdir(parents=True, exist_ok=True)
                     moved = 0
                     for img_path in fo_dir.rglob("*.jpg"):
                         rel_path = img_path.relative_to(fo_dir / "data")
                         if "data" in str(rel_path):
-                            # Handle nested structure
+                            # Handle nested structure.
                             parts = rel_path.parts
                             if len(parts) > 1:
                                 subdir = expected_dir / parts[0]
@@ -67,7 +67,7 @@ def monitor_download():
             else:
                 print(f"\r[{time.strftime('%H:%M:%S')}] Waiting for download to start...", end="", flush=True)
             
-            time.sleep(5)  # Check every 5 seconds
+            time.sleep(5)  # Check every 5 seconds.
             
     except KeyboardInterrupt:
         print("\n\nMonitoring stopped.")
@@ -78,3 +78,4 @@ def monitor_download():
 
 if __name__ == "__main__":
     monitor_download()
+

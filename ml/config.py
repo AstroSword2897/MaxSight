@@ -19,7 +19,7 @@ class ModelConfig:
     detection_threshold: float = 0.5
     enable_accessibility_features: bool = True
     
-    # Head dependencies
+    # Head dependencies.
     head_dependencies: Dict[str, List[str]] = field(default_factory=lambda: {
         'classification': [],
         'box_regression': ['classification'],
@@ -56,11 +56,11 @@ class ModelConfig:
 @dataclass
 class RuntimeConfig:
     """Runtime configuration for inference and deployment."""
-    # Performance constraints
-    max_latency_ms: float = 500.0  # Target: <500ms for mobile
-    max_memory_mb: float = 50.0    # Target: <50MB quantized
+    # Performance constraints.
+    max_latency_ms: float = 500.0  # Target: <500ms for mobile.
+    max_memory_mb: float = 50.0    # Target: <50MB quantized.
     
-    # Head execution
+    # Head execution.
     enable_all_heads: bool = True
     enabled_heads: List[str] = field(default_factory=lambda: [
         'classification', 'box_regression', 'objectness', 'text_region',
@@ -68,13 +68,13 @@ class RuntimeConfig:
         'navigation_difficulty', 'uncertainty'
     ])
     
-    # Fallback configuration
+    # Fallback configuration.
     enable_fallbacks: bool = True
     fallback_on_error: bool = True
     fallback_on_uncertainty: bool = True
-    uncertainty_threshold: float = 0.7  # If uncertainty > 0.7, use fallback
+    uncertainty_threshold: float = 0.7  # If uncertainty > 0.7, use fallback.
     
-    # Error handling
+    # Error handling.
     max_retries: int = 1
     timeout_ms: float = 1000.0
 
@@ -139,7 +139,7 @@ class DependencyGraph:
             deps = config.get('dependencies', [])
             valid = True
             for dep in deps:
-                # Check if dependency output exists
+                # Check if dependency output exists.
                 dep_parts = dep.split('.')
                 if len(dep_parts) == 2:
                     source, output_key = dep_parts
@@ -198,3 +198,4 @@ def load_config(filepath: Path) -> ModelConfig:
         head_dependencies=config_data.get('head_dependencies', {}),
         head_execution_order=config_data.get('head_execution_order', [])
     )
+

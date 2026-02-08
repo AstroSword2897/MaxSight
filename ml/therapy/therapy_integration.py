@@ -7,11 +7,11 @@ import torch
 
 class TherapyTaskType(Enum):
     """Therapy task types that use scene descriptions"""
-    ATTENTION_TRAINING = "attention"  # Focus on specific objects in scene
-    CONTRAST_RECOGNITION = "contrast"  # Identify objects with different contrast
-    EDGE_DETECTION = "edge"  # Identify edges and boundaries
-    SPATIAL_AWARENESS = "spatial"  # Understand spatial relationships
-    WARNING_RECOGNITION = "warning"  # Learn to recognize hazard cues over time
+    ATTENTION_TRAINING = "attention"  # Focus on specific objects in scene.
+    CONTRAST_RECOGNITION = "contrast"  # Identify objects with different contrast.
+    EDGE_DETECTION = "edge"  # Identify edges and boundaries.
+    SPATIAL_AWARENESS = "spatial"  # Understand spatial relationships.
+    WARNING_RECOGNITION = "warning"  # Learn to recognize hazard cues over time.
 
 
 class TherapyTaskIntegrator:
@@ -34,7 +34,7 @@ class TherapyTaskIntegrator:
             'target_objects': target_objects,
             'difficulty': difficulty,
             'instructions': f"Focus on: {', '.join(target_objects)}",
-            'duration': int(30 + (1.0 - difficulty) * 30)  # 30-60 seconds
+            'duration': int(30 + (1.0 - difficulty) * 30)  # 30-60 seconds.
         }
     
     def create_contrast_task(
@@ -116,29 +116,29 @@ class TherapyTaskIntegrator:
     ) -> Dict:
         """Generate therapy task from scene detections and description."""
         if task_type == TherapyTaskType.ATTENTION_TRAINING:
-            # Extract target objects from detections
+            # Extract target objects from detections.
             target_objects = [d.get('class_name', 'object') for d in detections[:3]]
             return self.create_attention_task(scene_description, target_objects, difficulty)
         
         elif task_type == TherapyTaskType.CONTRAST_RECOGNITION:
-            # Extract contrast levels from detections
+            # Extract contrast levels from detections.
             contrast_levels = [d.get('contrast', 0.5) for d in detections if 'contrast' in d]
             if not contrast_levels:
-                contrast_levels = [0.3, 0.5, 0.7]  # Default levels
+                contrast_levels = [0.3, 0.5, 0.7]  # Default levels.
             return self.create_contrast_task(scene_description, contrast_levels, difficulty)
         
         elif task_type == TherapyTaskType.EDGE_DETECTION:
-            # Extract edge types from detections
+            # Extract edge types from detections.
             edge_types = ['door_edge', 'stair_edge', 'obstacle_edge']
             return self.create_edge_task(scene_description, edge_types, difficulty)
         
         elif task_type == TherapyTaskType.SPATIAL_AWARENESS:
-            # Extract spatial relationships from detections
+            # Extract spatial relationships from detections.
             relationships = ['left_of', 'right_of', 'near', 'far']
             return self.create_spatial_task(scene_description, relationships, difficulty)
         
         elif task_type == TherapyTaskType.WARNING_RECOGNITION:
-            # Use first high-urgency detection for warning recognition drill
+            # Use first high-urgency detection for warning recognition drill.
             hazard = next((d for d in detections if d.get('urgency', 0) >= 1), detections[0] if detections else {})
             hazard_type = hazard.get('class_name', 'obstacle')
             urgency_level = hazard.get('urgency', 1)
@@ -150,7 +150,7 @@ class TherapyTaskIntegrator:
             )
         
         else:
-            # Default: attention task
+            # Default: attention task.
             target_objects = [d.get('class_name', 'object') for d in detections[:3]]
             return self.create_attention_task(scene_description, target_objects, difficulty)
 
@@ -158,4 +158,5 @@ class TherapyTaskIntegrator:
 def create_therapy_integrator() -> TherapyTaskIntegrator:
     """Factory function to create therapy task integrator."""
     return TherapyTaskIntegrator()
+
 

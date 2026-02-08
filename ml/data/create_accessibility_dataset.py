@@ -28,7 +28,7 @@ class AccessibilityDataset(Dataset):
         self.image_dir = Path(image_dir)
         self.target_size = target_size
         
-        # Load labels
+        # Load labels.
         if not label_file.exists():
             raise FileNotFoundError(f"Label file not found: {label_file}")
         
@@ -44,7 +44,7 @@ class AccessibilityDataset(Dataset):
         if not self.image_files:
             raise ValueError(f"No images found in {image_dir} with matching labels in {label_file}")
         
-        # Standard ImageNet transforms
+        # Standard ImageNet transforms.
         self.to_tensor = T.ToTensor()
         self.norm = T.Normalize(
             mean=[0.485, 0.456, 0.406],
@@ -58,16 +58,16 @@ class AccessibilityDataset(Dataset):
         """Get dataset item...."""
         path = self.image_files[idx]
         
-        # Load and resize image
+        # Load and resize image.
         img = Image.open(path).convert("RGB").resize(self.target_size)
         
-        # Convert to tensor and normalize
+        # Convert to tensor and normalize.
         tensor = self.norm(self.to_tensor(img))
         
-        # Get labels for this image
+        # Get labels for this image.
         labels = self.labels[path.stem]
         
-        # Validate and format labels
+        # Validate and format labels.
         formatted_labels = {
             "contrast_sensitivity": float(labels.get("contrast_sensitivity", 0.5)),
             "glare_risk_level": int(labels.get("glare_risk_level", 0)),
@@ -75,7 +75,7 @@ class AccessibilityDataset(Dataset):
             "navigation_difficulty": float(labels.get("navigation_difficulty", 0.5)),
         }
         
-        # Validate ranges
+        # Validate ranges.
         formatted_labels["contrast_sensitivity"] = np.clip(formatted_labels["contrast_sensitivity"], 0.0, 1.0)
         formatted_labels["glare_risk_level"] = np.clip(formatted_labels["glare_risk_level"], 0, 3)
         formatted_labels["object_findability"] = np.clip(formatted_labels["object_findability"], 0.0, 1.0)
@@ -99,7 +99,7 @@ class SyntheticImpairmentEngine:
         arr = np.array(img).astype(np.float32)
         mean = arr.mean(axis=(0, 1), keepdims=True)
         
-        # Mean-preserving contrast reduction
+        # Mean-preserving contrast reduction.
         # Level 1.0 = full contrast, level 0.0 = gray (no contrast)
         contrast_factor = level
         arr = (arr - mean) * contrast_factor + mean
@@ -114,7 +114,7 @@ class SyntheticImpairmentEngine:
         
         # Place glare source (prefer upper regions, like sunlight)
         gx = random.randint(int(w * 0.2), int(w * 0.8))
-        gy = random.randint(0, int(h * 0.4))  # Upper region
+        gy = random.randint(0, int(h * 0.4))  # Upper region.
         
         # Create Gaussian glare mask (high-frequency like real lens flare)
         y, x = np.ogrid[:h, :w]
@@ -126,7 +126,7 @@ class SyntheticImpairmentEngine:
         if len(arr.shape) == 3:
             mask = mask[:, :, np.newaxis]
         
-        glare = mask * intensity * 200  # Scale glare intensity
+        glare = mask * intensity * 200  # Scale glare intensity.
         arr = np.clip(arr + glare, 0, 255)
         
         return Image.fromarray(arr.astype(np.uint8))
@@ -137,14 +137,14 @@ class SyntheticImpairmentEngine:
         arr = np.array(img).astype(np.float32)
         
         # Apply Gaussian blur (handles both grayscale and RGB)
-        # Pre-allocate output to avoid memory leaks from temporary arrays
+        # Pre-allocate output to avoid memory leaks from temporary arrays.
         if len(arr.shape) == 3:
-            # Multi-channel: apply filter to each channel with pre-allocated output
+            # Multi-channel: apply filter to each channel with pre-allocated output.
             blurred = np.empty_like(arr)
             for i in range(arr.shape[2]):
                 ndimage.gaussian_filter(arr[:, :, i], sigma=amount, output=blurred[:, :, i])
         else:
-            # Grayscale: single channel
+            # Grayscale: single channel.
             blurred = np.empty_like(arr)
             ndimage.gaussian_filter(arr, sigma=amount, output=blurred)
         
@@ -152,7 +152,7 @@ class SyntheticImpairmentEngine:
         h, w = arr.shape[:2]
         mask = SyntheticImpairmentEngine._radial_mask((h, w))
         
-        # Blend: center = original, periphery = blurred
+        # Blend: center = original, periphery = blurred.
         if len(arr.shape) == 3:
             mask = mask[:, :, np.newaxis]
         
@@ -166,7 +166,7 @@ class SyntheticImpairmentEngine:
         arr = np.array(img).astype(np.float32)
         
         # Reduce local contrast (depth cues rely on contrast)
-        # Apply subtle blur to depth-separating edges
+        # Apply subtle blur to depth-separating edges.
         if strength > 0:
             blurred = ndimage.gaussian_filter(arr, sigma=strength * 2.0)
             arr = arr * (1 - strength * 0.3) + blurred * (strength * 0.3)
@@ -199,7 +199,7 @@ class SyntheticImpairmentEngine:
             return img
         
         # Reduce resolution then upscale (simulates low acuity)
-        scale_factor = 1.0 - acuity_drop * 0.7  # Max 70% reduction
+        scale_factor = 1.0 - acuity_drop * 0.7  # Max 70% reduction.
         new_size = (int(img.width * scale_factor), int(img.height * scale_factor))
         
         # Downsample then upsample (creates pixelation/blur)
@@ -220,18 +220,18 @@ class SyntheticImpairmentEngine:
         h, w = shape
         y, x = np.ogrid[-h/2:h/2, -w/2:w/2]
         r = np.sqrt(x*x + y*y)
-        r = r / (r.max() + 1e-8)  # Normalize to [0, 1]
+        r = r / (r.max() + 1e-8)  # Normalize to [0, 1].
         
-        # Invert: center = 1.0, edges = 0.0
+        # Invert: center = 1.0, edges = 0.0.
         mask = 1.0 - r
         
-        # Apply smooth falloff
+        # Apply smooth falloff.
         mask = np.power(mask, 2.0)
         
         return mask
 
 
-# Synthetic Dataset Generator
+# Synthetic Dataset Generator.
 
 def generate_synthetic_dataset(
     source: Path,
@@ -249,7 +249,7 @@ def generate_synthetic_dataset(
     synthetic_labels = {}
     engine = SyntheticImpairmentEngine()
     
-    # Get source images
+    # Get source images.
     images = sorted(list(source.glob("*.jpg")) + list(source.glob("*.png")))
     
     if not images:
@@ -265,7 +265,7 @@ def generate_synthetic_dataset(
             continue
         
         for i in range(n_per_image):
-            # Select augmentation type
+            # Select augmentation type.
             mode = random.choice(augmentation_types)
             aug_image = original.copy()
             labels = {}
@@ -276,28 +276,28 @@ def generate_synthetic_dataset(
                 labels = {
                     "contrast_sensitivity": level,
                     "glare_risk_level": 0,
-                    "object_findability": max(0.1, level * 0.9),  # Lower contrast = harder to find
-                    "navigation_difficulty": 1.0 - level,  # Lower contrast = harder navigation
+                    "object_findability": max(0.1, level * 0.9),  # Lower contrast = harder to find.
+                    "navigation_difficulty": 1.0 - level,  # Lower contrast = harder navigation.
                 }
             
             elif mode == "glare":
                 intensity = random.uniform(0.3, 1.0)
                 aug_image = engine.apply_glare(original, intensity)
                 labels = {
-                    "contrast_sensitivity": 0.6,  # Glare reduces effective contrast
+                    "contrast_sensitivity": 0.6,  # Glare reduces effective contrast.
                     "glare_risk_level": min(3, int(intensity * 3)),
-                    "object_findability": max(0.2, 0.6 - intensity * 0.3),  # Glare obscures objects
-                    "navigation_difficulty": 0.5 + intensity * 0.3,  # Glare increases difficulty
+                    "object_findability": max(0.2, 0.6 - intensity * 0.3),  # Glare obscures objects.
+                    "navigation_difficulty": 0.5 + intensity * 0.3,  # Glare increases difficulty.
                 }
             
             elif mode == "peripheral_blur":
                 sigma = random.uniform(2.0, 5.0)
                 aug_image = engine.apply_peripheral_blur(original, sigma)
                 labels = {
-                    "contrast_sensitivity": 0.8,  # Center still clear
+                    "contrast_sensitivity": 0.8,  # Center still clear.
                     "glare_risk_level": 0,
-                    "object_findability": max(0.3, 1.0 - sigma / 5.0),  # Peripheral objects harder to find
-                    "navigation_difficulty": min(1.0, sigma / 5.0),  # Peripheral blur increases difficulty
+                    "object_findability": max(0.3, 1.0 - sigma / 5.0),  # Peripheral objects harder to find.
+                    "navigation_difficulty": min(1.0, sigma / 5.0),  # Peripheral blur increases difficulty.
                 }
             
             elif mode == "depth_flattening":
@@ -306,8 +306,8 @@ def generate_synthetic_dataset(
                 labels = {
                     "contrast_sensitivity": 0.7,
                     "glare_risk_level": 0,
-                    "object_findability": 0.6,  # Depth cues help findability
-                    "navigation_difficulty": 0.4 + strength * 0.3,  # Depth loss increases difficulty
+                    "object_findability": 0.6,  # Depth cues help findability.
+                    "navigation_difficulty": 0.4 + strength * 0.3,  # Depth loss increases difficulty.
                 }
             
             elif mode == "halo":
@@ -315,7 +315,7 @@ def generate_synthetic_dataset(
                 aug_image = engine.apply_halo_effect(original, intensity)
                 labels = {
                     "contrast_sensitivity": 0.7,
-                    "glare_risk_level": min(3, int(intensity * 2)),  # Halos are a form of glare
+                    "glare_risk_level": min(3, int(intensity * 2)),  # Halos are a form of glare.
                     "object_findability": max(0.3, 0.7 - intensity * 0.2),
                     "navigation_difficulty": 0.4 + intensity * 0.2,
                 }
@@ -330,15 +330,15 @@ def generate_synthetic_dataset(
                     "navigation_difficulty": min(1.0, acuity_drop * 0.9),
                 }
             
-            # Save augmented image
+            # Save augmented image.
             aug_id = f"{img_path.stem}_aug{i:03d}"
             aug_file = output / f"{aug_id}.jpg"
             aug_image.save(aug_file, quality=95)
             
-            # Store labels
+            # Store labels.
             synthetic_labels[aug_id] = labels
     
-    # Save annotations
+    # Save annotations.
     annotations_file = output / "annotations.json"
     with open(annotations_file, "w") as f:
         json.dump(synthetic_labels, f, indent=2)
@@ -356,7 +356,7 @@ def generate_synthetic_dataset(
     return stats
 
 
-# Labeling Template
+# Labeling Template.
 
 def create_label_template(path: Path):
     """Create labeling template for user annotation.
@@ -366,7 +366,7 @@ def create_label_template(path: Path):
     template = {
         "example_image_id": {
             "contrast_sensitivity": 0.0,  # 0-1: How well can user detect contrast?
-            "glare_risk_level": 0,  # 0-3: 0=none, 1=low, 2=medium, 3=high
+            "glare_risk_level": 0,  # 0-3: 0=none, 1=low, 2=medium, 3=high.
             "object_findability": 0.0,  # 0-1: How easy to find objects? (therapy-relevant)
             "navigation_difficulty": 0.0,  # 0-1: How difficult to navigate? (therapy-relevant)
             "notes": "Optional notes about the scene, lighting, or user experience"
@@ -382,7 +382,7 @@ def create_label_template(path: Path):
     print(f"✅ Labeling template saved → {path}")
 
 
-# Dataset Registry & Utilities
+# Dataset Registry & Utilities.
 
 def combine_datasets(
     real_dir: Path,
@@ -395,35 +395,35 @@ def combine_datasets(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Load labels
+    # Load labels.
     with open(real_labels, 'r') as f:
         real_labels_dict = json.load(f)
     
     with open(synthetic_labels, 'r') as f:
         synthetic_labels_dict = json.load(f)
     
-    # Copy images and combine labels
+    # Copy images and combine labels.
     combined_labels = {}
     
-    # Copy real images
+    # Copy real images.
     real_images = list(Path(real_dir).glob("*.jpg")) + list(Path(real_dir).glob("*.png"))
     for img_path in real_images:
         if img_path.stem in real_labels_dict:
-            # Copy image
+            # Copy image.
             import shutil
             shutil.copy2(img_path, output_dir / img_path.name)
             combined_labels[img_path.stem] = real_labels_dict[img_path.stem]
     
-    # Copy synthetic images
+    # Copy synthetic images.
     synthetic_images = list(Path(synthetic_dir).glob("*.jpg")) + list(Path(synthetic_dir).glob("*.png"))
     for img_path in synthetic_images:
         if img_path.stem in synthetic_labels_dict:
-            # Copy image
+            # Copy image.
             import shutil
             shutil.copy2(img_path, output_dir / img_path.name)
             combined_labels[img_path.stem] = synthetic_labels_dict[img_path.stem]
     
-    # Save combined labels
+    # Save combined labels.
     combined_labels_file = output_dir / "annotations.json"
     with open(combined_labels_file, 'w') as f:
         json.dump(combined_labels, f, indent=2)
@@ -440,7 +440,7 @@ def combine_datasets(
     return stats
 
 
-# CLI Interface
+# CLI Interface.
 
 if __name__ == "__main__":
     import argparse
@@ -453,7 +453,7 @@ if __name__ == "__main__":
     
     subparsers = parser.add_subparsers(dest='command', help='Command to run')
     
-    # Generate synthetic dataset
+    # Generate synthetic dataset.
     gen_parser = subparsers.add_parser('generate', help='Generate synthetic dataset')
     gen_parser.add_argument('--source', type=Path, required=True, help='Source image directory')
     gen_parser.add_argument('--output', type=Path, required=True, help='Output directory')
@@ -463,11 +463,11 @@ if __name__ == "__main__":
                            default=['contrast', 'glare', 'peripheral_blur'],
                            help='Augmentation types to use')
     
-    # Create template
+    # Create template.
     template_parser = subparsers.add_parser('template', help='Create labeling template')
     template_parser.add_argument('--output', type=Path, required=True, help='Output template file path')
     
-    # Combine datasets
+    # Combine datasets.
     combine_parser = subparsers.add_parser('combine', help='Combine real and synthetic datasets')
     combine_parser.add_argument('--real_dir', type=Path, required=True, help='Real images directory')
     combine_parser.add_argument('--real_labels', type=Path, required=True, help='Real labels JSON file')
@@ -505,3 +505,4 @@ if __name__ == "__main__":
     
     else:
         parser.print_help()
+

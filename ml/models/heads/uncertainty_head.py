@@ -40,7 +40,7 @@ class GlobalConfidenceAggregator(nn.Module):
         """Forward pass with multi-modal uncertainty aggregation...."""
         x = self.backbone(scene_embedding)
         
-        # Future: additive uncertainty penalties
+        # Future: additive uncertainty penalties.
         if ocr_entropy is not None:
             x = x - ocr_entropy
         if audio_entropy is not None:
@@ -53,9 +53,10 @@ class GlobalConfidenceAggregator(nn.Module):
         return {
             "global_confidence": confidence,
             "confidence_logit": confidence_logit,
-            "uncertainty_score": uncertainty,  # Backward compatibility
+            "uncertainty_score": uncertainty,  # Backward compatibility.
         }
 
 
-# Backward compatibility alias
+# Backward compatibility alias.
 UncertaintyHead = GlobalConfidenceAggregator
+

@@ -22,7 +22,7 @@ class TherapySimulator:
         self.is_running = False
         self.frame_count = 0
         self.logs = []
-        self.processing_times = []  # Track processing times for summary
+        self.processing_times = []  # Track processing times for summary.
     
     def start_simulation(self, video_source: Optional[str] = None):
         """Start simulation...."""
@@ -46,14 +46,14 @@ class TherapySimulator:
         start_time = time.perf_counter()
         self.frame_count += 1
         
-        # Run model inference if model is available
+        # Run model inference if model is available.
         model_output = {}
         if self.model is not None:
             try:
                 import torch
                 from PIL import Image
                 
-                # Convert numpy array to PIL Image
+                # Convert numpy array to PIL Image.
                 if frame.dtype != np.uint8:
                     frame = (frame * 255).astype(np.uint8)
                 pil_image = Image.fromarray(frame)
@@ -67,7 +67,7 @@ class TherapySimulator:
                 ])
                 image_tensor = transform(pil_image).unsqueeze(0)
                 
-                # Run inference
+                # Run inference.
                 with torch.no_grad():
                     outputs = self.model(image_tensor)
                     model_output = {k: v.cpu().numpy() if isinstance(v, torch.Tensor) else v 
@@ -81,7 +81,7 @@ class TherapySimulator:
         # Generate overlays (simplified; overlay_engine not used here)
         overlays = []
         if model_output and 'boxes' in model_output:
-            # Basic overlay generation
+            # Basic overlay generation.
             overlays = [{'type': 'detection', 'data': model_output.get('boxes', [])}]
         
         processing_time_ms = (time.perf_counter() - start_time) * 1000
@@ -89,10 +89,10 @@ class TherapySimulator:
         
         result = {
             'frame_number': self.frame_count,
-            'timestamp': self.frame_count / 30.0,  # Assuming 30 FPS
+            'timestamp': self.frame_count / 30.0,  # Assuming 30 FPS.
             'model_output': model_output,
             'overlays': overlays,
-            'user_input': None,  # User input handling not implemented
+            'user_input': None,  # User input handling not implemented.
             'processing_time_ms': processing_time_ms
         }
         
@@ -148,4 +148,5 @@ class TherapySimulator:
                 'logs': self.logs,
                 'summary': self._generate_summary()
             }, f, indent=2)
+
 

@@ -31,7 +31,7 @@ def main():
         image_dir = args.train_annotation.parent.parent
     val_ann = args.val_annotation if args.val_annotation.exists() else args.train_annotation
 
-    # --- 1) create_data_loaders + collate (variable-length audio padding) ---
+    # --- 1) create_data_loaders + collate (variable-length audio padding) ---.
     from ml.data.data_pipeline import create_data_loaders, compute_class_weights
 
     print("Loading dataset (custom collate, variable-length audio padding)...")
@@ -49,7 +49,7 @@ def main():
     )
     print("  Train batches:", len(train_loader))
 
-    # --- 2) Test augmentations on up to max_samples images; check no overflows ---
+    # --- 2) Test augmentations on up to max_samples images; check no overflows ---.
     print("Checking for invalid values (NaN/Inf) in up to %d samples..." % args.max_samples)
     invalid = 0
     samples_seen = 0
@@ -66,7 +66,7 @@ def main():
         return 1
     print("  OK: All checked tensors finite (augmentations preserve valid range).")
 
-    # --- 3) Class weights: rare classes get higher weights ---
+    # --- 3) Class weights: rare classes get higher weights ---.
     print("Computing class weights (rare classes get higher weights)...")
     weights = compute_class_weights(args.train_annotation)
     if not weights:
@@ -81,3 +81,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

@@ -219,7 +219,7 @@ def main():
             import traceback
             manifest["conditions"][cond]["error"] = f"export: {e}"
             tb_lines = traceback.format_exc()
-            # Print to stdout as well so Colab shows it even if stderr is truncated
+            # Print to stdout as well so Colab shows it even if stderr is truncated.
             if verbose:
                 print(f"    export failed: {e}", file=sys.stderr)
                 print(tb_lines, file=sys.stderr)
@@ -288,3 +288,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

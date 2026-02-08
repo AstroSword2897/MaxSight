@@ -108,7 +108,7 @@ class UrgencyLoss(nn.Module):
         self.num_levels = num_levels
         self.alpha = alpha
         self.gamma = gamma
-        # Weight danger higher
+        # Weight danger higher.
         self.register_buffer('class_weights', torch.tensor([1.0, 1.5, 2.0, 3.0]))
     
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
@@ -267,7 +267,7 @@ class MultiHeadLoss(nn.Module):
                 'classification': 1.0,
                 'box': 1.0,
                 'distance': 0.5,
-                'urgency': 2.0,  # Higher weight for safety
+                'urgency': 2.0,  # Higher weight for safety.
                 'uncertainty': 0.5,
                 'depth': 1.0,
                 'motion': 0.3,
@@ -312,3 +312,4 @@ GROUND_TRUTH_SOURCES = {
     'ocr': 'Text detection datasets (ICDAR, COCO-Text)',
     'fatigue': 'User interaction logs (time-based, interaction patterns)',
 }
+

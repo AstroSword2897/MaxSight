@@ -10,11 +10,11 @@ from PIL import Image
 import torchvision.transforms as transforms
 import logging
 
-# Setup logging for error tracking
+# Setup logging for error tracking.
 logger = logging.getLogger(__name__)
 
 
-# Standard metadata schema for all datasets
+# Standard metadata schema for all datasets.
 STANDARD_METADATA_KEYS = {
     'weather': None,
     'scene': None,
@@ -33,7 +33,7 @@ def create_imagenet_transform() -> transforms.Compose:
         transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BILINEAR),
         transforms.ToTensor(),
         transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],  # ImageNet stats
+            mean=[0.485, 0.456, 0.406],  # ImageNet stats.
             std=[0.229, 0.224, 0.225]
         )
     ])
@@ -54,12 +54,12 @@ class OpenImagesV6Dataset(Dataset):
         download: bool = False,
         transform: Optional[transforms.Compose] = None,
         max_samples: Optional[int] = None,
-        skip_corrupted: bool = True  # FIXED: Skip corrupted images instead of dummy fallback
+        skip_corrupted: bool = True  # FIXED: Skip corrupted images instead of dummy fallback.
     ):
         """Initialize Open Images V6 dataset...."""
         self.root = Path(root)
         self.split = split
-        self.max_samples = max_samples  # FIXED: Actually assign max_samples
+        self.max_samples = max_samples  # FIXED: Actually assign max_samples.
         self.skip_corrupted = skip_corrupted
         
         # Default transform: ImageNet normalization (configurable)
@@ -68,7 +68,7 @@ class OpenImagesV6Dataset(Dataset):
         else:
             self.transform = transform
         
-        # Load image list and annotations
+        # Load image list and annotations.
         self.image_list = self._load_image_list()
         
         if self.max_samples:
@@ -88,10 +88,10 @@ class OpenImagesV6Dataset(Dataset):
         if not image_dir.exists():
             raise FileNotFoundError(f"Open Images {self.split} directory not found: {image_dir}")
         
-        # FIXED: Aggregate all labels per image
-        image_labels_map = {}  # image_id -> list of labels
+        # FIXED: Aggregate all labels per image.
+        image_labels_map = {}  # Image_id -> list of labels.
         
-        # Load from annotation file when available
+        # Load from annotation file when available.
         if annotation_file.exists():
             import csv
             with open(annotation_file, 'r') as f:
@@ -101,11 +101,11 @@ class OpenImagesV6Dataset(Dataset):
                     image_id = row.get('ImageID', '')
                     if image_id and image_id not in seen_images:
                         seen_images.add(image_id)
-                        # Open Images stores images in subdirectories
+                        # Open Images stores images in subdirectories.
                         subdir = image_id[:2]
                         image_path = image_dir / subdir / f'{image_id}.jpg'
                         if image_path.exists():
-                            # FIXED: Aggregate labels per image
+                            # FIXED: Aggregate labels per image.
                             if image_id not in image_labels_map:
                                 image_labels_map[image_id] = []
                             image_labels_map[image_id].append({
@@ -113,14 +113,14 @@ class OpenImagesV6Dataset(Dataset):
                                 'confidence': row.get('Confidence', '1')
                             })
         else:
-            # Fallback: scan directory for images
+            # Fallback: scan directory for images.
             for subdir in image_dir.iterdir():
                 if subdir.is_dir():
                     for img_file in subdir.glob('*.jpg'):
                         image_id = img_file.stem
-                        image_labels_map[image_id] = []  # No labels available
+                        image_labels_map[image_id] = []  # No labels available.
         
-        # Build image list with aggregated labels
+        # Build image list with aggregated labels.
         for image_id, labels in image_labels_map.items():
             subdir = image_id[:2]
             image_path = image_dir / subdir / f'{image_id}.jpg'
@@ -128,7 +128,7 @@ class OpenImagesV6Dataset(Dataset):
                 image_list.append({
                     'image_id': image_id,
                     'image_path': image_path,
-                    'labels': labels,  # FIXED: All labels, not just first
+                    'labels': labels,  # FIXED: All labels, not just first.
                     'num_labels': len(labels)
                 })
         
@@ -145,7 +145,7 @@ class OpenImagesV6Dataset(Dataset):
         item = self.image_list[idx]
         image_path = item['image_path']
         
-        # FIXED: Proper error handling - log and skip corrupted images
+        # FIXED: Proper error handling - log and skip corrupted images.
         try:
             image = Image.open(image_path).convert('RGB')
         except Exception as e:
@@ -154,11 +154,11 @@ class OpenImagesV6Dataset(Dataset):
                 # Return None to signal skip (caller should handle)
                 raise RuntimeError(f"Corrupted image skipped: {image_path}") from e
             else:
-                # Backward compatibility path; prefer explicit annotation
+                # Backward compatibility path; prefer explicit annotation.
                 image = Image.new('RGB', (224, 224), color=(128, 128, 128))
                 logger.warning(f"Using dummy image for {image_path}")
         
-        # Apply transform
+        # Apply transform.
         image_tensor = self.transform(image)
         
         labels = item.get('labels') or []
@@ -189,12 +189,12 @@ class BDD100KDataset(Dataset):
         split: str = 'val',
         transform: Optional[transforms.Compose] = None,
         max_samples: Optional[int] = None,
-        skip_corrupted: bool = True  # FIXED: Skip corrupted images
+        skip_corrupted: bool = True  # FIXED: Skip corrupted images.
     ):
         """Initialize BDD100K dataset...."""
         self.root = Path(root)
         self.split = split
-        self.max_samples = max_samples  # FIXED: Actually assign max_samples
+        self.max_samples = max_samples  # FIXED: Actually assign max_samples.
         self.skip_corrupted = skip_corrupted
         
         # Default transform: ImageNet normalization (configurable)
@@ -203,7 +203,7 @@ class BDD100KDataset(Dataset):
         else:
             self.transform = transform
         
-        # Load image list
+        # Load image list.
         self.image_list = self._load_image_list()
         
         if self.max_samples:
@@ -215,21 +215,21 @@ class BDD100KDataset(Dataset):
         """Load list of images from BDD100K format."""
         image_list = []
         
-        # BDD100K structure: images/ and labels/ directories
+        # BDD100K structure: images/ and labels/ directories.
         image_dir = self.root / 'images' / '100k' / self.split
         label_file = self.root / 'labels' / f'bdd100k_labels_images_{self.split}.json'
         
         if not image_dir.exists():
             raise FileNotFoundError(f"BDD100K {self.split} directory not found: {image_dir}")
         
-        # Load labels if available
+        # Load labels if available.
         labels = {}
         if label_file.exists():
             with open(label_file, 'r') as f:
                 label_data = json.load(f)
                 labels = {item['name']: item for item in label_data}
         
-        # Scan for images
+        # Scan for images.
         for img_file in image_dir.glob('*.jpg'):
             image_id = img_file.stem
             label_info = labels.get(img_file.name, {})
@@ -256,7 +256,7 @@ class BDD100KDataset(Dataset):
         item = self.image_list[idx]
         image_path = item['image_path']
         
-        # FIXED: Proper error handling
+        # FIXED: Proper error handling.
         try:
             image = Image.open(image_path).convert('RGB')
         except Exception as e:
@@ -267,7 +267,7 @@ class BDD100KDataset(Dataset):
                 image = Image.new('RGB', (224, 224), color=(128, 128, 128))
                 logger.warning(f"Using dummy image for {image_path}")
         
-        # Apply transform
+        # Apply transform.
         image_tensor = self.transform(image)
         
         return {
@@ -296,12 +296,12 @@ class ADE20KDataset(Dataset):
         split: str = 'validation',
         transform: Optional[transforms.Compose] = None,
         max_samples: Optional[int] = None,
-        skip_corrupted: bool = True  # FIXED: Skip corrupted images
+        skip_corrupted: bool = True  # FIXED: Skip corrupted images.
     ):
         """Initialize ADE20K dataset...."""
         self.root = Path(root)
         self.split = split
-        self.max_samples = max_samples  # FIXED: Actually assign max_samples
+        self.max_samples = max_samples  # FIXED: Actually assign max_samples.
         self.skip_corrupted = skip_corrupted
         
         # Default transform: ImageNet normalization (configurable)
@@ -310,7 +310,7 @@ class ADE20KDataset(Dataset):
         else:
             self.transform = transform
         
-        # Load image list
+        # Load image list.
         self.image_list = self._load_image_list()
         
         if self.max_samples:
@@ -322,18 +322,18 @@ class ADE20KDataset(Dataset):
         """Load list of images from ADE20K format."""
         image_list = []
         
-        # ADE20K structure: images/ and annotations/ directories
+        # ADE20K structure: images/ and annotations/ directories.
         image_dir = self.root / 'images' / self.split
         annotation_dir = self.root / 'annotations' / self.split
         
         if not image_dir.exists():
             raise FileNotFoundError(f"ADE20K {self.split} directory not found: {image_dir}")
         
-        # Scan for images
+        # Scan for images.
         for img_file in image_dir.glob('*.jpg'):
             image_id = img_file.stem
             
-            # Check for corresponding annotation
+            # Check for corresponding annotation.
             annotation_path = annotation_dir / f'{image_id}.png' if annotation_dir.exists() else None
             
             image_list.append({
@@ -355,7 +355,7 @@ class ADE20KDataset(Dataset):
         item = self.image_list[idx]
         image_path = item['image_path']
         
-        # FIXED: Proper error handling
+        # FIXED: Proper error handling.
         try:
             image = Image.open(image_path).convert('RGB')
         except Exception as e:
@@ -366,7 +366,7 @@ class ADE20KDataset(Dataset):
                 image = Image.new('RGB', (224, 224), color=(128, 128, 128))
                 logger.warning(f"Using dummy image for {image_path}")
         
-        # Apply transform
+        # Apply transform.
         image_tensor = self.transform(image)
         
         # Use no None values so DataLoader default_collate can batch correctly.
@@ -419,23 +419,23 @@ class DetectionPostProcessor:
                     confidence_threshold=self.confidence_threshold,
                     max_detections=self.max_detections
                 )
-                # FIXED: Handle different return formats
+                # FIXED: Handle different return formats.
                 if detections is None:
                     return [[] for _ in range(batch_size)]
                 
-                # Ensure list of lists format
+                # Ensure list of lists format.
                 if isinstance(detections, list):
-                    # Already in correct format
+                    # Already in correct format.
                     if len(detections) != batch_size:
                         logger.warning(f"Detections length {len(detections)} != batch_size {batch_size}")
-                        # Pad or truncate
+                        # Pad or truncate.
                         if len(detections) < batch_size:
                             detections.extend([[] for _ in range(batch_size - len(detections))])
                         else:
                             detections = detections[:batch_size]
                     return detections
                 else:
-                    # Single list - split by batch
+                    # Single list - split by batch.
                     return [detections[i:i+self.max_detections] for i in range(0, len(detections), self.max_detections)]
             except Exception as e:
                 logger.warning(f"model.get_detections failed: {e}, falling back to manual processing")
@@ -443,11 +443,11 @@ class DetectionPostProcessor:
         detections = []
         
         if 'objectness' in outputs and 'boxes' in outputs:
-            # Standard detection format
-            objectness = outputs['objectness']  # [B, H*W] or [B, N]
-            boxes = outputs['boxes']  # [B, H*W, 4] or [B, N, 4]
+            # Standard detection format.
+            objectness = outputs['objectness']  # [B, H*W] or [B, N].
+            boxes = outputs['boxes']  # [B, H*W, 4] or [B, N, 4].
             
-            # Apply confidence threshold and get top detections
+            # Apply confidence threshold and get top detections.
             for b in range(batch_size):
                 obj_scores = objectness[b] if objectness.dim() > 1 else objectness
                 valid_mask = obj_scores > self.confidence_threshold
@@ -456,7 +456,7 @@ class DetectionPostProcessor:
                     valid_scores = obj_scores[valid_mask]
                     valid_boxes = boxes[b][valid_mask] if boxes.dim() > 2 else boxes[valid_mask]
                     
-                    # Get top-K
+                    # Get top-K.
                     top_k = min(self.max_detections, len(valid_scores))
                     top_indices = torch.topk(valid_scores, k=top_k).indices
                     
@@ -465,13 +465,13 @@ class DetectionPostProcessor:
                         batch_detections.append({
                             'box': valid_boxes[idx].cpu().tolist() if torch.is_tensor(valid_boxes[idx]) else valid_boxes[idx],
                             'confidence': valid_scores[idx].item() if torch.is_tensor(valid_scores[idx]) else valid_scores[idx],
-                            'class': 0  # Default if not available
+                            'class': 0  # Default if not available.
                         })
                     detections.append(batch_detections)
                 else:
                     detections.append([])
         else:
-            # No detection outputs - return empty detections
+            # No detection outputs - return empty detections.
             detections = [[] for _ in range(batch_size)]
         
         return detections
@@ -503,7 +503,7 @@ def create_inference_dataloader(
     num_workers: int = 4,
     max_samples: Optional[int] = None,
     shuffle: bool = False,
-    pin_memory: Optional[bool] = None  # FIXED: Make configurable
+    pin_memory: Optional[bool] = None  # FIXED: Make configurable.
 ) -> DataLoader:
     """Create DataLoader for inference datasets...."""
     if dataset_name.lower() == 'open_images_v6':
@@ -527,9 +527,9 @@ def create_inference_dataloader(
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}. Choose from: open_images_v6, bdd100k, ade20k")
     
-    # FIXED: Proper pin_memory handling
+    # FIXED: Proper pin_memory handling.
     if pin_memory is None:
-        # Only pin memory if CUDA is available AND we'll use non_blocking transfers
+        # Only pin memory if CUDA is available AND we'll use non_blocking transfers.
         pin_memory = torch.cuda.is_available()
     
     dataloader = DataLoader(
@@ -556,7 +556,7 @@ def run_inference_on_dataset(
     model.eval()
     model.to(device)
     
-    # FIXED: Create postprocessor if not provided
+    # FIXED: Create postprocessor if not provided.
     if postprocessor is None:
         postprocessor = DetectionPostProcessor(
             confidence_threshold=0.3,
@@ -573,7 +573,7 @@ def run_inference_on_dataset(
     
     with torch.no_grad():
         for batch_idx, batch in enumerate(dataloader):
-            # FIXED: Handle corrupted images
+            # FIXED: Handle corrupted images.
             try:
                 images = batch['image']
             except RuntimeError as e:
@@ -586,31 +586,31 @@ def run_inference_on_dataset(
                 else:
                     raise
             
-            # FIXED: Use non_blocking transfer if pin_memory is enabled
+            # FIXED: Use non_blocking transfer if pin_memory is enabled.
             if dataloader.pin_memory and device != 'cpu':
                 images = images.to(device, non_blocking=True)
             else:
                 images = images.to(device)
             
-            # Run inference
+            # Run inference.
             outputs = model(images)
             
-            # FIXED: Use postprocessor interface
+            # FIXED: Use postprocessor interface.
             batch_size = images.size(0)
             detections = postprocessor.process(model, outputs, batch_size)
             
-            # Process batch
+            # Process batch.
             total += batch_size
             
-            # FIXED: Use global counter for image_idx
+            # FIXED: Use global counter for image_idx.
             for i in range(batch_size):
-                # FIXED: Handle different detection formats
+                # FIXED: Handle different detection formats.
                 if i < len(detections):
                     image_detections = detections[i]
                 else:
                     image_detections = []
                 
-                # FIXED: Standard metadata access
+                # FIXED: Standard metadata access.
                 context = batch.get('context', {})
                 if isinstance(context, list) and i < len(context):
                     context = context[i]
@@ -634,22 +634,22 @@ def run_inference_on_dataset(
                 }
                 
                 all_predictions.append(pred)
-                global_image_idx += 1  # FIXED: Increment global counter
+                global_image_idx += 1  # FIXED: Increment global counter.
             
             if verbose and (batch_idx + 1) % 10 == 0:
                 print(f"Processed {batch_idx + 1}/{len(dataloader)} batches")
     
-    # Calculate statistics
+    # Calculate statistics.
     stats = {
         'total_images': total,
         'total_detections': sum(p['num_detections'] for p in all_predictions),
         'avg_detections_per_image': sum(p['num_detections'] for p in all_predictions) / total if total > 0 else 0,
         'images_with_detections': sum(1 for p in all_predictions if p['num_detections'] > 0),
         'images_without_detections': sum(1 for p in all_predictions if p['num_detections'] == 0),
-        'corrupted_images_skipped': corrupted_count  # FIXED: Track corrupted images
+        'corrupted_images_skipped': corrupted_count  # FIXED: Track corrupted images.
     }
     
-    # Get dataset info from first sample
+    # Get dataset info from first sample.
     dataset_info = {}
     if all_predictions:
         dataset_info = {
@@ -661,7 +661,7 @@ def run_inference_on_dataset(
         'predictions': all_predictions,
         'stats': stats,
         'dataset_info': dataset_info,
-        'corrupted_images': corrupted_images  # FIXED: Return corrupted image list
+        'corrupted_images': corrupted_images  # FIXED: Return corrupted image list.
     }
     
     return results
@@ -691,7 +691,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Create dataloader
+    # Create dataloader.
     print(f"Creating {args.dataset} {args.split} dataloader...")
     dataloader = create_inference_dataloader(
         dataset_name=args.dataset,
@@ -701,7 +701,7 @@ if __name__ == "__main__":
         max_samples=args.max_samples
     )
     
-    # Load model
+    # Load model.
     print("Loading MaxSightCNN model...")
     model = MaxSightCNN(num_classes=80, use_audio=False)
     if args.model_path and args.model_path.exists():
@@ -714,7 +714,7 @@ if __name__ == "__main__":
     else:
         print("Using untrained model (random weights)")
     
-    # Run inference
+    # Run inference.
     try:
         dataset_size = len(dataloader.dataset)  # type: ignore
     except (TypeError, AttributeError):
@@ -731,7 +731,7 @@ if __name__ == "__main__":
         skip_corrupted=args.skip_corrupted
     )
     
-    # Print results
+    # Print results.
     print("\n" + "="*50)
     print("Inference Results:")
     print("="*50)
@@ -747,3 +747,4 @@ if __name__ == "__main__":
     if stats['corrupted_images_skipped'] > 0:
         print(f"⚠️  Corrupted images skipped: {stats['corrupted_images_skipped']}")
     print("="*50)
+

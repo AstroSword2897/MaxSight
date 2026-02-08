@@ -16,17 +16,17 @@ HOW IT CONNECTS TO THE PROBLEM STATEMENT:
 The problem statement asks: "What are ways that those who cannot see and hear be able to interact 
 with the world like those who can?" This module answers that by providing:
 
-1. ENVIRONMENTAL STRUCTURING (Barrier Removal Method #1):
+1. ENVIRONMENTAL STRUCTURING (Barrier Removal Method # 1):.
    - Converts raw detections into structured descriptions: "Door 2 meters ahead, handle left"
    - Labels surroundings in ways users can understand and act upon
    - Provides spatial context (distance, direction, height) that sighted people take for granted
 
-2. CLEAR MULTIMODAL COMMUNICATION (Barrier Removal Method #2):
+2. CLEAR MULTIMODAL COMMUNICATION (Barrier Removal Method # 2):.
    - Generates descriptions suitable for TTS (text-to-speech) for blind users
    - Creates concise summaries for visual overlays for deaf users
    - Adapts verbosity based on user needs (brief/normal/detailed)
 
-3. SKILL DEVELOPMENT ACROSS SENSES (Barrier Removal Method #3):
+3. SKILL DEVELOPMENT ACROSS SENSES (Barrier Removal Method # 3):.
    - Provides consistent spatial language that helps users build mental maps
    - Gradually reduces detail as users improve (via verbosity levels)
    - Reinforces spatial understanding through repeated, structured descriptions
@@ -76,7 +76,7 @@ class DescriptionGenerator:
     actionable, not just informative.
     """
     
-    # Distance zone names
+    # Distance zone names.
     DISTANCE_NAMES = ['near', 'medium', 'far']
     
     # Direction zones (relative to image center)
@@ -92,7 +92,7 @@ class DescriptionGenerator:
         'bottom': (0.33, 1.0)
     }
     
-    # Urgency level names
+    # Urgency level names.
     URGENCY_NAMES = ['safe', 'caution', 'warning', 'danger']
     
     def __init__(self, verbosity: str = 'normal'):
@@ -142,7 +142,7 @@ class DescriptionGenerator:
         else:
             h_dir = 'right'
         
-        # Vertical direction (y-axis) - top is negative, bottom is positive
+        # Vertical direction (y-axis) - top is negative, bottom is positive.
         if cy < 0.33:
             v_dir = 'above'
         elif cy < 0.4:
@@ -176,28 +176,28 @@ class DescriptionGenerator:
             distance_map = {'near': 0, 'medium': 1, 'far': 2}
             distance_zone = distance_map.get(distance_zone.lower(), 1)
         
-        # Ensure distance_zone is int and in valid range
+        # Ensure distance_zone is int and in valid range.
         distance_zone = int(distance_zone)
         if distance_zone < 0 or distance_zone >= len(self.DISTANCE_NAMES):
-            distance_zone = 1  # Default to medium
+            distance_zone = 1  # Default to medium.
         
         base_name = self.DISTANCE_NAMES[distance_zone]
         
-        # Add more precise estimates if box_size available
+        # Add more precise estimates if box_size available.
         if box_size is not None and self.verbosity in ['normal', 'detailed']:
-            if distance_zone == 0:  # Near
+            if distance_zone == 0:  # Near.
                 if box_size > 0.15:
                     return "very close"
                 elif box_size > 0.08:
                     return "close"
                 else:
                     return "near"
-            elif distance_zone == 1:  # Medium
+            elif distance_zone == 1:  # Medium.
                 if box_size > 0.05:
                     return "moderate distance"
                 else:
                     return "medium distance"
-            else:  # Far
+            else:  # Far.
                 if box_size < 0.02:
                     return "far away"
                 else:
@@ -225,21 +225,21 @@ class DescriptionGenerator:
         if self.verbosity != 'detailed':
             return None
         
-        # Rough size-based estimation
-        # Larger boxes = closer objects
-        if distance_zone == 0:  # Near
+        # Rough size-based estimation.
+        # Larger boxes = closer objects.
+        if distance_zone == 0:  # Near.
             if box_size > 0.15:
                 return "1-2 meters"
             elif box_size > 0.08:
                 return "2-3 meters"
             else:
                 return "3-5 meters"
-        elif distance_zone == 1:  # Medium
+        elif distance_zone == 1:  # Medium.
             if box_size > 0.05:
                 return "5-7 meters"
             else:
                 return "7-10 meters"
-        else:  # Far
+        else:  # Far.
             if box_size < 0.02:
                 return "10+ meters"
             else:
@@ -265,7 +265,7 @@ class DescriptionGenerator:
         
         cy, h = box[1].item(), box[3].item()
         
-        # Vertical position
+        # Vertical position.
         if cy < 0.3:
             position = "overhead"
         elif cy < 0.4:
@@ -277,7 +277,7 @@ class DescriptionGenerator:
         else:
             position = "near ground level"
         
-        # Size relative to typical object
+        # Size relative to typical object.
         if h > 0.3:
             size_desc = "large"
         elif h > 0.15:
@@ -341,20 +341,20 @@ class DescriptionGenerator:
         """
         verbosity = verbosity or self.verbosity
         
-        # Get direction
+        # Get direction.
         h_dir, v_dir = self.get_direction_from_box(box)
         
-        # Get distance
-        box_size = box[2].item() * box[3].item()  # w * h
+        # Get distance.
+        box_size = box[2].item() * box[3].item()  # W * h.
         distance_desc = self.get_distance_description(distance_zone, box_size)
         
-        # Get meters estimate if detailed
+        # Get meters estimate if detailed.
         meters = self.estimate_meters(distance_zone, box_size, class_name)
         
-        # Get height if detailed
+        # Get height if detailed.
         height_desc = self.get_relative_height(box)
         
-        # Build description based on verbosity
+        # Build description based on verbosity.
         if verbosity == 'brief':
             # Minimal: "Door ahead" or "Stairs left"
             if h_dir == 'ahead':
@@ -366,44 +366,44 @@ class DescriptionGenerator:
             # Standard: "Door 2 meters ahead, slightly left"
             parts = [class_name]
             
-            # Add distance
+            # Add distance.
             if meters:
                 parts.append(meters)
             else:
                 parts.append(distance_desc)
             
-            # Add direction
+            # Add direction.
             if h_dir != 'ahead':
                 parts.append(h_dir)
             
-            # Add urgency if high
+            # Add urgency if high.
             if urgency >= 2:
                 urgency_name = self.URGENCY_NAMES[urgency] if urgency < len(self.URGENCY_NAMES) else 'warning'
                 parts.append(f"({urgency_name})")
             
             return " ".join(parts)
         
-        else:  # detailed
+        else:  # Detailed.
             # Full: "Wooden door, 2 meters ahead, slightly left, at eye level, brass handle on left side"
             parts = [class_name]
             
-            # Add distance with meters
+            # Add distance with meters.
             if meters:
                 parts.append(f"{meters} away")
             else:
                 parts.append(f"at {distance_desc}")
             
-            # Add direction
+            # Add direction.
             if h_dir != 'ahead':
                 parts.append(h_dir)
             if v_dir != 'at eye level' and v_dir != 'ahead':
                 parts.append(v_dir)
             
-            # Add height if available
+            # Add height if available.
             if height_desc:
                 parts.append(f"({height_desc})")
             
-            # Add urgency
+            # Add urgency.
             if urgency >= 1:
                 urgency_name = self.URGENCY_NAMES[urgency] if urgency < len(self.URGENCY_NAMES) else 'caution'
                 parts.append(f"- {urgency_name}")
@@ -441,17 +441,17 @@ class DescriptionGenerator:
             reverse=True
         )
         
-        # Limit number of objects based on verbosity
+        # Limit number of objects based on verbosity.
         if verbosity == 'brief':
             max_objects = 2
         elif verbosity == 'normal':
             max_objects = 4
-        else:  # detailed
+        else:  # Detailed.
             max_objects = 6
         
         objects_to_describe = sorted_dets[:max_objects]
         
-        # Group by direction for better organization
+        # Group by direction for better organization.
         descriptions = []
         for det in objects_to_describe:
             class_name = det.get('class_name', 'object')
@@ -469,13 +469,13 @@ class DescriptionGenerator:
             else:
                 descriptions.append(class_name)
         
-        # Combine descriptions
+        # Combine descriptions.
         if verbosity == 'brief':
             return "; ".join(descriptions)
         elif verbosity == 'normal':
             return ". ".join(descriptions) + "."
-        else:  # detailed
-            # Add scene context
+        else:  # Detailed.
+            # Add scene context.
             urgency_name = self.URGENCY_NAMES[urgency_score] if urgency_score < len(self.URGENCY_NAMES) else 'normal'
             scene_context = f"Scene: {len(detections)} objects detected. Overall safety: {urgency_name}."
             return scene_context + " " + ". ".join(descriptions) + "."
@@ -526,7 +526,7 @@ class DescriptionGenerator:
         for d in detections:
             urgency = d.get('urgency', 0)
             distance = d.get('distance', 2)
-            # Convert string distance to zone if needed
+            # Convert string distance to zone if needed.
             if isinstance(distance, str):
                 distance_map = {'near': 0, 'medium': 1, 'far': 2}
                 distance = distance_map.get(distance.lower(), 1)
@@ -536,7 +536,7 @@ class DescriptionGenerator:
         if not obstacles:
             return "Clear path ahead"
         
-        # Analyze obstacle positions
+        # Analyze obstacle positions.
         left_obstacles = []
         right_obstacles = []
         center_obstacles = []
@@ -552,7 +552,7 @@ class DescriptionGenerator:
                 else:
                     center_obstacles.append(obs)
         
-        # Generate guidance
+        # Generate guidance.
         if center_obstacles:
             return "Obstacle directly ahead, move left or right"
         elif left_obstacles and not right_obstacles:
@@ -590,11 +590,11 @@ class DescriptionGenerator:
         
         urgency_word = self.URGENCY_NAMES[urgency] if urgency < len(self.URGENCY_NAMES) else 'warning'
         
-        if urgency >= 3:  # Danger
+        if urgency >= 3:  # Danger.
             return f"⚠️ DANGER: {class_name} {distance_desc} {h_dir}"
-        elif urgency >= 2:  # Warning
+        elif urgency >= 2:  # Warning.
             return f"⚠️ Warning: {class_name} {distance_desc} {h_dir}"
-        else:  # Caution
+        else:  # Caution.
             return f"Caution: {class_name} {distance_desc} {h_dir}"
     
     def generate_description(
@@ -623,4 +623,5 @@ class DescriptionGenerator:
 def create_description_generator(verbosity: str = 'normal') -> DescriptionGenerator:
     """Factory function to create description generator."""
     return DescriptionGenerator(verbosity=verbosity)
+
 

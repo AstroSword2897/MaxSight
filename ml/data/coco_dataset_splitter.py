@@ -21,37 +21,37 @@ def split_coco_dataset(
     min_objects_per_image: int = 1
 ) -> Tuple[Path, Path, Path]:
     """Split COCO dataset into train/val/test splits...."""
-    # Validate splits
+    # Validate splits.
     if abs(train_split + val_split + test_split - 1.0) > 1e-6:
         raise ValueError(f"Splits must sum to 1.0, got {train_split + val_split + test_split}")
     
-    # Set random seed
+    # Set random seed.
     random.seed(seed)
     np.random.seed(seed)
     
-    # Create output directory
+    # Create output directory.
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Load COCO annotations
+    # Load COCO annotations.
     print(f"Loading COCO annotations from {coco_annotation_file}...")
     with open(coco_annotation_file, 'r') as f:
         coco_data = json.load(f)
     
-    # Validate COCO format
+    # Validate COCO format.
     if 'images' not in coco_data or 'annotations' not in coco_data:
         raise ValueError("Invalid COCO format: missing 'images' or 'annotations'")
     
-    # Build mappings
+    # Build mappings.
     image_map = {img['id']: img for img in coco_data['images']}
     category_map = {cat['id']: cat['name'] for cat in coco_data.get('categories', [])}
     
-    # Group annotations by image_id
+    # Group annotations by image_id.
     image_annotations = defaultdict(list)
     for ann in coco_data['annotations']:
         image_annotations[ann['image_id']].append(ann)
     
-    # Filter images with minimum objects
+    # Filter images with minimum objects.
     valid_image_ids = [
         img_id for img_id in image_map.keys()
         if len(image_annotations.get(img_id, [])) >= min_objects_per_image
@@ -61,7 +61,7 @@ def split_coco_dataset(
     
     valid_image_ids = list(np.random.permutation(valid_image_ids))
     
-    # Calculate split indices
+    # Calculate split indices.
     total = len(valid_image_ids)
     if total == 0:
         raise ValueError("No valid images found after filtering.")
@@ -77,7 +77,7 @@ def split_coco_dataset(
     print(f"  Val:   {len(val_ids)} ({len(val_ids)/total*100:.1f}%)")
     print(f"  Test:  {len(test_ids)} ({len(test_ids)/total*100:.1f}%)")
     
-    # Create split annotation files
+    # Create split annotation files.
     def create_split_file(image_ids: List[int], split_name: str) -> Path:
         """Create annotation file for a split."""
         split_images = [image_map[img_id] for img_id in image_ids]
@@ -89,7 +89,7 @@ def split_coco_dataset(
                 split_annotations.append(ann)
                 split_category_ids.add(ann['category_id'])
         
-        # Filter categories to only include those in this split
+        # Filter categories to only include those in this split.
         split_categories = [cat for cat in coco_data.get('categories', [])
                             if cat['id'] in split_category_ids]
             
@@ -107,7 +107,7 @@ def split_coco_dataset(
         print(f"Created {split_name} split: {output_file} ({len(split_images)} images, {len(split_annotations)} annotations)")
         return output_file
     
-    # Create all splits
+    # Create all splits.
     train_file = create_split_file(train_ids, 'train')
     val_file = create_split_file(val_ids, 'val')
     test_file = create_split_file(test_ids, 'test')
@@ -136,34 +136,34 @@ def create_maxsight_splits_from_coco(
         generate_scene_description
     )
     
-    # Validate: use either ratios OR absolute counts, not both
+    # Validate: use either ratios OR absolute counts, not both.
     if train_samples is not None and val_samples is not None:
-        # Using absolute counts - validate they're positive
+        # Using absolute counts - validate they're positive.
         if train_samples <= 0 or val_samples <= 0:
             raise ValueError(f"Sample counts must be positive: train={train_samples}, val={val_samples}")
         use_absolute_counts = True
     elif train_split is not None and val_split is not None:
-        # Using ratios - validate they sum to 1.0
+        # Using ratios - validate they sum to 1.0.
         test_split = test_split or (1.0 - train_split - val_split)
         if abs(train_split + val_split + test_split - 1.0) > 1e-6:
             raise ValueError(f"Splits must sum to 1.0, got {train_split + val_split + test_split}")
         use_absolute_counts = False
     else:
-        # Default to ratios if nothing specified
+        # Default to ratios if nothing specified.
         train_split = train_split or 0.7
         val_split = val_split or 0.15
         test_split = test_split or 0.15
         use_absolute_counts = False
     
-    # Set random seed
+    # Set random seed.
     random.seed(seed)
     np.random.seed(seed)
     
-    # Create output directory
+    # Create output directory.
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Load COCO annotations
+    # Load COCO annotations.
     print(f"Loading COCO annotations from {coco_annotation_file}...")
     with open(coco_annotation_file, 'r') as f:
         coco_data = json.load(f)
@@ -175,7 +175,7 @@ def create_maxsight_splits_from_coco(
     for ann in coco_data['annotations']:
         image_annotations[ann['image_id']].append(ann)
     
-    # Filter images with minimum objects
+    # Filter images with minimum objects.
     valid_image_ids = [
         img_id for img_id in image_annotations.keys()
         if len(image_annotations.get(img_id, [])) >= min_objects_per_image
@@ -183,7 +183,7 @@ def create_maxsight_splits_from_coco(
     
     print(f"Found {len(valid_image_ids)} valid images (with >= {min_objects_per_image} objects)")
     
-    # Limit samples if specified
+    # Limit samples if specified.
     if num_samples and len(valid_image_ids) > num_samples:
         valid_image_ids = random.sample(valid_image_ids, num_samples)
         print(f"Limited to {num_samples} samples")
@@ -191,7 +191,7 @@ def create_maxsight_splits_from_coco(
     image_ids = valid_image_ids
     print(f"Processing {len(image_ids)} images...")
     
-    # Convert to MaxSight format
+    # Convert to MaxSight format.
     maxsight_annotations = []
     for image_id in image_ids:
         img_info = image_map.get(image_id)
@@ -208,11 +208,11 @@ def create_maxsight_splits_from_coco(
             category_name = category_map.get(category_id, 'unknown')
             env_category = map_coco_to_environmental(category_name)
             
-            bbox = ann['bbox']  # [x, y, w, h] in pixels
+            bbox = ann['bbox']  # [x, y, w, h] in pixels.
             img_width = max(1, img_info.get('width', 224))
             img_height = max(1, img_info.get('height', 224))
 
-            # Convert to center format and normalize
+            # Convert to center format and normalize.
             cx = (bbox[0] + bbox[2] / 2) / img_width
             cy = (bbox[1] + bbox[3] / 2) / img_height
             w = max(0.01, bbox[2] / img_width)
@@ -231,11 +231,11 @@ def create_maxsight_splits_from_coco(
                 'confidence': ann.get('score', 1.0)
             })
         
-        # Skip images with zero objects
+        # Skip images with zero objects.
         if not objects:
             continue
         
-        # Generate scene description
+        # Generate scene description.
         scene_desc = generate_scene_description(objects)
         
         # Handle image path (check if image_dir is None)
@@ -244,26 +244,26 @@ def create_maxsight_splits_from_coco(
         else:
             image_path = img_info.get('file_name', f'{image_id}.jpg')
         
-        # Create MaxSight annotation
+        # Create MaxSight annotation.
         maxsight_ann = {
             'image_id': image_id,
             'image_path': image_path,
             'objects': objects,
             'urgency': scene_urgency,
-            'lighting': 'normal',  # Will be detected during training
+            'lighting': 'normal',  # Will be detected during training.
             'description': scene_desc,
-            'audio_path': None  # No audio in COCO
+            'audio_path': None  # No audio in COCO.
         }
         
         maxsight_annotations.append(maxsight_ann)
     
     maxsight_annotations = list(np.random.permutation(maxsight_annotations))
     
-    # Calculate split indices
+    # Calculate split indices.
     total = len(maxsight_annotations)
     
     if use_absolute_counts:
-        # Use absolute sample counts
+        # Use absolute sample counts.
         train_end = min(train_samples, total)
         val_end = min(train_end + val_samples, total)
         
@@ -276,7 +276,7 @@ def create_maxsight_splits_from_coco(
         print(f"  Val:   {len(val_annotations):,} samples (requested: {val_samples:,})")
         print(f"  Test:  {len(test_annotations):,} samples (remaining)")
     else:
-        # Use ratios
+        # Use ratios.
         train_end = int(total * train_split)
         val_end = train_end + int(total * val_split)
         
@@ -289,7 +289,7 @@ def create_maxsight_splits_from_coco(
         print(f"  Val:   {len(val_annotations):,} ({len(val_annotations)/total*100:.1f}%)")
         print(f"  Test:  {len(test_annotations):,} ({len(test_annotations)/total*100:.1f}%)")
     
-    # Save split files
+    # Save split files.
     def save_split(annotations: List[Dict], split_name: str) -> Path:
         output_file = output_dir / f'maxsight_{split_name}.json'
         with open(output_file, 'w') as f:
@@ -329,7 +329,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Validate image_dir requirement for MaxSight format
+    # Validate image_dir requirement for MaxSight format.
     if args.format == 'maxsight' and args.image_dir is None:
         parser.error("--image_dir is required for MaxSight format")
     
@@ -354,11 +354,12 @@ if __name__ == "__main__":
             val_samples=args.val_samples,
             seed=args.seed,
             num_samples=args.num_samples,
-            min_objects_per_image=1  # Default: require at least 1 object per image
+            min_objects_per_image=1  # Default: require at least 1 object per image.
         )
     
     print("\n✅ Dataset splitting complete!")
     print(f"Train: {train_file}")
     print(f"Val:   {val_file}")
     print(f"Test:  {test_file}")
+
 

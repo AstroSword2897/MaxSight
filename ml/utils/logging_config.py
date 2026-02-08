@@ -18,21 +18,21 @@ def setup_logging(
     log_dir: Path = Path("logs")
 ) -> logging.Logger:
     """Setup production-grade logging configuration...."""
-    # Create log directory if needed
+    # Create log directory if needed.
     if log_file is None:
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / "maxsight.log"
     else:
         log_file.parent.mkdir(parents=True, exist_ok=True)
     
-    # Get root logger
+    # Get root logger.
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, log_level.upper()))
     
-    # Remove existing handlers
+    # Remove existing handlers.
     root_logger.handlers.clear()
     
-    # Console handler
+    # Console handler.
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(getattr(logging, log_level.upper()))
     console_formatter = logging.Formatter(
@@ -42,19 +42,19 @@ def setup_logging(
     console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
     
-    # File handler with rotation
+    # File handler with rotation.
     try:
         from logging.handlers import RotatingFileHandler
         file_handler = RotatingFileHandler(
             log_file,
-            maxBytes=10 * 1024 * 1024,  # 10MB
+            maxBytes=10 * 1024 * 1024,  # 10MB.
             backupCount=5
         )
     except ImportError:
-        # Fallback to basic FileHandler
+        # Fallback to basic FileHandler.
         file_handler = logging.FileHandler(log_file)
     
-    file_handler.setLevel(logging.DEBUG)  # Always log everything to file
+    file_handler.setLevel(logging.DEBUG)  # Always log everything to file.
     file_formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(pathname)s:%(lineno)d - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
@@ -62,7 +62,7 @@ def setup_logging(
     file_handler.setFormatter(file_formatter)
     root_logger.addHandler(file_handler)
     
-    # Suppress noisy third-party loggers
+    # Suppress noisy third-party loggers.
     logging.getLogger('PIL').setLevel(logging.WARNING)
     logging.getLogger('matplotlib').setLevel(logging.WARNING)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -120,14 +120,14 @@ class PatientPrintGuard:
             if self._thread_local is None:
                 self._thread_local = threading.local()
         except ImportError:
-            # No threading support, use global state
+            # No threading support, use global state.
             pass
         
         self._enabled = True
         self.original_stdout = sys.stdout
         self.original_stderr = sys.stderr
         
-        # Replace stdout/stderr with guarded versions
+        # Replace stdout/stderr with guarded versions.
         sys.stdout = GuardedOutput(self.original_stdout, "stdout", self.log_level)
         sys.stderr = GuardedOutput(self.original_stderr, "stderr", self.log_level)
     
@@ -201,7 +201,7 @@ def safe_print(
     patient_mode: bool = False
 ):
     """Safe print function that routes to logger...."""
-    # Route to logger
+    # Route to logger.
     logger = logging.getLogger(__name__)
     log_func = getattr(logger, level.lower(), logger.info)
     log_func(message)
@@ -213,7 +213,7 @@ def patient_mode_context(enabled: bool = True):
     
     Usage:
         with patient_mode_context(enabled=True):
-            # Any print() calls here will raise
+            # Any print() calls here will raise.
             safe_print("This works fine")"""
     guard = PatientPrintGuard(patient_mode=enabled)
     guard.enable()
@@ -223,7 +223,7 @@ def patient_mode_context(enabled: bool = True):
         guard.disable()
 
 
-# Global guard instance
+# Global guard instance.
 _global_guard: Optional[PatientPrintGuard] = None
 
 
@@ -246,4 +246,5 @@ def is_patient_mode_enabled() -> bool:
     """Check if patient mode is currently enabled."""
     global _global_guard
     return _global_guard is not None and _global_guard._enabled
+
 

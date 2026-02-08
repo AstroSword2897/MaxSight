@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
-# Add project root to path
+# Add project root to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model
@@ -36,16 +36,16 @@ class TestFixtures:
     batch_size: int = 2
     num_patches: int = 196
     
-    # Shared data
+    # Shared data.
     images: Optional[torch.Tensor] = None
     outputs: Optional[Dict[str, torch.Tensor]] = None
     targets: Optional[Dict[str, torch.Tensor]] = None
     
-    # Loss functions
+    # Loss functions.
     loss_fn: Optional[nn.Module] = None
     gradnorm_loss: Optional[GradNormMultiHeadLoss] = None
     
-    # Metrics
+    # Metrics.
     metrics: Optional[DetectionMetrics] = None
 
 
@@ -55,25 +55,25 @@ def setup_fixtures(device: str = 'cpu') -> TestFixtures:
     
     fixtures = TestFixtures(device=device)
     
-    # Create model
+    # Create model.
     print("   Creating model...")
     fixtures.model = create_model(num_classes=fixtures.num_classes)
     fixtures.model.to(device)
     fixtures.model.eval()
     
-    # Create sample data
+    # Create sample data.
     print("   Creating sample data...")
     fixtures.images = torch.randn(
         fixtures.batch_size, 3, 224, 224,
         device=device
     )
     
-    # Generate model outputs
+    # Generate model outputs.
     print("   Generating model outputs...")
     with torch.no_grad():
         fixtures.outputs = fixtures.model(fixtures.images)
     
-    # Create targets
+    # Create targets.
     print("   Creating targets...")
     fixtures.targets = {
         'classifications': torch.randint(
@@ -91,7 +91,7 @@ def setup_fixtures(device: str = 'cpu') -> TestFixtures:
         ),
     }
     
-    # Create loss functions
+    # Create loss functions.
     print("   Creating loss functions...")
     head_losses = {
         'classification': ClassificationLoss(num_classes=fixtures.num_classes),
@@ -105,7 +105,7 @@ def setup_fixtures(device: str = 'cpu') -> TestFixtures:
         update_interval=100
     )
     
-    # Create metrics tracker
+    # Create metrics tracker.
     print("   Creating metrics tracker...")
     fixtures.metrics = DetectionMetrics(num_classes=fixtures.num_classes)
     
@@ -119,19 +119,19 @@ def test_gradnorm(fixtures: TestFixtures) -> Tuple[bool, str]:
     print("=" * 70)
     
     try:
-        # Test 1: Import
+        # Test 1: Import.
         print("\n1. Testing GradNorm import...")
         from ml.training.task_balancing import GradNormMultiHeadLoss
         print("   ✅ GradNorm imported successfully")
         
-        # Test 2: Verify fixtures are set up
+        # Test 2: Verify fixtures are set up.
         print("\n2. Using shared fixtures...")
         assert fixtures.gradnorm_loss is not None, "GradNorm loss not initialized"
         assert fixtures.model is not None, "Model not initialized"
         print(f"   ✅ GradNorm initialized: {fixtures.gradnorm_loss.num_heads} heads")
         print(f"   ✅ Using shared model with {sum(p.numel() for p in fixtures.model.parameters()):,} parameters")
         
-        # Test 3: Loss computation with real model
+        # Test 3: Loss computation with real model.
         print("\n3. Testing GradNorm loss computation with real model...")
         
         # Make outputs require grad for backprop (only float tensors)
@@ -157,13 +157,13 @@ def test_gradnorm(fixtures: TestFixtures) -> Tuple[bool, str]:
         print(f"   ✅ Loss computation successful: {total_loss.item():.4f}")
         print(f"   ✅ Metrics: {list(metrics.keys())}")
         
-        # Test 4: Check for inplace operation issues with matching
+        # Test 4: Check for inplace operation issues with matching.
         print("\n4. Testing GradNorm with matching pipeline (real-world scenario)...")
         try:
-            # This simulates the actual training pipeline
+            # This simulates the actual training pipeline.
             fixtures.model.train()
             
-            # Generate predictions that require grad
+            # Generate predictions that require grad.
             pred_outputs = fixtures.model(fixtures.images)
             
             # Match predictions to ground truth (this was causing inplace errors)
@@ -174,7 +174,7 @@ def test_gradnorm(fixtures: TestFixtures) -> Tuple[bool, str]:
                 gt_labels=fixtures.targets['classifications'],
             )
             
-            # Compute loss with matched targets
+            # Compute loss with matched targets.
             loss, loss_dict = fixtures.gradnorm_loss(
                 pred_outputs,
                 fixtures.targets,
@@ -194,7 +194,7 @@ def test_gradnorm(fixtures: TestFixtures) -> Tuple[bool, str]:
                 return False, f"Inplace operation error detected: {e}"
             raise
         
-        # Test 5: Gradient norm computation
+        # Test 5: Gradient norm computation.
         print("\n5. Testing gradient norm computation...")
         if 'gradient_norms' in metrics:
             grad_norms = metrics['gradient_norms']
@@ -214,12 +214,12 @@ def test_automl() -> Tuple[bool, str]:
     print("=" * 70)
     
     try:
-        # Test 1: Import Optuna
+        # Test 1: Import Optuna.
         print("\n1. Testing Optuna import...")
         import optuna
         print(f"   ✅ Optuna imported: version {optuna.__version__}")
         
-        # Test 2: Create study
+        # Test 2: Create study.
         print("\n2. Testing Optuna study creation...")
         study = optuna.create_study(
             direction='minimize',
@@ -227,13 +227,13 @@ def test_automl() -> Tuple[bool, str]:
         )
         print("   ✅ Study created successfully")
         
-        # Test 3: Test trial
+        # Test 3: Test trial.
         print("\n3. Testing Optuna trial...")
         def objective(trial):
             lr = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
             wd = trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True)
             bs = trial.suggest_int('batch_size', 4, 16, step=4)
-            return (lr - 0.001) ** 2 + (wd - 0.0001) ** 2  # Dummy objective
+            return (lr - 0.001) ** 2 + (wd - 0.0001) ** 2  # Dummy objective.
         
         trial = study.ask()
         value = objective(trial)
@@ -241,7 +241,7 @@ def test_automl() -> Tuple[bool, str]:
         print(f"   ✅ Trial completed: value={value:.6f}")
         print(f"   ✅ Parameters: {trial.params}")
         
-        # Test 4: Check AutoML script exists
+        # Test 4: Check AutoML script exists.
         print("\n4. Testing AutoML script availability...")
         automl_script = Path(__file__).parent / 'AutoMLType.py'
         if automl_script.exists():
@@ -263,21 +263,21 @@ def test_false_positives(fixtures: TestFixtures) -> Tuple[bool, str]:
     print("=" * 70)
     
     try:
-        # Test 1: Use shared metrics tracker
+        # Test 1: Use shared metrics tracker.
         print("\n1. Using shared metrics tracker...")
         assert fixtures.metrics is not None, "Metrics not initialized"
         print("   ✅ DetectionMetrics initialized")
         
-        # Test 2: Extract detections from real model outputs
+        # Test 2: Extract detections from real model outputs.
         print("\n2. Testing false positive detection with real model outputs...")
         
         # Get model predictions (bounding boxes and classifications)
-        pred_boxes = fixtures.outputs['boxes'][0]  # First batch item
+        pred_boxes = fixtures.outputs['boxes'][0]  # First batch item.
         pred_logits = fixtures.outputs['classifications'][0]
         pred_scores = torch.softmax(pred_logits, dim=-1).max(dim=-1)[0]
         pred_labels = torch.softmax(pred_logits, dim=-1).argmax(dim=-1)
         
-        # Filter by confidence threshold
+        # Filter by confidence threshold.
         confidence_threshold = 0.5
         valid_mask = pred_scores > confidence_threshold
         pred_boxes_filtered = pred_boxes[valid_mask]
@@ -286,8 +286,8 @@ def test_false_positives(fixtures: TestFixtures) -> Tuple[bool, str]:
         
         # Create ground truth (simulating a scene with 2 objects)
         gt_boxes = torch.tensor([
-            [0.2, 0.2, 0.3, 0.3],  # Object 1
-            [0.6, 0.6, 0.2, 0.2],  # Object 2
+            [0.2, 0.2, 0.3, 0.3],  # Object 1.
+            [0.6, 0.6, 0.2, 0.2],  # Object 2.
         ], device=fixtures.device)
         gt_labels = torch.tensor([1, 5], device=fixtures.device)
         
@@ -304,14 +304,14 @@ def test_false_positives(fixtures: TestFixtures) -> Tuple[bool, str]:
         print(f"   ✅ Model predicted {len(pred_boxes_filtered)} detections")
         print(f"   ✅ Ground truth has {len(gt_boxes)} objects")
         
-        # Test 3: Compute false positive rate
+        # Test 3: Compute false positive rate.
         print("\n3. Computing detection metrics...")
         precision = fixtures.metrics.compute_precision()
         recall = fixtures.metrics.compute_recall()
         f1 = fixtures.metrics.compute_f1()
         map_score = fixtures.metrics.compute_map()
         
-        # compute_map() can return dict or float
+        # Compute_map() can return dict or float.
         map_result = fixtures.metrics.compute_map()
         if isinstance(map_result, dict):
             map_score = map_result.get('mAP', 0.0)
@@ -323,12 +323,12 @@ def test_false_positives(fixtures: TestFixtures) -> Tuple[bool, str]:
         print(f"   ✅ F1: {f1:.4f}")
         print(f"   ✅ mAP: {map_score:.4f}")
         
-        # Test 4: Per-class false positives
+        # Test 4: Per-class false positives.
         print("\n4. Testing per-class false positive tracking...")
         class_fp = fixtures.metrics.class_fp
         class_tp = fixtures.metrics.class_tp
         
-        # Sum values - handle both dict and Counter types
+        # Sum values - handle both dict and Counter types.
         if hasattr(class_fp, 'values'):
             try:
                 fp_values = list(class_fp.values())
@@ -354,7 +354,7 @@ def test_false_positives(fixtures: TestFixtures) -> Tuple[bool, str]:
         else:
             print(f"   ℹ️  No detections to compute FP rate")
         
-        # Test 5: Test with different confidence thresholds
+        # Test 5: Test with different confidence thresholds.
         print("\n5. Testing false positive rate at different confidence thresholds...")
         for threshold in [0.3, 0.5, 0.7, 0.9]:
             metrics_temp = DetectionMetrics(num_classes=fixtures.num_classes)
@@ -420,13 +420,13 @@ def test_model_forward(fixtures: TestFixtures) -> Tuple[bool, str]:
         print("   ✅ Forward pass successful")
         print(f"   ✅ Output keys: {list(fixtures.outputs.keys())}")
         
-        # Check output shapes
+        # Check output shapes.
         print("\n3. Verifying output shapes...")
         for key, value in fixtures.outputs.items():
             if torch.is_tensor(value):
                 print(f"   {key}: {value.shape}")
         
-        # Check for NaN/Inf
+        # Check for NaN/Inf.
         print("\n4. Checking for NaN/Inf values...")
         for key, value in fixtures.outputs.items():
             if torch.is_tensor(value):
@@ -444,7 +444,7 @@ def test_model_forward(fixtures: TestFixtures) -> Tuple[bool, str]:
             outputs2 = fixtures.model(fixtures.images)
             outputs3 = fixtures.model(fixtures.images)
         
-        # Outputs are deterministic in eval mode
+        # Outputs are deterministic in eval mode.
         for key in required_keys:
             diff = (outputs2[key] - outputs3[key]).abs().max().item()
             if diff > 1e-6:
@@ -482,7 +482,7 @@ def test_validation_loss(fixtures: TestFixtures) -> Tuple[bool, str]:
         print(f"   ✅ Loss computation successful: {total_loss.item():.4f}")
         print(f"   ✅ Loss components: {list(loss_dict.keys())}")
         
-        # Test 2: Compare with GradNorm loss
+        # Test 2: Compare with GradNorm loss.
         print("\n2. Comparing standard loss with GradNorm loss...")
         assert fixtures.gradnorm_loss is not None, "GradNorm loss not initialized"
         
@@ -496,7 +496,7 @@ def test_validation_loss(fixtures: TestFixtures) -> Tuple[bool, str]:
         print(f"   GradNorm loss: {gradnorm_total.item():.4f}")
         print(f"   ✅ Both losses computed successfully")
         
-        # Test 3: Ensure losses are in reasonable range
+        # Test 3: Ensure losses are in reasonable range.
         print("\n3. Checking loss magnitude...")
         if total_loss.item() > 100:
             print(f"   ⚠️  Loss is very high: {total_loss.item():.2f}")
@@ -514,7 +514,7 @@ def test_validation_loss(fixtures: TestFixtures) -> Tuple[bool, str]:
             else:
                 corrupted_outputs[key] = value
         
-        # Add some noise to float tensors
+        # Add some noise to float tensors.
         if torch.is_tensor(corrupted_outputs.get('boxes')):
             corrupted_outputs['boxes'] = corrupted_outputs['boxes'] + torch.randn_like(corrupted_outputs['boxes']) * 0.1
         
@@ -565,13 +565,13 @@ def test_integration_pipeline(fixtures: TestFixtures) -> Tuple[bool, str]:
     try:
         print("\n1. Simulating one training step...")
         
-        # Set model to train mode
+        # Set model to train mode.
         fixtures.model.train()
         
-        # Forward pass
+        # Forward pass.
         outputs = fixtures.model(fixtures.images)
         
-        # Match predictions to targets
+        # Match predictions to targets.
         print("   Matching predictions to ground truth...")
         matched_indices, costs = match_batch(
             pred_boxes=outputs['boxes'],
@@ -580,7 +580,7 @@ def test_integration_pipeline(fixtures: TestFixtures) -> Tuple[bool, str]:
             gt_labels=fixtures.targets['classifications'],
         )
         
-        # Compute loss with GradNorm
+        # Compute loss with GradNorm.
         print("   Computing GradNorm loss...")
         loss, loss_dict = fixtures.gradnorm_loss(
             outputs,
@@ -588,11 +588,11 @@ def test_integration_pipeline(fixtures: TestFixtures) -> Tuple[bool, str]:
             model=fixtures.model
         )
         
-        # Backward pass
+        # Backward pass.
         print("   Running backward pass...")
         loss.backward()
         
-        # Update metrics
+        # Update metrics.
         print("   Updating detection metrics...")
         for i in range(fixtures.batch_size):
             pred_boxes = outputs['boxes'][i].detach()
@@ -613,14 +613,14 @@ def test_integration_pipeline(fixtures: TestFixtures) -> Tuple[bool, str]:
         
         print(f"   ✅ Training step complete: loss = {loss.item():.4f}")
         
-        # Compute final metrics
+        # Compute final metrics.
         print("\n2. Computing final metrics...")
         precision = fixtures.metrics.compute_precision()
         recall = fixtures.metrics.compute_recall()
         f1 = fixtures.metrics.compute_f1()
         map_result = fixtures.metrics.compute_map()
         
-        # compute_map() can return dict or float
+        # Compute_map() can return dict or float.
         if isinstance(map_result, dict):
             map_score = map_result.get('mAP', 0.0)
         else:
@@ -633,11 +633,11 @@ def test_integration_pipeline(fixtures: TestFixtures) -> Tuple[bool, str]:
         
         print("\n3. Verifying no issues...")
         
-        # Check for NaN/Inf in loss
+        # Check for NaN/Inf in loss.
         if torch.isnan(loss) or torch.isinf(loss):
             return False, "Loss is NaN/Inf after training step"
         
-        # Check for NaN/Inf in gradients
+        # Check for NaN/Inf in gradients.
         has_nan_grad = False
         for name, param in fixtures.model.named_parameters():
             if param.grad is not None:
@@ -680,7 +680,7 @@ def main():
     
     args = parser.parse_args()
     
-    # Resolve device
+    # Resolve device.
     device = args.device
     if device == 'auto':
         if torch.cuda.is_available():
@@ -699,12 +699,12 @@ def main():
     
     # Set up shared fixtures (used by all tests)
     fixtures = None
-    if args.test != 'automl':  # AutoML test doesn't need fixtures
+    if args.test != 'automl':  # AutoML test doesn't need fixtures.
         fixtures = setup_fixtures(device=device)
     
     results: List[Tuple[str, bool, str]] = []
     
-    # Run tests with shared fixtures
+    # Run tests with shared fixtures.
     if args.test in ['all', 'model']:
         success, message = test_model_forward(fixtures)
         results.append(('Model Forward', success, message))
@@ -730,7 +730,7 @@ def main():
         success, message = test_automl()
         results.append(('AutoML', success, message))
     
-    # Print summary
+    # Print summary.
     print("\n" + "=" * 70)
     print("📊 Test Summary")
     print("=" * 70)
@@ -757,3 +757,4 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
+

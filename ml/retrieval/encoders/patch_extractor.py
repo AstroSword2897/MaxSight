@@ -20,9 +20,9 @@ class PatchExtractor(nn.Module):
         num_clusters: int = 25,
         embed_dim: int = 768,
         num_heads: int = 8,
-        use_soft_kmeans: bool = False,  # NEW: Differentiable soft KMeans alternative
-        temperature: float = 0.1,  # For soft KMeans
-        use_gradient_checkpointing: bool = False  # NEW: Memory efficiency
+        use_soft_kmeans: bool = False,  # NEW: Differentiable soft KMeans alternative.
+        temperature: float = 0.1,  # For soft KMeans.
+        use_gradient_checkpointing: bool = False  # NEW: Memory efficiency.
     ):
         super().__init__()
         
@@ -43,7 +43,7 @@ class PatchExtractor(nn.Module):
             torch.randn(1, num_clusters, embed_dim) * 0.02
         )
         
-        # NEW: Optional projection for better clustering
+        # NEW: Optional projection for better clustering.
         self.patch_proj = nn.Sequential(
             nn.Linear(embed_dim, embed_dim),
             nn.LayerNorm(embed_dim),
@@ -53,7 +53,7 @@ class PatchExtractor(nn.Module):
         
         # NEW: Soft KMeans alternative (fully differentiable)
         if use_soft_kmeans:
-            # Learnable cluster centers
+            # Learnable cluster centers.
             self.soft_cluster_centers = nn.Parameter(
                 torch.randn(1, num_clusters, embed_dim) * 0.02
             )
@@ -65,18 +65,18 @@ class PatchExtractor(nn.Module):
         """Attention-based pooling (fully differentiable, GPU-efficient)...."""
         B = patch_tokens.shape[0]
         
-        # Project patches for better clustering
-        patch_tokens_proj = self.patch_proj(patch_tokens)  # [B, N_patches, embed_dim]
+        # Project patches for better clustering.
+        patch_tokens_proj = self.patch_proj(patch_tokens)  # [B, N_patches, embed_dim].
         
-        # Expand cluster tokens for batch
-        cluster_tokens = self.cluster_tokens.expand(B, -1, -1)  # [B, num_clusters, embed_dim]
+        # Expand cluster tokens for batch.
+        cluster_tokens = self.cluster_tokens.expand(B, -1, -1)  # [B, num_clusters, embed_dim].
         
-        # Attention pooling: cluster tokens attend to patch tokens
+        # Attention pooling: cluster tokens attend to patch tokens.
         clustered_embeddings, attention_weights = self.attention_pool(
-            query=cluster_tokens,  # [B, num_clusters, embed_dim]
-            key=patch_tokens_proj,  # [B, N_patches, embed_dim]
-            value=patch_tokens_proj  # [B, N_patches, embed_dim]
-        )  # [B, num_clusters, embed_dim]
+            query=cluster_tokens,  # [B, num_clusters, embed_dim].
+            key=patch_tokens_proj,  # [B, N_patches, embed_dim].
+            value=patch_tokens_proj  # [B, N_patches, embed_dim].
+        )  # [B, num_clusters, embed_dim].
         
         return clustered_embeddings
     
@@ -87,31 +87,31 @@ class PatchExtractor(nn.Module):
         """Soft KMeans clustering (fully differentiable alternative to hard KMeans)...."""
         B, N_patches, _ = patch_tokens.shape
         
-        # Project patches
-        patch_tokens_proj = self.patch_proj(patch_tokens)  # [B, N_patches, embed_dim]
+        # Project patches.
+        patch_tokens_proj = self.patch_proj(patch_tokens)  # [B, N_patches, embed_dim].
         
-        # Expand cluster centers
-        cluster_centers = self.soft_cluster_centers.expand(B, -1, -1)  # [B, num_clusters, embed_dim]
+        # Expand cluster centers.
+        cluster_centers = self.soft_cluster_centers.expand(B, -1, -1)  # [B, num_clusters, embed_dim].
         
-        # Compute distances: [B, N_patches, num_clusters]
-        # Use cosine similarity (normalized) for better clustering
-        patch_norm = F.normalize(patch_tokens_proj, p=2, dim=2)  # [B, N_patches, embed_dim]
-        center_norm = F.normalize(cluster_centers, p=2, dim=2)  # [B, num_clusters, embed_dim]
+        # Compute distances: [B, N_patches, num_clusters].
+        # Use cosine similarity (normalized) for better clustering.
+        patch_norm = F.normalize(patch_tokens_proj, p=2, dim=2)  # [B, N_patches, embed_dim].
+        center_norm = F.normalize(cluster_centers, p=2, dim=2)  # [B, num_clusters, embed_dim].
         
-        # Cosine similarity: [B, N_patches, num_clusters]
+        # Cosine similarity: [B, N_patches, num_clusters].
         similarities = torch.bmm(
-            patch_norm,  # [B, N_patches, embed_dim]
-            center_norm.transpose(1, 2)  # [B, embed_dim, num_clusters]
-        )  # [B, N_patches, num_clusters]
+            patch_norm,  # [B, N_patches, embed_dim].
+            center_norm.transpose(1, 2)  # [B, embed_dim, num_clusters].
+        )  # [B, N_patches, num_clusters].
         
-        # Soft assignment with temperature: [B, N_patches, num_clusters]
+        # Soft assignment with temperature: [B, N_patches, num_clusters].
         soft_assignments = F.softmax(similarities / self.temperature, dim=2)
         
-        # Weighted average: [B, num_clusters, embed_dim]
+        # Weighted average: [B, num_clusters, embed_dim].
         clustered_embeddings = torch.bmm(
-            soft_assignments.transpose(1, 2),  # [B, num_clusters, N_patches]
-            patch_tokens_proj  # [B, N_patches, embed_dim]
-        )  # [B, num_clusters, embed_dim]
+            soft_assignments.transpose(1, 2),  # [B, num_clusters, N_patches].
+            patch_tokens_proj  # [B, N_patches, embed_dim].
+        )  # [B, num_clusters, embed_dim].
         
         return clustered_embeddings
     
@@ -124,14 +124,14 @@ class PatchExtractor(nn.Module):
         B = images.shape[0]
         device = images.device
         
-        # FIXED: Get patch tokens from ViT if not provided
+        # FIXED: Get patch tokens from ViT if not provided.
         if vit_patch_tokens is None:
             if self.vit_backbone is not None:
-                # Extract from ViT backbone
+                # Extract from ViT backbone.
                 try:
                     _, vit_patch_tokens = self.vit_backbone(images, return_patch_tokens=True)
                 except (AttributeError, TypeError):
-                    # Fallback: try standard forward and extract intermediate
+                    # Fallback: try standard forward and extract intermediate.
                     vit_outputs = self.vit_backbone(images)
                     if isinstance(vit_outputs, tuple):
                         vit_patch_tokens = vit_outputs[1] if len(vit_outputs) > 1 else None
@@ -147,7 +147,7 @@ class PatchExtractor(nn.Module):
                 "Cannot proceed without patch tokens."
             )
         
-        # Validate shape
+        # Validate shape.
         if vit_patch_tokens.dim() != 3:
             raise ValueError(
                 f"Expected 3D tensor [B, N_patches, embed_dim], got {vit_patch_tokens.shape}"
@@ -165,7 +165,7 @@ class PatchExtractor(nn.Module):
         else:
             # Attention pooling (default, fully differentiable)
             if self.use_gradient_checkpointing and self.training:
-                # Memory-efficient: checkpoint attention during training
+                # Memory-efficient: checkpoint attention during training.
                 clustered_embeddings = torch.utils.checkpoint.checkpoint(
                     self._attention_pooling,
                     vit_patch_tokens,
@@ -175,14 +175,14 @@ class PatchExtractor(nn.Module):
                 clustered_embeddings = self._attention_pooling(vit_patch_tokens)
         
         # FIXED: Safe L2 normalization (handle zero vectors)
-        # Add small epsilon to prevent NaNs
+        # Add small epsilon to prevent NaNs.
         clustered_embeddings = F.normalize(
-            clustered_embeddings + 1e-8,  # Prevent zero vectors
+            clustered_embeddings + 1e-8,  # Prevent zero vectors.
             p=2,
             dim=2
         )
         
-        # Final validation
+        # Final validation.
         if torch.isnan(clustered_embeddings).any() or torch.isinf(clustered_embeddings).any():
             raise RuntimeError("NaN/Inf detected in clustered embeddings")
         
@@ -213,6 +213,7 @@ class PatchExtractor(nn.Module):
             value=patch_tokens_proj
         )
         
-        return attention_weights  # [B, num_clusters, N_patches]
+        return attention_weights  # [B, num_clusters, N_patches].
+
 
 

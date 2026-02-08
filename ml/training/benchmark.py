@@ -70,7 +70,7 @@ def benchmark_inference(
         if device.type == 'cuda':
             batch_results['peak_memory_mb'] = torch.cuda.max_memory_allocated() / (1024 * 1024)
             batch_results['memory_reserved_mb'] = torch.cuda.max_memory_reserved() / (1024 * 1024)
-            # Reset for next batch size
+            # Reset for next batch size.
             torch.cuda.reset_peak_memory_stats()
         
         # Calculate throughput (FPS)
@@ -82,12 +82,12 @@ def benchmark_inference(
     if 'batch_1' in results:
         results['overall'] = results['batch_1'].copy()
     
-    # Final GPU memory stats if CUDA
+    # Final GPU memory stats if CUDA.
     if device.type == 'cuda':
         results['final_peak_memory_mb'] = torch.cuda.max_memory_allocated() / (1024 * 1024)
         results['final_memory_reserved_mb'] = torch.cuda.max_memory_reserved() / (1024 * 1024)
     
-    # Save results if path provided
+    # Save results if path provided.
     if save_path:
         save_benchmark_results(results, save_path, format='json')
     
@@ -135,4 +135,5 @@ def save_benchmark_results(
             logger.warning("pandas not available; use JSON format or install pandas.")
     else:
         raise ValueError(f"Unsupported format: {format}. Use 'json' or 'csv'.")
+
 

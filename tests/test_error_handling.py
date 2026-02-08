@@ -13,7 +13,7 @@ from ml.models.maxsight_cnn import create_model
 from ml.utils.error_handling import HeadExecutionManager, safe_head_execution, with_fallback
 from ml.config import RuntimeConfig
 
-# Set seeds for deterministic tests
+# Set seeds for deterministic tests.
 torch.manual_seed(42)
 
 
@@ -32,17 +32,17 @@ def test_fallback_on_forced_exception():
     dummy_image = torch.randn(1, 3, 224, 224)
     outputs = failing_forward(dummy_image)
     
-    # Validates fallback was returned
+    # Validates fallback was returned.
     assert 'classifications' in outputs
     assert 'boxes' in outputs
     assert 'objectness' in outputs
     
-    # Validate shapes and values match fallback
+    # Validate shapes and values match fallback.
     assert outputs['classifications'].shape == (1, 196, 80)
     assert outputs['boxes'].shape == (1, 196, 4)
     assert outputs['objectness'].shape == (1, 196)
     
-    # Fallback is all zeros
+    # Fallback is all zeros.
     assert outputs['classifications'].sum().item() == 0.0
     assert outputs['boxes'].sum().item() == 0.0
     assert outputs['objectness'].sum().item() == 0.0
@@ -67,12 +67,12 @@ def test_fallback_on_successful_execution():
     dummy_image = torch.randn(1, 3, 224, 224)
     outputs = successful_forward(dummy_image)
     
-    # Actual outputs, not fallback
+    # Actual outputs, not fallback.
     assert outputs['classifications'].sum().item() > 0.0
     assert outputs['boxes'].sum().item() > 0.0
     assert outputs['objectness'].sum().item() > 0.0
     
-    # Checks specific values
+    # Checks specific values.
     assert torch.allclose(outputs['classifications'], torch.ones(1, 196, 80) * 0.5)
     assert torch.allclose(outputs['boxes'], torch.ones(1, 196, 4) * 10.0)
     assert torch.allclose(outputs['objectness'], torch.ones(1, 196) * 0.8)
@@ -104,11 +104,11 @@ def test_dependency_validation_complete():
     
     validation = graph.validate_dependencies(outputs)
     
-    # All components should be valid with complete outputs
+    # All components should be valid with complete outputs.
     assert validation.get('model', False), "Model should be valid"
     assert validation.get('preprocessing', False), "Preprocessing should be valid"
     
-    # Count valid components
+    # Count valid components.
     valid_count = sum(1 for v in validation.values() if v)
     assert valid_count >= 2, f"Expected at least 2 valid components, got {valid_count}"
 
@@ -119,17 +119,17 @@ def test_dependency_validation_missing():
     
     graph = DependencyGraph()
     
-    # Minimal/incomplete outputs
+    # Minimal/incomplete outputs.
     outputs = {
         'model': {
             'detections': []
         }
-        # Missing: ocr, spatial_memory, session_manager, preprocessing
+        # Missing: ocr, spatial_memory, session_manager, preprocessing.
     }
     
     validation = graph.validate_dependencies(outputs)
     
-    # Model may be valid; others fail when missing
+    # Model may be valid; others fail when missing.
     missing_components = ['ocr', 'spatial_memory', 'session_manager', 'preprocessing']
     failed_count = sum(1 for comp in missing_components if not validation.get(comp, False))
     
@@ -142,55 +142,55 @@ def test_dependency_validation_partial():
     
     graph = DependencyGraph()
     
-    # Partial outputs with some fields missing
+    # Partial outputs with some fields missing.
     outputs = {
         'model': {
             'detections': [{'class_name': 'person'}],
             'urgency_scores': [0.7]
-            # Missing: text_regions, uncertainty
+            # Missing: text_regions, uncertainty.
         },
-        'ocr': {},  # Empty OCR
+        'ocr': {},  # Empty OCR.
         'preprocessing': {'processed': True}
-        # Missing: spatial_memory, session_manager
+        # Missing: spatial_memory, session_manager.
     }
     
     validation = graph.validate_dependencies(outputs)
     
-    # Model and preprocessing likely valid
+    # Model and preprocessing likely valid.
     assert validation.get('model', False) or validation.get('preprocessing', False), \
         "At least model or preprocessing should be valid"
     
-    # Track which components are missing
+    # Track which components are missing.
     all_components = ['model', 'ocr', 'spatial_memory', 'session_manager', 'preprocessing']
     invalid_components = [c for c in all_components if not validation.get(c, False)]
     
-    # Should have at least one invalid component
+    # Should have at least one invalid component.
     assert len(invalid_components) >= 1, \
         f"Expected some invalid components, but all passed: {validation}"
 
 
 def test_uncertainty_fallback_high_uncertainty():
     """Test fallback when uncertainty is high (forced deterministic case)."""
-    # Create mock model output with controlled uncertainty
+    # Create mock model output with controlled uncertainty.
     outputs = {
         'classifications': torch.ones(1, 196, 80) * 0.6,
         'boxes': torch.ones(1, 196, 4) * 50.0,
         'objectness': torch.ones(1, 196) * 0.9,
-        'uncertainty': torch.ones(1, 196) * 0.85  # High uncertainty
+        'uncertainty': torch.ones(1, 196) * 0.85  # High uncertainty.
     }
     
-    # Store original values
+    # Store original values.
     original_objectness = outputs['objectness'].clone()
     
-    # Apply uncertainty-based fallback logic
+    # Apply uncertainty-based fallback logic.
     uncertainty = outputs.get('uncertainty')
     assert uncertainty is not None, "Uncertainty should be present"
     assert uncertainty.mean().item() > 0.7, "Uncertainty should be high"
     
-    # High uncertainty - apply conservative outputs
+    # High uncertainty - apply conservative outputs.
     outputs['objectness'] = outputs['objectness'] * 0.8
     
-    # Verify confidence was reduced
+    # Verify confidence was reduced.
     assert torch.all(outputs['objectness'] <= original_objectness * 0.8 + 1e-5), \
         "Objectness should be reduced under high uncertainty"
     assert outputs['objectness'].max().item() < 1.0, \
@@ -206,34 +206,34 @@ def test_uncertainty_fallback_with_noisy_input():
     """Test uncertainty handling with adversarial noisy inputs."""
     torch.manual_seed(42)
     
-    # Create noisy/blurred input to simulate challenging conditions
+    # Create noisy/blurred input to simulate challenging conditions.
     clean_image = torch.randn(1, 3, 224, 224)
     noise = torch.randn_like(clean_image) * 0.5
     noisy_image = clean_image + noise
     
-    # Clip to valid range
+    # Clip to valid range.
     noisy_image = torch.clamp(noisy_image, -3.0, 3.0)
     
-    # Simulate model output with elevated uncertainty due to noise
+    # Simulate model output with elevated uncertainty due to noise.
     outputs = {
-        'classifications': torch.rand(1, 196, 80) * 0.4,  # Lower confidence
+        'classifications': torch.rand(1, 196, 80) * 0.4,  # Lower confidence.
         'boxes': torch.rand(1, 196, 4) * 100.0,
         'objectness': torch.rand(1, 196) * 0.7,
-        'uncertainty': torch.ones(1, 196) * 0.75  # Elevated uncertainty
+        'uncertainty': torch.ones(1, 196) * 0.75  # Elevated uncertainty.
     }
     
-    # Apply conservative fallback
+    # Apply conservative fallback.
     if outputs['uncertainty'].mean() > 0.7:
         outputs['objectness'] = outputs['objectness'] * 0.7
         outputs['classifications'] = outputs['classifications'] * 0.8
     
-    # Verify conservative scaling
+    # Verify conservative scaling.
     assert outputs['objectness'].max().item() < 0.5, \
         "Objectness should be conservative under noisy conditions"
     assert outputs['classifications'].max().item() < 0.35, \
         "Classifications should be conservative under noisy conditions"
     
-    # Numerical stability checks
+    # Numerical stability checks.
     assert not torch.isnan(outputs['objectness']).any()
     assert not torch.isnan(outputs['classifications']).any()
     
@@ -245,17 +245,17 @@ def test_uncertainty_fallback_low_uncertainty():
         'classifications': torch.ones(1, 196, 80) * 0.8,
         'boxes': torch.ones(1, 196, 4) * 50.0,
         'objectness': torch.ones(1, 196) * 0.9,
-        'uncertainty': torch.ones(1, 196) * 0.2  # Low uncertainty
+        'uncertainty': torch.ones(1, 196) * 0.2  # Low uncertainty.
     }
     
     original_objectness = outputs['objectness'].clone()
     
-    # Low uncertainty; no fallback triggers
+    # Low uncertainty; no fallback triggers.
     uncertainty = outputs.get('uncertainty')
     if uncertainty is not None and uncertainty.mean() > 0.7:
         outputs['objectness'] = outputs['objectness'] * 0.8
     
-    # Should remain unchanged
+    # Should remain unchanged.
     assert torch.allclose(outputs['objectness'], original_objectness), \
         "Objectness should not change under low uncertainty"
     
@@ -276,12 +276,12 @@ def test_head_execution_manager_success():
         fallback_func=None
     )
     
-    # Verifies output
+    # Verifies output.
     assert 'output' in result
     assert result['output'].shape == (1, 10)
     assert torch.allclose(result['output'], torch.ones(1, 10))
     
-    # Check execution summary
+    # Check execution summary.
     summary = manager.get_execution_summary()
     assert summary['total_executions'] >= 1
     assert summary.get('successful', summary['total_executions'] - summary.get('failed', 0)) >= 1
@@ -298,7 +298,7 @@ def test_head_execution_manager_exception_with_fallback():
     def fallback_func(**inputs):
         return {'output': torch.zeros(1, 10)}
     
-    # Execute with expected exception
+    # Execute with expected exception.
     result = manager.execute_head(
         head_name='failing_head',
         head_func=failing_head,
@@ -307,13 +307,13 @@ def test_head_execution_manager_exception_with_fallback():
         fallback_func=fallback_func
     )
     
-    # Should get fallback result
+    # Should get fallback result.
     assert isinstance(result, dict), "Result should be a dict"
     if 'output' in result:
         assert result['output'].shape == (1, 10)
         assert result['output'].sum().item() == 0.0, "Should return zeros from fallback"
     
-    # Verifies execution stats
+    # Verifies execution stats.
     summary = manager.get_execution_summary()
     assert summary['total_executions'] >= 1
     assert summary['fallbacks_used'] >= 1 or summary['failed'] >= 1, \
@@ -331,24 +331,24 @@ def test_head_execution_manager_missing_dependency():
         return {'output': torch.ones(1, 10)}
     
     def fallback_func(**inputs):
-        return {'output': torch.zeros(1, 10) - 1}  # Negative ones to distinguish
+        return {'output': torch.zeros(1, 10) - 1}  # Negative ones to distinguish.
     
     result = manager.execute_head(
         head_name='head_with_dep',
         head_func=head_needs_dep,
-        inputs={},  # Missing required_dep
+        inputs={},  # Missing required_dep.
         dependencies=['required_dep'],
         fallback_func=fallback_func
     )
     
-    # Should use fallback due to missing dependency
+    # Should use fallback due to missing dependency.
     if isinstance(result, dict) and 'output' in result:
-        # Fallback returns -1s
+        # Fallback returns -1s.
         assert result['output'].shape == (1, 10)
         # Should be negative (from fallback)
         assert result['output'].sum().item() < 0, "Should use fallback with negative values"
     
-    # Verify stats
+    # Verify stats.
     summary = manager.get_execution_summary()
     assert summary['total_executions'] >= 1
     assert summary['fallbacks_used'] >= 1 or summary['failed'] >= 1
@@ -360,11 +360,11 @@ def test_head_execution_manager_latency():
     manager = HeadExecutionManager(enable_fallbacks=True)
     
     def fast_head(**inputs):
-        # Simulate lightweight processing
+        # Simulate lightweight processing.
         x = inputs.get('input', torch.zeros(1, 10))
         return {'output': x * 2}
     
-    # Warm up
+    # Warm up.
     for _ in range(3):
         manager.execute_head(
             head_name='fast_head',
@@ -374,7 +374,7 @@ def test_head_execution_manager_latency():
             fallback_func=None
         )
     
-    # Measure execution time
+    # Measure execution time.
     start = time.time()
     for _ in range(10):
         result = manager.execute_head(
@@ -391,8 +391,8 @@ def test_head_execution_manager_latency():
     # Should complete quickly on CPU (< 10ms per execution)
     assert avg_latency < 0.01, f"Average latency {avg_latency*1000:.2f}ms exceeds 10ms threshold"
     
-    # Verifies result is correct
-    assert result['output'].sum().item() == 20.0  # 1 * 10 * 2
+    # Verifies result is correct.
+    assert result['output'].sum().item() == 20.0  # 1 * 10 * 2.
     
     print(f"✅ Test 12: HeadExecutionManager latency {avg_latency*1000:.3f}ms/exec working")
 
@@ -410,7 +410,7 @@ def test_head_execution_manager_summary_accounting():
     def fallback(**inputs):
         return {'output': torch.zeros(1, 5)}
     
-    # Execute successful heads
+    # Execute successful heads.
     for i in range(3):
         manager.execute_head(
             head_name=f'success_{i}',
@@ -420,7 +420,7 @@ def test_head_execution_manager_summary_accounting():
             fallback_func=None
         )
     
-    # Execute failing heads with fallback
+    # Execute failing heads with fallback.
     for i in range(2):
         manager.execute_head(
             head_name=f'fail_{i}',
@@ -432,11 +432,11 @@ def test_head_execution_manager_summary_accounting():
     
     summary = manager.get_execution_summary()
     
-    # Should have 5 total executions
+    # Should have 5 total executions.
     assert summary['total_executions'] == 5, \
         f"Expected 5 executions, got {summary['total_executions']}"
     
-    # Should have used fallbacks for the 2 failures
+    # Should have used fallbacks for the 2 failures.
     assert summary['fallbacks_used'] >= 2 or summary['failed'] >= 2, \
         f"Expected at least 2 fallbacks/failures, got {summary.get('fallbacks_used', 0)} fallbacks, {summary.get('failed', 0)} failed"
     
@@ -487,3 +487,4 @@ if __name__ == "__main__":
     print("  • HeadExecutionManager accounting: ✓")
     print("\nTotal: 13 comprehensive tests")
     print("="*70 + "\n")
+

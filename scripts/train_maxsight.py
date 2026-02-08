@@ -15,7 +15,7 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader
 
-# Project path
+# Project path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model, TierConfig, CapabilityTier
@@ -67,12 +67,12 @@ def backup_training_artifacts(best_ckpt: Path, data_dir: Path):
     backup_dir = Path("backups") / datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir.mkdir(parents=True, exist_ok=True)
     
-    # Model
+    # Model.
     models_dir = backup_dir / "models"
     models_dir.mkdir()
     shutil.copy2(best_ckpt, models_dir / best_ckpt.name)
     
-    # Git bundle
+    # Git bundle.
     bundle_path = backup_dir / "code.bundle"
     subprocess.run(
         ["git", "bundle", "create", str(bundle_path), "--all"],
@@ -81,7 +81,7 @@ def backup_training_artifacts(best_ckpt: Path, data_dir: Path):
         capture_output=True,
     )
     
-    # Metadata
+    # Metadata.
     meta = {
         "timestamp": datetime.now().isoformat(),
         "data_dir": str(data_dir),
@@ -112,14 +112,14 @@ def create_loss_fn(num_classes: int, use_gradnorm: bool = False):
 def main():
     parser = argparse.ArgumentParser("Train MaxSight CNN (Production v2)")
     
-    # Paths
+    # Paths.
     parser.add_argument("--data-dir", required=True, help="Data root (COCO dir or parent of train/val)")
     parser.add_argument("--checkpoint-dir", default="./checkpoints")
     parser.add_argument("--train-annotation", type=Path, default=None, help="Train split JSON (e.g. datasets/cleaned_splits/maxsight_train.json)")
     parser.add_argument("--val-annotation", type=Path, default=None, help="Val split JSON (e.g. datasets/cleaned_splits/maxsight_val.json)")
     parser.add_argument("--image-dir", type=Path, default=None, help="Image root (default: data-dir; used with train/val-annotation)")
     
-    # Training
+    # Training.
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=2e-3, help="Base LR (head); backbone uses lr * 0.1. Higher can reduce loss faster.")
@@ -141,43 +141,43 @@ def main():
         help="Path to best_hyperparameters.json from scripts/AutoMLType.py; overrides lr, weight_decay, batch_size, grad_clip for full training with tuned values",
     )
     
-    # Hardware
+    # Hardware.
     parser.add_argument("--device", choices=["cpu", "cuda", "mlx", "auto"], default="auto",
                         help="Device: cpu, cuda, mlx (= CPU), or auto (cuda if available)")
     parser.add_argument("--compile", action="store_true", help="Use torch.compile (CUDA only, faster after first epoch)")
     parser.add_argument("--use-amp", action="store_true", help="Use mixed precision (FP16) on CUDA for faster training; default FP32 for stability")
     
-    # Resume / backup
+    # Resume / backup.
     parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint in --checkpoint-dir")
     parser.add_argument("--resume-from", type=str, default=None, metavar="PATH", help="Resume from this checkpoint file (e.g. after copying to another GPU)")
     parser.add_argument("--resume-model-only", action="store_true", help="With --resume-from: load only model + epoch; use current optimizer/scheduler (e.g. new LRs, MLX-style)")
     parser.add_argument("--backup", action="store_true", help="Backup artifacts after training")
     
-    # Model
+    # Model.
     parser.add_argument("--num-classes", type=int, default=None, help="Number of classes (default: len(COCO_CLASSES))")
     parser.add_argument("--tier", choices=["T5"], default="T5", help="Model tier: T5 (temporal + hybrid + cross-task + cross-modal)")
     parser.add_argument("--use-audio", action="store_true")
     parser.add_argument("--condition-mode",
                         choices=[
                             None, 
-                            # Common conditions
+                            # Common conditions.
                             "glaucoma", "amd", "cataracts", "color_blindness",
-                            # Additional conditions
+                            # Additional conditions.
                             "diabetic_retinopathy", "retinitis_pigmentosa", "cvi",
-                            # Developmental/alignment
+                            # Developmental/alignment.
                             "amblyopia", "strabismus",
-                            # Refractive errors
+                            # Refractive errors.
                             "refractive_errors", "myopia", "hyperopia", "astigmatism", "presbyopia"
                         ],
                         default=None,
                         help="Vision condition adaptation mode")
     
-    # Loss
+    # Loss.
     parser.add_argument("--use-gradnorm", action="store_true", help="Use GradNorm for task balancing")
     
     args = parser.parse_args()
 
-    # Apply AutoML best hyperparameters if provided
+    # Apply AutoML best hyperparameters if provided.
     if args.hyperparameters is not None:
         hp_path = Path(args.hyperparameters)
         if not hp_path.exists():
@@ -332,7 +332,7 @@ def main():
     except Exception as e:
         logger.warning(f"Diagnostic check failed: {e}")
 
-    # Model
+    # Model.
     num_classes = args.num_classes or len(COCO_CLASSES)
     
     tier = CapabilityTier.T5_TEMPORAL
@@ -435,3 +435,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -50,8 +50,8 @@ CONDITIONS = [
     "presbyopia", "refractive_errors", "retinitis_pigmentosa", "strabismus",
 ]
 
-CONF_CANDIDATES = [0.3, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001]  # low values for weak/untrained checkpoints
-# Fast grid when targeting mAP (fewer runs): try key conf + auto, two NMS values
+CONF_CANDIDATES = [0.3, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001]  # Low values for weak/untrained checkpoints.
+# Fast grid when targeting mAP (fewer runs): try key conf + auto, two NMS values.
 CONF_FAST = [0.1, 0.05, 0.01, 0.001, "auto"]
 NMS_IOU_CANDIDATES = [0.5, 0.6, 0.7, 0.8]
 NMS_FAST = [0.5, 0.6]
@@ -102,7 +102,7 @@ def main():
     parser.add_argument("--quiet", action="store_true", help="Minimal output: only best params and final result.")
     args = parser.parse_args()
 
-    # Resolve checkpoint base
+    # Resolve checkpoint base.
     base = args.checkpoints_base
     if base is None:
         base = _find_checkpoints_base()
@@ -124,7 +124,7 @@ def main():
     try:
         best_conf = float(args.confidence)
     except ValueError:
-        best_conf = args.confidence  # e.g. "auto"
+        best_conf = args.confidence  # E.g. "auto"
     best_nms = args.nms_iou
     best_map = -1.0
 
@@ -218,3 +218,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

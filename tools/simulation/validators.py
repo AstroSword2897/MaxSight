@@ -103,7 +103,7 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
     if max_size_mb is None:
         max_size_mb = config.max_image_size_mb
     
-    # Check size
+    # Check size.
     size_mb = len(image_bytes) / (1024 * 1024)
     if size_mb > max_size_mb:
         raise ImageTooLargeError(
@@ -113,33 +113,33 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
     if len(image_bytes) == 0:
         raise InvalidImageError("Empty image file")
     
-    # Opens image file
+    # Opens image file.
     try:
-        # Ensure we have bytes, not a BytesIO object
+        # Ensure we have bytes, not a BytesIO object.
         if isinstance(image_bytes, BytesIO):
-            image_bytes.seek(0)  # Reset position if it's already a BytesIO
+            image_bytes.seek(0)  # Reset position if it's already a BytesIO.
             image_bytes = image_bytes.read()
         
-        # Ensure we have actual bytes
+        # Ensure we have actual bytes.
         if not isinstance(image_bytes, bytes):
             raise InvalidImageError(
                 f"Expected bytes, got {type(image_bytes).__name__}. "
                 "Please ensure the image file is properly read."
             )
         
-        # Create BytesIO buffer and ensure it's at position 0
+        # Create BytesIO buffer and ensure it's at position 0.
         image_buffer = BytesIO(image_bytes)
         image_buffer.seek(0)
         
-        # Open image
+        # Open image.
         try:
             image = Image.open(image_buffer)
         except Exception as open_error:
-            # Checks if it's a format issue
+            # Checks if it's a format issue.
             error_msg = str(open_error)
             if 'cannot identify' in error_msg.lower() or 'cannot open' in error_msg.lower():
-                # Detect format from file signature
-                if image_bytes[:4] == b'\x00\x00\x00\x20':  # HEIC signature
+                # Detect format from file signature.
+                if image_bytes[:4] == b'\x00\x00\x00\x20':  # HEIC signature.
                     raise InvalidImageError(
                         "HEIC/HEIF format is not supported. Please convert to JPEG or PNG. "
                         "You can use Preview on Mac: File > Export > Format: JPEG"
@@ -162,7 +162,7 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
         # Load image to verify it's valid (forces decoding)
         image.load()
         
-        # Checks format
+        # Checks format.
         if image.format not in config.allowed_image_formats:
             raise InvalidImageError(
                 f"Unsupported image format: {image.format}. "
@@ -180,11 +180,11 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
 def validate_image_data(image_data: str) -> Image.Image:
     """Validate base64 encoded image data...."""
     try:
-        # Remove data URI prefix if present
+        # Remove data URI prefix if present.
         if ',' in image_data:
             image_data = image_data.split(',')[1]
         
-        # Decode base64
+        # Decode base64.
         image_bytes = base64.b64decode(image_data)
         
         return validate_image_file(image_bytes)
@@ -233,4 +233,5 @@ def validate_init_request(data: Dict[str, Any]) -> Dict[str, Any]:
     validated['start_session'] = bool(data.get('start_session', False))
     
     return validated
+
 

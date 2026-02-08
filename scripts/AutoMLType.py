@@ -14,7 +14,7 @@ import optuna
 import torch
 from torch.utils.data import DataLoader
 
-# Project path
+# Project path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.data.dataset import MaxSightDataset
@@ -157,20 +157,20 @@ def main() -> int:
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
     device = resolve_device(args.device)
     num_classes = args.num_classes or len(COCO_CLASSES)
-    use_fp16 = False  # FP32 only
+    use_fp16 = False  # FP32 only.
 
     def objective(trial: optuna.Trial) -> float:
-        # Reproducibility per trial
+        # Reproducibility per trial.
         trial_seed = args.seed + trial.number
         set_seed(trial_seed)
 
-        # Sample hyperparameters
+        # Sample hyperparameters.
         learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
         weight_decay = trial.suggest_float("weight_decay", 1e-5, 1e-1, log=True)
-        batch_size = trial.suggest_categorical("batch_size", [4, 8, 16])  # Reduced for T4 GPU stability
+        batch_size = trial.suggest_categorical("batch_size", [4, 8, 16])  # Reduced for T4 GPU stability.
         gradient_clip_norm = trial.suggest_float("gradient_clip_norm", 0.5, 2.0)
 
-        # Per-trial checkpoint subdir so trials do not overwrite each other
+        # Per-trial checkpoint subdir so trials do not overwrite each other.
         trial_ckpt = args.checkpoint_dir / f"trial_{trial.number}"
         trial_ckpt.mkdir(parents=True, exist_ok=True)
 
@@ -249,7 +249,7 @@ def main() -> int:
             logger.warning(f"Trial {trial.number} failed: {e}")
             return float("inf")
 
-    # Create study and run
+    # Create study and run.
     load_if_exists = bool(args.storage)
     study = optuna.create_study(
         direction="minimize",
@@ -260,7 +260,7 @@ def main() -> int:
     )
     study.optimize(objective, n_trials=args.n_trials, show_progress_bar=True)
 
-    # Save best hyperparameters
+    # Save best hyperparameters.
     best_params = study.best_params
     best_value = study.best_value
     best_trial_number = study.best_trial.number
@@ -280,14 +280,14 @@ def main() -> int:
     logger.info(f"Best trial: {best_trial_number}, best_val_loss: {best_value:.4f}")
     logger.info(f"Best hyperparameters written to {out_path}")
 
-    # Copy best trial's best_model.pt to canonical path for easy reuse
+    # Copy best trial's best_model.pt to canonical path for easy reuse.
     best_trial_ckpt = args.checkpoint_dir / f"trial_{best_trial_number}" / "best_model.pt"
     if best_trial_ckpt.exists():
         dest = args.checkpoint_dir / "best_model.pt"
         shutil.copy2(best_trial_ckpt, dest)
         logger.info(f"Best model copied to {dest}")
 
-    # Optional: run full training with updated hyperparameters
+    # Optional: run full training with updated hyperparameters.
     if args.full_train_after is not None:
         import subprocess
         hp_path = args.checkpoint_dir / "best_hyperparameters.json"
@@ -321,3 +321,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

@@ -60,7 +60,7 @@ class SessionManager:
         self.task_attempts.append(attempt)
         self.current_session['tasks'].append(attempt)
         
-        # Update metrics
+        # Update metrics.
         self.current_session['metrics']['total_tasks'] += 1
         if result.get('success', False):
             self.current_session['metrics']['completed_tasks'] += 1
@@ -80,7 +80,7 @@ class SessionManager:
         
         self.current_session['end_time'] = datetime.now().isoformat()
         
-        # Generate skill curve
+        # Generate skill curve.
         skill_curve = self._generate_skill_curve()
         
         report = {
@@ -142,4 +142,5 @@ class SessionManager:
         if self.current_session:
             with open(filepath, 'w') as f:
                 json.dump(self.current_session, f, indent=2)
+
 

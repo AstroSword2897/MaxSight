@@ -10,7 +10,7 @@ from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
-# Global performance stats
+# Global performance stats.
 _performance_stats: dict[str, list[float]] = defaultdict(list)
 
 
@@ -78,4 +78,5 @@ def log_slow_operations(threshold: float = 0.1) -> None:
             logger.warning(
                 f"  {name}: mean={s['mean']:.3f}s, max={s['max']:.3f}s, count={s['count']}"
             )
+
 

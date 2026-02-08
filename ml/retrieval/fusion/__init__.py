@@ -3,7 +3,7 @@
 from .attention_fusion import AttentionFusion
 from .fusion_train import FusionMLP, FusionDataset
 
-# Phase 6: Meta-learning fusion
+# Phase 6: Meta-learning fusion.
 try:
     from .meta_fusion import (
         MetaFusionWeights,
@@ -26,5 +26,6 @@ except ImportError:
         'FusionMLP',
         'FusionDataset',
     ]
+
 
 

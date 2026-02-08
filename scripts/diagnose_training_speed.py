@@ -108,7 +108,7 @@ def diagnose_forward_pass(model, train_loader, device, num_batches: int = 10):
             
             images = batch['images'].to(device)
             
-            # Time forward pass
+            # Time forward pass.
             def forward():
                 return model(images)
             
@@ -128,7 +128,7 @@ def diagnose_validation(trainer, num_batches: int = 5):
     print("🔍 Diagnosing validation...")
     profiler = TimingProfiler()
     
-    # Mock validation with timing
+    # Mock validation with timing.
     original_validate = trainer.validate
     
     def timed_validate(*args, **kwargs):
@@ -141,7 +141,7 @@ def diagnose_validation(trainer, num_batches: int = 5):
     
     trainer.validate = timed_validate
     
-    # Run validation
+    # Run validation.
     try:
         trainer.validate(epoch=0, use_ema=False)
     except Exception as e:
@@ -180,7 +180,7 @@ def main():
     print(f"Profiling {args.num_batches} batches")
     print("="*70)
     
-    # Create data loaders
+    # Create data loaders.
     train_loader, val_loader, _ = create_data_loaders(
         train_annotation_file=Path(args.train_annotation),
         val_annotation_file=Path(args.val_annotation),
@@ -201,18 +201,18 @@ def main():
     
     print(f"\n📦 Model: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M parameters")
     
-    # Run diagnostics
+    # Run diagnostics.
     all_profilers = []
     
-    # Data loading
+    # Data loading.
     data_profiler = diagnose_data_loading(train_loader, args.num_batches)
     all_profilers.append(data_profiler)
     
-    # Forward pass
+    # Forward pass.
     forward_profiler = diagnose_forward_pass(model, train_loader, device, args.num_batches)
     all_profilers.append(forward_profiler)
     
-    # Create trainer for validation profiling
+    # Create trainer for validation profiling.
     trainer = ProductionTrainLoop(
         model=model,
         train_loader=train_loader,
@@ -222,11 +222,11 @@ def main():
         learning_rate=1e-4,
     )
     
-    # Validation
+    # Validation.
     val_profiler = diagnose_validation(trainer, num_batches=1)
     all_profilers.append(val_profiler)
     
-    # Combined report
+    # Combined report.
     combined_profiler = TimingProfiler()
     for profiler in all_profilers:
         for name, times in profiler.timings.items():
@@ -235,7 +235,7 @@ def main():
     
     combined_profiler.print_report()
     
-    # Recommendations
+    # Recommendations.
     print("\n" + "="*70)
     print("RECOMMENDATIONS")
     print("="*70)
@@ -270,3 +270,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

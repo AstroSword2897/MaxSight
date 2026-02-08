@@ -52,15 +52,15 @@ class AsyncRetrievalWorker:
         self.timeout_ms = timeout_ms
         
         self.request_queue = queue.Queue(maxsize=max_queue_size)
-        self.result_cache = {}  # Cache recent results
+        self.result_cache = {}  # Cache recent results.
         self.cache_max_size = 100
-        self.cache_ttl = 5.0  # seconds
+        self.cache_ttl = 5.0  # Seconds.
         
         self.worker_thread = None
         self.running = False
         self.lock = threading.Lock()
         
-        # Statistics
+        # Statistics.
         self.stats = {
             'requests_processed': 0,
             'requests_failed': 0,
@@ -87,23 +87,23 @@ class AsyncRetrievalWorker:
         """Main worker loop - processes requests from queue."""
         while self.running:
             try:
-                # Get request with timeout
+                # Get request with timeout.
                 try:
                     request = self.request_queue.get(timeout=0.1)
                 except queue.Empty:
                     continue
                 
-                # Process request
+                # Process request.
                 result = self._process_request(request)
                 
-                # Call callback if provided
+                # Call callback if provided.
                 if request.callback:
                     try:
                         request.callback(result)
                     except Exception as e:
                         print(f"Retrieval callback error: {e}")
                 
-                # Cache result
+                # Cache result.
                 if request.request_id:
                     self._cache_result(request.request_id, result)
                 
@@ -118,7 +118,7 @@ class AsyncRetrievalWorker:
         start_time = time.time()
         
         try:
-            # Stage 1: ANN search
+            # Stage 1: ANN search.
             if self.stage1_ann is None:
                 return RetrievalResult(
                     request_id=request.request_id,
@@ -144,11 +144,11 @@ class AsyncRetrievalWorker:
                     error="No query embedding provided"
                 )
             
-            # Convert to numpy if needed
+            # Convert to numpy if needed.
             if isinstance(query_emb, torch.Tensor):
                 query_emb = query_emb.detach().cpu().numpy()
             
-            # Ensure 2D
+            # Ensure 2D.
             if query_emb.ndim == 1:
                 query_emb = query_emb.reshape(1, -1)
             
@@ -158,18 +158,18 @@ class AsyncRetrievalWorker:
             # Stage 2: Reranking (if available)
             reranked_results = None
             if self.stage2_reranker is not None:
-                # Reranking would go here
+                # Reranking would go here.
                 pass
             
             # Knowledge augmentation (if available)
             kg_scores = None
             if self.knowledge_augment is not None:
-                # Knowledge augmentation would go here
+                # Knowledge augmentation would go here.
                 pass
             
             latency_ms = (time.time() - start_time) * 1000
             
-            # Update stats
+            # Update stats.
             self.stats['requests_processed'] += 1
             self.stats['avg_latency_ms'] = (
                 (self.stats['avg_latency_ms'] * (self.stats['requests_processed'] - 1) + latency_ms) /
@@ -201,9 +201,9 @@ class AsyncRetrievalWorker:
     def _cache_result(self, request_id: str, result: RetrievalResult):
         """Cache a retrieval result."""
         with self.lock:
-            # Remove old entries if cache is full
+            # Remove old entries if cache is full.
             if len(self.result_cache) >= self.cache_max_size:
-                # Remove oldest entry
+                # Remove oldest entry.
                 oldest_key = min(self.result_cache.keys(), key=lambda k: self.result_cache[k]['timestamp'])
                 del self.result_cache[oldest_key]
             
@@ -221,7 +221,7 @@ class AsyncRetrievalWorker:
                 if age < self.cache_ttl:
                     return cached['result']
                 else:
-                    # Expired, remove
+                    # Expired, remove.
                     del self.result_cache[request_id]
         return None
     
@@ -234,13 +234,13 @@ class AsyncRetrievalWorker:
         timeout_ms: Optional[float] = None
     ) -> Optional[RetrievalResult]:
         """Submit a retrieval request...."""
-        # Check cache first
+        # Check cache first.
         if request_id:
             cached = self.get_cached_result(request_id)
             if cached:
                 return cached
         
-        # Create request
+        # Create request.
         request = RetrievalRequest(
             query_embeddings=query_embeddings,
             callback=callback,
@@ -256,7 +256,7 @@ class AsyncRetrievalWorker:
             self.stats['requests_timeout'] += 1
             return None
         
-        # If blocking, wait for result
+        # If blocking, wait for result.
         if blocking:
             timeout = timeout_ms / 1000.0 if timeout_ms else self.timeout_ms / 1000.0
             start = time.time()
@@ -265,13 +265,13 @@ class AsyncRetrievalWorker:
                     result = self.get_cached_result(request_id)
                     if result:
                         return result
-                time.sleep(0.01)  # Small sleep to avoid busy-waiting
+                time.sleep(0.01)  # Small sleep to avoid busy-waiting.
             
-            # Timeout
+            # Timeout.
             self.stats['requests_timeout'] += 1
             return None
         
-        return None  # Non-blocking, return immediately
+        return None  # Non-blocking, return immediately.
 
 
 class AsyncRetrievalSystem:
@@ -314,7 +314,7 @@ class AsyncRetrievalSystem:
     ) -> Optional[Dict[str, Any]]:
         """Retrieve similar items (non-blocking by default)...."""
         if not self.enable_async:
-            # Synchronous mode
+            # Synchronous mode.
             if self.stage1_ann is None:
                 return None
             
@@ -337,7 +337,7 @@ class AsyncRetrievalSystem:
             except Exception:
                 return None
         
-        # Async mode
+        # Async mode.
         result = self.worker.submit_request(
             query_embeddings=query_embeddings,
             request_id=request_id,
@@ -359,4 +359,5 @@ class AsyncRetrievalSystem:
         """Shutdown async worker."""
         if self.worker:
             self.worker.stop()
+
 

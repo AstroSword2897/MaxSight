@@ -22,10 +22,10 @@ class EyeImagePreprocessor:
         self.normalize = normalize
         self.contrast_adjust = contrast_adjust
         
-        # Build transform pipeline
+        # Build transform pipeline.
         transform_list = [
             transforms.Resize(target_size),
-            transforms.ToTensor()  # Converts to [0,1] range automatically
+            transforms.ToTensor()  # Converts to [0,1] range automatically.
         ]
         
         if contrast_adjust:
@@ -38,7 +38,7 @@ class EyeImagePreprocessor:
         """Adjust contrast for better eye detection...."""
         from PIL import ImageEnhance
         enhancer = ImageEnhance.Contrast(image)
-        return enhancer.enhance(1.2)  # 20% contrast boost
+        return enhancer.enhance(1.2)  # 20% contrast boost.
     
     def __call__(self, image: Image.Image) -> torch.Tensor:
         """Preprocess eye/face image.
@@ -51,10 +51,10 @@ class EyeImagePreprocessor:
         result = self.transform(image)
         # Ensure result is a tensor (ToTensor() returns tensor)
         if not isinstance(result, torch.Tensor):
-            # Fallback: convert manually if transform didn't work
+            # Fallback: convert manually if transform didn't work.
             import torchvision.transforms.functional as TF
             result = TF.to_tensor(image)
-            result = TF.resize(result.unsqueeze(0), list(self.target_size)).squeeze(0)  # Convert tuple to list
+            result = TF.resize(result.unsqueeze(0), list(self.target_size)).squeeze(0)  # Convert tuple to list.
         return result
     
     def preprocess_tensor(
@@ -63,30 +63,30 @@ class EyeImagePreprocessor:
         ensure_normalized: bool = True
     ) -> torch.Tensor:
         """Preprocess tensor directly (for batch processing)."""
-        # Ensure batch dimension
+        # Ensure batch dimension.
         if tensor.dim() == 3:
             tensor = tensor.unsqueeze(0)
             squeeze_output = True
         else:
             squeeze_output = False
         
-        # Normalize to [0,1] if needed
+        # Normalize to [0,1] if needed.
         if ensure_normalized:
             if tensor.max() > 1.0:
                 tensor = tensor / 255.0
             if tensor.min() < 0.0:
                 tensor = (tensor + 1.0) / 2.0
         
-        # Resize to target size
+        # Resize to target size.
         if tensor.shape[2:] != self.target_size:
             tensor = F.interpolate(
                 tensor,
-                size=list(self.target_size),  # Convert tuple to list for type checker
+                size=list(self.target_size),  # Convert tuple to list for type checker.
                 mode='bilinear',
                 align_corners=False
             )
         
-        # Ensure 3 channels
+        # Ensure 3 channels.
         if tensor.shape[1] == 1:
             tensor = tensor.repeat(1, 3, 1, 1)
         elif tensor.shape[1] != 3:
@@ -114,31 +114,31 @@ class EyeModel(nn.Module):
         self.input_size = input_size
         self.dropout = dropout
         
-        # Tiny CNN architecture
+        # Tiny CNN architecture.
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
         self.bn2 = nn.BatchNorm2d(32)
         self.pool = nn.AdaptiveAvgPool2d(1)
         
-        # Output heads with dropout to prevent degenerate outputs
-        #              can lead to NaN or constant outputs. Dropout prevents this.
+        # Output heads with dropout to prevent degenerate outputs.
+        # Can lead to NaN or constant outputs. Dropout prevents this.
         self.blink_head = nn.Sequential(
             nn.Linear(32, 16),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(16, 1),
-            nn.Sigmoid()  # Blink probability [0, 1]
+            nn.Sigmoid()  # Blink probability [0, 1].
         )
         
         self.fixation_head = nn.Sequential(
             nn.Linear(32, 16),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(16, 2),  # [fixation_prob, saccade_prob]
-            nn.Softmax(dim=1)  # Softmax ensures probabilities sum to 1
+            nn.Linear(16, 2),  # [fixation_prob, saccade_prob].
+            nn.Softmax(dim=1)  # Softmax ensures probabilities sum to 1.
             # Use binary labels (0/1) for fixation vs saccade.
-            # If labels are continuous probabilities, use Sigmoid instead
+            # If labels are continuous probabilities, use Sigmoid instead.
         )
         
         self.pupil_head = nn.Sequential(
@@ -146,10 +146,10 @@ class EyeModel(nn.Module):
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(16, 1),
-            nn.Sigmoid()  # Pupil size proxy [0, 1]
+            nn.Sigmoid()  # Pupil size proxy [0, 1].
         )
         
-        # Initialize weights properly to avoid degenerate outputs
+        # Initialize weights properly to avoid degenerate outputs.
         self._initialize_weights()
     
     def _initialize_weights(self):
@@ -169,7 +169,7 @@ class EyeModel(nn.Module):
     
     def forward(self, face_region: torch.Tensor) -> Dict[str, torch.Tensor]:
         """Forward pass through eye model...."""
-        # Validate input shape
+        # Validate input shape.
         if face_region.dim() != 4:
             raise ValueError(f"Expected 4D tensor [B, 3, 64, 64], got {face_region.shape}")
         
@@ -182,15 +182,15 @@ class EyeModel(nn.Module):
                 f"Use EyeImagePreprocessor to resize/crop correctly."
             )
         
-        # Validate input range [0,1]
+        # Validate input range [0,1].
         if face_region.min() < 0.0 or face_region.max() > 1.0:
-            # Warn but don't fail - might be intentional
-            # However, this can lead to meaningless conv activations
+            # Warn but don't fail - might be intentional.
+            # However, this can lead to meaningless conv activations.
             if self.training:
-                # In training, normalize on-the-fly
+                # In training, normalize on-the-fly.
                 face_region = torch.clamp(face_region, 0.0, 1.0)
             else:
-                # In inference, warn user
+                # In inference, warn user.
                 import warnings
                 warnings.warn(
                     f"Input values outside [0,1] range: min={face_region.min():.3f}, "
@@ -198,10 +198,10 @@ class EyeModel(nn.Module):
                     f"Use EyeImagePreprocessor to normalize inputs."
                 )
         
-        # Feature extraction
+        # Feature extraction.
         x = F.relu(self.bn1(self.conv1(face_region)))
         x = F.relu(self.bn2(self.conv2(x)))
-        x = self.pool(x).flatten(1)  # [B, 32]
+        x = self.pool(x).flatten(1)  # [B, 32].
         
         # Check for NaN/Inf (can happen with degenerate inputs)
         if torch.isnan(x).any() or torch.isinf(x).any():
@@ -210,12 +210,12 @@ class EyeModel(nn.Module):
                 "ensure inputs are normalized to [0,1] and properly resized."
             )
         
-        # Output heads
+        # Output heads.
         blink_prob = self.blink_head(x)
         fixation = self.fixation_head(x)
         pupil_size = self.pupil_head(x)
         
-        # Validate outputs
+        # Validate outputs.
         if torch.isnan(blink_prob).any() or torch.isnan(fixation).any() or torch.isnan(pupil_size).any():
             raise RuntimeError(
                 "NaN detected in outputs. This may be due to: "
@@ -227,7 +227,7 @@ class EyeModel(nn.Module):
         
         return {
             'blink_prob': blink_prob,
-            'fixation': fixation,  # [B, 2] - softmax probabilities
+            'fixation': fixation,  # [B, 2] - softmax probabilities.
             'pupil_size': pupil_size
         }
     
@@ -238,4 +238,5 @@ class EyeModel(nn.Module):
             "[0, 1] for fixation, [1, 0] for saccade. "
             "If continuous probabilities are needed, modify head to use Sigmoid instead."
         )
+
 

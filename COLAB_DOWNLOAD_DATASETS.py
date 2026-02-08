@@ -9,22 +9,22 @@ import sys
 from pathlib import Path
 import subprocess
 
-# Setup paths
+# Setup paths.
 if 'COLAB_GPU' in os.environ or 'COLAB_JUPYTER_IP' in os.environ:
-    # Running in Colab
+    # Running in Colab.
     BASE_DIR = Path("/content/drive/MyDrive/MaxSight/datasets")
     os.makedirs(BASE_DIR, exist_ok=True)
     print(f"✓ Colab detected - using Drive: {BASE_DIR}")
 else:
-    # Running locally
+    # Running locally.
     BASE_DIR = Path("/content/datasets") if Path("/content").exists() else Path("./datasets")
     print(f"✓ Local environment - using: {BASE_DIR}")
 
-# Install FiftyOne for Open Images V6
+# Install FiftyOne for Open Images V6.
 print("\n📦 Installing FiftyOne...")
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "fiftyone"], check=False)
 
-# Install requests and tqdm if needed
+# Install requests and tqdm if needed.
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "requests", "tqdm"], check=False)
 
 import fiftyone as fo
@@ -33,7 +33,7 @@ from tqdm import tqdm
 
 print("✓ Dependencies installed\n")
 
-# Download Open Images V6 Validation Set
+# Download Open Images V6 Validation Set.
 
 print("="*70)
 print("Downloading Open Images V6 (Validation Set)")
@@ -43,7 +43,7 @@ open_images_dir = BASE_DIR / "open_images_v6"
 validation_dir = open_images_dir / "validation"
 csv_path = open_images_dir / "validation-annotations-bbox.csv"
 
-# Check if already downloaded
+# Check if already downloaded.
 if validation_dir.exists():
     img_count = len(list(validation_dir.rglob("*.jpg")))
     if img_count > 1000 and csv_path.exists():
@@ -55,7 +55,7 @@ else:
     print("   This will take 30-60 minutes depending on connection...")
     
     try:
-        # Download using FiftyOne
+        # Download using FiftyOne.
         dataset = fo.zoo.load_zoo_dataset(
             "open-images-v6",
             split="validation",
@@ -66,7 +66,7 @@ else:
         
         print(f"✓ Downloaded {len(dataset)} images")
         
-        # Reorganize files to expected structure
+        # Reorganize files to expected structure.
         print("  Reorganizing files...")
         fo_dataset_paths = [
             BASE_DIR.parent / "open-images-v6-validation",
@@ -96,7 +96,7 @@ else:
                     else:
                         dest = validation_dir / rel_path.name
                 else:
-                    # Handle flat structure
+                    # Handle flat structure.
                     img_id = img_path.stem
                     subdir = validation_dir / img_id[:2] if len(img_id) >= 2 else validation_dir
                     subdir.mkdir(exist_ok=True)
@@ -109,7 +109,7 @@ else:
             
             print(f"  ✓ Moved {moved} images to {validation_dir}")
         
-        # Download annotation CSV
+        # Download annotation CSV.
         print("\n📥 Downloading annotations CSV...")
         csv_url = "https://storage.googleapis.com/openimages/v6/oidv6-validation-annotations-bbox.csv"
         
@@ -131,14 +131,14 @@ else:
         print("  You can download manually from:")
         print("  https://storage.googleapis.com/openimages/web/index.html")
 
-# Verify Open Images V6
+# Verify Open Images V6.
 img_count = len(list(validation_dir.rglob("*.jpg"))) if validation_dir.exists() else 0
 if img_count > 0 and csv_path.exists():
     print(f"\n✅ Open Images V6: {img_count:,} images ready")
 else:
     print(f"\n⚠️  Open Images V6: Incomplete ({img_count} images)")
 
-# Download BDD100K Validation Set
+# Download BDD100K Validation Set.
 
 print("\n" + "="*70)
 print("Downloading BDD100K (Validation Set)")
@@ -156,7 +156,7 @@ else:
     print("\n📥 Downloading BDD100K validation set (~600 MB)...")
     
     try:
-        # Try direct download from ETH Zurich
+        # Try direct download from ETH Zurich.
         images_url = "https://dl.cv.ethz.ch/bdd100k/data/100k_images_val.zip"
         labels_url = "https://dl.cv.ethz.ch/bdd100k/data/bdd100k_det_20_labels_trainval.zip"
         
@@ -179,13 +179,13 @@ else:
                         f.write(chunk)
                         pbar.update(len(chunk))
         
-        # Extract labels
+        # Extract labels.
         print("  Extracting labels...")
         temp_labels = bdd100k_dir / "temp_labels"
         with zipfile.ZipFile(labels_zip, 'r') as zip_ref:
             zip_ref.extractall(temp_labels)
         
-        # Find det_val.json
+        # Find det_val.json.
         det_val_source = None
         for path in temp_labels.rglob("det_val.json"):
             det_val_source = path
@@ -195,11 +195,11 @@ else:
             shutil.copy(det_val_source, labels_path)
             print(f"  ✓ Labels extracted to {labels_path}")
         
-        # Cleanup
+        # Cleanup.
         shutil.rmtree(temp_labels, ignore_errors=True)
         labels_zip.unlink(missing_ok=True)
         
-        # Download images
+        # Download images.
         print("\n  Downloading images (542 MB)...")
         images_zip = bdd100k_dir / "100k_images_val.zip"
         images_dir.mkdir(parents=True, exist_ok=True)
@@ -215,13 +215,13 @@ else:
                         f.write(chunk)
                         pbar.update(len(chunk))
         
-        # Extract images
+        # Extract images.
         print("  Extracting images...")
         temp_extract = bdd100k_dir / "temp_extract"
         with zipfile.ZipFile(images_zip, 'r') as zip_ref:
             zip_ref.extractall(temp_extract)
         
-        # Find val folder
+        # Find val folder.
         val_source = None
         for path in temp_extract.rglob("val"):
             if path.is_dir() and len(list(path.glob("*.jpg"))) > 0:
@@ -234,7 +234,7 @@ else:
             shutil.move(str(val_source), str(images_dir))
             print(f"  ✓ Images extracted to {images_dir}")
         
-        # Cleanup
+        # Cleanup.
         shutil.rmtree(temp_extract, ignore_errors=True)
         images_zip.unlink(missing_ok=True)
         
@@ -245,14 +245,14 @@ else:
         print("  Alternative: Use FiftyOne:")
         print("  dataset = fo.zoo.load_zoo_dataset('bdd100k', split='validation')")
 
-# Verify BDD100K
+# Verify BDD100K.
 img_count = len(list(images_dir.glob("*.jpg"))) if images_dir.exists() else 0
 if img_count > 0 and labels_path.exists():
     print(f"✅ BDD100K: {img_count:,} images ready")
 else:
     print(f"⚠️  BDD100K: Incomplete ({img_count} images)")
 
-# Download ADE20K Validation Set
+# Download ADE20K Validation Set.
 
 print("\n" + "="*70)
 print("Downloading ADE20K (Validation Set)")
@@ -285,14 +285,14 @@ else:
                         f.write(chunk)
                         pbar.update(len(chunk))
         
-        # Extract
+        # Extract.
         print("  Extracting...")
         import zipfile
         temp_extract = ade20k_dir / "temp_extract"
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall(temp_extract)
         
-        # Move to expected structure
+        # Move to expected structure.
         ade_data = temp_extract / "ADEChallengeData2016"
         if ade_data.exists():
             if (ade_data / "images").exists():
@@ -307,7 +307,7 @@ else:
                     shutil.rmtree(ann_dest)
                 shutil.move(str(ade_data / "annotations"), str(ann_dest))
         
-        # Cleanup
+        # Cleanup.
         shutil.rmtree(temp_extract, ignore_errors=True)
         zip_path.unlink(missing_ok=True)
         
@@ -316,7 +316,7 @@ else:
     except Exception as e:
         print(f"⚠ ADE20K download failed: {e}")
 
-# Verify ADE20K
+# Verify ADE20K.
 img_count = len(list(ade20k_val_images.glob("*.jpg"))) if ade20k_val_images.exists() else 0
 ann_count = len(list(ade20k_val_annotations.glob("*.png"))) if ade20k_val_annotations.exists() else 0
 if img_count > 0 and ann_count > 0:
@@ -324,7 +324,7 @@ if img_count > 0 and ann_count > 0:
 else:
     print(f"⚠️  ADE20K: Incomplete ({img_count} images, {ann_count} annotations)")
 
-# Summary
+# Summary.
 
 print("\n" + "="*70)
 print("Download Summary")
@@ -332,17 +332,17 @@ print("="*70)
 
 datasets_status = []
 
-# Open Images V6
+# Open Images V6.
 oi6_count = len(list(validation_dir.rglob("*.jpg"))) if validation_dir.exists() else 0
 oi6_csv = csv_path.exists()
 datasets_status.append(("Open Images V6", oi6_count, oi6_csv, "41,620"))
 
-# BDD100K
+# BDD100K.
 bdd_count = len(list(images_dir.glob("*.jpg"))) if images_dir.exists() else 0
 bdd_labels = labels_path.exists()
 datasets_status.append(("BDD100K", bdd_count, bdd_labels, "~10,000"))
 
-# ADE20K
+# ADE20K.
 ade_count = len(list(ade20k_val_images.glob("*.jpg"))) if ade20k_val_images.exists() else 0
 ade_ann = ade20k_val_annotations.exists()
 datasets_status.append(("ADE20K", ade_count, ade_ann, "~2,000"))
@@ -356,3 +356,4 @@ for name, count, has_ann, target in datasets_status:
 
 print(f"\n📁 All datasets saved to: {BASE_DIR}")
 print("\n✅ Ready for inference evaluation!")
+

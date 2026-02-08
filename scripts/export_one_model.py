@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
-"""Minimal script: load one checkpoint and export to JIT. Prints full traceback on any error.
+"""Load one checkpoint and export to JIT; print full traceback on error.
 
-Use this when deploy keeps failing and you need to see the real error.
+Use when deploy fails and you need the real error. From repo root (e.g. on Colab after git pull):
 
-  # From repo root (e.g. on Colab after git pull):
   python scripts/export_one_model.py --checkpoint /path/to/checkpoints_amblyopia/best_model.pt --out maxsight.pt
-
-  # Or with condition name (auto-finds checkpoint under --checkpoints-base):
   python scripts/export_one_model.py --condition amblyopia --checkpoints-base /content/drive/MyDrive/MaxSight --out /tmp/amblyopia.pt
 
-If the run stops after "JIT export: running torch.jit.trace" with no error, the runtime was
-likely killed (e.g. OOM). Try: --fp16 to trace in half precision (uses less memory), or
-Runtime → Factory reset runtime and run again. Use --no-subprocess to run in the same process.
+If the run stops after "JIT export: running torch.jit.trace" with no error, the runtime was likely killed (OOM).
+Try --fp16 to trace in half precision, or Runtime → Factory reset runtime. Use --no-subprocess to run in the same process.
 """
 
 import argparse
@@ -52,7 +48,7 @@ def main():
     out_path = Path(args.out).resolve()
     device = args.device
 
-    # Run in subprocess so we get a clear "killed" or "timed out" if trace OOMs or hangs
+    # Run export in a subprocess so OOM or timeout yields a clear exit message instead of silent kill.
     if not args.no_subprocess and os.environ.get("EXPORT_ONE_CHILD") != "1":
         cmd = [sys.executable, str(REPO / "scripts" / "export_one_model.py")]
         if args.checkpoint:
@@ -156,3 +152,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

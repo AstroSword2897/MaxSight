@@ -4,7 +4,7 @@ Sprint 1 Validation"""
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import torch
@@ -41,9 +41,9 @@ def test_forward_pass():
     assert outputs['objectness'].shape == (batch_size, num_locations)
     assert outputs['text_regions'].shape == (batch_size, num_locations)
     assert outputs['scene_embedding'].shape == (batch_size, 512)
-    assert outputs['urgency_scores'].shape == (batch_size, 4)  # Scene-level, not per-object
+    assert outputs['urgency_scores'].shape == (batch_size, 4)  # Scene-level, not per-object.
     assert outputs['distance_zones'].shape == (batch_size, num_locations, 3)
-    assert num_locations == 196  # 14x14 grid
+    assert num_locations == 196  # 14x14 grid.
     
     print("Forward pass test passed")
 
@@ -82,7 +82,7 @@ def test_color_blindness_mode():
     assert 'colors' in outputs
     nl = outputs['num_locations']
     num_locations = int(nl.item()) if hasattr(nl, 'item') else int(nl)
-    assert outputs['colors'].shape == (batch_size, num_locations, 12)  # Per-location color predictions
+    assert outputs['colors'].shape == (batch_size, num_locations, 12)  # Per-location color predictions.
     print("Color blindness mode test passed")
 
 
@@ -94,7 +94,7 @@ def test_parameter_count():
     
     # T0 baseline ~99.6M; larger tiers up to ~250M (comprehensive class system)
     assert 90_000_000 < total_params < 350_000_000
-    assert trainable_params == total_params  # All should be trainable initially
+    assert trainable_params == total_params  # All should be trainable initially.
     
     print(f"Parameter count test passed: {total_params:,} parameters")
 
@@ -107,11 +107,11 @@ def test_gradient_flow():
     dummy_image = torch.randn(2, 3, 224, 224, requires_grad=True)
     outputs = model(dummy_image)
     
-    # Compute dummy loss on classifications
+    # Compute dummy loss on classifications.
     loss = outputs['classifications'].sum()
     loss.backward()
     
-    # Check that gradients exist
+    # Check that gradients exist.
     has_gradients = False
     for param in model.parameters():
         if param.grad is not None:
@@ -132,7 +132,7 @@ def test_inference_mode():
     with torch.no_grad():
         outputs = model(dummy_image)
     
-    # Check that all required outputs exist
+    # Check that all required outputs exist.
     assert 'classifications' in outputs
     assert 'boxes' in outputs
     assert 'objectness' in outputs
@@ -141,7 +141,7 @@ def test_inference_mode():
     assert 'distance_zones' in outputs
     assert 'num_locations' in outputs
     
-    # Test detection post-processing
+    # Test detection post-processing.
     detections = model.get_detections(outputs, confidence_threshold=0.3)
     assert isinstance(detections, list)
     assert len(detections) == 1
@@ -161,4 +161,5 @@ if __name__ == "__main__":
     test_inference_mode()
     
     print("\nAll tests passed")
+
 
