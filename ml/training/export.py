@@ -52,6 +52,7 @@ class _JITTraceWrapper(nn.Module):
 
 def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True) -> Path:
     """Export to PyTorch JIT format. Most reliable, always available. strict=False for dict outputs...."""
+    import dataclasses
     logger.info(f"Exporting to JIT format: {save_path}")
     
     model.eval()
@@ -73,16 +74,31 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
     elif export_device == 'mps':
         dummy_input = dummy_input.to('mps')
     
+    # Disable scene graph for tracing (SceneRelation is not JIT-traceable)
+    original_tier = None
+    if hasattr(model, "tier_config") and model.tier_config is not None:
+        try:
+            from ml.models.maxsight_cnn import TierConfig
+            original_tier = model.tier_config
+            model.tier_config = dataclasses.replace(original_tier, use_cross_task_attention=False)  # type: ignore[arg-type]
+            logger.debug("Disabled scene graph (use_cross_task_attention=False) for JIT trace.")
+        except Exception:
+            pass
     try:
         traced_model = torch.jit.trace(model, dummy_input, strict=False)
     except Exception as e:
         logger.warning(f"JIT trace of raw model failed ({e}); trying trace-safe wrapper (tensor-only outputs).")
+        if original_tier is not None:
+            model.tier_config = dataclasses.replace(original_tier, use_cross_task_attention=False)  # type: ignore[arg-type]
         wrapper = _JITTraceWrapper(model)
         try:
             traced_model = torch.jit.trace(wrapper, dummy_input, strict=False)
         except Exception as e2:
             logger.error(f"Export failed: {e2}", exc_info=True)
             raise
+    finally:
+        if original_tier is not None:
+            model.tier_config = original_tier
     if validate:
         try:
             test_output = traced_model(dummy_input)  # type: ignore
