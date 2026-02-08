@@ -8,9 +8,15 @@ Use this when deploy keeps failing and you need to see the real error.
 
   # Or with condition name (auto-finds checkpoint under --checkpoints-base):
   python scripts/export_one_model.py --condition amblyopia --checkpoints-base /content/drive/MyDrive/MaxSight --out /tmp/amblyopia.pt
+
+If the run stops after "JIT export: running torch.jit.trace" with no error, the runtime was
+likely killed (e.g. OOM). Try: --fp16 to trace in half precision (uses less memory), or
+Runtime → Factory reset runtime and run again. Use --no-subprocess to run in the same process.
 """
 
 import argparse
+import os
+import subprocess
 import sys
 import traceback
 from pathlib import Path
@@ -30,6 +36,8 @@ def main():
     parser.add_argument("--checkpoints-base", type=Path, default=None, help="Base dir; with --condition uses <base>/checkpoints_<cond>/best_model.pt")
     parser.add_argument("--out", type=Path, default=Path("maxsight_traced.pt"), help="Output .pt path")
     parser.add_argument("--device", default="cpu", choices=["cpu", "cuda"], help="Device for load/forward (export uses cpu)")
+    parser.add_argument("--no-subprocess", action="store_true", help="Run in this process (default: run in subprocess with 10 min timeout to detect OOM/kill)")
+    parser.add_argument("--fp16", action="store_true", help="Trace in half precision (uses less memory; can avoid OOM on Colab)")
     args = parser.parse_args()
 
     ckpt_path = args.checkpoint
@@ -44,8 +52,40 @@ def main():
     out_path = Path(args.out).resolve()
     device = args.device
 
+    # Run in subprocess so we get a clear "killed" or "timed out" if trace OOMs or hangs
+    if not args.no_subprocess and os.environ.get("EXPORT_ONE_CHILD") != "1":
+        cmd = [sys.executable, str(REPO / "scripts" / "export_one_model.py")]
+        if args.checkpoint:
+            cmd += ["--checkpoint", str(ckpt_path)]
+        if args.condition:
+            cmd += ["--condition", args.condition]
+        if args.checkpoints_base:
+            cmd += ["--checkpoints-base", str(args.checkpoints_base)]
+        cmd += ["--out", str(out_path), "--device", device, "--no-subprocess"]
+        env = {**os.environ, "EXPORT_ONE_CHILD": "1"}
+        print("Running export in subprocess (timeout 10 min). If killed, you'll see exit code below.", flush=True)
+        try:
+            r = subprocess.run(cmd, cwd=str(REPO), env=env, timeout=600)
+            if r.returncode == 0:
+                print(f"Done. Saved: {out_path}", flush=True)
+                return 0
+            if r.returncode == -9:
+                print("Process killed (signal 9). Likely out of memory during JIT trace.", flush=True)
+            else:
+                print(f"Subprocess exited with code {r.returncode}", flush=True)
+            return 1
+        except subprocess.TimeoutExpired:
+            print("Export timed out after 10 minutes. JIT trace may be stuck or very slow.", flush=True)
+            return 1
+
+    def progress(msg: str) -> None:
+        print(msg, flush=True)
+        p = os.environ.get("EXPORT_ONE_PROGRESS")
+        if p:
+            Path(p).write_text(msg + "\n")
+
     try:
-        print("Step 1: Importing model and export...", flush=True)
+        progress("Step 1: Importing model and export...")
         from ml.models.maxsight_cnn import (
             COCO_CLASSES,
             CapabilityTier,
@@ -55,7 +95,7 @@ def main():
         from ml.training.export import export_to_jit
 
         cond = args.condition or ckpt_path.parent.name.replace("checkpoints_", "")
-        print(f"Step 2: Creating model (condition={cond})...", flush=True)
+        progress(f"Step 2: Loading model from checkpoint (condition={cond})...")
         tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
         model = create_model(
             num_classes=len(COCO_CLASSES),
@@ -64,7 +104,7 @@ def main():
             tier_config=tier_config,
         )
 
-        print(f"Step 3: Loading weights from {ckpt_path}...", flush=True)
+        progress("Step 3: Loading best_model.pt weights into model...")
         import torch
         ckpt = torch.load(ckpt_path, map_location=device, weights_only=True)
         state = ckpt.get("model_state_dict", ckpt)
@@ -72,7 +112,7 @@ def main():
         model.to(device)
         model.eval()
 
-        print("Step 4: One forward pass...", flush=True)
+        progress("Step 4: One forward pass...")
         with torch.no_grad():
             dummy = torch.randn(1, 3, 224, 224, device=device)
             out = model(dummy)
@@ -81,16 +121,27 @@ def main():
             return 1
         print("  Forward OK.", flush=True)
 
-        print("Step 5: Exporting to JIT...", flush=True)
+        # Free memory before trace (trace is memory-heavy)
+        del dummy, out
+        del ckpt, state
+        import gc
+        gc.collect()
+        if device == "cuda":
+            torch.cuda.empty_cache()
+        progress("Step 5: Exporting to JIT...")
         model.cpu()
+        use_fp16 = getattr(args, "fp16", False)
+        if use_fp16:
+            progress("Step 5b: Using FP16 (half precision) to reduce memory.")
         export_to_jit(
             model,
             save_path=str(out_path),
             input_size=(1, 3, 224, 224),
             device="cpu",
             validate=False,
+            use_fp16=use_fp16,
         )
-        print(f"Done. Saved: {out_path}", flush=True)
+        progress(f"Done. Saved: {out_path}")
         return 0
 
     except Exception as e:

@@ -50,11 +50,12 @@ class _JITTraceWrapper(nn.Module):
         return {"output": torch.empty(0)}
 
 
-def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True) -> Path:
-    """Export to PyTorch JIT format. Most reliable, always available. strict=False for dict outputs...."""
+def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True, use_fp16: bool = False) -> Path:
+    """Export to PyTorch JIT format. Most reliable, always available. strict=False for dict outputs.
+    use_fp16: trace in half precision to reduce memory (helps avoid OOM on Colab)."""
     import dataclasses
-    logger.info(f"Exporting to JIT format: {save_path}")
-    print("JIT export: starting...", flush=True)
+    logger.info(f"Exporting to JIT format: {save_path}" + (" (FP16)" if use_fp16 else ""))
+    print("JIT export: starting" + (" (FP16 for lower memory)" if use_fp16 else "") + "...", flush=True)
     
     model.eval()
     export_device = device if device else next(model.parameters()).device
@@ -70,6 +71,9 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
     dummy_input = torch.randn(*input_size)
     if export_device.startswith('cuda'):
         dummy_input = dummy_input.cuda()
+    if use_fp16:
+        model.half()
+        dummy_input = dummy_input.half()
     
     # Disable scene graph for tracing (SceneRelation is not JIT-traceable)
     original_tier = None
