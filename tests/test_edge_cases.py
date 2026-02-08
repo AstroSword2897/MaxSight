@@ -182,10 +182,10 @@ def test_crowded_scene_simulation():
     num_detections = len(detections[0]) if detections else 0
     
     print(f"  Detections in scene: {num_detections}")
-    print(f"  Model can handle up to {outputs['num_locations']} potential detections")
-    
-    # Model should handle many detections without crashing
-    assert num_detections <= outputs['num_locations'], "Too many detections"
+    nl = outputs['num_locations']
+    num_locs = int(nl.item()) if hasattr(nl, 'item') else int(nl)
+    print(f"  Model can handle up to {num_locs} potential detections")
+    assert num_detections <= num_locs, "Too many detections"
     
     print("  ✅ PASSED: Model handles crowded scenes")
 

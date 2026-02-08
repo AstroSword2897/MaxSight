@@ -1143,20 +1143,11 @@ class MaxSightCNN(nn.Module):
             torch.clamp(box_preds[:, :, 3:4], min=1e-4, max=1.0)
         ], dim=2)
         nan_inf_mask = torch.isnan(box_preds) | torch.isinf(box_preds)
-        if nan_inf_mask.any():
-            default_box = torch.tensor([0.5, 0.5, 0.1, 0.1], device=box_preds.device, dtype=box_preds.dtype)
-            box_preds = torch.where(nan_inf_mask, default_box.unsqueeze(0).unsqueeze(0), box_preds)
-        
-        # Replace NaN/Inf in logits so sigmoid and loss stay defined.
-        if torch.isnan(obj_logits).any() or torch.isinf(obj_logits).any():
-            obj_logits = torch.where(torch.isnan(obj_logits) | torch.isinf(obj_logits), 
-                                     torch.zeros_like(obj_logits), obj_logits)
-        if torch.isnan(text_logits).any() or torch.isinf(text_logits).any():
-            text_logits = torch.where(torch.isnan(text_logits) | torch.isinf(text_logits),
-                                     torch.zeros_like(text_logits), text_logits)
-        if torch.isnan(cls_logits).any() or torch.isinf(cls_logits).any():
-            cls_logits = torch.where(torch.isnan(cls_logits) | torch.isinf(cls_logits),
-                                    torch.zeros_like(cls_logits), cls_logits)
+        default_box = torch.tensor([0.5, 0.5, 0.1, 0.1], device=box_preds.device, dtype=box_preds.dtype)
+        box_preds = torch.where(nan_inf_mask, default_box.unsqueeze(0).unsqueeze(0), box_preds)
+        obj_logits = torch.where(torch.isnan(obj_logits) | torch.isinf(obj_logits), torch.zeros_like(obj_logits), obj_logits)
+        text_logits = torch.where(torch.isnan(text_logits) | torch.isinf(text_logits), torch.zeros_like(text_logits), text_logits)
+        cls_logits = torch.where(torch.isnan(cls_logits) | torch.isinf(cls_logits), torch.zeros_like(cls_logits), cls_logits)
         
         obj_scores = torch.sigmoid(obj_logits)  # Objectness confidence - probability there's an object
         text_scores = torch.sigmoid(text_logits)  # Text probability - probability it's text
@@ -1181,7 +1172,7 @@ class MaxSightCNN(nn.Module):
         depth_map = depth_outputs['depth_map']  # [B, H, W]
         depth_uncertainty = depth_outputs['uncertainty']  # [B, H, W]
         
-        top_k_depth = min(10, H * W)
+        top_k_depth = min(10, int(H) * int(W))
         top_k_scores_depth, top_k_indices_depth = torch.topk(obj_scores, k=top_k_depth, dim=1)  # [B, K]
         
         # Extract box centers for top-K
@@ -1192,9 +1183,9 @@ class MaxSightCNN(nn.Module):
             index=top_k_indices_depth.unsqueeze(-1).expand(-1, -1, 2)
         )  # [B, K, 2]
         
-        cache_key = (H, W)
+        cache_key = (int(H), int(W))
         if not hasattr(self, '_grid_norm_cache') or self._grid_norm_cache.get('key') != cache_key:
-            self._grid_norm_cache = {'key': cache_key, 'scale': torch.tensor([W, H], device=images.device, dtype=torch.float32)}
+            self._grid_norm_cache = {'key': cache_key, 'scale': torch.tensor([float(W), float(H)], device=images.device, dtype=torch.float32)}
         scale = self._grid_norm_cache['scale'].to(images.device)
         normalized_centers = (top_k_centers / scale.unsqueeze(0).unsqueeze(0)) * 2.0 - 1.0
         normalized_centers = normalized_centers.flip(-1).unsqueeze(2)  # [B, K, 1, 2] for grid_sample
@@ -1225,7 +1216,8 @@ class MaxSightCNN(nn.Module):
         )  # [B, K]
         
         # Clamp class indices to valid range
-        top_k_classes_depth = torch.clamp(top_k_classes_depth, 0, len(class_depth_scales) - 1)
+        _num_scales = class_depth_scales.shape[0]
+        top_k_classes_depth = torch.clamp(top_k_classes_depth, 0, _num_scales - 1)
         
         depth_scales = class_depth_scales[top_k_classes_depth]
         precise_distances = depth_at_centers * depth_scales
@@ -1244,7 +1236,7 @@ class MaxSightCNN(nn.Module):
             'precise_distances': precise_distances,  # [B, K] meters
             'distance_uncertainties': uncertainty_at_centers,  # [B, K]
             'top_k_indices': top_k_indices_depth,  # For mapping back to detections
-            'num_locations': H * W
+            'num_locations': torch.tensor(H * W, dtype=torch.long, device=images.device),  # Scalar tensor for JIT trace (no int in dict)
         }
         
         # Check if Stage A is stable (uncertainty check)

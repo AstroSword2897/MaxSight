@@ -32,7 +32,8 @@ def test_forward_pass():
         outputs = model(dummy_image)
     
     # Check output shapes - current architecture uses 14x14 grid (196 locations)
-    num_locations = outputs['num_locations']  # Should be 196 (14*14)
+    nl = outputs['num_locations']
+    num_locations = int(nl.item()) if hasattr(nl, 'item') else int(nl)
     num_classes = len(COCO_CLASSES)
     
     assert outputs['classifications'].shape == (batch_size, num_locations, num_classes)
@@ -59,7 +60,8 @@ def test_audio_fusion():
     with torch.no_grad():
         outputs = model(dummy_image, dummy_audio)
     
-    num_locations = outputs['num_locations']
+    nl = outputs['num_locations']
+    num_locations = int(nl.item()) if hasattr(nl, 'item') else int(nl)
     num_classes = len(COCO_CLASSES)
     assert outputs['classifications'].shape == (batch_size, num_locations, num_classes)
     assert outputs['scene_embedding'].shape == (batch_size, 512)
@@ -78,7 +80,8 @@ def test_color_blindness_mode():
         outputs = model(dummy_image)
     
     assert 'colors' in outputs
-    num_locations = outputs['num_locations']
+    nl = outputs['num_locations']
+    num_locations = int(nl.item()) if hasattr(nl, 'item') else int(nl)
     assert outputs['colors'].shape == (batch_size, num_locations, 12)  # Per-location color predictions
     print("Color blindness mode test passed")
 
