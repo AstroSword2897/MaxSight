@@ -16,6 +16,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 import torch
 
@@ -32,12 +33,40 @@ TOP7_CONDITIONS = [
 ]
 
 
+def _find_checkpoints_base() -> Optional[Path]:
+    """Discover base dir that has at least one checkpoints_<cond>/best_model.pt."""
+    import os
+    candidates = [os.environ.get("CHECKPOINTS_BASE")]
+    if candidates[0]:
+        candidates = [Path(candidates[0])]
+    else:
+        candidates = []
+    candidates += [REPO / "checkpoints", REPO / "backups"]
+    home = Path.home()
+    candidates += [home / "Google Drive" / "My Drive" / "MaxSight"]
+    candidates += list(home.glob("Library/CloudStorage/GoogleDrive-*/My Drive/MaxSight"))
+    candidates += [Path("/content/drive/MyDrive/MaxSight")]
+    for base in candidates:
+        if not base:
+            continue
+        base = Path(base)
+        if not base.exists():
+            continue
+        try:
+            for d in base.iterdir():
+                if d.is_dir() and d.name.startswith("checkpoints_") and (d / "best_model.pt").exists():
+                    return base.resolve()
+        except OSError:
+            continue
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validate and export top 7 condition models for deployment."
     )
-    parser.add_argument("--checkpoints-base", type=Path, required=True,
-                        help="Base dir containing checkpoints_<cond>/best_model.pt")
+    parser.add_argument("--checkpoints-base", type=Path, default=None,
+                        help="Base dir with checkpoints_<cond>/best_model.pt (default: auto-detect or CHECKPOINTS_BASE)")
     parser.add_argument("--output-dir", type=Path, default=REPO / "exports" / "top7",
                         help="Output root; each condition gets output_dir/<cond>/")
     parser.add_argument("--conditions", nargs="*", default=TOP7_CONDITIONS,
@@ -58,7 +87,16 @@ def main():
     )
     from ml.training.export import export_ios_bundle
 
-    base = Path(args.checkpoints_base).resolve()
+    base = Path(args.checkpoints_base).resolve() if args.checkpoints_base else None
+    if base is None:
+        base = _find_checkpoints_base()
+    if base is None:
+        print("No checkpoints base found. Either:", file=sys.stderr)
+        print("  1. Pass --checkpoints-base /path/to/dir (folder containing checkpoints_amblyopia/best_model.pt etc.)", file=sys.stderr)
+        print("  2. Set CHECKPOINTS_BASE and run again", file=sys.stderr)
+        print("  3. Run: python scripts/find_trained_checkpoints.py  (to see if any known path has checkpoints)", file=sys.stderr)
+        return 1
+    base = base.resolve()
     out_root = Path(args.output_dir).resolve()
     conditions = args.conditions or TOP7_CONDITIONS
     validate_only = args.validate_only or args.skip_export
@@ -153,6 +191,12 @@ def main():
         print(f"Validated: {sum(1 for c in conditions if manifest['conditions'][c].get('inference_ok'))}/{len(conditions)}")
         if not validate_only:
             print(f"Exported:  {sum(1 for c in conditions if manifest['conditions'][c].get('export_path'))}/{len(conditions)}")
+    found = sum(1 for c in conditions if manifest["conditions"][c].get("exists"))
+    if found == 0:
+        print(f"No best_model.pt found for any of the top 7 under: {base}", file=sys.stderr)
+        print("Each condition needs: <base>/checkpoints_<cond>/best_model.pt", file=sys.stderr)
+        print("Train first: python scripts/train_alive_models.py --checkpoints-base <base> --data-dir <data> --train-annotation ... --val-annotation ...", file=sys.stderr)
+        print("Or copy trained checkpoints into that layout. Discover path: python scripts/find_trained_checkpoints.py", file=sys.stderr)
     return 0 if (all_ok and (validate_only or all_exported)) else 1
 
 

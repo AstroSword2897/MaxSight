@@ -45,8 +45,8 @@ def main():
     p = argparse.ArgumentParser(
         description="Inference (optional) + deploy for top 7 conditions in ~1 hour."
     )
-    p.add_argument("--checkpoints-base", type=Path, required=True,
-                   help="Base dir with checkpoints_<cond>/best_model.pt")
+    p.add_argument("--checkpoints-base", type=Path, default=None,
+                   help="Base dir with checkpoints_<cond>/best_model.pt (default: auto-detect or CHECKPOINTS_BASE)")
     p.add_argument("--output-dir", type=Path, default=None,
                    help="Deploy output root (default: <checkpoints-base>/exports_top7)")
     p.add_argument("--val-annotation", type=Path, default=None,
@@ -62,7 +62,21 @@ def main():
     p.add_argument("--quiet", action="store_true", help="Less output")
     args = p.parse_args()
 
-    base = Path(args.checkpoints_base).resolve()
+    base = Path(args.checkpoints_base).resolve() if args.checkpoints_base else None
+    if base is None:
+        r = subprocess.run(
+            [sys.executable, str(REPO / "scripts" / "find_trained_checkpoints.py")],
+            cwd=str(REPO), capture_output=True, text=True
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            base = Path(r.stdout.strip()).resolve()
+        else:
+            base = None
+        if base is None:
+            print("No checkpoints base found. Pass --checkpoints-base /path/to/MaxSight or set CHECKPOINTS_BASE.", file=sys.stderr)
+            print("Discover: python scripts/find_trained_checkpoints.py", file=sys.stderr)
+            return 1
+    base = base.resolve()
     out_dir = Path(args.output_dir).resolve() if args.output_dir else (base / "exports_top7")
     run_inference = (not args.skip_inference) and args.val_annotation and args.val_annotation.exists()
     if args.val_annotation and not args.val_annotation.exists():
