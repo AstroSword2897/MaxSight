@@ -1,6 +1,6 @@
 # Top 7 conditions – list and commands
 
-Single reference for the **top 7 (alive)** conditions. Set your paths once, then run the scripts below.
+Single reference for the **top 7** conditions. You can use either the **fixed list** below or the **top 7 by mAP** (best validation mAP) with `--top-by-map`.
 
 ---
 
@@ -18,6 +18,8 @@ Single reference for the **top 7 (alive)** conditions. Set your paths once, then
 
 **As a list (for scripts):**  
 `amblyopia amd color_blindness cvi glaucoma retinitis_pigmentosa strabismus`
+
+**Top 7 by mAP:** To use the seven conditions with the highest validation mAP instead of this fixed list, run inference first (so `inference_data.json` exists), then pass `--top-by-map` to deploy or inference_and_deploy. See section 3 below.
 
 ---
 
@@ -77,9 +79,28 @@ python scripts/deploy_top7.py \
   --checkpoints-base "$CHECKPOINTS_BASE" \
   --output-dir "$CHECKPOINTS_BASE/exports_top7"
 ```
+To deploy the **top 7 by mAP** (from a previous inference run): pass `--top-by-map` and `--inference-data`:
+```bash
+python scripts/deploy_top7.py \
+  --checkpoints-base "$CHECKPOINTS_BASE" \
+  --output-dir "$CHECKPOINTS_BASE/exports_top7" \
+  --top-by-map --inference-data inference_data.json
+```
 Output: `$CHECKPOINTS_BASE/exports_top7/<condition>/` per condition + `manifest.json`.
 
-**E. Run inference on Open Images + ADE20K** (when those datasets are present)
+**E. Inference + deploy using top 7 by mAP** (run inference over all conditions, then deploy the 7 with highest mAP)
+```bash
+cd $REPO
+python scripts/inference_and_deploy_top7.py \
+  --checkpoints-base "$CHECKPOINTS_BASE" \
+  --output-dir "$CHECKPOINTS_BASE/exports_top7" \
+  --val-annotation "$DATA_DIR/cleaned_splits/maxsight_val.json" \
+  --image-dir "$DATA_DIR" \
+  --top-by-map --max-batches 10
+```
+If `inference_data.json` already exists, you can omit val/image and use `--top-by-map` so deploy uses that file to pick the top 7.
+
+**F. Run inference on Open Images + ADE20K** (when those datasets are present)
 ```bash
 cd $REPO
 python scripts/run_inference_on_inference_datasets.py \

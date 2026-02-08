@@ -14,6 +14,7 @@ Usage:
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
@@ -69,8 +70,12 @@ def main():
                         help="Base dir with checkpoints_<cond>/best_model.pt (default: auto-detect or CHECKPOINTS_BASE)")
     parser.add_argument("--output-dir", type=Path, default=REPO / "exports" / "top7",
                         help="Output root; each condition gets output_dir/<cond>/")
-    parser.add_argument("--conditions", nargs="*", default=TOP7_CONDITIONS,
-                        help=f"Conditions to deploy (default: top 7)")
+    parser.add_argument("--conditions", nargs="*", default=None,
+                        help=f"Conditions to deploy (default: top 7 list, or top 7 by mAP if --top-by-map)")
+    parser.add_argument("--top-by-map", action="store_true",
+                        help="Use top 7 conditions by mAP from --inference-data (overrides --conditions)")
+    parser.add_argument("--inference-data", type=Path, default=REPO / "inference_data.json",
+                        help="Path to inference_data.json (used with --top-by-map)")
     parser.add_argument("--validate-only", action="store_true",
                         help="Only check checkpoints and run 1-batch inference; no export")
     parser.add_argument("--skip-export", action="store_true",
@@ -105,7 +110,23 @@ def main():
         return 1
     base = base.resolve()
     out_root = Path(args.output_dir).resolve()
-    conditions = args.conditions or TOP7_CONDITIONS
+    if getattr(args, "top_by_map", False) and args.inference_data and Path(args.inference_data).exists():
+        r = subprocess.run(
+            [sys.executable, str(REPO / "scripts" / "get_top7_by_map.py"),
+             "--inference-data", str(args.inference_data), "--k", "7", "--print"],
+            cwd=str(REPO), capture_output=True, text=True,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            conditions = [c.strip() for c in r.stdout.strip().splitlines() if c.strip()]
+        else:
+            conditions = []
+        if not conditions:
+            print("No conditions found in inference data; falling back to default top 7.", file=sys.stderr)
+            conditions = TOP7_CONDITIONS
+        elif verbose:
+            print(f"Top 7 by mAP: {conditions}")
+    else:
+        conditions = args.conditions or TOP7_CONDITIONS
     validate_only = args.validate_only or args.skip_export
     device = args.device
     verbose = not args.quiet
