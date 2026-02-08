@@ -51,8 +51,10 @@ CONDITIONS = [
 ]
 
 CONF_CANDIDATES = [0.3, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001]  # low values for weak/untrained checkpoints
-CONF_CANDIDATES_TARGET_MAP = [0.001, 0.0005]  # extra low when aiming for 0.5+ mAP
+# Fast grid when targeting mAP (fewer runs): try key conf + auto, two NMS values
+CONF_FAST = [0.1, 0.05, 0.01, 0.001, "auto"]
 NMS_IOU_CANDIDATES = [0.5, 0.6, 0.7, 0.8]
+NMS_FAST = [0.5, 0.6]
 
 
 def parse_map_from_output(output: str) -> float:
@@ -90,10 +92,13 @@ def main():
     parser.add_argument("--config-output", type=Path, default=REPO / "improved_inference_config.json", help="Save best confidence/nms per run")
     parser.add_argument("--conditions", nargs="*", default=None, help="Limit to these conditions (default: all)")
     parser.add_argument("--max-batches", type=int, default=None, help="Cap batches per sweep run (faster sweep)")
+    parser.add_argument("--batch-size", type=int, default=64, help="Validation batch size (passed to run_checkpoint_inference)")
+    parser.add_argument("--num-workers", type=int, default=0, help="DataLoader workers (passed to run_checkpoint_inference)")
     parser.add_argument("--skip-sweep", action="store_true", help="Skip sweep; run inference once with --confidence and --nms-iou")
     parser.add_argument("--confidence", type=str, default="0.05", help="Used if --skip-sweep: float or 'auto' for adaptive threshold")
     parser.add_argument("--nms-iou", type=float, default=0.5, help="Used if --skip-sweep")
-    parser.add_argument("--target-map", type=float, default=None, metavar="F", help="When sweeping, try to reach at least this mAP@0.5 (extends confidence candidates, may try 'auto')")
+    parser.add_argument("--target-map", type=float, default=None, metavar="F", help="When sweeping, try to reach at least this mAP@0.5; uses fast grid (fewer conf/nms combos)")
+    parser.add_argument("--fast-sweep", action="store_true", help="Use reduced conf/nms grid (fewer runs, faster)")
     parser.add_argument("--quiet", action="store_true", help="Minimal output: only best params and final result.")
     args = parser.parse_args()
 
@@ -130,7 +135,7 @@ def main():
     if not args.skip_sweep:
         total = len(conf_candidates) * len(NMS_IOU_CANDIDATES)
         n = 0
-        for conf, iou in itertools.product(conf_candidates, NMS_IOU_CANDIDATES):
+        for conf, iou in itertools.product(conf_candidates, nms_candidates):
             n += 1
             if not args.quiet:
                 print(f"\n[{n}/{total}] confidence={conf}, nms_iou={iou}")
@@ -181,6 +186,8 @@ def main():
         "--checkpoints-base", str(base),
         "--confidence", str(best_conf),
         "--nms-iou", str(best_nms),
+        "--batch-size", str(args.batch_size),
+        "--num-workers", str(args.num_workers),
         "--output", str(args.output),
     ]
     if conditions:

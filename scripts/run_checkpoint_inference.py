@@ -338,8 +338,14 @@ def main():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=32,
-        help="Validation batch size",
+        default=64,
+        help="Validation batch size (larger = fewer steps, faster on GPU)",
+    )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=0,
+        help="DataLoader workers (0 = main thread only; use 2–4 locally for faster loading)",
     )
     parser.add_argument(
         "--max-batches",
@@ -485,7 +491,7 @@ def main():
         test_annotation_file=None,
         image_dir=image_dir,
         batch_size=args.batch_size,
-        num_workers=0,
+        num_workers=args.num_workers,
         pin_memory=(args.device == "cuda"),
         condition_mode=None,
         apply_lighting_augmentation=False,

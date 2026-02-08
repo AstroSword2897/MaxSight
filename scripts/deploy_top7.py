@@ -80,7 +80,8 @@ def main():
                         help="Only check checkpoints and run 1-batch inference; no export")
     parser.add_argument("--skip-export", action="store_true",
                         help="Same as --validate-only")
-    parser.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
+    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", choices=["cpu", "cuda"],
+                        help="Device for validation (default: cuda if available)")
     parser.add_argument("--quiet", action="store_true", help="Less verbose")
     args = parser.parse_args()
 
@@ -241,7 +242,23 @@ def main():
         print("Each condition needs: <base>/checkpoints_<cond>/best_model.pt", file=sys.stderr)
         print("Train first: python scripts/train_alive_models.py --checkpoints-base <base> --data-dir <data> --train-annotation ... --val-annotation ...", file=sys.stderr)
         print("Or copy trained checkpoints into that layout. Discover path: python scripts/find_trained_checkpoints.py", file=sys.stderr)
-    return 0 if (all_ok and (validate_only or all_exported)) else 1
+        return 1
+
+    if not (all_ok and (validate_only or all_exported)):
+        failed_inf = [c for c in conditions if not manifest["conditions"][c].get("inference_ok")]
+        failed_export = [c for c in conditions if manifest["conditions"][c].get("inference_ok") and not manifest["conditions"][c].get("export_path")]
+        if failed_inf:
+            print(f"Validation failed: {', '.join(failed_inf)}", file=sys.stderr)
+            for c in failed_inf:
+                err = manifest["conditions"][c].get("error", "?")
+                print(f"  {c}: {err}", file=sys.stderr)
+        if failed_export:
+            print(f"Export failed: {', '.join(failed_export)}", file=sys.stderr)
+            for c in failed_export:
+                err = manifest["conditions"][c].get("error", "?")
+                print(f"  {c}: {err}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

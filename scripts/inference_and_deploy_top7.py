@@ -140,7 +140,7 @@ def main():
 
     if top_by_map and not inference_data_path.exists() and run_inference:
         if sweep_for_map:
-            print("Step 1/2: Inference (all conditions, sweep for best mAP)...")
+            print("Step 1/2: Inference (all conditions, fast sweep for best mAP)...")
             cmd = [
                 sys.executable,
                 str(REPO / "scripts" / "improve_map_all_models.py"),
@@ -149,6 +149,9 @@ def main():
                 "--image-dir", str(args.image_dir),
                 "--output", str(inference_data_path),
                 "--max-batches", str(args.max_batches),
+                "--batch-size", str(args.batch_size),
+                "--num-workers", str(args.num_workers),
+                "--fast-sweep",
             ]
             if target_map is not None:
                 cmd += ["--target-map", str(target_map)]
@@ -165,6 +168,8 @@ def main():
                 "--image-dir", str(args.image_dir),
                 "--output", str(inference_data_path),
                 "--max-batches", str(args.max_batches),
+                "--batch-size", str(args.batch_size),
+                "--num-workers", str(args.num_workers),
                 "--confidence", "auto",
             ]
             if args.quiet:
@@ -185,8 +190,11 @@ def main():
             "--output", str(inference_data_path),
             "--conditions"] + TOP7 + [
             "--max-batches", str(args.max_batches),
+            "--batch-size", str(args.batch_size),
+            "--num-workers", str(args.num_workers),
         ]
         if sweep_for_map:
+            cmd.append("--fast-sweep")
             if target_map is not None:
                 cmd += ["--target-map", str(target_map)]
         else:
@@ -219,9 +227,13 @@ def main():
         cmd += ["--top-by-map", "--inference-data", str(inference_data_path)]
     if args.quiet:
         cmd.append("--quiet")
-    r = subprocess.run(cmd, cwd=str(REPO))
+    r = subprocess.run(cmd, cwd=str(REPO), capture_output=True, text=True)
     if r.returncode != 0:
         print("Deploy step failed.", file=sys.stderr)
+        if r.stdout:
+            print(r.stdout, file=sys.stderr)
+        if r.stderr:
+            print(r.stderr, file=sys.stderr)
         return r.returncode
     print(f"Done. Bundles: {out_dir}")
     print(f"Manifest: {out_dir / 'manifest.json'}")
