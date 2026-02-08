@@ -8,19 +8,17 @@ import subprocess
 import sys
 from pathlib import Path
 
-# ============== EDIT THESE ==============
+# Override via env: DATA_DIR, IMAGE_DIR, REPO_DIR, RUN_TRAINING, MODE, BATCH_SIZE, EPOCHS, etc.
 DATA_DIR = os.environ.get("DATA_DIR", "/content/drive/MyDrive/MaxSight_Training")
 IMAGE_DIR = os.environ.get("IMAGE_DIR", DATA_DIR)
 REPO_DIR = Path(os.environ.get("REPO_DIR", "/content/2026-Prototype"))
-RUN_TRAINING = os.environ.get("RUN_TRAINING", "1") == "1"   # set to "0" to only check
-MODE = os.environ.get("MODE", "train")  # "train" or "automl"
-# Training defaults (used if RUN_TRAINING=1)
+RUN_TRAINING = os.environ.get("RUN_TRAINING", "1") == "1"
+MODE = os.environ.get("MODE", "train")
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "8"))
 EPOCHS = int(os.environ.get("EPOCHS", "5"))
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", "0"))
 N_TRIALS = int(os.environ.get("N_TRIALS", "5"))
 EPOCHS_PER_TRIAL = int(os.environ.get("EPOCHS_PER_TRIAL", "2"))
-# ========================================
 
 DRIVE_MOUNT = "/content/drive"
 CLEANED = "cleaned_splits"

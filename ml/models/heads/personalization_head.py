@@ -24,9 +24,7 @@ class PersonalizationHead(nn.Module):
         self.num_features = num_features
         self.num_alert_types = num_alert_types
         
-        # -------------------------------------------------
         # Crisp parameter: Controls softmax distribution sharpness
-        # -------------------------------------------------
         # crisp < 1.0: Sharper distribution (more confident, focused on top choice)
         #   Example: crisp=0.5 makes [0.1, 0.2, 0.7] → [0.05, 0.15, 0.80]
         # crisp = 1.0: Standard softmax (default, no scaling)
@@ -39,15 +37,11 @@ class PersonalizationHead(nn.Module):
         # - Can be learned or set per-user based on preferences
         self.crisp = crisp
         
-        # -------------------------------------------------
         # Persistent user representation (scales to real deployments)
-        # -------------------------------------------------
         self.user_embedding = nn.Embedding(num_users, embed_dim)
         nn.init.normal_(self.user_embedding.weight, std=0.02)
         
-        # -------------------------------------------------
         # Contextual adaptation (gated residual update - stable)
-        # -------------------------------------------------
         self.adaptation_gate = nn.Sequential(
             nn.Linear(embed_dim + interaction_dim, embed_dim),
             nn.Sigmoid()
@@ -59,18 +53,14 @@ class PersonalizationHead(nn.Module):
             nn.Linear(embed_dim, embed_dim)
         )
         
-        # -------------------------------------------------
         # Shared fusion trunk
-        # -------------------------------------------------
         fused_dim = input_dim + embed_dim
         self.fusion = nn.Sequential(
             nn.Linear(fused_dim, 512),
             nn.ReLU()
         )
         
-        # -------------------------------------------------
         # Heads (logit-first design)
-        # -------------------------------------------------
         self.attention_head = nn.Linear(512, num_features)
         self.verbosity_head = nn.Linear(512, 4)  # logits (0-3)
         self.alert_head = nn.Linear(512, num_alert_types)
@@ -84,14 +74,10 @@ class PersonalizationHead(nn.Module):
         """Forward pass for personalization (v2)...."""
         B = scene_features.size(0)
         
-        # -------------------------------------------------
         # Base user embedding
-        # -------------------------------------------------
         user_emb = self.user_embedding(user_id)  # [B, embed_dim]
         
-        # -------------------------------------------------
         # Contextual adaptation (optional, gated)
-        # -------------------------------------------------
         if interaction_features is not None:
             adapt_input = torch.cat([user_emb, interaction_features], dim=1)
             
@@ -100,15 +86,11 @@ class PersonalizationHead(nn.Module):
             
             user_emb = user_emb + gate * delta  # stable residual update
         
-        # -------------------------------------------------
         # Fuse scene + user
-        # -------------------------------------------------
         fused = torch.cat([scene_features, user_emb], dim=1)
         fused = self.fusion(fused)
         
-        # -------------------------------------------------
         # Outputs (LOGITS FIRST - preferred for training)
-        # -------------------------------------------------
         attention_logits = self.attention_head(fused)
         alert_logits = self.alert_head(fused)
         verbosity_logits = self.verbosity_head(fused)

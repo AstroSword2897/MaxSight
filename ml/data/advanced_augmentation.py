@@ -119,7 +119,6 @@ class AdvancedAugmentation:
             
         return augmentations
     
-    # ==================== Geometric Transforms ====================
     
     def horizontal_flip(self, image: torch.Tensor, 
                        targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:
@@ -183,7 +182,6 @@ class AdvancedAugmentation:
         # Note: bbox adjustment for rotation is complex, skip for now
         return image, targets
     
-    # ==================== Photometric Transforms ====================
     
     def color_jitter(self, image: torch.Tensor,
                     targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:
@@ -231,7 +229,6 @@ class AdvancedAugmentation:
             
         return image, targets
     
-    # ==================== Noise Injection ====================
     
     def gaussian_noise(self, image: torch.Tensor,
                       targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:
@@ -292,7 +289,6 @@ class AdvancedAugmentation:
             
         return image, targets
     
-    # ==================== Occlusion Simulation ====================
     
     def random_erasing(self, image: torch.Tensor,
                       targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:
@@ -368,7 +364,6 @@ class AdvancedAugmentation:
         
         return image, targets
     
-    # ==================== Weather Effects ====================
     
     def fog_effect(self, image: torch.Tensor,
                   targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:
@@ -401,7 +396,6 @@ class AdvancedAugmentation:
         image = image * 0.8 + rain_layer * 0.2
         return image.clamp(0, 1), targets
     
-    # ==================== Camera Artifacts ====================
     
     def jpeg_compression(self, image: torch.Tensor,
                         targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:

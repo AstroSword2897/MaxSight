@@ -176,7 +176,6 @@ class HybridCNNViTBackbone(nn.Module):
             out_channels=cnn_out_channels
         )
         
-        # === ViT Backbone ===
         from .vit_backbone import VisionTransformerBackbone
         self.vit = VisionTransformerBackbone(
             img_size=img_size,
@@ -209,7 +208,6 @@ class HybridCNNViTBackbone(nn.Module):
                 nn.GELU()
             )
         
-        # === Fusion Layers ===
         total_cnn_dim = cnn_out_channels * 3  # From 3 FPN levels
         
         if fusion_method == 'concat':
@@ -366,7 +364,6 @@ class HybridCNNViTBackbone(nn.Module):
         """Forward pass with improved cross-layer interaction...."""
         B = x.shape[0]
         
-        # === Extract CNN features ===
         fpn_features, cnn_feats = self.extract_cnn_features(x)
         
         # === Extract ViT features (if not provided) ===
@@ -392,14 +389,12 @@ class HybridCNNViTBackbone(nn.Module):
         else:
             cnn_enhanced, vit_enhanced = fpn_features, vit_patches
         
-        # === Prepare for fusion ===
         # Flatten FPN features and concatenate
         fpn_flat = [f.flatten(2).mean(dim=2) for f in cnn_enhanced]  # [B, C] each
         cnn_concat = torch.cat(fpn_flat, dim=1)  # [B, total_cnn_dim]
         
         vit_global = vit_enhanced.mean(dim=1)  # [B, vit_embed_dim]
         
-        # === Feature Fusion ===
         if self.fusion_method == 'concat':
             fused = self.fusion(torch.cat([cnn_concat, vit_global], dim=1))
         elif self.fusion_method == 'weighted':
@@ -419,7 +414,6 @@ class HybridCNNViTBackbone(nn.Module):
         
         fused = self.dropout(fused)
         
-        # === Prepare output ===
         if return_all_features:
             aux_features = {
                 'fpn_features': cnn_enhanced,
@@ -432,7 +426,6 @@ class HybridCNNViTBackbone(nn.Module):
         return fused, None
 
 
-# === Example Usage ===
 if __name__ == '__main__':
     # Standard usage
     model = HybridCNNViTBackbone(

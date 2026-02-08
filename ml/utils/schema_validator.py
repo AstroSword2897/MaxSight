@@ -318,9 +318,7 @@ def validate_and_downgrade(
     return outputs, is_valid, errors
 
 
-# ============================================================================
 # Schema Stress Tests
-# ============================================================================
 
 @dataclass
 class SchemaStressTestResult:

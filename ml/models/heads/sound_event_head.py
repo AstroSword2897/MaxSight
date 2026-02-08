@@ -23,9 +23,7 @@ class SoundEventHead(nn.Module):
         self.num_classes = num_classes
         self.num_directions = num_directions
         
-        # -------------------------------------------------
         # Spectrogram CNN (time preserved)
-        # -------------------------------------------------
         self.cnn = nn.Sequential(
             nn.Conv2d(1, 32, 3, padding=1),
             nn.BatchNorm2d(32),
@@ -38,9 +36,7 @@ class SoundEventHead(nn.Module):
         
         self.cnn_proj = nn.Linear(64 * 16, embed_dim)
         
-        # -------------------------------------------------
         # Temporal encoder
-        # -------------------------------------------------
         self.temporal_attn = nn.MultiheadAttention(
             embed_dim, num_heads, dropout=dropout, batch_first=True
         )
@@ -49,16 +45,12 @@ class SoundEventHead(nn.Module):
         # Learned temporal pooling
         self.pool_query = nn.Parameter(torch.randn(1, 1, embed_dim))
         
-        # -------------------------------------------------
         # Heads (logits-first)
-        # -------------------------------------------------
         self.classifier = nn.Linear(embed_dim, num_classes)
         self.direction_head = nn.Linear(embed_dim, num_directions)
         self.priority_head = nn.Linear(embed_dim, 1)
         
-        # -------------------------------------------------
         # Urgency map (risk prior)
-        # -------------------------------------------------
         self.register_buffer(
             "urgency_map",
             torch.tensor([
@@ -73,30 +65,22 @@ class SoundEventHead(nn.Module):
         """Forward pass through sound event head...."""
         B, T, freq_bins = spectrogram.shape
         
-        # -------------------------------------------------
         # CNN
-        # -------------------------------------------------
         x = spectrogram.unsqueeze(1)  # [B, 1, T, freq_bins]
         x = self.cnn(x)               # [B, 64, T, 16]
         x = x.permute(0, 2, 1, 3).contiguous().reshape(B, T, -1)
         x = self.cnn_proj(x)          # [B, T, embed_dim]
         
-        # -------------------------------------------------
         # Temporal attention
-        # -------------------------------------------------
         attn_out, _ = self.temporal_attn(x, x, x)
         x = self.temporal_norm(x + attn_out)
         
-        # -------------------------------------------------
         # Attention pooling
-        # -------------------------------------------------
         query = self.pool_query.expand(B, -1, -1)
         pooled, _ = self.temporal_attn(query, x, x)
         pooled = pooled.squeeze(1)  # [B, embed_dim]
         
-        # -------------------------------------------------
         # Predictions (logits-first)
-        # -------------------------------------------------
         class_logits = self.classifier(pooled)
         direction_logits = self.direction_head(pooled)
         priority = torch.sigmoid(self.priority_head(pooled))

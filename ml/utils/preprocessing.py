@@ -286,9 +286,7 @@ def apply_clahe_tensor(
     return enhanced
 
 
-# ============================================================================
 # Image Preprocessing Class (Meta AI-style: Tensor-first, GPU-friendly)
-# ============================================================================
 
 class ImagePreprocessor:
     """Image preprocessing with condition-specific augmentations for visual impairments."""

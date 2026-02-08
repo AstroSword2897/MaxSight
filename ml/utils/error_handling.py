@@ -280,9 +280,7 @@ def safe_head_execution(
     )
 
 
-# ============================================================================
 # Head Kill Switch System
-# ============================================================================
 
 class HeadKillSwitchManager:
     """Runtime-configurable head disabling manager."""
@@ -437,9 +435,7 @@ def wrap_heads_with_killswitch(
     return model
 
 
-# ============================================================================
 # Ethical Safeguards
-# ============================================================================
 
 class UncertaintySuppressor:
     """Ensures uncertainty suppresses potentially harmful actions."""

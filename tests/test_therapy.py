@@ -19,9 +19,7 @@ from ml.therapy.therapy_integration import (
 )
 
 
-# ---------------------------------------------------------------------------
 # SessionManager
-# ---------------------------------------------------------------------------
 
 def test_session_manager_start_and_end():
     """SessionManager starts a session and returns a valid session ID."""
@@ -87,9 +85,7 @@ def test_session_manager_skill_curve():
     assert curve[2]["cumulative_success_rate"] == pytest.approx(2.0 / 3.0)
 
 
-# ---------------------------------------------------------------------------
 # TaskGenerator
-# ---------------------------------------------------------------------------
 
 def test_task_generator_fatigue_rest():
     """TaskGenerator returns FATIGUE_REST when fatigue is high."""
@@ -134,9 +130,7 @@ def test_task_generator_update_performance():
     assert len(gen.recent_failures) == 1
 
 
-# ---------------------------------------------------------------------------
 # TherapyTaskIntegrator
-# ---------------------------------------------------------------------------
 
 def test_therapy_integrator_attention_task():
     """TherapyTaskIntegrator creates attention task with scene description."""
@@ -218,9 +212,7 @@ def test_create_therapy_integrator_factory():
     assert isinstance(integrator, TherapyTaskIntegrator)
 
 
-# ---------------------------------------------------------------------------
 # TherapyStateHead (forward pass)
-# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def therapy_head():

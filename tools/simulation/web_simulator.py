@@ -104,9 +104,7 @@ global_rate_limiter = GlobalRateLimiter(config.rate_limit_global)
 INFERENCE_SEMAPHORE = threading.Semaphore(value=1)  # Serialize inference for safety
 
 
-# ----------------------------------------------------------------------------
 # Pipeline latency tracker (per-stage timing for bottleneck analysis)
-# ----------------------------------------------------------------------------
 class PipelineLatencyTracker:
     """Track per-stage pipeline timing: preprocess, gpu_transfer, model, postprocess, overlay, audio."""
 
@@ -1182,9 +1180,7 @@ class SessionRegistry:
 registry = SessionRegistry()
 
 
-# ============================================================================
 # Helper Functions for Flask Routes
-# ============================================================================
 
 def get_session_id() -> Optional[str]:
     """Get session ID from request (header or JSON)."""
@@ -1228,9 +1224,7 @@ def require_session() -> MaxSightSession:
     return session
 
 
-# ============================================================================
 # Legacy MaxSightSimulator (DEPRECATED - Use MaxSightSession instead)
-# ============================================================================
 # MaxSightSession with SessionRegistry provides multi-user support.
 
 class MaxSightSimulator:
@@ -2002,9 +1996,7 @@ class MaxSightSimulator:
 
 
 
-# ============================================================================
 # Web Routes
-# ============================================================================
 
 @app.route('/')
 def index():

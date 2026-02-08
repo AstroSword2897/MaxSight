@@ -124,7 +124,6 @@ class TherapyStateHead(nn.Module):
             nn.Linear(32, 3)
         )
         
-        # --- Contrast ---
         self.in_channels_contrast = in_channels_contrast
         self.use_edge_aware = use_edge_aware
         
@@ -261,7 +260,6 @@ class TherapyStateHead(nn.Module):
         zone_input = torch.cat([depth_pooled, depth_stats], dim=1)
         zones = self.zone_head(zone_input)
         
-        # --- Contrast ---
         # Motion-conditioned contrast (if motion is 4D)
         if motion_features.dim() == 4 and hasattr(self, 'motion_proj_contrast'):
             motion_proj = self.motion_proj_contrast(motion_features)

@@ -14,9 +14,7 @@ from torch.utils.data import Dataset
 import torchvision.transforms as T
 
 
-# ============================================================================
 # Core Dataset (Pure Loader - No On-the-Fly Augmentation)
-# ============================================================================
 
 class AccessibilityDataset(Dataset):
     """Pure dataset loader for accessibility features...."""
@@ -90,9 +88,7 @@ class AccessibilityDataset(Dataset):
         }
 
 
-# ============================================================================
 # Synthetic Augmentation Engine (Medically-Aligned)
-# ============================================================================
 
 class SyntheticImpairmentEngine:
     """Engine for generating synthetic impairments more realistically...."""
@@ -235,9 +231,7 @@ class SyntheticImpairmentEngine:
         return mask
 
 
-# ============================================================================
 # Synthetic Dataset Generator
-# ============================================================================
 
 def generate_synthetic_dataset(
     source: Path,
@@ -362,9 +356,7 @@ def generate_synthetic_dataset(
     return stats
 
 
-# ============================================================================
 # Labeling Template
-# ============================================================================
 
 def create_label_template(path: Path):
     """Create labeling template for user annotation.
@@ -390,9 +382,7 @@ def create_label_template(path: Path):
     print(f"✅ Labeling template saved → {path}")
 
 
-# ============================================================================
 # Dataset Registry & Utilities
-# ============================================================================
 
 def combine_datasets(
     real_dir: Path,
@@ -450,9 +440,7 @@ def combine_datasets(
     return stats
 
 
-# ============================================================================
 # CLI Interface
-# ============================================================================
 
 if __name__ == "__main__":
     import argparse

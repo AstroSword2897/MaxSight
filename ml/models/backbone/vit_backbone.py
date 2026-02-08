@@ -517,7 +517,6 @@ class HybridCNNViTBackbone(nn.Module):
         if enable_feature_cache:
             self.cache = FeatureCache()
         
-        # === Efficient CNN Backbone ===
         weights = ResNet50_Weights.IMAGENET1K_V2 if pretrained_cnn else None
         resnet = resnet50(weights=weights)
         
@@ -540,7 +539,6 @@ class HybridCNNViTBackbone(nn.Module):
             out_channels=cnn_out_channels
         )
         
-        # === ViT Backbone ===
         # Import VisionTransformerBackbone from the module (avoid circular import)
         # The class is defined in this file or imported from elsewhere
         try:
@@ -596,7 +594,6 @@ class HybridCNNViTBackbone(nn.Module):
                     self.vit_align = nn.Linear(vit_embed_dim, 
                                               min(cnn_out_channels, vit_embed_dim), bias=False)
         
-        # === Optimized Fusion ===
         total_cnn_dim = cnn_out_channels * len(fpn_levels)
         
         if fusion_method == 'concat':
@@ -812,7 +809,6 @@ class HybridCNNViTBackbone(nn.Module):
         return fused, None
 
 
-# === Usage Example ===
 if __name__ == '__main__':
     model = HybridCNNViTBackbone(
         img_size=224,

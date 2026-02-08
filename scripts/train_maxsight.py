@@ -29,15 +29,10 @@ from ml.models.maxsight_cnn import COCO_CLASSES
 
 import logging
 
-# ---------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------
 setup_logging(log_level="INFO", log_dir=Path("logs"))
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------
-# Reproducibility
-# ---------------------------------------------------------------------
+
 def set_seed(seed: int):
     random.seed(seed)
     np.random.seed(seed)
@@ -53,9 +48,6 @@ def seed_worker(worker_id):
     random.seed(worker_seed)
 
 
-# ---------------------------------------------------------------------
-# Device resolution
-# ---------------------------------------------------------------------
 def resolve_device(requested: str) -> str:
     # NEVER use MPS - it has backward pass errors with .view() operations
     if requested == "auto":
@@ -79,9 +71,6 @@ def resolve_device(requested: str) -> str:
     return requested
 
 
-# ---------------------------------------------------------------------
-# Backup
-# ---------------------------------------------------------------------
 def backup_training_artifacts(best_ckpt: Path, data_dir: Path):
     backup_dir = Path("backups") / datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -112,9 +101,6 @@ def backup_training_artifacts(best_ckpt: Path, data_dir: Path):
     logger.info(f"✅ Backup completed: {backup_dir}")
 
 
-# ---------------------------------------------------------------------
-# Loss function wrapper
-# ---------------------------------------------------------------------
 def create_loss_fn(num_classes: int, use_gradnorm: bool = False):
     """Create loss function compatible with ProductionTrainLoop."""
     loss_functions = {
@@ -131,9 +117,6 @@ def create_loss_fn(num_classes: int, use_gradnorm: bool = False):
         return MultiHeadLoss(loss_functions)
 
 
-# ---------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser("Train MaxSight CNN (Production v2)")
     
@@ -222,9 +205,6 @@ def main():
             f"Using tuned hyperparameters from {hp_path}: lr={args.learning_rate}, wd={args.weight_decay}, batch={args.batch_size}, grad_clip={args.grad_clip}"
         )
     
-    # -----------------------------------------------------------------
-    # Setup
-    # -----------------------------------------------------------------
     device = resolve_device(args.device)
     logger.info(f"Using device: {device}")
     
@@ -391,9 +371,6 @@ def main():
     
     loss_fn = create_loss_fn(num_classes, use_gradnorm=args.use_gradnorm)
     
-    # -----------------------------------------------------------------
-    # Trainer
-    # -----------------------------------------------------------------
     # Find checkpoint to resume from (same machine or after copy to another GPU)
     resume_from = None
     if args.resume_from:
@@ -446,18 +423,12 @@ def main():
         use_gradnorm=args.use_gradnorm,
     )
     
-    # -----------------------------------------------------------------
-    # Train
-    # -----------------------------------------------------------------
     try:
         results = trainer.train()
         
         logger.info(f"Best model: {results['best_model_path']}")
         logger.info(f"Best val loss: {results['best_val_loss']:.4f}")
         
-        # -----------------------------------------------------------------
-        # Backup (only if training succeeded)
-        # -----------------------------------------------------------------
         if args.backup:
             backup_training_artifacts(
                 Path(results["best_model_path"]),

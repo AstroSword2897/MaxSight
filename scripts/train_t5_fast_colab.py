@@ -128,9 +128,7 @@ def main():
     
     args = parser.parse_args()
     
-    # -----------------------------------------------------------------
     # Setup
-    # -----------------------------------------------------------------
     seed_everything(args.seed)
     device = args.device
     
@@ -168,9 +166,7 @@ def main():
     logger.info(f"Val annotation: {val_ann}")
     logger.info(f"Image dir: {image_dir}")
     
-    # -----------------------------------------------------------------
     # Data (with subset for train)
-    # -----------------------------------------------------------------
     logger.info("Creating data loaders...")
     train_loader_full, val_loader, _ = create_data_loaders(
         train_annotation_file=train_ann,
@@ -210,9 +206,7 @@ def main():
     logger.info(f"Val: {len(val_loader.dataset)} samples (full validation set)")  # type: ignore[arg-type]
     logger.info(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
     
-    # -----------------------------------------------------------------
     # Model: T5_TEMPORAL
-    # -----------------------------------------------------------------
     num_classes = args.num_classes or len(COCO_CLASSES)
     tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
     
@@ -228,9 +222,7 @@ def main():
     # Loss
     loss_fn = create_loss_fn(num_classes, use_gradnorm=True)
     
-    # -----------------------------------------------------------------
     # Trainer
-    # -----------------------------------------------------------------
     resume_from = None
     if args.resume_from:
         p = Path(args.resume_from)
@@ -265,9 +257,7 @@ def main():
         use_gradnorm=True,
     )
     
-    # -----------------------------------------------------------------
     # Train
-    # -----------------------------------------------------------------
     try:
         logger.info(f"Starting T5 training: {args.epochs} epochs, warmup {args.warmup_epochs}, subset {fraction*100:.1f}%")
         results = trainer.train()

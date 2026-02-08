@@ -457,9 +457,7 @@ def create_scheduler_from_profile(user_profile: Dict) -> CrossModalScheduler:
     return CrossModalScheduler(config)
 
 
-# ============================================================================
 # RUNTIME OUTPUT CONTRACT (Patient Safety)
-# ============================================================================
 """Runtime Output Contract..."""
 
 import re

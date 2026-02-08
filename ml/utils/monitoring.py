@@ -15,7 +15,6 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 
 
-# ==================== Enums ====================
 
 class ReadinessStatus(Enum):
     """Overall readiness status."""
@@ -32,7 +31,6 @@ class AlertSeverity(Enum):
     CRITICAL = "critical"
 
 
-# ==================== Data Classes ====================
 
 @dataclass
 class PredictionLog:
@@ -95,7 +93,6 @@ class ChecklistItem:
     recommendation: Optional[str] = None
 
 
-# ==================== Monitoring System ====================
 
 class PredictionMonitor:
     """Real-time prediction monitoring and logging."""
@@ -273,7 +270,6 @@ class ReadinessMonitor(PredictionMonitor):
         )
 
 
-# ==================== Readiness Dashboard ====================
 
 class ReadinessDashboard:
     """Real-World Readiness Assessment Dashboard.
@@ -638,7 +634,6 @@ def create_monitoring_pipeline(model: torch.nn.Module) -> Dict:
     }
 
 
-# ==================== Health Check System ====================
 
 class HealthChecker:
     """Health check system for MaxSight Tier 1 heads and system reliability.

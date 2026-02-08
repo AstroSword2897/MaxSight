@@ -2,9 +2,7 @@
 
 Copy-paste this entire cell into Colab and run it."""
 
-# ============================================================================
 # CELL 1: Download Inference Datasets (Open Images V6, BDD100K, ADE20K)
-# ============================================================================
 
 import os
 import sys
@@ -35,9 +33,7 @@ from tqdm import tqdm
 
 print("✓ Dependencies installed\n")
 
-# ============================================================================
 # Download Open Images V6 Validation Set
-# ============================================================================
 
 print("="*70)
 print("Downloading Open Images V6 (Validation Set)")
@@ -142,9 +138,7 @@ if img_count > 0 and csv_path.exists():
 else:
     print(f"\n⚠️  Open Images V6: Incomplete ({img_count} images)")
 
-# ============================================================================
 # Download BDD100K Validation Set
-# ============================================================================
 
 print("\n" + "="*70)
 print("Downloading BDD100K (Validation Set)")
@@ -258,9 +252,7 @@ if img_count > 0 and labels_path.exists():
 else:
     print(f"⚠️  BDD100K: Incomplete ({img_count} images)")
 
-# ============================================================================
 # Download ADE20K Validation Set
-# ============================================================================
 
 print("\n" + "="*70)
 print("Downloading ADE20K (Validation Set)")
@@ -332,9 +324,7 @@ if img_count > 0 and ann_count > 0:
 else:
     print(f"⚠️  ADE20K: Incomplete ({img_count} images, {ann_count} annotations)")
 
-# ============================================================================
 # Summary
-# ============================================================================
 
 print("\n" + "="*70)
 print("Download Summary")

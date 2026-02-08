@@ -161,21 +161,21 @@ class OpenImagesV6Dataset(Dataset):
         # Apply transform
         image_tensor = self.transform(image)
         
-        # FIXED: Standard metadata schema
+        labels = item.get('labels') or []
+        first = labels[0] if labels else {}
         return {
             'image': image_tensor,
             'image_id': item['image_id'],
             'image_path': str(image_path),
             'dataset': 'open_images_v6',
             'split': self.split,
-            # Standard metadata (None for fields not available)
             'context': {
-                'weather': None,
-                'scene': None,
-                'labels': item.get('labels', []),  # All labels aggregated
-                'annotation_path': None,
-                'label': item.get('labels', [{}])[0].get('label', '') if item.get('labels') else None,  # First label for compatibility
-                'confidence': item.get('labels', [{}])[0].get('confidence', '1') if item.get('labels') else None
+                'weather': '',
+                'scene': '',
+                'labels': labels,
+                'annotation_path': '',
+                'label': (first.get('label') or '') if isinstance(first, dict) else '',
+                'confidence': (first.get('confidence') or '1') if isinstance(first, dict) else '1'
             }
         }
 
@@ -270,21 +270,19 @@ class BDD100KDataset(Dataset):
         # Apply transform
         image_tensor = self.transform(image)
         
-        # FIXED: Standard metadata schema
         return {
             'image': image_tensor,
             'image_id': item['image_id'],
             'image_path': str(image_path),
             'dataset': 'bdd100k',
             'split': self.split,
-            # Standard metadata schema
             'context': {
-                'weather': item.get('weather', 'unknown'),
-                'scene': item.get('scene', 'unknown'),
-                'labels': item.get('labels', {}),
-                'annotation_path': None,
-                'label': None,
-                'confidence': None
+                'weather': item.get('weather') or 'unknown',
+                'scene': item.get('scene') or 'unknown',
+                'labels': item.get('labels') or {},
+                'annotation_path': '',
+                'label': '',
+                'confidence': ''
             }
         }
 
@@ -371,21 +369,20 @@ class ADE20KDataset(Dataset):
         # Apply transform
         image_tensor = self.transform(image)
         
-        # FIXED: Standard metadata schema
+        # Use no None values so DataLoader default_collate can batch correctly.
         return {
             'image': image_tensor,
             'image_id': item['image_id'],
             'image_path': str(image_path),
             'dataset': 'ade20k',
             'split': self.split,
-            # Standard metadata schema
             'context': {
-                'weather': None,
-                'scene': None,
-                'labels': None,
-                'annotation_path': item.get('annotation_path'),
-                'label': None,
-                'confidence': None
+                'weather': '',
+                'scene': '',
+                'labels': {},
+                'annotation_path': item.get('annotation_path') or '',
+                'label': '',
+                'confidence': ''
             }
         }
 
@@ -482,6 +479,24 @@ class DetectionPostProcessor:
         return detections
 
 
+def _replace_none_for_collate(obj: Any) -> Any:
+    """Recursively replace None so default_collate never sees None (avoids TypeError in workers)."""
+    if obj is None:
+        return ''
+    if isinstance(obj, dict):
+        return {k: _replace_none_for_collate(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_replace_none_for_collate(v) for v in obj]
+    return obj
+
+
+def _inference_collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Collate batch after stripping None so default_collate never fails."""
+    from torch.utils.data._utils.collate import default_collate
+    cleaned = [_replace_none_for_collate(b) for b in batch]
+    return default_collate(cleaned)
+
+
 def create_inference_dataloader(
     dataset_name: str,
     root: Path,
@@ -524,7 +539,8 @@ def create_inference_dataloader(
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
-        pin_memory=pin_memory
+        pin_memory=pin_memory,
+        collate_fn=_inference_collate_fn,
     )
     
     return dataloader
@@ -604,19 +620,18 @@ def run_inference_on_dataset(
                     context = {}
                 
                 pred = {
-                    'image_idx': global_image_idx,  # FIXED: Global counter
+                    'image_idx': global_image_idx,
                     'detections': image_detections,
                     'num_detections': len(image_detections),
                     'image_id': batch['image_id'][i] if 'image_id' in batch and i < len(batch['image_id']) else f'img_{global_image_idx}',
                     'dataset': batch['dataset'][i] if 'dataset' in batch and i < len(batch['dataset']) else 'unknown',
-                    # FIXED: Standard metadata schema
                     'context': {
-                        'weather': context.get('weather') if isinstance(context, dict) else None,
-                        'scene': context.get('scene') if isinstance(context, dict) else None,
-                        'labels': context.get('labels') if isinstance(context, dict) else None,
-                        'annotation_path': context.get('annotation_path') if isinstance(context, dict) else None,
-                        'label': context.get('label') if isinstance(context, dict) else None,
-                        'confidence': context.get('confidence') if isinstance(context, dict) else None
+                        'weather': (context.get('weather') or '') if isinstance(context, dict) else '',
+                        'scene': (context.get('scene') or '') if isinstance(context, dict) else '',
+                        'labels': (context.get('labels') or {}) if isinstance(context, dict) else {},
+                        'annotation_path': (context.get('annotation_path') or '') if isinstance(context, dict) else '',
+                        'label': (context.get('label') or '') if isinstance(context, dict) else '',
+                        'confidence': (context.get('confidence') or '') if isinstance(context, dict) else ''
                     }
                 }
                 

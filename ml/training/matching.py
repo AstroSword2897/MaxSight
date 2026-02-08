@@ -281,9 +281,7 @@ def match_batch(
     return indices_list, costs_list
 
 
-# -----------------------------------------------------------------------------
 # Build aligned pred/target dicts for loss (GradNorm / MultiHeadLoss)
-# -----------------------------------------------------------------------------
 
 
 def _interpret_indices(

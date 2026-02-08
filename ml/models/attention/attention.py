@@ -6,9 +6,7 @@ import torch.nn.functional as F
 from typing import Optional, Tuple
 
 
-# ============================================================================
 # CBAM / SE Attention
-# ============================================================================
 
 class ChannelAttention(nn.Module):
     """Channel attention with safety checks and GPU optimization."""
@@ -82,9 +80,7 @@ class SEBlock(nn.Module):
         return x * self.fc(self.avg_pool(x))
 
 
-# ============================================================================
 # Cross-Modal Attention
-# ============================================================================
 
 class CrossModalAttention(nn.Module):
     """Cross-modal attention for vision/audio/haptic fusion."""
@@ -153,9 +149,7 @@ class CrossModalAttention(nn.Module):
         return fused, vision_enhanced, audio_enhanced
 
 
-# ============================================================================
 # Cross-Task Attention
-# ============================================================================
 
 class CrossTaskAttention(nn.Module):
     """Cross-task attention linking detection/OCR/description."""

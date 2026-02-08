@@ -12,7 +12,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# ==================== Dropout Variants ====================
 
 class SpatialDropout2d(nn.Module):
     """Spatial dropout that drops entire channels."""
@@ -82,7 +81,6 @@ class StochasticDepth(nn.Module):
             return x + residual / (1 - self.p)
 
 
-# ==================== Loss Functions ====================
 
 class LabelSmoothingCrossEntropy(nn.Module):
     """Cross entropy with label smoothing."""
@@ -205,7 +203,6 @@ class ClassWeightedLoss(nn.Module):
             next(self.parameters()).device if list(self.parameters()) else 'cpu')
 
 
-# ==================== Transfer Learning ====================
 
 class TransferLearningConfig:
     """Configuration for transfer learning."""
@@ -312,7 +309,6 @@ def gradual_unfreeze_step(model: nn.Module,
         logger.info(f"Epoch {epoch}: Unfroze last {layers_to_unfreeze} layers")
 
 
-# ==================== Weight Decay ====================
 
 def add_weight_decay(model: nn.Module,
                     weight_decay: float = 1e-5,
@@ -375,7 +371,6 @@ class WeightDecayScheduler:
                 param_group['weight_decay'] = wd
 
 
-# ==================== Regularization Manager ====================
 
 class RegularizationManager:
     """Central manager for all regularization techniques."""

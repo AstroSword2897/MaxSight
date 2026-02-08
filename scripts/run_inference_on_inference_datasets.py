@@ -113,6 +113,13 @@ def main():
             print(f"Skip {dname}: dir not found {root}", file=sys.stderr)
             all_results[dname] = {"error": f"dir not found: {root}"}
             continue
+        if dname.lower() == "open_images_v6":
+            val_dir = root / "validation"
+            if not val_dir.is_dir():
+                err = f"Open Images validation directory not found: {val_dir}"
+                print(f"Skip {dname}: {err}", file=sys.stderr)
+                all_results[dname] = {"error": err}
+                continue
         all_results[dname] = {}
         for cond in conditions:
             ckpt_path = checkpoints_base / f"checkpoints_{cond}" / "best_model.pt"
@@ -133,13 +140,18 @@ def main():
                 state = ckpt.get("model_state_dict", ckpt)
                 model.load_state_dict(state, strict=False)
                 model.to(device)
-                loader = create_inference_dataloader(
-                    dataset_name=dname,
-                    root=root,
-                    split="validation",
-                    batch_size=32,
-                    max_samples=args.max_samples,
-                )
+                try:
+                    loader = create_inference_dataloader(
+                        dataset_name=dname,
+                        root=root,
+                        split="validation",
+                        batch_size=32,
+                        num_workers=0,
+                        max_samples=args.max_samples,
+                    )
+                except FileNotFoundError as fnf:
+                    all_results[dname][cond] = {"error": str(fnf)}
+                    continue
                 results = run_inference_on_dataset(
                     model=model,
                     dataloader=loader,
