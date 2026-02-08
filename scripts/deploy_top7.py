@@ -126,10 +126,24 @@ def main():
         if not conditions:
             print("No conditions found in inference data; falling back to default top 7.", file=sys.stderr)
             conditions = TOP7_CONDITIONS
-        elif verbose:
-            print(f"Top 7 by mAP: {conditions}")
+        else:
+            conditions = conditions[:7]
+            print("Top 7 by mAP (mAP@0.5, descending):", ", ".join(conditions))
+            if verbose:
+                try:
+                    with open(args.inference_data) as f:
+                        idata = json.load(f)
+                    map_by_cond = {}
+                    for r in idata.get("results", []):
+                        if isinstance(r, dict) and "error" not in r:
+                            map_by_cond[r["condition"]] = r.get("mAP_50", r.get("mAP", 0))
+                    for c in conditions:
+                        print(f"  {c}: mAP_50={map_by_cond.get(c, '?')}")
+                except Exception:
+                    pass
     else:
-        conditions = args.conditions or TOP7_CONDITIONS
+        conditions = (args.conditions or TOP7_CONDITIONS)[:7]
+    conditions = conditions[:7]
 
     tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
     num_classes = len(COCO_CLASSES)

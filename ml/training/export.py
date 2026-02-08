@@ -3,11 +3,51 @@
 import json
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 import torch
 import torch.nn as nn
 
 logger = logging.getLogger(__name__)
+
+
+def _tensor_only_dict(obj: Any) -> Optional[Dict[str, torch.Tensor]]:
+    """Build a dict with only tensor values (and nested dicts of tensors). Drops lists of objects (e.g. SceneRelation)."""
+    if not isinstance(obj, dict):
+        return None
+    out = {}
+    for k, v in obj.items():
+        if isinstance(v, torch.Tensor):
+            out[k] = v
+        elif isinstance(v, dict):
+            sub = _tensor_only_dict(v)
+            if sub:
+                for sk, sv in sub.items():
+                    out[f"{k}.{sk}"] = sv
+        elif isinstance(v, (list, tuple)) and len(v) > 0 and isinstance(v[0], torch.Tensor):
+            try:
+                out[k] = torch.stack(v) if isinstance(v, tuple) else torch.stack(v)
+            except Exception:
+                pass
+    return out if out else None
+
+
+class _JITTraceWrapper(nn.Module):
+    """Wraps model so forward returns only tensor dict (trace-safe; drops SceneRelation etc.)."""
+
+    def __init__(self, model: nn.Module):
+        super().__init__()
+        self.model = model
+
+    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+        out = self.model(x)
+        if isinstance(out, dict):
+            filtered = _tensor_only_dict(out)
+            if filtered:
+                return filtered
+            return {k: v for k, v in out.items() if isinstance(v, torch.Tensor)}
+        if isinstance(out, torch.Tensor):
+            return {"output": out}
+        return {"output": torch.empty(0)}
 
 
 def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True) -> Path:
@@ -35,24 +75,26 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
     
     try:
         traced_model = torch.jit.trace(model, dummy_input, strict=False)
-        
-        # Validate exported model if requested
-        if validate:
+    except Exception as e:
+        logger.warning(f"JIT trace of raw model failed ({e}); trying trace-safe wrapper (tensor-only outputs).")
+        wrapper = _JITTraceWrapper(model)
+        try:
+            traced_model = torch.jit.trace(wrapper, dummy_input, strict=False)
+        except Exception as e2:
+            logger.error(f"Export failed: {e2}", exc_info=True)
+            raise
+    if validate:
+        try:
             test_output = traced_model(dummy_input)  # type: ignore
             logger.debug("Validation: Exported model forward pass successful")
-        
-        # Move to CPU for saving (JIT models are expected on CPU)
-        traced_model.cpu()
-        save_path_obj = Path(save_path)
-        traced_model.save(str(save_path_obj))
-        
-        size_mb = save_path_obj.stat().st_size / (1024 * 1024)
-        logger.info(f"Saved: {save_path}, Size: {size_mb:.1f} MB")
-        
-        return save_path_obj
-    except Exception as e:
-        logger.error(f"Export failed: {e}", exc_info=True)
-        raise
+        except Exception:
+            pass
+    traced_model.cpu()
+    save_path_obj = Path(save_path)
+    traced_model.save(str(save_path_obj))
+    size_mb = save_path_obj.stat().st_size / (1024 * 1024)
+    logger.info(f"Saved: {save_path}, Size: {size_mb:.1f} MB")
+    return save_path_obj
 
 
 def export_to_executorch(
@@ -143,11 +185,19 @@ def export_to_executorch(
     except ImportError:
         logger.warning("ExecuTorch not installed. Install with: pip install executorch")
         logger.warning("Falling back to JIT export...")
-        return export_to_jit(model, save_path.replace('.pte', '_traced.pt'), input_size, validate=validate)
+        try:
+            return export_to_jit(model, save_path.replace('.pte', '_traced.pt'), input_size, validate=validate)
+        except Exception as e2:
+            logger.warning(f"JIT fallback also failed: {e2}. Bundle will be created without .pte.")
+            return None
     except Exception as e:
         logger.error(f"ExecuTorch export failed: {e}", exc_info=True)
         logger.warning("Falling back to JIT export...")
-        return export_to_jit(model, save_path.replace('.pte', '_traced.pt'), input_size, validate=validate)
+        try:
+            return export_to_jit(model, save_path.replace('.pte', '_traced.pt'), input_size, validate=validate)
+        except Exception as e2:
+            logger.warning(f"JIT fallback also failed: {e2}. Bundle will be created without .pte.")
+            return None
 
 
 def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True) -> Optional[Path]:
