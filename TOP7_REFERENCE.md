@@ -133,17 +133,13 @@ drive.mount("/content/drive")
 # !pip install -q -r requirements.txt   # if repo has one
 ```
 
-**Cell 3a – Deploy only (top 7 fixed list)**  
-Checkpoints must already be on Drive at `MyDrive/MaxSight/checkpoints_<cond>/best_model.pt`.
-```python
-!python scripts/inference_and_deploy_top7.py \
-  --checkpoints-base /content/drive/MyDrive/MaxSight \
-  --output-dir /content/drive/MyDrive/MaxSight/exports_top7
-```
+**Cell 3 – Inference + deploy (recommended)**  
+Runs inference on the val set, then exports the top 7 to iOS bundles. Val data and checkpoints must be on Drive.
 
-**Cell 3b – Top 7 by mAP then deploy**  
-Runs inference on all conditions, picks the 7 with highest mAP, then exports them. Val data must be on Drive.
+*Option A – Top 7 by mAP (inference on all conditions, deploy the 7 with highest mAP):*
 ```python
+%cd /content/2026-Prototype
+!git pull
 !python scripts/inference_and_deploy_top7.py \
   --checkpoints-base /content/drive/MyDrive/MaxSight \
   --output-dir /content/drive/MyDrive/MaxSight/exports_top7 \
@@ -151,8 +147,27 @@ Runs inference on all conditions, picks the 7 with highest mAP, then exports the
   --image-dir /content/drive/MyDrive/MaxSight_Training \
   --top-by-map --max-batches 8
 ```
+For a fuller mAP ranking (slower), use `--max-batches 800` instead of `8`.
 
-**Paths:** Use `/content/drive/MyDrive/MaxSight` for checkpoints and `/content/drive/MyDrive/MaxSight_Training` for data; adjust if your Drive layout differs.
+*Option B – Fixed top 7 (inference on those 7, then deploy):*
+```python
+!python scripts/inference_and_deploy_top7.py \
+  --checkpoints-base /content/drive/MyDrive/MaxSight \
+  --output-dir /content/drive/MyDrive/MaxSight/exports_top7 \
+  --val-annotation /content/drive/MyDrive/MaxSight_Training/cleaned_splits/maxsight_val.json \
+  --image-dir /content/drive/MyDrive/MaxSight_Training \
+  --max-batches 8
+```
+
+**Cell 3c (optional) – Deploy only**  
+Use if you already ran inference and only need to export (e.g. re-deploy after pulling). Checkpoints must be on Drive.
+```python
+!python scripts/inference_and_deploy_top7.py \
+  --checkpoints-base /content/drive/MyDrive/MaxSight \
+  --output-dir /content/drive/MyDrive/MaxSight/exports_top7
+```
+
+**Paths:** `/content/drive/MyDrive/MaxSight` = checkpoints; `/content/drive/MyDrive/MaxSight_Training` = data (val JSON, images). Adjust if your Drive layout differs.
 
 ---
 

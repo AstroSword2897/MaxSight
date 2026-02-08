@@ -110,6 +110,9 @@ def main():
         return 1
     base = base.resolve()
     out_root = Path(args.output_dir).resolve()
+    validate_only = args.validate_only or args.skip_export
+    device = args.device
+    verbose = not args.quiet
     if getattr(args, "top_by_map", False) and args.inference_data and Path(args.inference_data).exists():
         r = subprocess.run(
             [sys.executable, str(REPO / "scripts" / "get_top7_by_map.py"),
@@ -127,9 +130,6 @@ def main():
             print(f"Top 7 by mAP: {conditions}")
     else:
         conditions = args.conditions or TOP7_CONDITIONS
-    validate_only = args.validate_only or args.skip_export
-    device = args.device
-    verbose = not args.quiet
 
     tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
     num_classes = len(COCO_CLASSES)
