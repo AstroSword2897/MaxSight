@@ -137,7 +137,7 @@ class EyeModel(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(16, 2),  # [fixation_prob, saccade_prob]
             nn.Softmax(dim=1)  # Softmax ensures probabilities sum to 1
-            # NOTE: Training labels should be binary (0/1) for fixation vs saccade
+            # Use binary labels (0/1) for fixation vs saccade.
             # If labels are continuous probabilities, use Sigmoid instead
         )
         

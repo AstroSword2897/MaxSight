@@ -87,7 +87,7 @@ class CrossModalScheduler:
         """Schedule outputs based on detections and model outputs."""
         scheduled = []
         
-        # CRITICAL: Always process high-urgency items regardless of uncertainty
+        # Process high-urgency items even when uncertainty is high.
         critical_detections = [d for d in detections if d.get('urgency', 0) >= 3]
         normal_detections = [d for d in detections if d.get('urgency', 0) < 3]
         

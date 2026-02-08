@@ -144,7 +144,7 @@ class MetaFusionWeights(nn.Module):
     ) -> torch.Tensor:
         """Adapt fusion weights to a specific user using meta-learning...."""
         # Create user-specific adaptation
-        # This is a simplified version - full MAML would require inner loop optimization
+        # Simplified meta-update; full MAML would use inner-loop optimization.
         
         # Start with base weights
         adapted_weights = self.base_weights.clone()

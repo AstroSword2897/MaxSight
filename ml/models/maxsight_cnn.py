@@ -273,23 +273,35 @@ class MaxSightCNN(nn.Module):
         super().__init__()
         
         self._urgency_map = {
-            # Level 3: Danger - immediate hazards
             'danger': {
                 'car', 'truck', 'bus', 'motorcycle', 'vehicle', 'traffic',
                 'stairs', 'staircase', 'stairway', 'escalator', 'elevator',
                 'fire', 'emergency', 'hazard', 'construction', 'obstacle'
             },
-            # Level 2: Warning - requires attention
             'warning': {
                 'bicycle', 'person', 'stop_sign', 'traffic_light', 'crosswalk',
                 'pedestrian', 'yield', 'caution', 'warning'
             },
-            # Level 1: Caution - moderate importance
             'caution': {
                 'door', 'chair', 'table', 'furniture', 'barrier', 'fence',
                 'wall', 'corner', 'step', 'curb', 'ramp'
             }
         }
+        level_to_int = {'danger': 3, 'warning': 2, 'caution': 1}
+        self._urgency_patterns: List[Tuple[Any, int]] = []
+        for level, keywords in self._urgency_map.items():
+            for keyword in keywords:
+                pat = re.compile(r'\b' + re.escape(keyword.lower()) + r'\b')
+                self._urgency_patterns.append((pat, level_to_int[level]))
+        self._high_priority_classes = frozenset(
+            {'car', 'truck', 'bus', 'motorcycle', 'vehicle', 'stairs', 'staircase', 'stairway',
+             'escalator', 'elevator', 'door', 'exit', 'entrance', 'fire_door', 'emergency_exit',
+             'stop_sign', 'traffic_light', 'crosswalk', 'pedestrian_crossing', 'stove', 'oven',
+             'fire', 'hazard', 'obstacle'}
+        )
+        self._medium_priority_classes = frozenset(
+            {'person', 'bicycle', 'chair', 'table', 'handle', 'button', 'ramp', 'curb', 'step', 'barrier', 'fence'}
+        )
         
         self.num_classes = num_classes
         self.num_urgency_levels = num_urgency_levels
@@ -306,8 +318,8 @@ class MaxSightCNN(nn.Module):
             tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
         self.tier_config = tier_config
         
-        # OPTIMIZED: Initialize cached tensors (avoid hasattr checks in forward pass)
-        self._cached_image_size = None  # Will be set on first forward pass
+        self._cached_image_size = None
+        self.use_gradient_checkpointing = False  # Set True to trade compute for memory in training.
         
         # ResNet50 backbone (pretrained ImageNet) - Always enabled (T0 baseline)
         try:
@@ -358,7 +370,6 @@ class MaxSightCNN(nn.Module):
         # T5: Dynamic convolution (Stage B)
         if tier_config.use_dynamic_conv:
             from ml.models.backbone.dynamic_conv import DynamicConv2d
-            # Add dynamic conv layer in detection head (will be added later)
             self.use_dynamic_conv = True
         else:
             self.use_dynamic_conv = False
@@ -381,18 +392,16 @@ class MaxSightCNN(nn.Module):
             nn.Dropout(0.3),
             nn.Linear(256, 128)
         )
-        scene_input_dim = 256 + 256  # Visual features (256) + audio features (256) = 512 total
-        # This 512-dim vector represents the whole scene context
+        scene_input_dim = 256 + 256  # Visual (256) + audio (256) for scene context.
         
-        # Combine features from multiple scales (P3, P4, P5) for better detection
+        # Fuse P3, P4, P5 so detection sees multiple scales.
         self.detection_fusion = nn.Sequential(
             nn.Conv2d(fpn_channels * 3, fpn_channels, 1, bias=False),  # Fuse 3 scales
             nn.BatchNorm2d(fpn_channels),
             nn.ReLU(inplace=False)
         )
         
-        # Process the fused features to extract detection information
-        # Three layers deep to learn complex patterns
+        # Three conv layers to extract detection features from fused FPN.
         self.detection_head = nn.Sequential(
             nn.Conv2d(fpn_channels, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
@@ -405,12 +414,9 @@ class MaxSightCNN(nn.Module):
             nn.ReLU(inplace=False)
         )
         
-        # Now the actual prediction heads - each one predicts something different
-        # All share the same detection features but predict different things
-        # This is multi-task learning - sharing features helps all tasks
+        # Multi-task heads share det_feats; each predicts one output (class, box, objectness, text).
         
-        # Class head: what object is this? (person, car, door, etc.)
-        # Output is logits (not probabilities) - we'll apply softmax later
+        # Class logits (softmax applied in loss).
         self.cls_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1, bias=False),  # 3x3 for spatial context
             nn.BatchNorm2d(256),
@@ -427,9 +433,7 @@ class MaxSightCNN(nn.Module):
             nn.Conv2d(256, 4, 1)  # x, y, width, height (center format)
         )
         
-        # Objectness head: is there actually an object here? (confidence score)
-        # This is like "is there something here at all?" before we care what it is
-        # Helps filter out background noise
+        # Objectness score per location to filter background.
         self.obj_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
@@ -437,9 +441,7 @@ class MaxSightCNN(nn.Module):
             nn.Conv2d(256, 1, 1)  # Single confidence score per location
         )
         
-        # Text head: is this text? (for OCR later)
-        # Smaller head because text detection is simpler than object detection
-        # We'll use this to know where to run OCR
+        # Text probability per location for OCR regions.
         self.text_head = nn.Sequential(
             nn.Conv2d(256, 128, 3, padding=1, bias=False),  # Fewer channels - text is simpler
             nn.BatchNorm2d(128),
@@ -551,7 +553,6 @@ class MaxSightCNN(nn.Module):
             self.temporal_encoder = None
             self.temporal_feature_proj = None
         
-        # Scene graph encoder (no MPS backend; cpu/cuda only)
         from ml.models.scene_graph.scene_graph_encoder import SceneGraphEncoder
         self.scene_graph_encoder = SceneGraphEncoder(
             object_embed_dim=256,
@@ -579,8 +580,7 @@ class MaxSightCNN(nn.Module):
                 use_clip=False
             )
         
-        # QUALITY: Retrieval system integration (Tier 4+, Advisory Only, Async)
-        # Retrieval is async and non-blocking; it never blocks inference.
+        # Retrieval is async and advisory; it never blocks inference.
         self.enable_retrieval = (tier_config.use_retrieval if hasattr(tier_config, 'use_retrieval') else False)
         self.retrieval_system = None
         if self.enable_retrieval:
@@ -865,16 +865,23 @@ class MaxSightCNN(nn.Module):
     
     def _forward_stage_a_backbone(self, images: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor, torch.Tensor]:
         """Stage A backbone: ResNet50 + FPN only. No hybrid or temporal (safety guarantee)."""
-        # ResNet50 forward (Stage A fixed; T5 tier uses temporal in Stage B only)
+        from torch.utils.checkpoint import checkpoint
+        
         x = self.conv1(images)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
         
-        c2 = self.layer1(x)
-        c3 = self.layer2(c2)
-        c4 = self.layer3(c3)
-        c5 = self.layer4(c4)
+        if self.training and getattr(self, 'use_gradient_checkpointing', False):
+            c2 = checkpoint(self.layer1, x, use_reentrant=False)
+            c3 = checkpoint(self.layer2, c2, use_reentrant=False)
+            c4 = checkpoint(self.layer3, c3, use_reentrant=False)
+            c5 = checkpoint(self.layer4, c4, use_reentrant=False)
+        else:
+            c2 = self.layer1(x)
+            c3 = self.layer2(c2)
+            c4 = self.layer3(c3)
+            c5 = self.layer4(c4)
         
         # FPN forward (Stage A only; T5 hybrid/temporal run in Stage B)
         p2, p3, p4, p5 = self.fpn([c2, c3, c4, c5])
@@ -899,9 +906,8 @@ class MaxSightCNN(nn.Module):
         p5_resized = F.interpolate(p5, size=p4.shape[2:], mode='bilinear', align_corners=False).contiguous()
         p4 = p4.contiguous()
         fused_features = torch.cat([p3_resized, p4, p5_resized], dim=1)
-        fused_features = fused_features.contiguous()  # CRITICAL: Ensure contiguous before fusion
-        fused_features = self.detection_fusion(fused_features)
-        fused_features = fused_features.contiguous()  # CRITICAL: Ensure contiguous after fusion
+        fused_features = self.detection_fusion(fused_features.contiguous())
+        fused_features = fused_features.contiguous()  # CUDA/cpu: contiguous after fusion for downstream
         
         return [p2, p3, p4, p5], fused_features, scene_context
     
@@ -911,10 +917,12 @@ class MaxSightCNN(nn.Module):
         stage_a_features: torch.Tensor,
         temporal_mode: bool = False,
         B_orig: Optional[int] = None,
-        T: Optional[int] = None
+        T: Optional[int] = None,
+        prev_temporal_state: Optional[Dict] = None,
     ) -> Tuple[torch.Tensor, Optional[Dict]]:
-        """Stage B backbone: optional hybrid CNN-ViT and temporal encoder (tier-dependent)."""
-        # Start with Stage A features (will be enhanced if tier allows)
+        """Stage B backbone: optional hybrid CNN-ViT and temporal encoder (tier-dependent).
+        prev_temporal_state is reserved for stateful temporal across batches; TemporalEncoder does not use it yet.
+        """
         stage_b_features = stage_a_features
         temporal_outputs = None
         
@@ -974,24 +982,20 @@ class MaxSightCNN(nn.Module):
             # Reshape to temporal format (use reshape for backward compatibility)
             stage_b_temporal = stage_b_features.contiguous().reshape(B_orig, T, -1, H_temp, W_temp)
             
-            # Temporal processing
             temporal_outputs = self.temporal_encoder(stage_b_temporal)
-            
-            # Get motion features
             motion_features = temporal_outputs.get('motion_features')
             if motion_features is not None:
-                # Reshape motion features (use reshape for backward compatibility)
+                if self.training and not motion_features.requires_grad:
+                    raise RuntimeError(
+                        "motion_features detached - gradient flow broken in temporal branch. "
+                        "TemporalEncoder must not detach motion_features when training."
+                    )
                 motion_features = motion_features.contiguous().reshape(B_orig * T, -1, H_temp, W_temp)
-                
-                # Project if channel mismatch
                 if motion_features.shape[1] != stage_b_features.shape[1]:
                     if self.temporal_feature_proj is not None:
                         motion_features = self.temporal_feature_proj(motion_features)
                     else:
-                        # Skip if no projection available
                         motion_features = None
-                
-                # Resize if needed
                 if motion_features is not None and motion_features.shape[2:] != stage_b_features.shape[2:]:
                     motion_features = F.interpolate(
                         motion_features,
@@ -999,8 +1003,6 @@ class MaxSightCNN(nn.Module):
                         mode='bilinear',
                         align_corners=False
                     )
-                
-                # Add motion to features (additive fusion)
                 if motion_features is not None:
                     stage_b_features = stage_b_features + motion_features
         
@@ -1015,7 +1017,7 @@ class MaxSightCNN(nn.Module):
         use_temporal: bool = False,
         frame_id: Optional[int] = None  # For feature caching
     ) -> Dict[str, torch.Tensor]:
-        """Forward pass with enforced Stage A / Stage B separation."""
+        """Forward pass with Stage A then Stage B. prev_temporal_state is passed to Stage B; TemporalEncoder does not use it yet."""
         # Input: preprocessing and temporal handling
         temporal_mode = False
         B_orig = None
@@ -1089,7 +1091,6 @@ class MaxSightCNN(nn.Module):
             audio_emb = torch.zeros(batch_size, 256, device=scene_context.device)
             combined_context = torch.cat([scene_context, audio_emb], dim=1)  # [B, 512]
         
-        # OPTIMIZED: Cache condition mode checks (computed once per forward pass)
         condition_blur = self.condition_mode in ['cataracts', 'refractive_errors', 'myopia', 'hyperopia', 'astigmatism', 'presbyopia']
         condition_spotty = self.condition_mode == 'diabetic_retinopathy'
         condition_night = self.condition_mode == 'retinitis_pigmentosa'
@@ -1105,79 +1106,48 @@ class MaxSightCNN(nn.Module):
             # Night blindness - brighten everything
             fused_features = fused_features * self.brightness_enhance
         if condition_inconsistent and hasattr(self, 'attention_weights'):
-            # Inconsistent vision - focus on the most reliable scale
             attn = F.softmax(self.attention_weights, dim=0)
             fused_features = (attn[1] * p3_resized + attn[2] * p4 + attn[3] * p5_resized) * 0.5 + fused_features * 0.5
+        if not self.training:
+            del p3_resized, p5_resized
         
-        # Ensure contiguous before detection head
-        fused_features = fused_features.contiguous()
-        
-        # CRITICAL: Temporal processing is MOVED to Stage B only
-        # Stage A does NOT use temporal features - safety guarantee
-        
-        # Stage A: detection and Tier 1 heads
-        # CRITICAL: Ensure fused_features is contiguous before detection_head
+        # Single contiguous for CUDA/cpu before detection head
         fused_features = fused_features.contiguous()
         det_feats = self.detection_head(fused_features)
-        det_feats = det_feats.contiguous()  # Ensure contiguous before passing to heads
-        
-        # CRITICAL: Assert contiguity before heads (anomaly detection found issue here)
-        assert det_feats.is_contiguous(), "det_feats not contiguous before heads"
+        det_feats = det_feats.contiguous()  # Required for downstream heads on CUDA/cpu
         
         # TIER 1 HEADS: Safety-Critical (Never Disabled)
-        # MPS requires explicit contiguous tensors for backward pass
-        det_feats_contig = det_feats.contiguous()
-        if not det_feats_contig.is_contiguous():
-            det_feats_contig = det_feats_contig.clone().contiguous()
+        cls_logits = self.cls_head(det_feats)
+        box_preds = self.box_head(det_feats)
+        obj_logits = self.obj_head(det_feats)
+        text_logits = self.text_head(det_feats)
         
-        # Make predictions at every spatial location
-        # Each location can potentially have an object
-        cls_logits = self.cls_head(det_feats_contig)  # What class?
-        box_preds = self.box_head(det_feats_contig)   # Where is it?
-        obj_logits = self.obj_head(det_feats_contig)   # Is there actually something?
-        text_logits = self.text_head(det_feats_contig)  # Is it text?
-        
-        # CRITICAL: Ensure outputs are contiguous for backward pass
-        cls_logits = cls_logits.contiguous()
-        box_preds = box_preds.contiguous()
-        obj_logits = obj_logits.contiguous()
-        text_logits = text_logits.contiguous()
-        
-        # This flattens spatial dimensions so each location is a separate prediction
-        H, W = det_feats.shape[2:]  # Get spatial dimensions
-        
-        cls_logits = cls_logits.permute(0, 2, 3, 1)  # [B, H, W, C]
-        box_preds = box_preds.permute(0, 2, 3, 1)    # [B, H, W, 4]
-        obj_logits = obj_logits.permute(0, 2, 3, 1)  # [B, H, W]
-        text_logits = text_logits.permute(0, 2, 3, 1)  # [B, H, W]
-        
-        cls_logits = cls_logits.contiguous().reshape(batch_size, H*W, self.num_classes)
+        H, W = det_feats.shape[2:]
+        cls_logits = cls_logits.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W, self.num_classes)
+        box_preds = box_preds.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W, 4)
+        obj_logits = obj_logits.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W)
+        text_logits = text_logits.permute(0, 2, 3, 1).contiguous().reshape(batch_size, H*W)
         box_preds = box_preds.contiguous().reshape(batch_size, H*W, 4)
         obj_logits = obj_logits.contiguous().reshape(batch_size, H*W)
         text_logits = text_logits.contiguous().reshape(batch_size, H*W)
         
-        # Apply sigmoid to get probabilities (0 to 1 range)
-        # Boxes are normalized to [0, 1] - makes training more stable
-        # We'll denormalize them later when we need pixel coordinates
-        box_preds = torch.sigmoid(box_preds)  # Boxes are normalized to [0, 1]
+        # Clamp raw box logits before sigmoid to avoid extreme values and gradient explosion (CUDA-safe)
+        box_preds = torch.clamp(box_preds, min=-20.0, max=20.0)
+        box_preds = torch.sigmoid(box_preds)  # Boxes normalized to [0, 1]
         
-        # CRITICAL: Sanitize box predictions to prevent NaN/Inf and zero-width boxes
+        # Enforce valid dimensions, then replace any remaining NaN/Inf.
+        box_preds = torch.cat([
+            torch.clamp(box_preds[:, :, 0:1], min=0.0, max=1.0),
+            torch.clamp(box_preds[:, :, 1:2], min=0.0, max=1.0),
+            torch.clamp(box_preds[:, :, 2:3], min=1e-4, max=1.0),
+            torch.clamp(box_preds[:, :, 3:4], min=1e-4, max=1.0)
+        ], dim=2)
         nan_inf_mask = torch.isnan(box_preds) | torch.isinf(box_preds)
         if nan_inf_mask.any():
             default_box = torch.tensor([0.5, 0.5, 0.1, 0.1], device=box_preds.device, dtype=box_preds.dtype)
-            # Use non-inplace masked_fill to avoid breaking computation graph
             box_preds = torch.where(nan_inf_mask, default_box.unsqueeze(0).unsqueeze(0), box_preds)
         
-        # Ensure minimum box dimensions (width and height must be >= 1e-4)
-        # Use non-inplace clamp to avoid breaking computation graph
-        box_preds = torch.cat([
-            torch.clamp(box_preds[:, :, 0:1], min=0.0, max=1.0),  # x center
-            torch.clamp(box_preds[:, :, 1:2], min=0.0, max=1.0),  # y center
-            torch.clamp(box_preds[:, :, 2:3], min=1e-4, max=1.0),  # width
-            torch.clamp(box_preds[:, :, 3:4], min=1e-4, max=1.0)   # height
-        ], dim=2)
-        
-        # Sanitize logits to prevent NaN/Inf before sigmoid (non-inplace)
+        # Replace NaN/Inf in logits so sigmoid and loss stay defined.
         if torch.isnan(obj_logits).any() or torch.isinf(obj_logits).any():
             obj_logits = torch.where(torch.isnan(obj_logits) | torch.isinf(obj_logits), 
                                      torch.zeros_like(obj_logits), obj_logits)
@@ -1192,38 +1162,25 @@ class MaxSightCNN(nn.Module):
         text_scores = torch.sigmoid(text_logits)  # Text probability - probability it's text
         # Note: cls_logits stays as logits - we'll apply softmax in the loss function
         
-        # TIER 1: Scene-level safety predictions
-        scene_emb = self.scene_embedding(combined_context)  # For generating descriptions
-        urgency = self.urgency_head(combined_context)  # How urgent/dangerous is this scene?
+        scene_emb = self.scene_embedding(combined_context)
+        urgency = self.urgency_head(combined_context)
         
-        # TIER 1: Distance estimation - need both scene context and box size
-        # Bigger boxes usually mean closer objects, but context helps too
-        # (e.g., a small car in the distance vs a large car up close)
-        # 
-        expanded_context = combined_context.unsqueeze(1).expand(batch_size, H*W, -1)  # [B, H*W, context_dim]
-        
-        # OPTIMIZED: Concatenate without intermediate reshape (more efficient)
+        # Distance uses scene context and box size (size hints proximity).
+        expanded_context = combined_context.unsqueeze(1).expand(batch_size, H*W, -1)
         dist_input = torch.cat([
             expanded_context,  # [B, H*W, context_dim]
             box_preds  # [B, H*W, 4]
-        ], dim=2)  # [B, H*W, context_dim + 4]
-        
-        # OPTIMIZED: Reshape once for distance head (reduces memory allocations)
-        # Use reshape instead of view for backward compatibility
-        distances_flat = self.distance_head(dist_input.contiguous().reshape(-1, dist_input.size(-1)))  # [B*H*W, 3]
+        ], dim=2)
+        distances_flat = self.distance_head(dist_input.contiguous().reshape(-1, dist_input.size(-1)))
         distances = distances_flat.contiguous().reshape(batch_size, H*W, self.num_distance_zones)  # [B, H*W, 3]
         
-        # TIER 1: Depth estimation with uncertainty (vectorized)
-        # CRITICAL: Stage A does NOT use temporal features - depth is frame-independent
         depth_outputs = self.depth_head_module(
             fused_features,
-            motion_features=None  # No temporal in Stage A - safety guarantee
+            motion_features=None
         )
         depth_map = depth_outputs['depth_map']  # [B, H, W]
         depth_uncertainty = depth_outputs['uncertainty']  # [B, H, W]
         
-        # VECTORIZED depth sampling at box centers (NO LOOPS)
-        # OPTIMIZED: Use same top_k for depth and scene graph (computed once)
         top_k_depth = min(10, H * W)
         top_k_scores_depth, top_k_indices_depth = torch.topk(obj_scores, k=top_k_depth, dim=1)  # [B, K]
         
@@ -1235,15 +1192,13 @@ class MaxSightCNN(nn.Module):
             index=top_k_indices_depth.unsqueeze(-1).expand(-1, -1, 2)
         )  # [B, K, 2]
         
-        # OPTIMIZED: Cache image size tensor (avoid creating every forward pass)
-        # Normalize to [-1, 1] for grid_sample
-        if self._cached_image_size is None or self._cached_image_size[0] != W or self._cached_image_size[1] != H:
-            self._cached_image_size = torch.tensor([W, H], device=images.device, dtype=torch.float32)
-        
-        normalized_centers = (top_k_centers / self._cached_image_size.unsqueeze(0).unsqueeze(0)) * 2.0 - 1.0  # [B, K, 2]
+        cache_key = (H, W)
+        if not hasattr(self, '_grid_norm_cache') or self._grid_norm_cache.get('key') != cache_key:
+            self._grid_norm_cache = {'key': cache_key, 'scale': torch.tensor([W, H], device=images.device, dtype=torch.float32)}
+        scale = self._grid_norm_cache['scale'].to(images.device)
+        normalized_centers = (top_k_centers / scale.unsqueeze(0).unsqueeze(0)) * 2.0 - 1.0
         normalized_centers = normalized_centers.flip(-1).unsqueeze(2)  # [B, K, 1, 2] for grid_sample
         
-        # Sample depth at box centers (BATCHED)
         depth_at_centers = F.grid_sample(
             depth_map.unsqueeze(1),  # [B, 1, H, W]
             normalized_centers,  # [B, K, 1, 2]
@@ -1259,14 +1214,10 @@ class MaxSightCNN(nn.Module):
             padding_mode='border'
         ).squeeze(1).squeeze(-1)  # [B, K]
         
-        # Convert normalized depth [0, 1] to meters (calibrated per object class)
-        # Vectorized depth scaling
+        # Scale depth to meters per class (calibrated defaults).
         class_depth_scales = torch.tensor([
-            10.0, 5.0, 3.0, 8.0, 12.0,  # Example scales for person, car, door, truck, bus
-            # Add more as needed for your COCO classes
+            10.0, 5.0, 3.0, 8.0, 12.0,
         ], device=images.device)
-        
-        # Get class indices for top-K (for depth scaling)
         top_k_classes_depth = torch.gather(
             cls_logits.argmax(dim=-1),
             dim=1,
@@ -1276,9 +1227,8 @@ class MaxSightCNN(nn.Module):
         # Clamp class indices to valid range
         top_k_classes_depth = torch.clamp(top_k_classes_depth, 0, len(class_depth_scales) - 1)
         
-        # Vectorized depth scaling
-        depth_scales = class_depth_scales[top_k_classes_depth]  # [B, K]
-        precise_distances = depth_at_centers * depth_scales  # [B, K] in meters
+        depth_scales = class_depth_scales[top_k_classes_depth]
+        precise_distances = depth_at_centers * depth_scales
         
         # Stage A outputs (Tier 1)
         stage_a_outputs = {
@@ -1307,21 +1257,14 @@ class MaxSightCNN(nn.Module):
             stage_a_outputs['uncertainty'] = uncertainty_score
             stage_a_outputs['global_confidence'] = uncertainty_outputs['global_confidence']
         
-        # Safety decision: Is user safe now?
-        # If uncertainty > 0.7, we're in "fail-silent" mode - skip Stage B
+        # Skip Stage B when uncertainty is high (fail-silent).
         skip_stage_b = (uncertainty_score is not None and 
                        (uncertainty_score > 0.7).any()) if uncertainty_score is not None else False
         
-        # QUALITY: Timing enforcement for Stage A (<150ms target)
-        # Track Stage A timing for monitoring and early-exit enforcement
         stage_a_start_time = time.perf_counter() if getattr(self, '_enable_timing', False) else None
-        
-        # Calculate Stage A latency
         stage_a_latency_ms = None
         if stage_a_start_time is not None:
             stage_a_latency_ms = (time.perf_counter() - stage_a_start_time) * 1000
-            # If Stage A exceeds threshold, skip Stage B to maintain safety
-            # Use tier-specific threshold (Issue 6 fix: realistic latency numbers)
             max_latency = self.tier_config.max_latency_ms if hasattr(self, 'tier_config') else 200.0
             if stage_a_latency_ms > max_latency:
                 skip_stage_b = True
@@ -1330,19 +1273,14 @@ class MaxSightCNN(nn.Module):
                         self._timing_warnings = []
                     self._timing_warnings.append(f"Stage A latency {stage_a_latency_ms:.2f}ms exceeds threshold, skipping Stage B")
         
-        # Stage A → Stage B handoff (when Stage B skipped, return Stage A only)
-        # JIT trace: when scene graph disabled do not early-return so output dict has consistent keys
-        if skip_stage_b and enable_scene_graph:
-            stage_a_outputs['stage_a_latency_ms'] = stage_a_latency_ms
-            stage_a_outputs['stage_b_completed'] = False
-            stage_a_outputs['skip_stage_b_reason'] = 'high_latency' if (stage_a_latency_ms and stage_a_latency_ms > 200.0) else 'high_uncertainty'
-            return stage_a_outputs
+        # Do not early return; always run Stage B path and build full outputs so JIT sees fixed schema.
         
         # Stage B context pass (Hybrid backbone uses raw images)
         stage_b_features, temporal_outputs = self._forward_stage_b_backbone(
             images,  # RAW IMAGES - Hybrid backbone processes these
             fused_features,  # Stage A features - for temporal processing
-            temporal_mode, B_orig, T
+            temporal_mode, B_orig, T,
+            prev_temporal_state=prev_temporal_state,
         )
         
         # Start outputs with Stage A results
@@ -1350,17 +1288,19 @@ class MaxSightCNN(nn.Module):
         if enable_scene_graph:
             outputs['stage_a_latency_ms'] = stage_a_latency_ms
         
-        # Stage B heads (Tier 2/3)
-        # Motion (temporal anchor) - only if temporal processing ran (omit key when None for JIT)
+        # Always set motion and temporal_consistency so JIT sees fixed schema (use sentinels when absent).
+        dev = fused_features.device
         if temporal_outputs is not None:
-            motion_features = temporal_outputs.get('motion')  # [B, 2, H, W]
-            if motion_features is not None:
-                outputs['motion'] = motion_features
+            motion_features = temporal_outputs.get('motion')
             c = temporal_outputs.get('consistency')
-            if c is not None:
-                outputs['temporal_consistency'] = c
-            
-            # Audio outputs (Tier 2)
+        else:
+            motion_features = None
+            c = None
+        outputs['motion'] = motion_features if motion_features is not None else torch.zeros(batch_size, 2, 1, 1, device=dev, dtype=fused_features.dtype)
+        if c is not None:
+            outputs['temporal_consistency'] = c
+        
+        # Audio outputs (Tier 2)
         if sound_outputs is not None:
             outputs['sound_classifications'] = sound_outputs['sound_probs']
             outputs['sound_direction'] = sound_outputs['direction']
@@ -1379,7 +1319,6 @@ class MaxSightCNN(nn.Module):
                 # Compute shared scene embedding (reused by multiple heads)
                 shared_scene_emb = self.shared_scene_embedding(combined_context)  # [B, 256]
                 
-                # CRITICAL: Assert contiguity before heads
                 assert combined_context.is_contiguous(), "combined_context not contiguous before shared_scene_embedding"
                 assert det_feats.is_contiguous(), "det_feats not contiguous before findability_head"
                 
@@ -1471,27 +1410,13 @@ class MaxSightCNN(nn.Module):
                     'shared_scene_embedding': shared_scene_emb
                 })
         
-        # Scene graph (top-K objects only) for spatial memory
-        # OPTIMIZED: Vectorized object embedding extraction (no Python loops)
         top_k_scene = min(self.max_scene_graph_objects, H * W)
-        top_k_scores_scene, top_k_indices_scene = torch.topk(obj_scores, k=top_k_scene, dim=1)  # [B, K]
-        
-        # OPTIMIZED: Vectorized extraction using advanced indexing
-        # Convert linear indices to 2D coordinates
-        y_indices = top_k_indices_scene // W  # [B, K]
-        x_indices = top_k_indices_scene % W   # [B, K]
-        
-        # OPTIMIZED: Batch gather using advanced indexing (fully vectorized)
-        # Create batch indices: [B, K]
+        top_k_scores_scene, top_k_indices_scene = torch.topk(obj_scores, k=top_k_scene, dim=1)
+        y_indices = top_k_indices_scene // W
+        x_indices = top_k_indices_scene % W
         batch_indices = torch.arange(batch_size, device=det_feats.device).unsqueeze(1).expand(-1, top_k_scene)
+        object_embeddings = det_feats[batch_indices, :, y_indices, x_indices]
         
-        # Gather features: [B, K, C] - fully vectorized, no loops
-        # Indexing det_feats[..., y, x] already gives us the feature at that location
-        # No need to pool a 1x1 feature again - this was wasteful
-        object_embeddings = det_feats[batch_indices, :, y_indices, x_indices]  # [B, K, C]
-        # Done - no pooling needed!
-        
-        # Extract boxes and classes for top-K
         top_k_boxes = torch.gather(
             box_preds,
             dim=1,
@@ -1510,31 +1435,21 @@ class MaxSightCNN(nn.Module):
         
         if enable_scene_graph:
             # CRITICAL FIX (Issue 1): GPU-based class name lookup - no CPU sync!
-            # Pre-compute class names on GPU using dictionary lookup (O(1) per class)
-            # This avoids GPU→CPU→Python loop that was blocking the pipeline
-            class_names_batch = []
-            for b in range(batch_size):
-                # Keep on GPU - use dictionary lookup instead of CPU conversion
-                class_ids_tensor = top_k_classes_scene[b]  # [K] - stays on GPU
-                # Convert to Python list only once (minimal overhead)
-                class_ids_list = class_ids_tensor.cpu().tolist()  # Single CPU sync per batch, not per class
-                # Use pre-computed dictionary for O(1) lookup
-                class_names = [COCO_CLASSES_DICT.get(int(c), 'object') for c in class_ids_list]
-                class_names_batch.append(class_names)
+            # Single GPU→CPU sync for entire batch (avoids per-item sync that breaks pipeline parallelism)
+            class_ids_cpu = top_k_classes_scene.cpu()  # [B, K] one sync
+            class_names_batch = [
+                [COCO_CLASSES_DICT.get(int(c), 'object') for c in class_ids_cpu[b].tolist()]
+                for b in range(batch_size)
+            ]
             
-            # CRITICAL: Assert contiguity before scene graph encoder
             assert top_k_boxes.is_contiguous(), "top_k_boxes not contiguous before scene_graph_encoder"
             assert object_embeddings.is_contiguous(), "object_embeddings not contiguous before scene_graph_encoder"
-            
-            # CRITICAL: Use batched API - handles multiple scenes efficiently
-            # Input format: [B, K, 4] boxes, [B, K, C] embeddings, List[List[str]] classes
             scene_graph_output = self.scene_graph_encoder(
-                boxes=top_k_boxes,  # [B, K, 4]
-                object_embeddings=object_embeddings,  # [B, K, C]
-                object_classes=class_names_batch  # List[List[str]]
+                boxes=top_k_boxes,
+                object_embeddings=object_embeddings,
+                object_classes=class_names_batch
             )
         else:
-            # Dummy output for isolation
             scene_graph_output = {
                 'relations': [],
                 'edge_index': torch.empty((2, 0), dtype=torch.long, device=det_feats.device),
@@ -1553,17 +1468,12 @@ class MaxSightCNN(nn.Module):
         }
         if len(scene_graph_output['relations']) > 0:
             scene_graph_stored['relations'] = scene_graph_output['relations']
-        if enable_scene_graph:
-            outputs['scene_graph'] = scene_graph_stored
+        outputs['scene_graph'] = scene_graph_stored
         
-        # CRITICAL: Verify graph consistency before processing
         edge_index = scene_graph_output['edge_index']
         edge_attr = scene_graph_output['edge_attr']
         relations = scene_graph_output['relations']
-        scene_graph_object_embeddings = scene_graph_output['object_embeddings']  # Already flattened [B*K, C]
-        
-        # Hard kill if graph is invalid (fail loud, fail early)
-        # Set global flag for Stage B skip decision
+        scene_graph_object_embeddings = scene_graph_output['object_embeddings']
         scene_graph_invalid = (
             edge_index.shape[0] != 2 or
             edge_index.shape[1] != edge_attr.shape[0] or
@@ -1584,8 +1494,6 @@ class MaxSightCNN(nn.Module):
                 outputs['spatial_relations'] = spatial_relations
                 outputs['semantic_relations'] = semantic_relations
         
-        # Also store per-scene relations for backward compatibility (if training)
-        # CRITICAL: Use EXPLICIT edge identity (src/dst), not inferred from position
         if self.training:
             batch = scene_graph_output.get('batch')
             if batch is not None:
@@ -1595,14 +1503,9 @@ class MaxSightCNN(nn.Module):
                 for b in range(num_scenes):
                     scene_mask = (batch == b)
                     
-                    # Filter relations for this scene using EXPLICIT src/dst (not position)
                     scene_node_indices = set(torch.where(scene_mask)[0].cpu().tolist())
                     scene_relations = []
-                    
-                    # CRITICAL: Filter using explicit src/dst from SceneRelation dataclass
-                    # This prevents silent corruption from reordering/pruning
                     for rel in relations:
-                        # Use explicit src/dst (never infer from position)
                         if rel.src in scene_node_indices and rel.dst in scene_node_indices:
                             scene_relations.append(rel)
                     
@@ -1614,9 +1517,7 @@ class MaxSightCNN(nn.Module):
                     })
                 outputs['scene_graphs'] = scene_graphs
         
-        # TIER 3: Scene Description (gated, expensive operation)
-        # BINARY ISOLATION: Temporarily disable global encoder to isolate backward bug
-        enable_global_encoder = False  # Toggle this for isolation (start with False)
+        enable_global_encoder = False
         
         # Only generate if Stage B ran (not skipped)
         if (self.training or self.generate_description) and not skip_stage_b and enable_global_encoder:
@@ -1629,25 +1530,14 @@ class MaxSightCNN(nn.Module):
             # Get CLIP global embedding
             global_emb = self.global_encoder(clip_images)  # [B, 512]
             
-            # OPTIMIZED: Vectorized region embedding extraction (no nested loops)
             batch_size_for_regions = B_orig if temporal_mode and B_orig is not None else batch_size
             num_regions = min(5, top_k_scene)
-            
-            # OPTIMIZED: Use top-K from scene graph (already computed)
-            # Take top num_regions from scene graph indices
-            top_region_indices = top_k_indices_scene[:, :num_regions]  # [B, num_regions]
-            
-            # OPTIMIZED: Vectorized extraction
-            y_indices_regions = top_region_indices // W  # [B, num_regions]
-            x_indices_regions = top_region_indices % W   # [B, num_regions]
-            
-            # Batch indices
+            top_region_indices = top_k_indices_scene[:, :num_regions]
+            y_indices_regions = top_region_indices // W
+            x_indices_regions = top_region_indices % W
             batch_indices_regions = torch.arange(batch_size_for_regions, device=det_feats.device).unsqueeze(1).expand(-1, num_regions)
+            region_embs_tensor = det_feats[batch_indices_regions, :, y_indices_regions, x_indices_regions]
             
-            # OPTIMIZED: Gather features vectorized
-            region_embs_tensor = det_feats[batch_indices_regions, :, y_indices_regions, x_indices_regions]  # [B, num_regions, C]
-            
-            # For consistency, apply global pooling (vectorized)
             region_embs_tensor = F.adaptive_avg_pool2d(
                 region_embs_tensor.unsqueeze(-1).unsqueeze(-1).contiguous().reshape(batch_size_for_regions * num_regions, region_embs_tensor.shape[2], 1, 1),
                 1
@@ -1663,14 +1553,14 @@ class MaxSightCNN(nn.Module):
                 }
                 
                 # Submit async retrieval request (non-blocking)
-                retrieval_results = self.retrieval_system.retrieve(
-                    query_embeddings=query_embeddings,
-                    request_id=f"frame_{frame_id}" if frame_id is not None else None,
-                    blocking=False  # Non-blocking - returns None if not ready
-                )
-                
-                # If retrieval not ready, use None (advisory enhancement skipped)
-                # This is expected behavior - retrieval doesn't block inference
+                try:
+                    retrieval_results = self.retrieval_system.retrieve(
+                        query_embeddings=query_embeddings,
+                        request_id=f"frame_{frame_id}" if frame_id is not None else None,
+                        blocking=False
+                    )
+                except Exception:
+                    retrieval_results = None
             
             # Generate description (with optional retrieval enhancement)
             description_outputs = self.scene_description_head(
@@ -1735,30 +1625,8 @@ class MaxSightCNN(nn.Module):
                 # Emphasize central regions (AMD affects central vision)
                 outputs['central_priority'] = center_mask * self.central_weight
         
-        # Output scheduling (see ml.utils.output_scheduler)
-        # This module receives model outputs and manages:
-        # - Multi-channel output prioritization (Visual, Audio, Haptic)
-        # - Rate limiting (avoid flooding user)
-        # - Cooldown timers per ROI/task
-        # - Adaptive cognitive load modulation
-        # - Mode selection: Safe / Assist / Therapy
-        # 
-        # Integration point:
-        #   from ml.utils.output_scheduler import CrossModalScheduler
-        #   scheduler = CrossModalScheduler(...)
-        #   scheduled_outputs = scheduler.schedule(outputs)
-        
-        # Multimodal output (app/overlays)
-        # This includes:
-        # - Visual Overlays (bounding boxes, highlights, labels)
-        # - Audio Output (TTS, alarms, priority tones)
-        # - Haptic Feedback (vibration patterns, directional cues)
-        #
-        # Integration point:
-        #   from app.overlays.overlay_engine import OverlayEngine
-        #   from app.ui.voice_feedback import VoiceFeedback
-        #   from app.ui.haptic_feedback import HapticFeedback
-        #   overlay_engine.render(scheduled_outputs)
+        # Outputs feed ml.utils.output_scheduler (prioritization, rate limiting, Safe/Assist/Therapy).
+        # Downstream: CrossModalScheduler.schedule(outputs); overlay_engine.render(scheduled_outputs).
         #   voice_feedback.speak(scheduled_outputs)
         #   haptic_feedback.vibrate(scheduled_outputs)
         
@@ -1848,10 +1716,8 @@ class MaxSightCNN(nn.Module):
             filtered_text = text_scores[mask]
             filtered_distances = distances[mask]
             
-            # Get the most likely class per detection
             filtered_cls_conf, filtered_cls_idx = filtered_cls_probs.max(dim=1)
             
-            # Multiply class confidence by objectness score for final confidence
             final_scores = filtered_cls_conf * filtered_scores
             
             cx, cy, w, h = filtered_boxes[:, 0], filtered_boxes[:, 1], filtered_boxes[:, 2], filtered_boxes[:, 3]
@@ -1876,16 +1742,13 @@ class MaxSightCNN(nn.Module):
             
             image_urgency = None
             if 'urgency_scores' in outputs:
-                # This is image-level urgency [B, 4] -> single value per image
                 image_urgency = int(outputs['urgency_scores'][b].argmax().item())
             
-            # Get accessibility features if available
             findability_scores = None
             if 'object_findability' in outputs:
                 findability_scores = outputs['object_findability'][b]
                 filtered_findability = findability_scores[mask]
             
-            # Build detection list
             img_detections = []
             for idx in nms_indices:
                 idx = int(idx.item())
@@ -1920,7 +1783,6 @@ class MaxSightCNN(nn.Module):
                     'is_text': is_text
                 }
                 
-                # Add accessibility features if available
                 if findability_scores is not None:
                     detection['findability'] = float(filtered_findability[idx].item())
                 
@@ -2055,48 +1917,27 @@ class MaxSightCNN(nn.Module):
         confidence: Optional[float] = None,
     ) -> int:
         """Map object class name to urgency level for user safety prioritization."""
-        # Urgency map is now initialized in __init__ for thread safety
-        class_lower = class_name.lower()  # Case-insensitive matching
-        
-        # Build exact match map from urgency_map (once, cached)
-        if not hasattr(self, '_urgency_exact_map'):
-            self._urgency_exact_map = {}
-            for level, keywords in self._urgency_map.items():
-                for keyword in keywords:
-                    pattern = r'\b' + re.escape(keyword.lower()) + r'\b'
-                    self._urgency_exact_map[pattern] = level
-        
+        class_lower = class_name.lower()
         base_urgency = 0
-        for pattern, level in self._urgency_exact_map.items():
-            if re.search(pattern, class_lower):
-                if level == 'danger':
-                    base_urgency = 3
+        for pattern, level in self._urgency_patterns:
+            if pattern.search(class_lower):
+                base_urgency = max(base_urgency, level)
+                if level == 3:
                     break
-                elif level == 'warning':
-                    base_urgency = 2
-                    break
-                elif level == 'caution':
-                    base_urgency = 1
-                    break
-        
         if base_urgency == 0:
-            if class_lower in [k.lower() for k in self._urgency_map.get('danger', [])]:
+            danger_lower = {k.lower() for k in self._urgency_map.get('danger', set())}
+            warning_lower = {k.lower() for k in self._urgency_map.get('warning', set())}
+            caution_lower = {k.lower() for k in self._urgency_map.get('caution', set())}
+            if class_lower in danger_lower:
                 base_urgency = 3
-            elif class_lower in [k.lower() for k in self._urgency_map.get('warning', [])]:
+            elif class_lower in warning_lower:
                 base_urgency = 2
-            elif class_lower in [k.lower() for k in self._urgency_map.get('caution', [])]:
+            elif class_lower in caution_lower:
                 base_urgency = 1
-        
-        # Safety bias: over-warn for hazards and large/close objects
-        HAZARD_CLASSES = {
-            'car', 'truck', 'bus', 'motorcycle', 'bicycle', 'vehicle', 'train',
-            'fire', 'hazard', 'emergency', 'siren', 'alarm',
-        }
-        if confidence is not None and class_lower in HAZARD_CLASSES and confidence > 0.3:
+        if confidence is not None and any(kw in class_lower for kw in self._high_priority_classes) and confidence > 0.3:
             base_urgency = max(base_urgency, 2)
         if box_size is not None and box_size > 0.2:
             base_urgency = min(base_urgency + 1, 3)
-        
         return base_urgency
     
     def _calculate_priority(self, class_name: str, urgency: int, confidence: float) -> int:
@@ -2109,24 +1950,10 @@ class MaxSightCNN(nn.Module):
             3: 95    # danger -> very high priority
         }.get(urgency, 20)
         
-        # Adjust based on class importance
-        high_priority_classes = {
-            'car', 'truck', 'bus', 'motorcycle', 'vehicle',
-            'stairs', 'staircase', 'stairway', 'escalator', 'elevator',
-            'door', 'exit', 'entrance', 'fire_door', 'emergency_exit',
-            'stop_sign', 'traffic_light', 'crosswalk', 'pedestrian_crossing',
-            'stove', 'oven', 'fire', 'hazard', 'obstacle'
-        }
-        
-        medium_priority_classes = {
-            'person', 'bicycle', 'chair', 'table', 'handle', 'button',
-            'ramp', 'curb', 'step', 'barrier', 'fence'
-        }
-        
         class_lower = class_name.lower()
-        if any(keyword in class_lower for keyword in high_priority_classes):
+        if any(kw in class_lower for kw in self._high_priority_classes):
             base_priority = max(base_priority, 80)
-        elif any(keyword in class_lower for keyword in medium_priority_classes):
+        elif any(kw in class_lower for kw in self._medium_priority_classes):
             base_priority = max(base_priority, 60)
         
         # Scale by confidence (higher confidence = slightly higher priority)

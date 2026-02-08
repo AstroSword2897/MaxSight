@@ -99,9 +99,8 @@ def add_security_headers_after_request(response):
 session_rate_limiter = RateLimiter(config.rate_limit_per_session)
 global_rate_limiter = GlobalRateLimiter(config.rate_limit_global)
 
-# Global inference semaphore for thread safety (max concurrent inferences)
-# This prevents GPU memory leaks and ensures thread-safe model access
-INFERENCE_SEMAPHORE = threading.Semaphore(value=1)  # Serialize inference for safety
+# Serialize inference to avoid GPU memory leaks and keep model access thread-safe.
+INFERENCE_SEMAPHORE = threading.Semaphore(value=1)
 
 
 # Pipeline latency tracker (per-stage timing for bottleneck analysis)

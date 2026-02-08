@@ -367,8 +367,7 @@ def create_synthetic_impairments():
         darken_mask = np.clip(dist / darken_radius, 0, 1)
         if len(image.shape) == 3:
             darken_mask = darken_mask[:, :, np.newaxis]
-        # CRITICAL: Normalize image to [0, 1] before scaling to avoid overflow
-        # Ensure image is float and in valid range
+        # Normalize to [0, 1] before scaling to avoid overflow.
         if image.dtype != np.float32 and image.dtype != np.float64:
             image = image.astype(np.float32) / 255.0
         elif image.max() > 1.0:
@@ -379,13 +378,11 @@ def create_synthetic_impairments():
     
     def apply_low_light(image: np.ndarray, brightness: float = 0.3) -> np.ndarray:
         """Reduce brightness for retinitis pigmentosa."""
-        # CRITICAL: Normalize image to [0, 1] before scaling to avoid overflow
         original_dtype = image.dtype
         if image.dtype != np.float32 and image.dtype != np.float64:
             image = image.astype(np.float32) / 255.0
         elif image.max() > 1.0:
             image = image / 255.0
-        # Apply scaling and clamp to valid range
         result = np.clip(image * brightness, 0.0, 1.0)
         # Convert back to original dtype if needed
         if original_dtype != np.float32 and original_dtype != np.float64:

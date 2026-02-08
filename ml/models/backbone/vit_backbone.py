@@ -540,7 +540,6 @@ class HybridCNNViTBackbone(nn.Module):
         )
         
         # Import VisionTransformerBackbone from the module (avoid circular import)
-        # The class is defined in this file or imported from elsewhere
         try:
             # Import from the same module (if defined later in file)
             import sys

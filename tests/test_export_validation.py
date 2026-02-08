@@ -228,9 +228,7 @@ def test_all_exports():
     
     print(f"\nPassed: {passed}/{total}")
     
-    # The export functionality is tested separately in ml/training/export.py
-    
-    # Just verify we attempted exports and got results
+    # Export logic lives in ml/training/export.py; here we only check that results were produced.
     assert len(results) > 0, "No export results generated"
     
     if passed == 0:

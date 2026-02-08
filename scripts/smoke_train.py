@@ -10,10 +10,10 @@ import time
 from typing import Dict, Optional, Tuple, Any
 import argparse
 
-# CRITICAL: Enable anomaly detection for backward pass debugging
+# Enable anomaly detection to catch NaNs in backward pass.
 torch.autograd.set_detect_anomaly(True)
 
-# Add parent directory to path
+# Ensure project root is on path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model, CapabilityTier, TierConfig

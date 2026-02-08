@@ -440,8 +440,6 @@ class DetectionPostProcessor:
             except Exception as e:
                 logger.warning(f"model.get_detections failed: {e}, falling back to manual processing")
         
-        # Fallback: manual processing from outputs
-        # This handles dict outputs, tensor outputs, etc.
         detections = []
         
         if 'objectness' in outputs and 'boxes' in outputs:

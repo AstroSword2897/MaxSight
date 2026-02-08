@@ -263,11 +263,7 @@ def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', in
         else:
             output_types = [ct.TensorType(name="output")]
         
-        # CRITICAL: Explicitly define all input shapes to avoid runtime errors
-        # If model accepts audio_features, add them here with fixed shape
-        # Example: inputs=[ct.TensorType(name="image", shape=input_size),
-        #                  ct.TensorType(name="audio_features", shape=(1, 128))]
-        # For now, only image input is defined - update if model signature changes
+        # Define input shapes so CoreML does not infer them at runtime.
         coreml_model = ct.convert(
             traced_model,
             inputs=[ct.TensorType(name="image", shape=input_size)],
@@ -522,9 +518,8 @@ class AlertFrequency(Enum):
                     for line in lines:
                         # Checks if line has config reference
                         if 'config.' in line:
-                            # Add TODO comment before the line
                             indent = len(line) - len(line.lstrip())
-                            todo_comment = ' ' * indent + '# TODO: Parameterize config references when porting to Swift'
+                            todo_comment = ' ' * indent + '# TODO: Parameterize config when porting to Swift.'
                             cleaned_lines.append(todo_comment)
                             # Replace config. with placeholder that needs to be parameterized
                             # Handle both .config. and config. (after self. removal)

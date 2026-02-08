@@ -30,11 +30,7 @@ class MotionHead(nn.Module):
         self.use_multi_scale = use_multi_scale
         self.use_attention = use_attention
 
-        # CRITICAL: Unified coarse network that always accepts hidden_channels input
-        # This eliminates layer skipping and manual channel projections
-        # Otherwise, project in_channels to hidden_channels via input_proj
-        
-        # coarse_net always takes hidden_channels as input
+        # coarse_net always takes hidden_channels; use input_proj when needed.
         self.coarse_net = nn.Sequential(
             nn.Conv2d(hidden_channels, hidden_channels, kernel_size=7, padding=3, bias=False),
             nn.BatchNorm2d(hidden_channels),
@@ -163,9 +159,7 @@ class MotionHead(nn.Module):
         else:
             raise ValueError(f"Expected 4D or 5D tensor, got {temporal_features.shape}")
 
-        # CRITICAL: Forward through unified coarse_net (no skipping, no hacks)
-        # coarse_net always accepts hidden_channels input and outputs hidden_channels//2
-        features = self.coarse_net(features_input)  # [B, hidden_channels//2, H, W]
+        features = self.coarse_net(features_input)
 
         # NEW: Multi-scale processing (coarse H/2 → fine H)
         multi_scale_flows = {}

@@ -1290,7 +1290,7 @@ class ProductionTrainLoop:
                             for new_group_idx, new_group in enumerate(self.optimizer.param_groups):
                                 for new_param_idx, new_param in enumerate(new_group['params']):
                                     # Find matching old parameter
-                                    # This is a simplified approach - full implementation would match by name
+                                    # Simplified; full impl would match state dict by parameter name.
                                     if new_param_idx < len(old_optimizer_state.get('param_groups', [{}])[0].get('params', [])):
                                         old_param_id = old_optimizer_state['param_groups'][0]['params'][new_param_idx]
                                         if old_param_id in old_state:
@@ -1327,8 +1327,7 @@ class ProductionTrainLoop:
                 epoch_losses: List[float] = train_metrics.get('all_losses', [])
                 self.history['train_loss'].append(train_loss)
                 
-                # Step scheduler (per-epoch for most, per-batch for OneCycleLR/SequentialLR)
-                # NOTE: OneCycleLR and SequentialLR step per-batch in train_epoch()
+                # OneCycleLR and SequentialLR step per-batch in train_epoch(); others step here.
                 if not isinstance(self.scheduler, (OneCycleLR, SequentialLR)):
                     self.scheduler.step()
                     self.logger.debug(f"Scheduler stepped (per-epoch). New LR: {self.optimizer.param_groups[0]['lr']:.6f}")

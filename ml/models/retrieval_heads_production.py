@@ -40,7 +40,6 @@ class MultiVectorRetrievalHeads(nn.Module):
         self.audio_encoder = AudioEncoder(embed_dim=audio_dim)
         self.scene_graph_encoder = SceneGraphRetrievalEncoder(embed_dim=scene_graph_dim)
         
-        # CRITICAL: Projection layers to common embedding space
         self.global_proj = nn.Linear(global_dim, common_embed_dim)
         self.region_proj = nn.Linear(region_dim, common_embed_dim)
         self.patch_proj = nn.Linear(patch_dim, common_embed_dim)
@@ -111,7 +110,6 @@ class MultiVectorRetrievalHeads(nn.Module):
         # Audio embeddings (with spatial info)
         if audio is not None:
             audio_emb, spatial = self.audio_encoder(audio)  # audio_emb: [B, audio_dim] or [B, A, audio_dim]
-            # CRITICAL: Preserve spatial info
             if audio_emb.dim() == 2:
                 embeddings['audio'] = self.audio_proj(audio_emb)  # [B, common_embed_dim]
             else:
@@ -121,9 +119,7 @@ class MultiVectorRetrievalHeads(nn.Module):
             embeddings['audio'] = torch.zeros(B, self.common_embed_dim, device=device)
             embeddings['audio_spatial'] = None
         
-        # Scene graph embeddings (with validation)
         if scene_graph is not None:
-            # CRITICAL: Validate scene graph format
             required_keys = {'node_features', 'edge_index'}
             if not required_keys.issubset(scene_graph.keys()):
                 raise ValueError(f"scene_graph must contain {required_keys}")
