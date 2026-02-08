@@ -1568,14 +1568,16 @@ class MaxSightCNN(nn.Module):
                 'batch': torch.zeros(batch_size * top_k_scene, dtype=torch.long, device=det_feats.device)
             }
         
-        # Store batched scene graph data
-        outputs['scene_graph'] = {
-            'relations': scene_graph_output['relations'],
+        # Store batched scene graph data (omit 'relations' when empty for JIT trace safety)
+        scene_graph_stored = {
             'edge_index': scene_graph_output['edge_index'],
             'edge_attr': scene_graph_output['edge_attr'],
             'object_embeddings': scene_graph_output['object_embeddings'],
             'batch': scene_graph_output.get('batch')  # For GNN pooling
         }
+        if len(scene_graph_output['relations']) > 0:
+            scene_graph_stored['relations'] = scene_graph_output['relations']
+        outputs['scene_graph'] = scene_graph_stored
         
         # CRITICAL: Verify graph consistency before processing
         edge_index = scene_graph_output['edge_index']
@@ -1598,12 +1600,12 @@ class MaxSightCNN(nn.Module):
             print("⚠️  WARNING: Scene graph invalid, skipping Stage B graph processing")
             skip_stage_b = True  # Hard-disable Stage B outputs
         else:
-            # Extract spatial and semantic relations from batched output
-            spatial_relations = [r for r in relations if r.predicate in self.scene_graph_encoder.spatial_predicates]
-            semantic_relations = [r for r in relations if r.predicate not in self.scene_graph_encoder.spatial_predicates]
-            
-            outputs['spatial_relations'] = spatial_relations
-            outputs['semantic_relations'] = semantic_relations
+            # Extract spatial and semantic relations from batched output (only when non-empty for JIT trace safety)
+            if len(relations) > 0:
+                spatial_relations = [r for r in relations if r.predicate in self.scene_graph_encoder.spatial_predicates]
+                semantic_relations = [r for r in relations if r.predicate not in self.scene_graph_encoder.spatial_predicates]
+                outputs['spatial_relations'] = spatial_relations
+                outputs['semantic_relations'] = semantic_relations
         
         # Also store per-scene relations for backward compatibility (if training)
         # CRITICAL: Use EXPLICIT edge identity (src/dst), not inferred from position
