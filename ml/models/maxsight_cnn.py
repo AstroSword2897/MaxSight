@@ -1458,17 +1458,13 @@ class MaxSightCNN(nn.Module):
                 'batch': torch.zeros(batch_size * top_k_scene, dtype=torch.long, device=det_feats.device)
             }
         
-        # Store batched scene graph data (omit 'relations' when empty for JIT trace safety)
-        # Skip nested dict in outputs when scene graph disabled so JIT sees consistent dict value types (tensors only)
-        scene_graph_stored = {
-            'edge_index': scene_graph_output['edge_index'],
-            'edge_attr': scene_graph_output['edge_attr'],
-            'object_embeddings': scene_graph_output['object_embeddings'],
-            'batch': scene_graph_output.get('batch')  # For GNN pooling
-        }
-        if len(scene_graph_output['relations']) > 0:
-            scene_graph_stored['relations'] = scene_graph_output['relations']
-        outputs['scene_graph'] = scene_graph_stored
+        # Store scene graph as flattened tensor keys so JIT trace sees consistent type (all Tensor; no Dict[str, Tensor]).
+        outputs['scene_graph.edge_index'] = scene_graph_output['edge_index']
+        outputs['scene_graph.edge_attr'] = scene_graph_output['edge_attr']
+        outputs['scene_graph.object_embeddings'] = scene_graph_output['object_embeddings']
+        batch_sg = scene_graph_output.get('batch')
+        outputs['scene_graph.batch'] = batch_sg if batch_sg is not None else torch.zeros(batch_size * top_k_scene, dtype=torch.long, device=det_feats.device)
+        # relations (list of SceneRelation) omitted from outputs for trace; use scene_graph_output['relations'] in Python
         
         edge_index = scene_graph_output['edge_index']
         edge_attr = scene_graph_output['edge_attr']
