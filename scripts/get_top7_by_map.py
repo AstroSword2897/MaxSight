@@ -38,7 +38,7 @@ def get_top_conditions_by_map(
     with open(path) as f:
         data = json.load(f)
     results = data.get("results", [])
-    # Build (condition, mAP) for entries that have metrics (no error)
+    # Collect (condition, mAP) for entries with valid metrics so we can rank by mAP.
     candidates = []
     for r in results:
         if isinstance(r, dict) and "error" not in r:
@@ -46,7 +46,7 @@ def get_top_conditions_by_map(
             m = r.get(map_key) is not None and r.get(map_key) or r.get("mAP", 0.0)
             if cond is not None:
                 candidates.append((cond, float(m)))
-    # Sort by mAP descending, then take top k.
+    # Sort by mAP descending and take top k.
     candidates.sort(key=lambda x: -x[1])
     return [c[0] for c in candidates[:k]]
 

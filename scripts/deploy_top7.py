@@ -35,7 +35,7 @@ TOP7_CONDITIONS = [
 
 
 def _find_checkpoints_base() -> Optional[Path]:
-    """Discover base dir that has at least one checkpoints_<cond>/best_model.pt."""
+    """Return base directory that contains at least one checkpoints_<cond>/best_model.pt."""
     import os
     candidates = [os.environ.get("CHECKPOINTS_BASE")]
     if candidates[0]:
@@ -96,6 +96,7 @@ def main():
     from ml.training.export import export_ios_bundle
 
     def _is_placeholder(p) -> bool:
+        """Treat None or path containing 'path/to' as unset so we auto-detect base."""
         if p is None:
             return True
         s = str(p)
@@ -181,18 +182,18 @@ def main():
             model.to(device)
             model.eval()
             if verbose:
-                print(f"    running 1-batch inference check...", flush=True)
+                print("    Running 1-batch inference check...", flush=True)
             with torch.no_grad():
                 dummy = torch.randn(1, 3, 224, 224, device=device)
                 out = model(dummy)
             if not isinstance(out, dict) or "objectness" not in out:
                 manifest["conditions"][cond]["error"] = "forward pass missing objectness"
                 if verbose:
-                    print(f"    inference check failed: no objectness in output")
+                    print("    Inference check failed: no objectness in output.")
                 continue
             manifest["conditions"][cond]["inference_ok"] = True
             if verbose:
-                print(f"    inference OK", flush=True)
+                print("    Inference OK.", flush=True)
         except Exception as e:
             manifest["conditions"][cond]["error"] = str(e)
             if verbose:
@@ -225,7 +226,7 @@ def main():
                 print(tb_lines, file=sys.stderr)
                 print(f"\nEXPORT FAILED ({cond}): {e}", flush=True)
                 print(tb_lines, flush=True)
-            # Write full traceback to file so it is not lost when stderr is truncated (e.g. Colab)
+            # Persist full traceback so it survives truncated stderr (e.g. Colab).
             try:
                 err_file = out_root / f"export_error_{cond}.txt"
                 with open(err_file, "w") as f:
