@@ -1569,6 +1569,7 @@ class MaxSightCNN(nn.Module):
             }
         
         # Store batched scene graph data (omit 'relations' when empty for JIT trace safety)
+        # Skip nested dict in outputs when scene graph disabled so JIT sees consistent dict value types (tensors only)
         scene_graph_stored = {
             'edge_index': scene_graph_output['edge_index'],
             'edge_attr': scene_graph_output['edge_attr'],
@@ -1577,7 +1578,8 @@ class MaxSightCNN(nn.Module):
         }
         if len(scene_graph_output['relations']) > 0:
             scene_graph_stored['relations'] = scene_graph_output['relations']
-        outputs['scene_graph'] = scene_graph_stored
+        if enable_scene_graph:
+            outputs['scene_graph'] = scene_graph_stored
         
         # CRITICAL: Verify graph consistency before processing
         edge_index = scene_graph_output['edge_index']
