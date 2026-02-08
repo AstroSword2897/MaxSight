@@ -18,7 +18,7 @@ Usage:
     --image-dir /path/to/data \\
     --max-batches 10
 
-  # Colab
+  # Colab (run Cell 1 first: clone repo and cd /content/2026-Prototype; see COLAB_FIRST_CELL.md)
   python scripts/inference_and_deploy_top7.py \\
     --checkpoints-base /content/drive/MyDrive/MaxSight \\
     --output-dir /content/drive/MyDrive/MaxSight/exports_top7 \\
@@ -37,6 +37,19 @@ try:
     REPO = Path(__file__).resolve().parents[1]
 except NameError:
     REPO = Path.cwd()
+
+_SCRIPT = REPO / "scripts" / "inference_and_deploy_top7.py"
+if not _SCRIPT.exists() or not (REPO / ".git").exists():
+    print("Repo not found: run the clone and cd first (e.g. in Colab run Cell 1 before this script).", file=sys.stderr)
+    if Path("/content").exists():
+        print("\nColab – run this in a cell first:", file=sys.stderr)
+        print("  %cd /content", file=sys.stderr)
+        print("  !git clone -q -b feature/multimodal_refactor https://github.com/AstroSword2897/2026-Prototype.git", file=sys.stderr)
+        print("  %cd /content/2026-Prototype", file=sys.stderr)
+        print("\nThen run:  !python scripts/inference_and_deploy_top7.py ...", file=sys.stderr)
+    else:
+        print("  cd /path/to/2026-Prototype  then  python scripts/inference_and_deploy_top7.py ...", file=sys.stderr)
+    sys.exit(1)
 
 TOP7 = [
     "amblyopia", "amd", "color_blindness", "cvi", "glaucoma",
