@@ -15,10 +15,11 @@ drive.mount("/content/drive")
 
 ## Cell 2 – Run your script from inside the repo
 
-Always use `%cd /content/2026-Prototype` (or run from a cell that already did that), then run scripts by name:
+Always use `%cd /content/2026-Prototype` (or run from a cell that already did that). **Pull latest before deploy** so export fixes (JIT wrapper, num_locations) are used:
 
 ```python
 %cd /content/2026-Prototype
+!git pull
 !python scripts/inference_and_deploy_top7.py \
   --checkpoints-base /content/drive/MyDrive/MaxSight \
   --output-dir /content/drive/MyDrive/MaxSight/exports_top7

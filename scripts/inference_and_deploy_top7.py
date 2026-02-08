@@ -218,6 +218,13 @@ def main():
         return 0
 
     print("Step 2/2: Deploy (export top 7 to iOS bundles)...")
+    try:
+        import subprocess as _sp
+        r = _sp.run(["git", "rev-parse", "HEAD"], cwd=str(REPO), capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout.strip():
+            print(f"  (commit: {r.stdout.strip()[:8]}; run 'git pull' if deploy fails)")
+    except Exception:
+        pass
     cmd = [
         sys.executable,
         str(REPO / "scripts" / "deploy_top7.py"),

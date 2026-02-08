@@ -81,19 +81,23 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
         except Exception:
             pass
     # Try trace-safe wrapper first (tensor-only outputs) for fast, reliable export
-    wrapper = _JITTraceWrapper(model)
-    try:
-        traced_model = torch.jit.trace(wrapper, dummy_input, strict=False)
-    except Exception as e:
-        logger.warning(f"JIT trace with wrapper failed ({e}); trying raw model.")
+    # Suppress TracerWarnings so the real exception is visible if trace fails
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=torch.jit.TracerWarning)
+        wrapper = _JITTraceWrapper(model)
         try:
-            traced_model = torch.jit.trace(model, dummy_input, strict=False)
-        except Exception as e2:
-            logger.error(f"Export failed: {e2}", exc_info=True)
-            raise
-    finally:
-        if original_tier is not None:
-            model.tier_config = original_tier
+            traced_model = torch.jit.trace(wrapper, dummy_input, strict=False)
+        except Exception as e:
+            logger.warning(f"JIT trace with wrapper failed ({e}); trying raw model.")
+            try:
+                traced_model = torch.jit.trace(model, dummy_input, strict=False)
+            except Exception as e2:
+                logger.error(f"Export failed: {e2}", exc_info=True)
+                raise
+        finally:
+            if original_tier is not None:
+                model.tier_config = original_tier
     if validate:
         try:
             test_output = traced_model(dummy_input)  # type: ignore
