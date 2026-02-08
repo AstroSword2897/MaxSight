@@ -82,6 +82,8 @@ def main():
                         help="Same as --validate-only")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", choices=["cpu", "cuda"],
                         help="Device for validation (default: cuda if available)")
+    parser.add_argument("--quick", action="store_true", default=True, help="JIT-only export (default: on; use --no-quick for full PTE)")
+    parser.add_argument("--no-quick", action="store_false", dest="quick", help="Try ExecuTorch PTE first, then JIT fallback")
     parser.add_argument("--quiet", action="store_true", help="Less verbose")
     args = parser.parse_args()
 
@@ -206,6 +208,7 @@ def main():
                 model=model,
                 output_dir=str(cond_out),
                 input_size=(1, 3, 224, 224),
+                jit_only=getattr(args, "quick", False),
             )
             manifest["conditions"][cond]["export_path"] = str(bundle_path)
             if verbose:
@@ -213,9 +216,21 @@ def main():
         except Exception as e:
             import traceback
             manifest["conditions"][cond]["error"] = f"export: {e}"
+            tb_lines = traceback.format_exc()
             if verbose:
                 print(f"    export failed: {e}", file=sys.stderr)
-                traceback.print_exc(file=sys.stderr)
+                print(tb_lines, file=sys.stderr)
+            # Write full traceback to file so it is not lost when stderr is truncated (e.g. Colab)
+            try:
+                err_file = out_root / f"export_error_{cond}.txt"
+                with open(err_file, "w") as f:
+                    f.write(tb_lines)
+                    f.write("\n---\n")
+                    f.write(str(e))
+                if verbose:
+                    print(f"    Full traceback written to: {err_file}", file=sys.stderr)
+            except Exception:
+                pass
 
     manifest_path = out_root / "manifest.json"
     out_root.mkdir(parents=True, exist_ok=True)

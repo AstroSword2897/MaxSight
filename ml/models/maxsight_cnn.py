@@ -213,6 +213,14 @@ URGENCY_LEVELS = ['safe', 'caution', 'warning', 'danger']
 DISTANCE_ZONES = ['near', 'medium', 'far']
 
 
+def _scalar_tensor_num_locations(H, W, device):
+    """Return H*W as a scalar long tensor; avoids torch.tensor(tensor) copy-construct warning under JIT trace."""
+    n = H * W
+    if isinstance(n, torch.Tensor):
+        return n.detach().clone().to(dtype=torch.long, device=device)
+    return torch.tensor(n, dtype=torch.long, device=device)
+
+
 class SimplifiedFPN(nn.Module):
     
     def __init__(self, in_channels_list=[256, 512, 1024, 2048], out_channels=256):
@@ -1236,7 +1244,7 @@ class MaxSightCNN(nn.Module):
             'precise_distances': precise_distances,  # [B, K] meters
             'distance_uncertainties': uncertainty_at_centers,  # [B, K]
             'top_k_indices': top_k_indices_depth,  # For mapping back to detections
-            'num_locations': torch.tensor(H * W, dtype=torch.long, device=images.device),  # Scalar tensor for JIT trace (no int in dict)
+            'num_locations': _scalar_tensor_num_locations(H, W, images.device),  # Scalar tensor for JIT trace (no int in dict)
         }
         
         # Check if Stage A is stable (uncertainty check)

@@ -80,15 +80,14 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
             logger.debug("Disabled scene graph (use_cross_task_attention=False) for JIT trace.")
         except Exception:
             pass
+    # Try trace-safe wrapper first (tensor-only outputs) for fast, reliable export
+    wrapper = _JITTraceWrapper(model)
     try:
-        traced_model = torch.jit.trace(model, dummy_input, strict=False)
+        traced_model = torch.jit.trace(wrapper, dummy_input, strict=False)
     except Exception as e:
-        logger.warning(f"JIT trace of raw model failed ({e}); trying trace-safe wrapper (tensor-only outputs).")
-        if original_tier is not None:
-            model.tier_config = dataclasses.replace(original_tier, use_cross_task_attention=False)  # type: ignore[arg-type]
-        wrapper = _JITTraceWrapper(model)
+        logger.warning(f"JIT trace with wrapper failed ({e}); trying raw model.")
         try:
-            traced_model = torch.jit.trace(wrapper, dummy_input, strict=False)
+            traced_model = torch.jit.trace(model, dummy_input, strict=False)
         except Exception as e2:
             logger.error(f"Export failed: {e2}", exc_info=True)
             raise
@@ -548,9 +547,10 @@ class AlertFrequency(Enum):
 def export_ios_bundle(
     model: nn.Module,
     output_dir: str = 'maxsight_ios_bundle',
-    input_size: tuple = (1, 3, 224, 224)
+    input_size: tuple = (1, 3, 224, 224),
+    jit_only: bool = False,
 ) -> Path:
-    """Export minimal iOS bundle: PTE + configs + single reference file...."""
+    """Export minimal iOS bundle: PTE (or JIT if jit_only) + configs + single reference file."""
     from pathlib import Path
     import json
     from datetime import datetime
@@ -558,19 +558,21 @@ def export_ios_bundle(
     bundle_path = Path(output_dir)
     bundle_path.mkdir(exist_ok=True, parents=True)
     
-    # 1. Export PTE
-    logger.info(f"Exporting PTE model...")
-    pte_path = export_to_executorch(
-        model,
-        str(bundle_path / 'maxsight.pte'),
-        input_size,
-        validate=True
-    )
-    
-    if not pte_path:
-        logger.warning("PTE export failed (ExecuTorch may not be installed). Bundle created without PTE file.")
-        logger.warning("Install ExecuTorch: pip install executorch")
-        pte_size_mb = 0.0
+    pte_path = None
+    if not jit_only:
+        logger.info("Exporting PTE model...")
+        pte_path = export_to_executorch(
+            model,
+            str(bundle_path / 'maxsight.pte'),
+            input_size,
+            validate=True
+        )
+    if jit_only or not pte_path:
+        if not jit_only:
+            logger.warning("PTE export failed (ExecuTorch may not be installed). Falling back to JIT.")
+        logger.info("Exporting JIT model (quick path)...")
+        jit_path = export_to_jit(model, str(bundle_path / 'maxsight_traced.pt'), input_size, device='cpu', validate=False)
+        pte_size_mb = jit_path.stat().st_size / (1024 * 1024)
     else:
         pte_size_mb = pte_path.stat().st_size / (1024 * 1024)
     

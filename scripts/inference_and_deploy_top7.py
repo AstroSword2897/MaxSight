@@ -86,6 +86,7 @@ def main():
                    help="Sweep confidence/NMS to maximize mAP (slower; aims for higher mAP e.g. 0.5)")
     p.add_argument("--target-map", type=float, default=None, metavar="F",
                    help="When sweeping, extend search to try to reach at least this mAP@0.5 (e.g. 0.5)")
+    p.add_argument("--quick", action="store_true", help="Deploy with JIT-only export (faster, skip ExecuTorch)")
     p.add_argument("--quiet", action="store_true", help="Less output")
     args = p.parse_args()
 
@@ -225,6 +226,8 @@ def main():
     ]
     if top_by_map and inference_data_path.exists():
         cmd += ["--top-by-map", "--inference-data", str(inference_data_path)]
+    if getattr(args, "quick", False):
+        cmd.append("--quick")
     if args.quiet:
         cmd.append("--quiet")
     r = subprocess.run(cmd, cwd=str(REPO), capture_output=True, text=True)
