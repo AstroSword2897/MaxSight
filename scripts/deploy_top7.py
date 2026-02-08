@@ -210,9 +210,11 @@ def main():
             if verbose:
                 print(f"    exported -> {bundle_path}")
         except Exception as e:
+            import traceback
             manifest["conditions"][cond]["error"] = f"export: {e}"
             if verbose:
-                print(f"    export failed: {e}")
+                print(f"    export failed: {e}", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
 
     manifest_path = out_root / "manifest.json"
     out_root.mkdir(parents=True, exist_ok=True)

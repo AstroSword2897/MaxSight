@@ -1358,11 +1358,11 @@ class MaxSightCNN(nn.Module):
                     self._timing_warnings.append(f"Stage A latency {stage_a_latency_ms:.2f}ms exceeds threshold, skipping Stage B")
         
         # Stage A → Stage B handoff (when Stage B skipped, return Stage A only)
-        if skip_stage_b:
-            if enable_scene_graph:
-                stage_a_outputs['stage_a_latency_ms'] = stage_a_latency_ms
-                stage_a_outputs['stage_b_completed'] = False
-                stage_a_outputs['skip_stage_b_reason'] = 'high_latency' if (stage_a_latency_ms and stage_a_latency_ms > 200.0) else 'high_uncertainty'
+        # JIT trace: when scene graph disabled do not early-return so output dict has consistent keys
+        if skip_stage_b and enable_scene_graph:
+            stage_a_outputs['stage_a_latency_ms'] = stage_a_latency_ms
+            stage_a_outputs['stage_b_completed'] = False
+            stage_a_outputs['skip_stage_b_reason'] = 'high_latency' if (stage_a_latency_ms and stage_a_latency_ms > 200.0) else 'high_uncertainty'
             return stage_a_outputs
         
         # Stage B context pass (Hybrid backbone uses raw images)
