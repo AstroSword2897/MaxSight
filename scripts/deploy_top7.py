@@ -167,7 +167,7 @@ def main():
             continue
 
         if verbose:
-            print(f"  {cond}: loading and validating...")
+            print(f"  {cond}: loading and validating...", flush=True)
         try:
             model = create_model(
                 num_classes=num_classes,
@@ -180,6 +180,8 @@ def main():
             model.load_state_dict(state, strict=False)
             model.to(device)
             model.eval()
+            if verbose:
+                print(f"    running 1-batch inference check...", flush=True)
             with torch.no_grad():
                 dummy = torch.randn(1, 3, 224, 224, device=device)
                 out = model(dummy)
@@ -190,7 +192,7 @@ def main():
                 continue
             manifest["conditions"][cond]["inference_ok"] = True
             if verbose:
-                print(f"    inference OK")
+                print(f"    inference OK", flush=True)
         except Exception as e:
             manifest["conditions"][cond]["error"] = str(e)
             if verbose:
@@ -217,9 +219,12 @@ def main():
             import traceback
             manifest["conditions"][cond]["error"] = f"export: {e}"
             tb_lines = traceback.format_exc()
+            # Print to stdout as well so Colab shows it even if stderr is truncated
             if verbose:
                 print(f"    export failed: {e}", file=sys.stderr)
                 print(tb_lines, file=sys.stderr)
+                print(f"\nEXPORT FAILED ({cond}): {e}", flush=True)
+                print(tb_lines, flush=True)
             # Write full traceback to file so it is not lost when stderr is truncated (e.g. Colab)
             try:
                 err_file = out_root / f"export_error_{cond}.txt"
@@ -229,6 +234,7 @@ def main():
                     f.write(str(e))
                 if verbose:
                     print(f"    Full traceback written to: {err_file}", file=sys.stderr)
+                    print(f"Full traceback written to: {err_file}", flush=True)
             except Exception:
                 pass
 
@@ -272,6 +278,10 @@ def main():
             for c in failed_export:
                 err = manifest["conditions"][c].get("error", "?")
                 print(f"  {c}: {err}", file=sys.stderr)
+            err_files = [out_root / f"export_error_{c}.txt" for c in failed_export]
+            existing = [f for f in err_files if f.exists()]
+            if existing:
+                print(f"Deploy failed. Full tracebacks in: {[str(f) for f in existing]}", flush=True)
         return 1
     return 0
 

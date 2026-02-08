@@ -54,6 +54,7 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
     """Export to PyTorch JIT format. Most reliable, always available. strict=False for dict outputs...."""
     import dataclasses
     logger.info(f"Exporting to JIT format: {save_path}")
+    print("JIT export: starting...", flush=True)
     
     model.eval()
     export_device = device if device else next(model.parameters()).device
@@ -83,16 +84,20 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
     # Try trace-safe wrapper first (tensor-only outputs) for fast, reliable export
     # Suppress TracerWarnings so the real exception is visible if trace fails
     import warnings
+    print("JIT export: running torch.jit.trace (wrapper)...", flush=True)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=torch.jit.TracerWarning)
         wrapper = _JITTraceWrapper(model)
         try:
             traced_model = torch.jit.trace(wrapper, dummy_input, strict=False)
         except Exception as e:
+            print(f"JIT trace (wrapper) failed: {e}", flush=True)
             logger.warning(f"JIT trace with wrapper failed ({e}); trying raw model.")
             try:
+                print("JIT export: retrying with raw model...", flush=True)
                 traced_model = torch.jit.trace(model, dummy_input, strict=False)
             except Exception as e2:
+                print(f"JIT export FAILED: {e2}", flush=True)
                 logger.error(f"Export failed: {e2}", exc_info=True)
                 raise
         finally:
