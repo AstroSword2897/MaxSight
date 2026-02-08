@@ -704,3 +704,4 @@ class GradNormStressIntegrator:
 
 
 
+

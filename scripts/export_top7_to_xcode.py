@@ -18,3 +18,4 @@ if __name__ == "__main__":
     ]
     import scripts.deploy_top7 as deploy
     deploy.main()
+

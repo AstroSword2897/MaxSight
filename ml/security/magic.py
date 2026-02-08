@@ -43,3 +43,4 @@ def validate_image_magic(file_bytes: bytes, allowed_types: tuple = ('jpg', 'png'
 
 
 
+
