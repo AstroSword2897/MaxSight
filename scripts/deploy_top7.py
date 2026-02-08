@@ -73,6 +73,8 @@ def main():
                         help="Device for validation (default: cuda if available)")
     parser.add_argument("--quick", action="store_true", default=True, help="JIT-only export (default: on; use --no-quick for full PTE)")
     parser.add_argument("--no-quick", action="store_false", dest="quick", help="Try ExecuTorch PTE first, then JIT fallback")
+    parser.add_argument("--coreml-only", action="store_true",
+                        help="Skip JIT/PTE; export only CoreML .mlpackage for Xcode (faster, avoids JIT segfault)")
     parser.add_argument("--quiet", action="store_true", help="Less verbose")
     args = parser.parse_args()
 
@@ -138,6 +140,9 @@ def main():
         conditions = (args.conditions or TOP7_CONDITIONS)[:7]
     conditions = conditions[:7]
 
+    if verbose:
+        print(f"Exporting all {len(conditions)} conditions: {', '.join(conditions)}", flush=True)
+
     tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
     num_classes = len(COCO_CLASSES)
     manifest = {"checkpoints_base": str(base), "output_dir": str(out_root), "conditions": {}}
@@ -194,23 +199,27 @@ def main():
 
         cond_out = out_root / cond
         cond_out.mkdir(parents=True, exist_ok=True)
+        coreml_only = getattr(args, "coreml_only", False)
         try:
             model.cpu()
-            bundle_path = export_ios_bundle(
-                model=model,
-                output_dir=str(cond_out),
-                input_size=(1, 3, 224, 224),
-                jit_only=getattr(args, "quick", False),
-            )
-            manifest["conditions"][cond]["export_path"] = str(bundle_path)
-            if verbose:
-                print(f"    exported -> {bundle_path}")
+            if not coreml_only:
+                bundle_path = export_ios_bundle(
+                    model=model,
+                    output_dir=str(cond_out),
+                    input_size=(1, 3, 224, 224),
+                    jit_only=getattr(args, "quick", False),
+                )
+                manifest["conditions"][cond]["export_path"] = str(bundle_path)
+                if verbose:
+                    print(f"    exported -> {bundle_path}")
+            else:
+                manifest["conditions"][cond]["export_path"] = str(cond_out)
             coreml_path = export_to_coreml(
                 model=model,
                 save_path=str(cond_out / f"{cond}.mlpackage"),
                 input_size=(1, 3, 224, 224),
                 device="cpu",
-                validate=True,
+                validate=not coreml_only,
             )
             if coreml_path:
                 manifest["conditions"][cond]["coreml_path"] = str(coreml_path)
@@ -244,16 +253,26 @@ def main():
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
     if verbose:
-        print(f"\nManifest: {manifest_path}")
+        coreml_done = [c for c in conditions if manifest["conditions"][c].get("coreml_path")]
+        print(f"\nCoreML exported: {len(coreml_done)}/{len(conditions)}  {coreml_done}")
+        print(f"Manifest: {manifest_path}")
 
     all_ok = all(
         manifest["conditions"][c].get("inference_ok") for c in conditions
     )
-    all_exported = validate_only or all(
-        not manifest["conditions"][c].get("inference_ok")
-        or manifest["conditions"][c].get("export_path")
-        for c in conditions
-    )
+    coreml_only = getattr(args, "coreml_only", False)
+    if coreml_only:
+        all_exported = validate_only or all(
+            not manifest["conditions"][c].get("inference_ok")
+            or manifest["conditions"][c].get("coreml_path")
+            for c in conditions
+        )
+    else:
+        all_exported = validate_only or all(
+            not manifest["conditions"][c].get("inference_ok")
+            or manifest["conditions"][c].get("export_path")
+            for c in conditions
+        )
     if verbose:
         print(f"Validated: {sum(1 for c in conditions if manifest['conditions'][c].get('inference_ok'))}/{len(conditions)}")
         if not validate_only:
@@ -268,7 +287,10 @@ def main():
 
     if not (all_ok and (validate_only or all_exported)):
         failed_inf = [c for c in conditions if not manifest["conditions"][c].get("inference_ok")]
-        failed_export = [c for c in conditions if manifest["conditions"][c].get("inference_ok") and not manifest["conditions"][c].get("export_path")]
+        if coreml_only:
+            failed_export = [c for c in conditions if manifest["conditions"][c].get("inference_ok") and not manifest["conditions"][c].get("coreml_path")]
+        else:
+            failed_export = [c for c in conditions if manifest["conditions"][c].get("inference_ok") and not manifest["conditions"][c].get("export_path")]
         if failed_inf:
             print(f"Validation failed: {', '.join(failed_inf)}", file=sys.stderr)
             for c in failed_inf:
