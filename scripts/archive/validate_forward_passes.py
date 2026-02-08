@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 import traceback
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model, CapabilityTier, TierConfig
@@ -42,15 +42,15 @@ def create_test_input(batch_size: int = 2, device: torch.device = None) -> Dict[
     if device is None:
         device = get_device()
     
-    # Image input: [B, 3, H, W] - matches ImagePreprocessor output
-    # Note: Real data would be [0, 255] uint8, but model expects normalized float
+    # Image input: [B, 3, H, W] - matches ImagePreprocessor output.
+    # Note: Real data would be [0, 255] uint8, but model expects normalized float.
     images = torch.randn(batch_size, 3, 224, 224, device=device)
     # Normalize to [0, 1] range (simulating preprocessing)
     images = torch.clamp((images + 1) / 2, 0, 1)
     
-    # Audio input: [B, samples] - raw waveform
-    audio = torch.randn(batch_size, 16000, device=device)  # 1 second at 16kHz
-    # Normalize audio to reasonable range
+    # Audio input: [B, samples] - raw waveform.
+    audio = torch.randn(batch_size, 16000, device=device)  # 1 second at 16kHz.
+    # Normalize audio to reasonable range.
     audio = torch.clamp(audio, -1, 1)
     
     return {
@@ -88,20 +88,20 @@ def test_tier_forward_pass(
         # Create model (exactly as training will)
         print(f"Creating model for {tier.name}...")
         model = create_model(
-            num_classes=91,  # COCO classes
-            use_audio=(tier.value >= 4),  # T4+ use audio
+            num_classes=91,  # COCO classes.
+            use_audio=(tier.value >= 4),  # T4+ use audio.
             tier_config=TierConfig.for_tier(tier)
         )
-        # CRITICAL: Set to eval mode (no dropout, batchnorm uses running stats)
+        # Set eval mode so dropout is off and batchnorm uses running stats.
         model.eval()
         model = model.to(device)
         
-        # Count parameters
+        # Count parameters.
         total_params = sum(p.numel() for p in model.parameters())
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"  Parameters: {total_params:,} total, {trainable_params:,} trainable")
         
-        # Create test input
+        # Create test input.
         inputs = create_test_input(batch_size=batch_size, device=device)
         
         # Warmup (critical for accurate timing)
@@ -119,10 +119,10 @@ def test_tier_forward_pass(
                 elif device.type == 'mps':
                     torch.mps.synchronize()
             except Exception as e:
-                print(f"  ⚠️  Warmup failed: {e}")
+                print(f"  WARNING  Warmup failed: {e}")
                 raise
         
-        # Clear cache and measure memory before
+        # Clear cache and measure memory before.
         if device.type == 'cuda':
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
@@ -135,7 +135,7 @@ def test_tier_forward_pass(
         else:
             memory_before = 0
         
-        # Time forward passes
+        # Time forward passes.
         latencies = []
         stage_a_latencies = []
         stage_b_latencies = []
@@ -151,7 +151,7 @@ def test_tier_forward_pass(
                 
                 start_time = time.time()
                 
-                # Forward pass
+                # Forward pass.
                 # Audio is passed as audio_features (not audio keyword)
                 if model.use_audio and inputs.get('audio') is not None:
                     outputs = model(inputs['images'], audio_features=inputs['audio'])
@@ -175,9 +175,9 @@ def test_tier_forward_pass(
                     stage_b_latencies.append(stage_b_time * 1000)
                 
                 elapsed = time.time() - start_time
-                latencies.append(elapsed * 1000)  # Convert to ms
+                latencies.append(elapsed * 1000)  # Convert to ms.
                 
-                # Capture output shapes on first run
+                # Capture output shapes on first run.
                 if i == 0:
                     for key, value in outputs.items():
                         if isinstance(value, torch.Tensor):
@@ -188,7 +188,7 @@ def test_tier_forward_pass(
                                 for k, v in value.items()
                             }
         
-        # Measure memory after
+        # Measure memory after.
         if device.type == 'cuda':
             memory_after = torch.cuda.max_memory_allocated() / 1024**2
         elif device.type == 'mps':
@@ -196,7 +196,7 @@ def test_tier_forward_pass(
         else:
             memory_after = 0
         
-        # Calculate statistics
+        # Calculate statistics.
         results['latency_ms'] = {
             'mean': sum(latencies) / len(latencies),
             'min': min(latencies),
@@ -225,8 +225,8 @@ def test_tier_forward_pass(
         }
         results['success'] = True
         
-        # Print results
-        print(f"\n  ✅ SUCCESS")
+        # Print results.
+        print(f"\n  OK SUCCESS")
         print(f"  Latency: {results['latency_ms']['mean']:.2f}ms (min: {results['latency_ms']['min']:.2f}ms, max: {results['latency_ms']['max']:.2f}ms)")
         if results['stage_a_latency_ms']:
             print(f"  Stage A: {results['stage_a_latency_ms']['mean']:.2f}ms")
@@ -239,14 +239,14 @@ def test_tier_forward_pass(
         if results['stage_a_latency_ms']:
             stage_a_mean = results['stage_a_latency_ms']['mean']
             if stage_a_mean > 150:
-                print(f"  ⚠️  WARNING: Stage A latency ({stage_a_mean:.2f}ms) exceeds 150ms target!")
+                print(f"  WARNING  WARNING: Stage A latency ({stage_a_mean:.2f}ms) exceeds 150ms target!")
                 results['errors'].append(f"Stage A latency {stage_a_mean:.2f}ms > 150ms target")
             else:
-                print(f"  ✅ Stage A latency ({stage_a_mean:.2f}ms) meets <150ms target")
+                print(f"  OK Stage A latency ({stage_a_mean:.2f}ms) meets <150ms target")
         
     except Exception as e:
         error_msg = f"Forward pass failed: {str(e)}"
-        print(f"\n  ❌ FAILED: {error_msg}")
+        print(f"\n  FAIL FAILED: {error_msg}")
         print(f"  Traceback:")
         traceback.print_exc()
         results['errors'].append(error_msg)
@@ -289,24 +289,24 @@ def main():
             if not results['success']:
                 failed_tiers.append(tier.name)
             
-            # Clear cache between tiers to avoid memory accumulation
+            # Clear cache between tiers to avoid memory accumulation.
             if device.type == 'cuda':
                 torch.cuda.empty_cache()
             elif device.type == 'mps':
                 torch.mps.empty_cache()
                 
         except Exception as e:
-            print(f"\n❌ CRITICAL ERROR testing {tier.name}: {e}")
+            print(f"\nFAIL CRITICAL ERROR testing {tier.name}: {e}")
             traceback.print_exc()
             failed_tiers.append(tier.name)
             
-            # Clear cache even on error
+            # Clear cache even on error.
             if device.type == 'cuda':
                 torch.cuda.empty_cache()
             elif device.type == 'mps':
                 torch.mps.empty_cache()
     
-    # Summary
+    # Summary.
     print("\n" + "="*60)
     print("VALIDATION SUMMARY")
     print("="*60)
@@ -316,13 +316,13 @@ def main():
     print(f"Tiers Failed: {len(failed_tiers)}")
     
     if failed_tiers:
-        print(f"\n❌ FAILED TIERS: {', '.join(failed_tiers)}")
-        print("\n⚠️  STOP: Fix failures before proceeding to training!")
+        print(f"\nFAIL FAILED TIERS: {', '.join(failed_tiers)}")
+        print("\nWARNING  STOP: Fix failures before proceeding to training!")
         return 1
     
-    print("\n✅ ALL TIERS PASSED!")
+    print("\nOK ALL TIERS PASSED!")
     
-    # Print latency summary
+    # Print latency summary.
     print("\n" + "-"*60)
     print("LATENCY SUMMARY")
     print("-"*60)
@@ -334,7 +334,7 @@ def main():
             stage_a = stage_a_data.get('mean', 'N/A') if stage_a_data else 'N/A'
             print(f"{tier:20s} | Total: {latency:7.2f}ms | Stage A: {stage_a if isinstance(stage_a, float) else str(stage_a):>7}")
     
-    # Print memory summary
+    # Print memory summary.
     print("\n" + "-"*60)
     print("MEMORY SUMMARY")
     print("-"*60)
@@ -346,7 +346,7 @@ def main():
             print(f"{tier:20s} | Memory: {memory:7.2f} MB | Params: {params:>12,}")
     
     print("\n" + "="*60)
-    print("✅ VALIDATION COMPLETE - PROCEED TO SMOKE TRAINING")
+    print("OK VALIDATION COMPLETE - PROCEED TO SMOKE TRAINING")
     print("="*60)
     
     return 0
@@ -354,4 +354,5 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+
 

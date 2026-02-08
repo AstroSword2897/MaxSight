@@ -586,7 +586,7 @@ class ReadinessDashboard:
         """Generate prioritized recommendations."""
         recommendations = []
         
-        # Critical first.
+        # Process critical items first.
         for item in self.checklist:
             if item.status == 'fail' and item.recommendation:
                 recommendations.append(f"[CRITICAL] {item.recommendation}")
@@ -639,7 +639,7 @@ class HealthChecker:
     """Health check system for MaxSight Tier 1 heads and system reliability.
     Run daily to catch issues before they impact users."""
     
-    # Critical thresholds for Tier 1 heads.
+    # Thresholds for Tier 1 head alerts.
     TIER1_DETECTION_RATE_THRESHOLD = 0.85
     TIER1_MAP_THRESHOLD = 0.80
     TIER1_IOU_THRESHOLD = 0.70
@@ -862,5 +862,6 @@ class HealthChecker:
             report['overall_status'] = 'FAIL'
         
         return report
+
 
 

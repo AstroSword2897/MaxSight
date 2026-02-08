@@ -34,18 +34,18 @@ class FunctionFlowTracer:
         print(f"\nInput: images.shape = {images.shape}")
         print(f"Batch size: {batch_size}")
         
-        # Trace Stage A
+        # Trace Stage A.
         print("\n" + "="*80)
         print("STAGE A: Fast Safety Pass (<150ms target)")
         print("="*80)
         
-        # Stage A backbone
+        # Stage A backbone.
         print("\n1. _forward_stage_a_backbone()")
         print("   - Input: images [B, 3, 224, 224]")
         print("   - Backbone: ResNet50 + FPN (ALWAYS, regardless of tier)")
         print("   - Output: fpn_features (p2, p3, p4, p5), fused_features, scene_context")
         
-        # Stage A heads
+        # Stage A heads.
         print("\n2. Stage A Heads (Safety-Critical):")
         print("   - Objectness head")
         print("   - Classification head")
@@ -54,7 +54,7 @@ class FunctionFlowTracer:
         print("   - Urgency head")
         print("   - Uncertainty head")
         
-        # Decision point
+        # Decision point.
         print("\n3. Stage A → Stage B Decision:")
         print("   - Check: stage_a_latency_ms > 200ms? → skip_stage_b = True")
         print("   - Check: uncertainty > 0.7? → skip_stage_b = True")
@@ -201,11 +201,11 @@ def main():
     )
     model.eval()
     
-    # Create test input
+    # Create test input.
     batch_size = 1
     images = torch.randn(batch_size, 3, 224, 224)
     
-    # Run analysis
+    # Run analysis.
     tracer = FunctionFlowTracer()
     tracer.trace_forward(model, images)
     outputs = tracer.analyze_data_flow(model, images)
@@ -223,4 +223,5 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+
 

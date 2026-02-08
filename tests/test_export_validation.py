@@ -40,7 +40,7 @@ def validate_exported_model(
             try:
                 import executorch
                 # Load and run executorch model.
-                # Note: This is simplified - actual executorch loading is more complex.
+                # Simplified check; actual ExecuTorch loading is more complex.
                 return {
                     'format': format,
                     'status': 'skipped',
@@ -267,5 +267,6 @@ def test_e2e_checkpoint_to_jit():
 
 if __name__ == "__main__":
     test_all_exports()
+
 
 

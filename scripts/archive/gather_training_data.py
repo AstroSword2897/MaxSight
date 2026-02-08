@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Project root
+# Project root.
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -98,7 +98,7 @@ def main() -> int:
         print("Step 1: Skip download (--skip-download)")
         print()
 
-    # 2. Extract
+    # 2. Extract.
     if not args.skip_extract:
         print("Step 2: Extract COCO zips...")
         extract_script = ROOT / "scripts" / "extract_coco.py"
@@ -107,7 +107,7 @@ def main() -> int:
         else:
             from ml.data.download_datasets import verify_coco_dataset
             data_dir.mkdir(parents=True, exist_ok=True)
-            # Run extract in project root; extract_coco expects datasets/coco_raw
+            # Run extract in project root; extract_coco expects datasets/coco_raw.
             if data_dir == ROOT / "datasets" / "coco_raw":
                 try:
                     run([sys.executable, str(extract_script)], check=False)
@@ -194,3 +194,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

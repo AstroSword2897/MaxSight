@@ -15,5 +15,6 @@ When adding or editing comments in Python (or any code), follow **docs/COMMENT_S
 - **Non-obvious choices:** Add one line of context or constraint.
 - **No CRITICAL/OPTIMIZED/QUALITY labels** unless you replace them with the actual reason (e.g. "Enforce contiguous layout so CUDA runs without copy.").
 - **TODO:** Use `TODO: <actionable note>.` not "fix later".
+- **No multiline comments.** Use single-line `#` only; one thought per line.
 
-Reference: `docs/COMMENT_STYLE.md`.
+Reference: `docs/COMMENT_STYLE.md`. Cheat sheet: `docs/COMMENT_STYLE_CHEATSHEET.md`.

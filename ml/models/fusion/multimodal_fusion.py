@@ -86,7 +86,7 @@ class EnhancedAudioEncoder(nn.Module):
             direction = direction.mean(dim=1)  # [B].
             
             # Create spatial attention map (simplified)
-            # In practice, this would be more sophisticated.
+            # In practice, use a more sophisticated fusion strategy.
             spatial_attention = torch.ones(B, 14, 14, device=audio_features.device)
             # Could modulate based on direction here.
         
@@ -248,7 +248,7 @@ class HapticEmbedding(nn.Module):
 
 
 class HapticVisualAttention(nn.Module):
-    """Cross-modal attention: Haptic → Visual."""
+    """Cross-modal attention: Haptic to Visual."""
     
     def __init__(self, haptic_embed_dim: int = 128, visual_embed_dim: int = 256, attention_dim: int = 128):
         super().__init__()
@@ -265,6 +265,7 @@ class HapticVisualAttention(nn.Module):
         attended_visual = self.norm(visual_proj + attended.expand(-1, visual_proj.shape[1], -1))
         attention_weights = attn_weights.squeeze(1)
         return attended_visual, attention_weights
+
 
 
 

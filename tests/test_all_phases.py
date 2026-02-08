@@ -49,20 +49,21 @@ def run_all_phase_tests():
     total = len(results)
     
     for test_file, success in results:
-        status = "✅ PASS" if success else "❌ FAIL"
+        status = "PASS" if success else "FAIL"
         print(f"{status}: {test_file}")
     
     print(f"\nTotal: {passed}/{total} test suites passed")
     
     if passed == total:
-        print("🎉 All test suites passed!")
+        print("All test suites passed!")
         return 0
     else:
-        print("⚠️ Some test suites failed - check output above")
+        print("WARNING Some test suites failed - check output above")
         return 1
 
 
 if __name__ == "__main__":
     exit(run_all_phase_tests())
+
 
 

@@ -2,7 +2,9 @@
 
 **Apply this standard to every comment in the repository** (`ml/`, `scripts/`, `tools/`, `tests/`, `app/`). Comments should explain intent, stay concise, and stay consistent.
 
-**No multi-line comments.** Use only single-line comments (`#`). One thought per line. For multiple points use multiple single-line comments, not one block or paragraph across lines.
+**One-page reference:** See `docs/COMMENT_STYLE_CHEATSHEET.md` for a scannable good-vs-bad cheat sheet and template phrases.
+
+**No multi-line block comments.** Use only single-line comments (`#`). One thought per line. For multiple points use multiple single-line comments, not one block or paragraph. Docstrings (`"""`) for modules, classes, and functions are allowed and should follow the same intent and style.
 
 ---
 
@@ -125,14 +127,15 @@ Example:
 ## Summary
 
 1. **Explain intent, not code.**
-2. **Keep to 1–3 sentences; use present tense and active voice.**
+2. **Be concise:** 1–3 sentences max; use present tense and active voice.
 3. **Avoid redundancy and obvious explanations.**
 4. **Be consistent:** capitalization, punctuation, tense.
 5. **Add context:** assumptions, constraints, or reasoning for non-obvious choices.
 6. **Stay minimal but clear;** split complex thoughts into short sentences.
-7. **No jokes, personal notes, or vague placeholders;** use `TODO:` for actionable items.
+7. **No jokes, personal notes, or vague placeholders;** use `TODO:` with an actionable note.
 8. **Document non-obvious decisions** with reasoning or references.
 9. **Update or remove comments** when code changes.
+10. **No multiline comments.** Use only single-line `#` comments; one thought per line.
 
 ---
 
@@ -152,5 +155,5 @@ Example:
 ## Examples from this repo
 
 - **Intent:** "Clamp raw box logits before sigmoid to avoid extreme values and gradient explosion."
-- **Context:** "Single GPU→CPU sync for the batch; per-item sync would break pipeline parallelism."
+- **Context:** "Single GPU-to-CPU sync for the batch; per-item sync would break pipeline parallelism."
 - **Constraint:** "Omit nested dict when scene graph is off so JIT trace sees a single value type."

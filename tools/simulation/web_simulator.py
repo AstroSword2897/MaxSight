@@ -426,7 +426,7 @@ class MaxSightSession:
         # Acquire inference semaphore (serializes model access)
         with INFERENCE_SEMAPHORE:
             inference_start = time.perf_counter()
-            with torch.no_grad():  # Critical: prevents graph construction and memory leaks.
+            with torch.no_grad():  # Prevents graph construction and memory leaks.
                 if audio_features is not None:
                     audio_tensor = torch.from_numpy(audio_features).unsqueeze(0).to(self.core.device)
                     outputs = self.core.model(image_tensor, audio_tensor)
@@ -1334,7 +1334,7 @@ class MaxSightSimulator:
         # Acquire inference semaphore (serializes model access)
         with INFERENCE_SEMAPHORE:
             inference_start = time.perf_counter()
-            with torch.no_grad():  # Critical: prevents graph construction and memory leaks.
+            with torch.no_grad():  # Prevents graph construction and memory leaks.
                 if audio_features is not None:
                     audio_tensor = torch.from_numpy(audio_features).unsqueeze(0).to(self.device)
                     outputs = self.model(image_tensor, audio_tensor)
@@ -2684,7 +2684,7 @@ if __name__ == '__main__':
     # For production, use Gunicorn with 1 worker and proper WSGI configuration.
     if config.multi_user_enabled:
         logger.warning(
-            "⚠️  WARNING: Running multi-user mode with Flask dev server is unsafe. "
+            "WARNING: Running multi-user mode with Flask dev server is unsafe. "
             "Use Gunicorn for production: gunicorn -w 1 -t 120 tools.simulation.web_simulator:app"
         )
     
@@ -2694,5 +2694,6 @@ if __name__ == '__main__':
         logger.info("Shutting down...")
         registry.shutdown()
         logger.info("Shutdown complete")
+
 
 

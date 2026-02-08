@@ -27,7 +27,7 @@ VAL_ANN = "maxsight_val.json"
 
 
 def log(msg: str, ok: bool = None) -> None:
-    prefix = "✅ " if ok is True else "❌ " if ok is False else "ℹ️ "
+    prefix = "OK " if ok is True else "FAIL " if ok is False else "INFO "
     print(prefix + msg)
 
 
@@ -81,8 +81,8 @@ def main() -> int:
             annotations_empty = True
         if annotations_empty:
             print()
-            print("⚠️  EMPTY annotation files. Skipping training (would fail with empty dataset).")
-            print("   Add real maxsight_train.json and maxsight_val.json to Drive → MaxSight_Training/cleaned_splits/")
+            print("WARNING EMPTY annotation files. Skipping training (would fail with empty dataset).")
+            print("   Add real maxsight_train.json and maxsight_val.json to Drive/MaxSight_Training/cleaned_splits/")
             print("   Then re-run this script or run the training command below.")
             print()
             run_training = False
@@ -162,4 +162,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
 

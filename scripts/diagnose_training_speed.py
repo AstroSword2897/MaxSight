@@ -78,7 +78,7 @@ class TimingProfiler:
 
 def diagnose_data_loading(train_loader, num_batches: int = 10):
     """Diagnose data loading speed."""
-    print("🔍 Diagnosing data loading...")
+    print("Diagnosing data loading...")
     profiler = TimingProfiler()
     
     for i, batch in enumerate(train_loader):
@@ -89,15 +89,15 @@ def diagnose_data_loading(train_loader, num_batches: int = 10):
     stats = profiler.get_stats()
     if 'data_load' in stats:
         mean_time = stats['data_load']['mean']
-        print(f"  ⏱️  Mean batch load time: {mean_time:.4f}s")
-        print(f"  📊 Estimated time per epoch: {mean_time * len(train_loader):.2f}s")
+        print(f"  Time:  Mean batch load time: {mean_time:.4f}s")
+        print(f"  Estimated time per epoch: {mean_time * len(train_loader):.2f}s")
     
     return profiler
 
 
 def diagnose_forward_pass(model, train_loader, device, num_batches: int = 10):
     """Diagnose forward pass speed."""
-    print("🔍 Diagnosing forward pass...")
+    print("Diagnosing forward pass...")
     profiler = TimingProfiler()
     model.eval()
     
@@ -117,15 +117,15 @@ def diagnose_forward_pass(model, train_loader, device, num_batches: int = 10):
     stats = profiler.get_stats()
     if 'forward_pass' in stats:
         mean_time = stats['forward_pass']['mean']
-        print(f"  ⏱️  Mean forward pass time: {mean_time:.4f}s")
-        print(f"  📊 Estimated time per epoch: {mean_time * len(train_loader):.2f}s")
+        print(f"  Time:  Mean forward pass time: {mean_time:.4f}s")
+        print(f"  Estimated time per epoch: {mean_time * len(train_loader):.2f}s")
     
     return profiler
 
 
 def diagnose_validation(trainer, num_batches: int = 5):
     """Diagnose validation speed."""
-    print("🔍 Diagnosing validation...")
+    print("Diagnosing validation...")
     profiler = TimingProfiler()
     
     # Mock validation with timing.
@@ -145,12 +145,12 @@ def diagnose_validation(trainer, num_batches: int = 5):
     try:
         trainer.validate(epoch=0, use_ema=False)
     except Exception as e:
-        print(f"  ⚠️  Validation error: {e}")
+        print(f"  WARNING  Validation error: {e}")
     
     stats = profiler.get_stats()
     if 'validation' in stats:
         mean_time = stats['validation']['mean']
-        print(f"  ⏱️  Validation time: {mean_time:.2f}s")
+        print(f"  Time:  Validation time: {mean_time:.2f}s")
     
     return profiler
 
@@ -191,7 +191,7 @@ def main():
         pin_memory=(device.type == "cuda"),
     )
     
-    print(f"\n📊 Dataset sizes:")
+    print(f"\nDataset sizes:")
     print(f"  Train batches: {len(train_loader)}")
     print(f"  Val batches: {len(val_loader)}")
     
@@ -246,28 +246,29 @@ def main():
     if 'validation' in stats:
         val_pct = stats['validation']['total'] / total_time * 100
         if val_pct > 30:
-            print("⚠️  Validation is taking >30% of time!")
-            print("   → Consider optimizing validation loop (batch get_detections)")
-            print("   → Reduce validation frequency (validate every N epochs)")
+            print("WARNING  Validation is taking >30% of time!")
+            print("   - Consider optimizing validation loop (batch get_detections)")
+            print("   - Reduce validation frequency (validate every N epochs)")
     
     if 'data_load' in stats:
         data_pct = stats['data_load']['total'] / total_time * 100
         if data_pct > 20:
-            print("⚠️  Data loading is taking >20% of time!")
-            print(f"   → Increase num_workers (current: {args.num_workers})")
-            print("   → Enable pin_memory if using CUDA")
-            print("   → Consider caching/preloading images")
+            print("WARNING  Data loading is taking >20% of time!")
+            print(f"   - Increase num_workers (current: {args.num_workers})")
+            print("   - Enable pin_memory if using CUDA")
+            print("   - Consider caching/preloading images")
     
     if 'forward_pass' in stats:
         forward_pct = stats['forward_pass']['total'] / total_time * 100
         if forward_pct < 50:
-            print("⚠️  Forward pass is <50% of time - likely I/O bound!")
-            print("   → Increase batch size if memory allows")
-            print("   → Optimize data loading (see above)")
+            print("WARNING  Forward pass is <50% of time - likely I/O bound!")
+            print("   - Increase batch size if memory allows")
+            print("   - Optimize data loading (see above)")
     
     print("="*70)
 
 
 if __name__ == "__main__":
     main()
+
 

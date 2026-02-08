@@ -47,10 +47,10 @@ def test_gradnorm_availability():
         # Verifies the class is actually usable (not just importable)
         assert GradNormMultiHeadLoss is not None
         assert callable(GradNormMultiHeadLoss)
-        print("✅ GradNormMultiHeadLoss imported successfully")
+        print("OK GradNormMultiHeadLoss imported successfully")
         return True
     except ImportError as e:
-        print(f"❌ GradNorm not available: {e}")
+        print(f"FAIL GradNorm not available: {e}")
         return False
 
 
@@ -75,13 +75,13 @@ def test_gradnorm_initialization():
             update_interval=100
         )
         
-        print("✅ GradNorm initialized successfully")
+        print("OK GradNorm initialized successfully")
         print(f"   - Number of heads: {gradnorm.num_heads}")
         print(f"   - Alpha: {gradnorm.alpha}")
         print(f"   - Update interval: {gradnorm.update_interval}")
         return True, gradnorm
     except Exception as e:
-        print(f"❌ GradNorm initialization failed: {e}")
+        print(f"FAIL GradNorm initialization failed: {e}")
         import traceback
         traceback.print_exc()
         return False, None
@@ -122,17 +122,17 @@ def test_training_loop_with_gradnorm():
                 gradnorm_update_interval=50
             )
             
-            print("✅ Training loop created with GradNorm enabled")
+            print("OK Training loop created with GradNorm enabled")
             print(f"   - use_gradnorm: {trainer.use_gradnorm}")
             return True
         except Exception as e:
-            print(f"⚠️ Training loop creation failed: {e}")
+            print(f"WARNING Training loop creation failed: {e}")
             print("   This is expected if GradNorm requires specific loss structure")
             import traceback
             traceback.print_exc()
             return False
     except Exception as e:
-        print(f"❌ Test failed: {e}")
+        print(f"FAIL Test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -173,12 +173,12 @@ def test_gradnorm_loss_computation():
         # Compute loss.
         total_loss, metrics = gradnorm(outputs, targets, model=model)
         
-        print("✅ GradNorm loss computation successful")
+        print("OK GradNorm loss computation successful")
         print(f"   - Total loss: {total_loss.item():.4f}")
         print(f"   - Metrics keys: {list(metrics.keys())}")
         return True
     except Exception as e:
-        print(f"❌ GradNorm loss computation failed: {e}")
+        print(f"FAIL GradNorm loss computation failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -215,20 +215,21 @@ def main():
     total = len(results)
     
     for test_name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
+        status = "PASS" if result else "FAIL"
         print(f"{status}: {test_name}")
     
     print(f"\nTotal: {passed}/{total} tests passed")
     
     if passed == total:
-        print("🎉 All tests passed!")
+        print("All tests passed!")
         return 0
     else:
-        print("⚠️ Some tests failed - check output above")
+        print("WARNING Some tests failed - check output above")
         return 1
 
 
 if __name__ == "__main__":
     exit(main())
+
 
 

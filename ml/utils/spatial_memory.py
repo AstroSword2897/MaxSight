@@ -26,7 +26,7 @@ class SpatialObject:
     last_seen: float
     seen_count: int
     stability: float  # 0-1, how stable the position is.
-    # For incremental stability calculation.
+    # Compute stability incrementally.
     position_sum: Tuple[float, float] = field(default_factory=lambda: (0.0, 0.0))
     position_sq_sum: Tuple[float, float] = field(default_factory=lambda: (0.0, 0.0))
 
@@ -101,7 +101,7 @@ class SpatialMemory:
                 matched_obj = self._find_matching_object(class_name, position)
                 
                 if matched_obj:
-                    # Update existing object with incremental stability.
+                    # Update existing object stability incrementally.
                     matched_obj.last_seen = timestamp
                     matched_obj.seen_count += 1
                     old_pos = matched_obj.position
@@ -119,7 +119,7 @@ class SpatialMemory:
                         matched_obj.position_sq_sum[1] + cy * cy
                     )
                     
-                    # Recalculate stability using incremental method.
+                    # Recalculate stability from running statistics.
                     matched_obj.stability = self._calculate_stability_incremental(matched_obj)
                     self._spatial_index_dirty[class_name] = True
                 else:
@@ -411,5 +411,6 @@ class SpatialMemorySystem(SpatialMemory):
             **kwargs,
         )
         self.image_size = image_size
+
 
 

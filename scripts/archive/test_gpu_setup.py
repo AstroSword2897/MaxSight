@@ -5,7 +5,7 @@ Run this after setting up cloud GPU to ensure everything works."""
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import torch
@@ -15,15 +15,15 @@ from ml.models.maxsight_cnn import MaxSightCNN, CapabilityTier
 def test_cuda():
     """Test CUDA availability and device info."""
     print("=" * 60)
-    print("🔍 CUDA Test")
+    print("CUDA Test")
     print("=" * 60)
     
     cuda_available = torch.cuda.is_available()
-    print(f"✅ CUDA Available: {cuda_available}")
+    print(f"OK CUDA Available: {cuda_available}")
     
     if cuda_available:
         device_count = torch.cuda.device_count()
-        print(f"✅ CUDA Devices: {device_count}")
+        print(f"OK CUDA Devices: {device_count}")
         
         for i in range(device_count):
             props = torch.cuda.get_device_properties(i)
@@ -31,10 +31,10 @@ def test_cuda():
             print(f"   Memory: {props.total_memory / 1e9:.1f} GB")
             print(f"   Compute Capability: {props.major}.{props.minor}")
         
-        print(f"\n✅ CUDA Version: {torch.version.cuda}")
-        print(f"✅ cuDNN Version: {torch.backends.cudnn.version()}")
+        print(f"\nOK CUDA Version: {torch.version.cuda}")
+        print(f"OK cuDNN Version: {torch.backends.cudnn.version()}")
     else:
-        print("❌ CUDA not available. Make sure:")
+        print("FAIL CUDA not available. Make sure:")
         print("   1. GPU runtime is enabled (Colab: Runtime → Change runtime type → GPU)")
         print("   2. PyTorch with CUDA is installed")
         print("   3. You're using a GPU instance (AWS/Paperspace)")
@@ -59,17 +59,17 @@ def test_model_loading():
         )
         
         param_count = sum(p.numel() for p in model.parameters())
-        print(f"✅ Model loaded: {param_count:,} parameters")
+        print(f"OK Model loaded: {param_count:,} parameters")
         
-        # Move to GPU if available
+        # Move to GPU if available.
         if device == 'cuda':
             model = model.cuda()
-            print("✅ Model moved to GPU")
+            print("OK Model moved to GPU")
         
         return model, device
         
     except Exception as e:
-        print(f"❌ Error loading model: {e}")
+        print(f"FAIL Error loading model: {e}")
         import traceback
         traceback.print_exc()
         return None, None
@@ -82,11 +82,11 @@ def test_forward_pass(model, device):
     print("=" * 60)
     
     if model is None:
-        print("❌ Model not loaded, skipping forward pass test")
+        print("FAIL Model not loaded, skipping forward pass test")
         return False
     
     try:
-        # Create dummy input
+        # Create dummy input.
         batch_size = 2
         dummy_input = torch.randn(batch_size, 3, 224, 224)
         
@@ -96,15 +96,15 @@ def test_forward_pass(model, device):
         print(f"Input shape: {dummy_input.shape}")
         print(f"Input device: {dummy_input.device}")
         
-        # Forward pass
+        # Forward pass.
         print("\nRunning forward pass...")
         with torch.no_grad():
             output = model(dummy_input)
         
-        print("✅ Forward pass successful!")
+        print("OK Forward pass successful!")
         print(f"\nOutput keys: {list(output.keys())}")
         
-        # Print output shapes
+        # Print output shapes.
         for key, value in output.items():
             if isinstance(value, torch.Tensor):
                 print(f"  {key}: {value.shape}")
@@ -116,7 +116,7 @@ def test_forward_pass(model, device):
         return True
         
     except Exception as e:
-        print(f"❌ Error in forward pass: {e}")
+        print(f"FAIL Error in forward pass: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -129,11 +129,11 @@ def test_memory():
     print("=" * 60)
     
     if not torch.cuda.is_available():
-        print("⚠️  CUDA not available, skipping memory test")
+        print("WARNING  CUDA not available, skipping memory test")
         return
     
     try:
-        # Get memory info
+        # Get memory info.
         total_memory = torch.cuda.get_device_properties(0).total_memory
         allocated = torch.cuda.memory_allocated(0)
         reserved = torch.cuda.memory_reserved(0)
@@ -143,15 +143,15 @@ def test_memory():
         print(f"Reserved: {reserved / 1e9:.2f} GB ({reserved / total_memory * 100:.1f}%)")
         print(f"Free: {(total_memory - reserved) / 1e9:.2f} GB")
         
-        # Check if enough memory for training
+        # Check if enough memory for training.
         free_gb = (total_memory - reserved) / 1e9
         if free_gb < 8:
-            print("⚠️  Warning: Less than 8GB free. May need to reduce batch size.")
+            print("WARNING  Warning: Less than 8GB free. May need to reduce batch size.")
         else:
-            print("✅ Sufficient memory for training")
+            print("OK Sufficient memory for training")
         
     except Exception as e:
-        print(f"❌ Error checking memory: {e}")
+        print(f"FAIL Error checking memory: {e}")
 
 
 def main():
@@ -161,37 +161,37 @@ def main():
     print("=" * 60)
     print()
     
-    # Test CUDA
+    # Test CUDA.
     cuda_available = test_cuda()
     
-    # Test model loading
+    # Test model loading.
     model, device = test_model_loading()
     
-    # Test forward pass
+    # Test forward pass.
     if model is not None:
         forward_success = test_forward_pass(model, device)
     else:
         forward_success = False
     
-    # Test memory
+    # Test memory.
     test_memory()
     
-    # Summary
+    # Summary.
     print("\n" + "=" * 60)
-    print("📊 Test Summary")
+    print(" Test Summary")
     print("=" * 60)
     
     all_passed = cuda_available and (model is not None) and forward_success
     
     if all_passed:
-        print("✅ All tests passed! Ready for training.")
+        print("OK All tests passed! Ready for training.")
         print("\nNext steps:")
         print("  1. Run smoke training:")
         print("     python scripts/smoke_train.py --tier T0_BASELINE_CNN --epochs 2 --device cuda")
         print("  2. Start full training:")
         print("     python scripts/train_maxsight.py --config ml/training/configs/t0_baseline.yaml --device cuda")
     else:
-        print("❌ Some tests failed. Please check the errors above.")
+        print("FAIL Some tests failed. Please check the errors above.")
         print("\nCommon issues:")
         if not cuda_available:
             print("  - CUDA not available: Enable GPU runtime or use GPU instance")
@@ -208,4 +208,5 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
 

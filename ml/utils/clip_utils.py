@@ -20,3 +20,4 @@ def clip_image_features_to_tensor(out: Any) -> torch.Tensor:
         return last[:, 0]
     raise TypeError("CLIP image output has no pooler_output or last_hidden_state")
 
+

@@ -90,7 +90,7 @@ def backup_training_artifacts(best_ckpt: Path, data_dir: Path):
     with open(backup_dir / "metadata.json", "w") as f:
         json.dump(meta, f, indent=2)
     
-    logger.info(f"✅ Backup completed: {backup_dir}")
+    logger.info(f"Backup completed: {backup_dir}")
 
 
 def create_loss_fn(num_classes: int, use_gradnorm: bool = False):
@@ -435,4 +435,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

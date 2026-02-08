@@ -129,7 +129,7 @@ class HeadIsolationStressTest:
                 outputs = model(images)
                 
                 # Track gradient norms per head.
-                # This would enable per-head gradient monitoring and debugging.
+                # Enable per-head gradient monitoring and debugging.
                 
                 num_batches += 1
             
@@ -169,7 +169,7 @@ class HeadIsolationStressTest:
             if grad_norm_key in metrics:
                 grad_norms = metrics[grad_norm_key]
                 if len(grad_norms) > 0 and grad_norms[-1] < 1e-6:
-                    red_flags.append(f"{head_name} gradient norm → near zero")
+                    red_flags.append(f"{head_name} gradient norm near zero")
         
         passed = len(red_flags) == 0
         
@@ -224,7 +224,7 @@ class LossScalingStressTest:
         scale_factor: float
     ) -> nn.Module:
         """Create a loss function with scaled head loss."""
-        # This would wrap the loss function to scale specific head losses.
+        # Wrap the loss function to scale specific head losses.
         # Simplified implementation.
         return loss_fn
     
@@ -598,7 +598,7 @@ class StressTestSuite:
         # Test 1: Head Isolation.
         logger.info("Running Head Isolation Stress Tests...")
         isolation_test = HeadIsolationStressTest(self.config)
-        # Note: This is expensive, might want to skip in quick tests.
+        # Expensive; skip in quick tests.
         # All_results['head_isolation'] = isolation_results.
         
         # Test 2: Loss Scaling.
@@ -665,7 +665,7 @@ class StressTestSuite:
                         dashboard['tests'].append({
                             'category': category,
                             'test': result.test_name,
-                            'status': '✅' if result.passed else '❌',
+                            'status': 'OK' if result.passed else 'FAIL',
                             'red_flags': result.red_flags,
                             'metrics': result.metrics,
                             'notes': result.notes
@@ -699,5 +699,6 @@ class StressTestSuite:
             json.dump(report, f, indent=2)
         
         logger.info(f"Stress test report saved to {filepath}")
+
 
 

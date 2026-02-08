@@ -100,7 +100,7 @@ class QuantizationValidator:
         if targets is not None:
             # Targets format: [B, max_objects] with class indices.
             # For MaxSight, we need to match predictions to ground truth.
-            # This is simplified - full matching requires IoU computation.
+            # Simplified matching; full matching requires IoU computation.
             fp32_preds = fp32_flat.argmax(dim=1)
             int8_preds = int8_flat.argmax(dim=1)
             
@@ -596,5 +596,6 @@ if __name__ == "__main__":
         print(f"  INT8 latency: {bench['int8']['mean_ms']:.2f} ms")
         print(f"  Speedup: {bench['speedup']:.2f}x")
         print(f"  Latency reduction: {bench['latency_reduction_percent']:.1f}%")
+
 
 

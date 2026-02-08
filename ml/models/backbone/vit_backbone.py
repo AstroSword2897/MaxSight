@@ -547,7 +547,7 @@ class HybridCNNViTBackbone(nn.Module):
             if hasattr(current_module, 'VisionTransformerBackbone'):
                 VisionTransformerBackbone = getattr(current_module, 'VisionTransformerBackbone')
             else:
-                # If not in this file, import from the package.
+                # Import from package when not defined in this file.
                 from ml.models.backbone import VisionTransformerBackbone
         except (ImportError, AttributeError):
             raise ImportError(
@@ -820,7 +820,7 @@ if __name__ == '__main__':
         cross_layer_alpha=None,  # Learnable.
     ).cuda()
     
-    print(f"Flash Attention: {'✓' if XFORMERS_AVAILABLE else '✗'}")
+    print(f"Flash Attention: {'yes' if XFORMERS_AVAILABLE else 'no'}")
     print(f"Parameters: {sum(p.numel() for p in model.parameters())/1e6:.2f}M")
     
     x = torch.randn(4, 3, 224, 224).cuda()

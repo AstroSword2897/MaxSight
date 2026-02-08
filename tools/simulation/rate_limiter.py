@@ -35,7 +35,7 @@ class RateLimiter:
                     f"Rate limit exceeded: {self.requests_per_minute} requests per {self.window_seconds} seconds"
                 )
             
-            # Record this request.
+            # Record request for rate limiting.
             self.requests[key].append(now)
     
     def get_remaining(self, session_id: str, identifier: Optional[str] = None) -> int:
@@ -62,5 +62,6 @@ class GlobalRateLimiter:
     def get_remaining(self, identifier: str) -> int:
         """Get remaining global requests."""
         return self.limiter.get_remaining("global", identifier)
+
 
 

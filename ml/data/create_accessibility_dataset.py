@@ -64,7 +64,7 @@ class AccessibilityDataset(Dataset):
         # Convert to tensor and normalize.
         tensor = self.norm(self.to_tensor(img))
         
-        # Get labels for this image.
+        # Look up labels for the current image path.
         labels = self.labels[path.stem]
         
         # Validate and format labels.
@@ -350,7 +350,7 @@ def generate_synthetic_dataset(
         'output_dir': str(output)
     }
     
-    print(f"✅ Generated {len(synthetic_labels)} synthetic samples → {output}")
+    print(f"OK Generated {len(synthetic_labels)} synthetic samples -> {output}")
     print(f"   Annotations saved to: {annotations_file}")
     
     return stats
@@ -379,7 +379,7 @@ def create_label_template(path: Path):
     with open(path, 'w') as f:
         json.dump(template, f, indent=2)
     
-    print(f"✅ Labeling template saved → {path}")
+    print(f"OK Labeling template saved -> {path}")
 
 
 # Dataset Registry & Utilities.
@@ -435,7 +435,7 @@ def combine_datasets(
         'output_dir': str(output_dir)
     }
     
-    print(f"✅ Combined dataset: {stats['real_samples']} real + {stats['synthetic_samples']} synthetic = {stats['total_samples']} total")
+    print(f"OK Combined dataset: {stats['real_samples']} real + {stats['synthetic_samples']} synthetic = {stats['total_samples']} total")
     
     return stats
 
@@ -484,7 +484,7 @@ if __name__ == "__main__":
             n_per_image=args.n_per_image,
             augmentation_types=args.augmentations
         )
-        print(f"\n📊 Generation Statistics:")
+        print(f"\nGeneration Statistics:")
         for key, value in stats.items():
             print(f"   {key}: {value}")
     
@@ -499,10 +499,11 @@ if __name__ == "__main__":
             synthetic_labels=args.synthetic_labels,
             output_dir=args.output
         )
-        print(f"\n📊 Combination Statistics:")
+        print(f"\nCombination Statistics:")
         for key, value in stats.items():
             print(f"   {key}: {value}")
     
     else:
         parser.print_help()
+
 

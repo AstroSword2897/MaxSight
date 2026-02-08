@@ -76,7 +76,7 @@ def run_therapy_session_simulation(
         'duration': session_duration
     })
     
-    print(f"\n✓ Session started: {session_id}")
+    print(f"\n[ok] Session started: {session_id}")
     
     # Simulate session.
     user_skill = initial_skill
@@ -125,7 +125,7 @@ def run_therapy_session_simulation(
             fatigue = max(0.0, fatigue - 0.3)
             print(f"  Task {task_num+1:2d}: REST (fatigue reduced to {fatigue:.2f})")
         else:
-            status = "✓" if result['success'] else "✗"
+            status = "[ok]" if result['success'] else "[fail]"
             print(f"  Task {task_num+1:2d}: {task['task_type'].value:20s} | Difficulty: {task['difficulty']:.2f} | {status} | Skill: {user_skill:.2f} | Fatigue: {fatigue:.2f}")
     
     # End session and get report.
@@ -212,7 +212,7 @@ def test_scene_based_therapy():
         print(f"  Spatial relationships: {spatial_task['spatial_relationships']}")
         print(f"  Difficulty: {spatial_task['difficulty']}")
     
-    print("\n✓ Scene-based therapy tasks generated successfully")
+    print("\n[ok] Scene-based therapy tasks generated successfully")
     return True
 
 
@@ -236,7 +236,7 @@ def test_adaptive_difficulty():
     print(f"  Generated difficulty: {task1['difficulty']:.2f}")
     print(f"  Task type: {task1['task_type'].value}")
     assert task1['difficulty'] < 0.5, "Difficulty should be reduced for struggling user"
-    print("  ✓ Difficulty appropriately reduced")
+    print("  [ok] Difficulty appropriately reduced")
     
     # Scenario 2: User performs well (low uncertainty)
     print("\nScenario 2: User excelling (low uncertainty)")
@@ -250,14 +250,14 @@ def test_adaptive_difficulty():
     print(f"  Generated difficulty: {task2['difficulty']:.2f}")
     print(f"  Task type: {task2['task_type'].value}")
     assert task2['difficulty'] > 0.5, "Difficulty should be increased for excelling user"
-    print("  ✓ Difficulty appropriately increased")
+    print("  [ok] Difficulty appropriately increased")
     
     # Scenario 3: User is fatigued.
     print("\nScenario 3: User is fatigued")
     task3 = task_gen.generate_task(uncertainty=0.5, fatigue_score=0.85, recent_performance=good_performance)
     print(f"  Task type: {task3['task_type'].value}")
     assert task3['task_type'] == TaskType.FATIGUE_REST, "Should suggest rest when fatigued"
-    print("  ✓ Rest task suggested for fatigued user")
+    print("  [ok] Rest task suggested for fatigued user")
     
     return True
 
@@ -317,19 +317,19 @@ def test_skill_progression():
     skill_levels = [r['final_skill'] for r in results]
     avg_improvement = sum(r['skill_improvement'] for r in results) / len(results)
     
-    print(f"\n✓ Average skill improvement per session: {avg_improvement:.3f}")
-    print(f"✓ Success rate progression: {success_rates[0]:.2%} → {success_rates[-1]:.2%}")
-    print(f"✓ Skill level progression: {skill_levels[0]:.2f} → {skill_levels[-1]:.2f}")
+    print(f"\n[ok] Average skill improvement per session: {avg_improvement:.3f}")
+    print(f"[ok] Success rate progression: {success_rates[0]:.2%} -> {success_rates[-1]:.2%}")
+    print(f"[ok] Skill level progression: {skill_levels[0]:.2f} -> {skill_levels[-1]:.2f}")
     
     # Verify improvement trend - key metric is skill improvement.
     # Success rate may vary due to adaptive difficulty.
     if skill_levels[-1] > skill_levels[0] and avg_improvement > 0.05:
-        print("\n✅ SYSTEM IS EFFECTIVE: User skill improved over sessions")
+        print("\nOK SYSTEM IS EFFECTIVE: User skill improved over sessions")
         print(f"   Skill increased by {skill_levels[-1] - skill_levels[0]:.2f} points")
         print(f"   Average improvement per session: {avg_improvement:.3f}")
         return True
     else:
-        print("\n⚠️  WARNING: No clear improvement trend detected")
+        print("\nWARNING  WARNING: No clear improvement trend detected")
         return False
 
 
@@ -393,7 +393,7 @@ def test_therapy_with_real_scene():
         if 'instructions' in task:
             print(f"  Instructions: {task['instructions'][:80]}...")
     
-    print("\n✓ Therapy tasks successfully generated from real scene")
+    print("\n[ok] Therapy tasks successfully generated from real scene")
     return True
 
 
@@ -475,10 +475,10 @@ def test_long_term_effectiveness():
     skill_improvement = last_session['skill_level'] - first_session['skill_level']
     time_improvement = first_session['avg_reaction_time'] - last_session['avg_reaction_time']
     
-    print(f"\n📊 IMPROVEMENT METRICS:")
-    print(f"  Success rate: {first_session['success_rate']:.2%} → {last_session['success_rate']:.2%} (Δ {success_improvement:+.2%})")
-    print(f"  Skill level: {first_session['skill_level']:.2f} → {last_session['skill_level']:.2f} (Δ {skill_improvement:+.2f})")
-    print(f"  Reaction time: {first_session['avg_reaction_time']:.2f}s → {last_session['avg_reaction_time']:.2f}s (Δ {time_improvement:+.2f}s)")
+    print(f"\nIMPROVEMENT METRICS:")
+    print(f"  Success rate: {first_session['success_rate']:.2%} -> {last_session['success_rate']:.2%} (Δ {success_improvement:+.2%})")
+    print(f"  Skill level: {first_session['skill_level']:.2f} -> {last_session['skill_level']:.2f} (Δ {skill_improvement:+.2f})")
+    print(f"  Reaction time: {first_session['avg_reaction_time']:.2f}s -> {last_session['avg_reaction_time']:.2f}s (Δ {time_improvement:+.2f}s)")
     
     # Effectiveness criteria.
     # NOTE: Success rate and reaction time may not improve linearly because.
@@ -487,27 +487,27 @@ def test_long_term_effectiveness():
     
     # Primary metric: Skill improvement.
     if skill_improvement > 0.15:
-        print(f"\n  ✅ Skill level improved by {skill_improvement:.2f} (threshold: >0.15)")
+        print(f"\n  OK Skill level improved by {skill_improvement:.2f} (threshold: >0.15)")
         effectiveness_checks.append(True)
     else:
-        print(f"\n  ⚠️  Skill improvement: {skill_improvement:.2f} (expected >0.15)")
+        print(f"\n  WARNING  Skill improvement: {skill_improvement:.2f} (expected >0.15)")
         effectiveness_checks.append(False)
     
     # Secondary metrics: Success rate (may vary due to adaptive difficulty)
     if success_improvement > 0:
-        print(f"  ✅ Success rate improved by {success_improvement:.1%} (positive improvement)")
+        print(f"  OK Success rate improved by {success_improvement:.1%} (positive improvement)")
         effectiveness_checks.append(True)
     else:
-        print(f"  ℹ️  Success rate change: {success_improvement:.1%} (may vary due to adaptive difficulty)")
+        print(f"  INFO  Success rate change: {success_improvement:.1%} (may vary due to adaptive difficulty)")
         # Don't fail test if skill improved but success rate didn't.
         effectiveness_checks.append(skill_improvement > 0.15)
     
     # Reaction time may increase as difficulty increases.
     if time_improvement >= 0:
-        print(f"  ✅ Reaction time stable or improved: {time_improvement:+.2f}s")
+        print(f"  OK Reaction time stable or improved: {time_improvement:+.2f}s")
         effectiveness_checks.append(True)
     else:
-        print(f"  ℹ️  Reaction time change: {time_improvement:+.2f}s (expected with increased difficulty)")
+        print(f"  INFO  Reaction time change: {time_improvement:+.2f}s (expected with increased difficulty)")
         # Don't fail if skill improved significantly.
         effectiveness_checks.append(skill_improvement > 0.2)
     
@@ -530,9 +530,9 @@ def main():
     # Test 1: Scene-based therapy.
     try:
         results['scene_based'] = test_scene_based_therapy()
-        print("\n✓ Scene-based therapy test PASSED")
+        print("\n[ok] Scene-based therapy test PASSED")
     except Exception as e:
-        print(f"\n✗ Scene-based therapy test FAILED: {e}")
+        print(f"\nFAIL Scene-based therapy test FAILED: {e}")
         import traceback
         traceback.print_exc()
         results['scene_based'] = False
@@ -540,9 +540,9 @@ def main():
     # Test 2: Adaptive difficulty.
     try:
         results['adaptive_difficulty'] = test_adaptive_difficulty()
-        print("\n✓ Adaptive difficulty test PASSED")
+        print("\n[ok] Adaptive difficulty test PASSED")
     except Exception as e:
-        print(f"\n✗ Adaptive difficulty test FAILED: {e}")
+        print(f"\nFAIL Adaptive difficulty test FAILED: {e}")
         import traceback
         traceback.print_exc()
         results['adaptive_difficulty'] = False
@@ -550,9 +550,9 @@ def main():
     # Test 3: Skill progression.
     try:
         results['skill_progression'] = test_skill_progression()
-        print("\n✓ Skill progression test PASSED")
+        print("\n[ok] Skill progression test PASSED")
     except Exception as e:
-        print(f"\n✗ Skill progression test FAILED: {e}")
+        print(f"\nFAIL Skill progression test FAILED: {e}")
         import traceback
         traceback.print_exc()
         results['skill_progression'] = False
@@ -560,9 +560,9 @@ def main():
     # Test 4: Long-term effectiveness.
     try:
         results['long_term'] = test_long_term_effectiveness()
-        print("\n✓ Long-term effectiveness test PASSED")
+        print("\n[ok] Long-term effectiveness test PASSED")
     except Exception as e:
-        print(f"\n✗ Long-term effectiveness test FAILED: {e}")
+        print(f"\nFAIL Long-term effectiveness test FAILED: {e}")
         import traceback
         traceback.print_exc()
         results['long_term'] = False
@@ -578,23 +578,23 @@ def main():
     print(f"\nTests passed: {passed_tests}/{total_tests}")
     
     for test_name, passed in results.items():
-        status = "✅ PASS" if passed else "❌ FAIL"
+        status = "PASS" if passed else "FAIL"
         print(f"  {status} - {test_name.replace('_', ' ').title()}")
     
     if all(results.values()):
         print("\n" + "="*70)
-        print("✅ THERAPY SYSTEM IS EFFECTIVE")
+        print("OK THERAPY SYSTEM IS EFFECTIVE")
         print("="*70)
         print("\nThe therapy system demonstrates:")
-        print("  ✓ Adaptive difficulty based on user performance")
-        print("  ✓ Scene-based task generation from real detections")
-        print("  ✓ Measurable skill improvement over time")
-        print("  ✓ Appropriate fatigue management")
+        print("  [ok] Adaptive difficulty based on user performance")
+        print("  [ok] Scene-based task generation from real detections")
+        print("  [ok] Measurable skill improvement over time")
+        print("  [ok] Appropriate fatigue management")
         print("\nThe system is ready for integration into MaxSight.")
         return 0
     else:
         print("\n" + "="*70)
-        print("⚠️  THERAPY SYSTEM NEEDS IMPROVEMENT")
+        print("WARNING  THERAPY SYSTEM NEEDS IMPROVEMENT")
         print("="*70)
         print("\nSome effectiveness tests failed. Review failed tests above.")
         return 1
@@ -602,4 +602,5 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
 

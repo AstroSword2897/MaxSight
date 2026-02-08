@@ -138,7 +138,7 @@ class COCOImagePatcher:
                 # Progress update every 50 images.
                 if i % 50 == 0:
                     logger.info(f"Progress: {i}/{len(missing_files)} "
-                              f"(✓ {success_count}, ✗ {fail_count})")
+                              f"(ok {success_count}, fail {fail_count})")
         
         logger.info(f"Completed {split} split: {success_count} success, {fail_count} failed")
         return success_count, fail_count
@@ -148,9 +148,9 @@ class COCOImagePatcher:
         missing_files, _ = self.find_missing_images(split)
         
         if not missing_files:
-            logger.info(f"✓ All {split} images are now available!")
+            logger.info(f"ok All {split} images are now available!")
         else:
-            logger.warning(f"⚠ Still missing {len(missing_files)} {split} images")
+            logger.warning(f"WARNING Still missing {len(missing_files)} {split} images")
 
 
 def main():
@@ -209,13 +209,14 @@ def main():
     logger.info("=" * 60)
     
     if total_fail > 0:
-        logger.warning(f"⚠ {total_fail} images could not be downloaded")
+        logger.warning(f"WARNING {total_fail} images could not be downloaded")
         logger.warning("These may be removed from COCO servers or have connectivity issues")
     
     if total_success > 0:
-        logger.info("✓ New images will be used automatically in subsequent training batches")
+        logger.info("ok New images will be used automatically in subsequent training batches")
 
 
 if __name__ == '__main__':
     main()
+
 

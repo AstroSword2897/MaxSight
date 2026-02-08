@@ -274,3 +274,4 @@ def test_therapy_state_head_forward_motion_2d(therapy_head):
     assert out["fatigue_score"].shape == (B, 1)
     assert out["depth_map"].shape == (B, H, W)
 
+

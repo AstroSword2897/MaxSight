@@ -60,3 +60,4 @@ class HapticFeedback:
         self.trigger(HapticPattern.FAILURE_SEQUENCE, 0.4)
 
 
+

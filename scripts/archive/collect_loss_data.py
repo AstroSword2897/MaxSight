@@ -13,7 +13,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from datetime import datetime
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model, COCO_CLASSES
@@ -45,7 +45,7 @@ class LossDataCollector:
         self.collect_gradients = collect_gradients
         self.collect_task_weights = collect_task_weights
         
-        # Create loss functions if not provided
+        # Create loss functions if not provided.
         if loss_fn is None:
             loss_functions = {
                 'objectness': ObjectnessLoss(),
@@ -64,14 +64,14 @@ class LossDataCollector:
         else:
             self.loss_fn = loss_fn
         
-        # Data storage
+        # Data storage.
         self.loss_history: Dict[str, List[float]] = defaultdict(list)
         self.gradient_norms: Dict[str, List[float]] = defaultdict(list)
         self.task_weights: Dict[str, List[float]] = defaultdict(list)
         self.loss_statistics: Dict[str, Dict[str, float]] = {}
         self.iteration = 0
         
-        # Loss monitor for trend detection
+        # Loss monitor for trend detection.
         self.loss_monitor = PerHeadLossMonitor(window_size=100)
     
     def collect_step(
@@ -83,7 +83,7 @@ class LossDataCollector:
         """Collect loss data for a single training step...."""
         self.iteration += 1
         
-        # Compute losses
+        # Compute losses.
         if isinstance(self.loss_fn, MultiHeadLoss):
             loss_dict = self.loss_fn(outputs, targets)
         elif isinstance(self.loss_fn, GradNormMultiHeadLoss):
@@ -100,7 +100,7 @@ class LossDataCollector:
             total_loss = self.loss_fn(outputs, targets)
             loss_dict = {'total_loss': total_loss}
         
-        # Extract per-head losses
+        # Extract per-head losses.
         head_losses = {}
         for key, value in loss_dict.items():
             if key != 'total_loss' and torch.is_tensor(value):
@@ -113,12 +113,12 @@ class LossDataCollector:
             total_loss_val = total_loss_val.item() if total_loss_val.numel() == 1 else total_loss_val.mean().item()
         self.loss_history['total_loss'].append(total_loss_val)
         
-        # Collect gradient norms if requested
+        # Collect gradient norms if requested.
         gradient_data = {}
         if self.collect_gradients and compute_gradients:
             gradient_data = self._collect_gradient_norms()
         
-        # Update loss monitor
+        # Update loss monitor.
         monitor_losses = {k: torch.tensor(v) for k, v in head_losses.items()}
         self.loss_monitor.update(monitor_losses)
         
@@ -171,7 +171,7 @@ class LossDataCollector:
                 'trend': self._compute_trend(losses_array)
             }
         
-        # Gradient norm statistics
+        # Gradient norm statistics.
         if self.gradient_norms:
             for component, norms in self.gradient_norms.items():
                 if len(norms) > 0:
@@ -206,12 +206,12 @@ class LossDataCollector:
         if len(values) < 10:
             return 'insufficient_data'
         
-        # Linear regression to detect trend
+        # Linear regression to detect trend.
         x = np.arange(len(values))
         coeffs = np.polyfit(x, values, 1)
         slope = coeffs[0]
         
-        # Normalize by mean to get relative change
+        # Normalize by mean to get relative change.
         relative_slope = slope / (np.mean(values) + 1e-8)
         
         if relative_slope > 0.01:
@@ -234,7 +234,7 @@ class LossDataCollector:
             },
             'loss_statistics': stats,
             'detected_issues': issues,
-            'loss_history': {k: v[-100:] for k, v in self.loss_history.items()},  # Last 100 iterations
+            'loss_history': {k: v[-100:] for k, v in self.loss_history.items()},  # Last 100 iterations.
             'task_weights': {k: v[-50:] for k, v in self.task_weights.items()} if self.task_weights else {}
         }
     
@@ -245,7 +245,7 @@ class LossDataCollector:
         with open(output_path, 'w') as f:
             json.dump(summary, f, indent=2)
         
-        print(f"✅ Loss data saved to {output_path}")
+        print(f"OK Loss data saved to {output_path}")
         print(f"   Iterations: {self.iteration}")
         print(f"   Heads tracked: {len(self.loss_history)}")
         print(f"   Statistics computed: {len(self.loss_statistics)}")
@@ -266,11 +266,11 @@ def collect_loss_data(
     print("Loss Data Collection")
     print("="*60)
     
-    # Create model
+    # Create model.
     print(f"\nCreating model...")
     model = create_model(num_classes=len(COCO_CLASSES))
     
-    # Load checkpoint if provided
+    # Load checkpoint if provided.
     if checkpoint_path and checkpoint_path.exists():
         print(f"Loading checkpoint: {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path, map_location=device)
@@ -278,12 +278,12 @@ def collect_loss_data(
             model.load_state_dict(checkpoint['model'])
         else:
             model.load_state_dict(checkpoint)
-        print("✅ Checkpoint loaded")
+        print("OK Checkpoint loaded")
     
     model = model.to(device)
-    model.eval()  # Set to eval for inference
+    model.eval()  # Set to eval for inference.
     
-    # Create loss collector
+    # Create loss collector.
     print(f"\nInitializing loss collector...")
     collector = LossDataCollector(
         model=model,
@@ -292,28 +292,28 @@ def collect_loss_data(
         collect_task_weights=collect_task_weights
     )
     
-    # Load dataset
+    # Load dataset.
     print(f"\nLoading dataset: {data_dir}")
     try:
         dataset = MaxSightDataset(data_dir)
-        print(f"✅ Dataset loaded: {len(dataset)} samples")
+        print(f"OK Dataset loaded: {len(dataset)} samples")
     except Exception as e:
-        print(f"⚠️  Dataset loading failed: {e}")
+        print(f"WARNING  Dataset loading failed: {e}")
         print("   Using synthetic data for collection...")
-        # Create synthetic dataset
+        # Create synthetic dataset.
         from torch.utils.data import TensorDataset
         images = torch.randn(min(num_samples, 100), 3, 224, 224)
         dataset = TensorDataset(images)
     
-    # Create dataloader
+    # Create dataloader.
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=0  # Avoid multiprocessing issues
+        num_workers=0  # Avoid multiprocessing issues.
     )
     
-    # Collect data
+    # Collect data.
     print(f"\nCollecting loss data from {num_samples} samples...")
     samples_processed = 0
     
@@ -322,7 +322,7 @@ def collect_loss_data(
             if samples_processed >= num_samples:
                 break
             
-            # Parse batch
+            # Parse batch.
             if isinstance(batch, (list, tuple)):
                 images = batch[0]
                 targets = batch[1] if len(batch) > 1 else {}
@@ -335,10 +335,10 @@ def collect_loss_data(
             
             images = images.to(device)
             
-            # Forward pass
+            # Forward pass.
             outputs = model(images)
             
-            # Create synthetic targets if missing
+            # Create synthetic targets if missing.
             if not targets:
                 B = images.shape[0]
                 H, W = outputs.get('classifications', torch.zeros(B, 100, len(COCO_CLASSES))).shape[1:3]
@@ -350,7 +350,7 @@ def collect_loss_data(
                     'urgency': torch.randint(0, 4, (B,)).long().to(device)
                 }
             
-            # Collect loss data
+            # Collect loss data.
             collector.collect_step(outputs, targets, compute_gradients=False)
             
             samples_processed += images.shape[0]
@@ -358,7 +358,7 @@ def collect_loss_data(
             if (batch_idx + 1) % 10 == 0:
                 print(f"  Processed {samples_processed}/{num_samples} samples...")
     
-    # Compute statistics and save
+    # Compute statistics and save.
     print(f"\nComputing statistics...")
     summary = collector.get_summary()
     
@@ -368,10 +368,10 @@ def collect_loss_data(
         if 'gradient' not in head_name and 'task_weight' not in head_name:
             print(f"{head_name:20s}: mean={stats['mean']:.4f}, std={stats['std']:.4f}, trend={stats.get('trend', 'N/A')}")
     
-    # Save data
+    # Save data.
     collector.save(output_path)
     
-    print(f"\n✅ Loss data collection complete!")
+    print(f"\nOK Loss data collection complete!")
     return summary
 
 
@@ -406,4 +406,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

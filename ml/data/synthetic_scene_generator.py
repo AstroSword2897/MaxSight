@@ -55,3 +55,4 @@ if __name__ == "__main__":
     print(f"Generated images shape: {images.shape}")  # (16, 3, 224, 224)
     print(f"Min/Max pixel values: {images.min().item():.3f}/{images.max().item():.3f}")
 
+

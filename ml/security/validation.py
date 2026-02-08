@@ -54,3 +54,4 @@ def decode_and_validate_image(base64_str: str, max_size_mb: int = 10, allowed_ty
         return False, None, f"Decoding error: {str(e)}"
 
 
+

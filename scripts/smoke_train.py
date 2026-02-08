@@ -229,10 +229,10 @@ def smoke_train(
             print(f"  Device: {device} (auto-selected: {'CPU' if total_params < param_threshold else 'CUDA required'})")
             
             if total_params >= param_threshold and device.type == "cpu" and not force_cpu:
-                print("  ⚠️  WARNING: Large model on CPU - training will be very slow")
+                print("  WARNING  WARNING: Large model on CPU - training will be very slow")
                 print("     Consider using cloud GPU for better performance")
         except RuntimeError as e:
-            print(f"\n❌ ERROR: {e}")
+            print(f"\nFAIL ERROR: {e}")
             print("\n💡 Solutions:")
             print("  1. Use --force-cpu to override (not recommended for large models)")
             print("  2. Use cloud GPU: Google Colab, AWS EC2, Paperspace, Lambda Labs")
@@ -297,7 +297,7 @@ def smoke_train(
                 
                 # Check for NaN.
                 if torch.isnan(total_loss if isinstance(total_loss, torch.Tensor) else torch.tensor(total_loss)):
-                    print(f"  ❌ NaN detected in loss at batch {batch_idx}")
+                    print(f"  FAIL NaN detected in loss at batch {batch_idx}")
                     nan_detected = True
                     break
                 
@@ -307,7 +307,7 @@ def smoke_train(
                 # Check for NaN gradients.
                 for name, param in model.named_parameters():
                     if param.grad is not None and torch.isnan(param.grad).any():
-                        print(f"  ❌ NaN gradient detected in {name}")
+                        print(f"  FAIL NaN gradient detected in {name}")
                         nan_detected = True
                         break
                 
@@ -330,7 +330,7 @@ def smoke_train(
                 
             except RuntimeError as e:
                 if "out of memory" in str(e):
-                    print(f"  ❌ Out of memory at batch {batch_idx}")
+                    print(f"  FAIL Out of memory at batch {batch_idx}")
                     memory_issues = True
                     break
                 else:
@@ -354,17 +354,17 @@ def smoke_train(
     print("="*60)
     
     if nan_detected:
-        print("\n❌ FAILED: NaN detected during training")
+        print("\nFAIL FAILED: NaN detected during training")
         print("   Fix this before proceeding!")
         return 1
     
     if memory_issues:
-        print("\n❌ FAILED: Out of memory")
+        print("\nFAIL FAILED: Out of memory")
         print("   Reduce batch size or model size")
         return 1
     
     if len(epoch_losses) < 2:
-        print("\n❌ FAILED: Training stopped early")
+        print("\nFAIL FAILED: Training stopped early")
         return 1
     
     # Check if loss decreased.
@@ -375,11 +375,11 @@ def smoke_train(
         print(f"  Epoch {i+1}: {loss:.4f}")
     
     if loss_decreased:
-        print(f"\n✅ SUCCESS: Loss decreased from {epoch_losses[0]:.4f} to {epoch_losses[-1]:.4f}")
+        print(f"\nOK SUCCESS: Loss decreased from {epoch_losses[0]:.4f} to {epoch_losses[-1]:.4f}")
         print("   Model can learn - proceed to full training!")
         return 0
     else:
-        print(f"\n⚠️  WARNING: Loss did not decrease ({epoch_losses[0]:.4f} → {epoch_losses[-1]:.4f})")
+        print(f"\nWARNING: Loss did not decrease ({epoch_losses[0]:.4f} -> {epoch_losses[-1]:.4f})")
         print("   Check learning rate, loss functions, or model architecture")
         return 1
 
@@ -416,5 +416,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 

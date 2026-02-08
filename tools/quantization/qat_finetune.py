@@ -161,7 +161,7 @@ class QATTrainer:
             except Exception:
                 pass
         
-        # Set qconfig on model (PyTorch typing quirk - this is valid)
+        # Set qconfig on model (valid despite PyTorch typing quirk).
         setattr(model_qat, 'qconfig', qconfig)  # type: ignore
         
         # Prepare for QAT (inserts fake quantization modules)
@@ -507,5 +507,6 @@ if __name__ == "__main__":
     print(f"  Best model: {results['qat_model_path']}")
     print(f"  INT8 model: {results['int8_model_path']}")
     print(f"  Best validation loss: {results['best_val_loss']:.4f}")
+
 
 

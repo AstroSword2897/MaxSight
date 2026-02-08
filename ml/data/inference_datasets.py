@@ -745,6 +745,7 @@ if __name__ == "__main__":
     print(f"Images with detections: {stats['images_with_detections']}")
     print(f"Images without detections: {stats['images_without_detections']}")
     if stats['corrupted_images_skipped'] > 0:
-        print(f"⚠️  Corrupted images skipped: {stats['corrupted_images_skipped']}")
+        print(f"WARNING Corrupted images skipped: {stats['corrupted_images_skipped']}")
     print("="*50)
+
 

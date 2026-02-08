@@ -69,7 +69,7 @@ class DynamicConv2d(nn.Module):
         kernel_weights = self.condition_mlp(condition_vec)  # [B, num_kernels].
 
         # FIXED: Use grouped convolution trick instead of per-sample loop.
-        # This preserves GPU parallelism and works with torch.compile.
+        # Preserve GPU parallelism and compatibility with torch.compile.
         # Stack kernels: [B*out_ch, in_ch/groups, K, K].
         base_kernels = torch.stack(list(self.base_kernels), dim=0)  # [num_kernels, out_ch, in_ch/groups, K, K].
         
@@ -91,7 +91,7 @@ class DynamicConv2d(nn.Module):
             bias=None,  # Handle bias separately.
             stride=self.stride,
             padding=self.padding,
-            groups=B  # Critical: one group per sample.
+            groups=B  # One group per sample so each channel is independent.
         )
         
         # Reshape back: [B, out_ch, H', W'].
@@ -127,4 +127,5 @@ class DynamicConv2d(nn.Module):
         Return motion condition [B,1]
         """
         return motion
+
 

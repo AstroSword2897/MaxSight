@@ -52,7 +52,7 @@ def main():
             input_size=(1, 3, 224, 224)
         )
         
-        logger.info(f"✅ Export complete!")
+        logger.info("Export complete!")
         logger.info(f"\nBundle location: {bundle_path}")
         logger.info(f"\nFiles created:")
         for file in sorted(bundle_path.glob("*")):
@@ -72,4 +72,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

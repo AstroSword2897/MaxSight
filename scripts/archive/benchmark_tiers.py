@@ -10,7 +10,7 @@ import json
 from typing import Dict, List
 import argparse
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model, CapabilityTier, TierConfig
@@ -26,7 +26,7 @@ def get_device(requested: str = None):
             return torch.device("mps")
         if requested == "cpu":
             return torch.device("cpu")
-        # Fallback if requested device not available
+        # Fallback if requested device not available.
         if requested == "cuda":
             return torch.device("cpu")
         if requested == "mps":
@@ -55,7 +55,7 @@ def benchmark_model(
     }
     
     try:
-        # Create model
+        # Create model.
         model = create_model(
             num_classes=91,
             use_audio=(tier.value >= 4),
@@ -64,20 +64,20 @@ def benchmark_model(
         model.eval()
         model = model.to(device)
         
-        # Count parameters
+        # Count parameters.
         total_params = sum(p.numel() for p in model.parameters())
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         results['parameters'] = {
             'total': total_params,
             'trainable': trainable_params,
-            'total_mb': total_params * 4 / 1024**2,  # Assume float32
+            'total_mb': total_params * 4 / 1024**2,  # Assume float32.
         }
         
         # Create input (model expects audio_features [B, 128], not raw waveform)
         images = torch.randn(batch_size, 3, 224, 224, device=device)
         audio_features = torch.randn(batch_size, 128, device=device) if tier.value >= 4 else None
         
-        # Warmup
+        # Warmup.
         with torch.no_grad():
             for _ in range(5):
                 if audio_features is not None:
@@ -85,7 +85,7 @@ def benchmark_model(
                 else:
                     _ = model(images)
         
-        # Measure memory
+        # Measure memory.
         if device.type == 'cuda':
             torch.cuda.reset_peak_memory_stats()
             memory_before = torch.cuda.memory_allocated() / 1024**2
@@ -94,14 +94,14 @@ def benchmark_model(
         else:
             memory_before = 0
         
-        # Benchmark latency
+        # Benchmark latency.
         latencies = []
         stage_a_latencies = []
         stage_b_latencies = []
         
         with torch.no_grad():
             for _ in range(num_runs):
-                # CRITICAL: Synchronize GPU before timing (CUDA or MPS) for accurate latency
+                # Synchronize GPU before timing for accurate latency (CUDA or MPS).
                 if device.type == 'cuda':
                     torch.cuda.synchronize()
                 elif device.type == 'mps':
@@ -115,16 +115,16 @@ def benchmark_model(
                     torch.cuda.synchronize()
                 elif device.type == 'mps':
                     torch.mps.synchronize()
-                elapsed = (time.perf_counter() - start) * 1000  # ms
+                elapsed = (time.perf_counter() - start) * 1000  # Ms.
                 latencies.append(elapsed)
                 
-                # Get stage timings when available
+                # Get stage timings when available.
                 if hasattr(model, '_last_stage_a_time'):
                     stage_a_latencies.append(model._last_stage_a_time * 1000)
                 if hasattr(model, '_last_stage_b_time'):
                     stage_b_latencies.append(model._last_stage_b_time * 1000)
         
-        # Measure peak memory
+        # Measure peak memory.
         if device.type == 'cuda':
             memory_peak = torch.cuda.max_memory_allocated() / 1024**2
         elif device.type == 'mps':
@@ -165,7 +165,7 @@ def benchmark_model(
             'fps': 1000.0 / results['latency_ms']['mean'],
         }
         
-        # Check Stage A latency target
+        # Check Stage A latency target.
         if results.get('stage_a_latency_ms'):
             stage_a_mean = results['stage_a_latency_ms']['mean']
             results['stage_a_meets_target'] = stage_a_mean < 150
@@ -174,18 +174,18 @@ def benchmark_model(
         
         results['success'] = True
         
-        # Print results
-        print(f"  ✅ Parameters: {total_params:,} ({results['parameters']['total_mb']:.2f} MB)")
-        print(f"  ✅ Latency: {results['latency_ms']['mean']:.2f}ms (p50: {results['latency_ms']['p50']:.2f}ms, p95: {results['latency_ms']['p95']:.2f}ms)")
+        # Print results.
+        print(f"  OK Parameters: {total_params:,} ({results['parameters']['total_mb']:.2f} MB)")
+        print(f"  OK Latency: {results['latency_ms']['mean']:.2f}ms (p50: {results['latency_ms']['p50']:.2f}ms, p95: {results['latency_ms']['p95']:.2f}ms)")
         if results.get('stage_a_latency_ms'):
-            print(f"  ✅ Stage A: {results['stage_a_latency_ms']['mean']:.2f}ms {'✅' if results['stage_a_meets_target'] else '❌'}")
+            print(f"  OK Stage A: {results['stage_a_latency_ms']['mean']:.2f}ms {'OK' if results['stage_a_meets_target'] else 'FAIL'}")
         if results.get('stage_b_latency_ms'):
-            print(f"  ✅ Stage B: {results['stage_b_latency_ms']['mean']:.2f}ms")
-        print(f"  ✅ Memory: {results['memory_mb']['peak']:.2f} MB peak")
-        print(f"  ✅ Throughput: {results['throughput']['fps']:.2f} FPS")
+            print(f"  OK Stage B: {results['stage_b_latency_ms']['mean']:.2f}ms")
+        print(f"  OK Memory: {results['memory_mb']['peak']:.2f} MB peak")
+        print(f"  OK Throughput: {results['throughput']['fps']:.2f} FPS")
         
     except Exception as e:
-        print(f"  ❌ FAILED: {e}")
+        print(f"  FAIL FAILED: {e}")
         results['error'] = str(e)
         results['success'] = False
     
@@ -204,7 +204,7 @@ def benchmark_export(tier: CapabilityTier, device: torch.device) -> Dict:
     }
     
     try:
-        # Create model
+        # Create model.
         model = create_model(
             num_classes=91,
             use_audio=(tier.value >= 4),
@@ -216,30 +216,30 @@ def benchmark_export(tier: CapabilityTier, device: torch.device) -> Dict:
         # Dummy input size for export (image only)
         input_size = (1, 3, 224, 224)
         
-        # Test JIT export
+        # Test JIT export.
         try:
             print("  Testing JIT export...")
             jit_path = Path(f"/tmp/maxsight_{tier.name.lower()}_jit.pt")
             export_to_jit(model, str(jit_path), input_size=input_size, device=str(device))
-            jit_size = jit_path.stat().st_size / 1024**2  # MB
+            jit_size = jit_path.stat().st_size / 1024**2  # MB.
             results['exports']['jit'] = {'size_mb': jit_size, 'success': True}
-            print(f"    ✅ JIT: {jit_size:.2f} MB")
-            jit_path.unlink()  # Cleanup
+            print(f"    OK JIT: {jit_size:.2f} MB")
+            jit_path.unlink()  # Cleanup.
         except Exception as e:
-            print(f"    ❌ JIT export failed: {e}")
+            print(f"    FAIL JIT export failed: {e}")
             results['exports']['jit'] = {'success': False, 'error': str(e)}
         
-        # Test ONNX export
+        # Test ONNX export.
         try:
             print("  Testing ONNX export...")
             onnx_path = Path(f"/tmp/maxsight_{tier.name.lower()}_onnx.onnx")
             export_to_onnx(model, str(onnx_path), input_size)
-            onnx_size = onnx_path.stat().st_size / 1024**2  # MB
+            onnx_size = onnx_path.stat().st_size / 1024**2  # MB.
             results['exports']['onnx'] = {'size_mb': onnx_size, 'success': True}
-            print(f"    ✅ ONNX: {onnx_size:.2f} MB")
-            onnx_path.unlink()  # Cleanup
+            print(f"    OK ONNX: {onnx_size:.2f} MB")
+            onnx_path.unlink()  # Cleanup.
         except Exception as e:
-            print(f"    ❌ ONNX export failed: {e}")
+            print(f"    FAIL ONNX export failed: {e}")
             results['exports']['onnx'] = {'success': False, 'error': str(e)}
         
         # Test CoreML export (if on macOS)
@@ -248,13 +248,13 @@ def benchmark_export(tier: CapabilityTier, device: torch.device) -> Dict:
             coreml_path = Path(f"/tmp/maxsight_{tier.name.lower()}_coreml.mlpackage")
             export_to_coreml(model, str(coreml_path), input_size=input_size, device=str(device))
             if coreml_path.is_dir():
-                # .mlpackage is a directory
+                # .mlpackage is a directory.
                 coreml_size = sum(f.stat().st_size for f in coreml_path.rglob('*') if f.is_file()) / 1024**2
             else:
                 coreml_size = coreml_path.stat().st_size / 1024**2
             results['exports']['coreml'] = {'size_mb': coreml_size, 'success': True}
-            print(f"    ✅ CoreML: {coreml_size:.2f} MB")
-            # Cleanup
+            print(f"    OK CoreML: {coreml_size:.2f} MB")
+            # Cleanup.
             import shutil
             if coreml_path.exists():
                 if coreml_path.is_dir():
@@ -262,11 +262,11 @@ def benchmark_export(tier: CapabilityTier, device: torch.device) -> Dict:
                 else:
                     coreml_path.unlink()
         except Exception as e:
-            print(f"    ❌ CoreML export failed: {e}")
+            print(f"    FAIL CoreML export failed: {e}")
             results['exports']['coreml'] = {'success': False, 'error': str(e)}
         
     except Exception as e:
-        print(f"  ❌ Export benchmark failed: {e}")
+        print(f"  FAIL Export benchmark failed: {e}")
         results['error'] = str(e)
     
     return results
@@ -292,7 +292,7 @@ def main():
     print(f"\nDevice: {device}")
     print(f"Runs per tier: {args.runs}")
     
-    # Select tiers
+    # Select tiers.
     if args.tier:
         tiers = [CapabilityTier[args.tier]]
     else:
@@ -308,16 +308,16 @@ def main():
     all_results = []
     
     for tier in tiers:
-        # Benchmark inference
+        # Benchmark inference.
         inference_results = benchmark_model(tier, device, num_runs=args.runs)
         all_results.append(inference_results)
         
-        # Benchmark exports if requested
+        # Benchmark exports if requested.
         if args.export:
             export_results = benchmark_export(tier, device)
             all_results.append(export_results)
     
-    # Summary
+    # Summary.
     print("\n" + "="*60)
     print("BENCHMARK SUMMARY")
     print("="*60)
@@ -333,19 +333,19 @@ def main():
             memory = result['memory_mb']['peak']
             fps = result['throughput']['fps']
             
-            # Checks Stage A target
+            # Checks Stage A target.
             stage_a_ok = result.get('stage_a_meets_target')
-            marker = "✅" if stage_a_ok else "⚠️ " if stage_a_ok is False else "  "
+            marker = "OK" if stage_a_ok else "WARNING " if stage_a_ok is False else "  "
             
             print(f"{tier:<20} | {params_m:>12.2f} | {latency:>15.2f} | {memory:>12.2f} | {fps:>8.2f} {marker}")
     
-    # Save results
+    # Save results.
     output_path = Path(args.output)
     with open(output_path, 'w') as f:
         json.dump(all_results, f, indent=2)
-    print(f"\n✅ Results saved to {output_path}")
+    print(f"\nOK Results saved to {output_path}")
     
-    # Recommendations
+    # Recommendations.
     print("\n" + "="*60)
     print("RECOMMENDATIONS")
     print("="*60)
@@ -358,13 +358,14 @@ def main():
                 viable_tiers.append(result['tier'])
     
     if viable_tiers:
-        print(f"\n✅ Viable tiers (Stage A <150ms): {', '.join(viable_tiers)}")
+        print(f"\nOK Viable tiers (Stage A <150ms): {', '.join(viable_tiers)}")
     else:
-        print("\n⚠️  No tiers meet Stage A <150ms target - consider optimization")
+        print("\nWARNING  No tiers meet Stage A <150ms target - consider optimization")
     
     return 0
 
 
 if __name__ == "__main__":
     exit(main())
+
 

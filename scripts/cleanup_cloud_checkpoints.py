@@ -58,16 +58,16 @@ def cleanup_checkpoints(
     """Clean up checkpoint files...."""
     checkpoint_dir = Path(checkpoint_dir)
     if not checkpoint_dir.exists():
-        print(f"❌ Checkpoint directory {checkpoint_dir} does not exist")
+        print(f"FAIL Checkpoint directory {checkpoint_dir} does not exist")
         return 0, 0.0
     
     checkpoints = find_checkpoints(checkpoint_dir)
     
     if not checkpoints:
-        print(f"✅ No checkpoints found in {checkpoint_dir}")
+        print(f"OK No checkpoints found in {checkpoint_dir}")
         return 0, 0.0
     
-    print(f"\n📁 Found {len(checkpoints)} checkpoint(s) in {checkpoint_dir}")
+    print(f"\nFound {len(checkpoints)} checkpoint(s) in {checkpoint_dir}")
     print("=" * 70)
     
     # Identify what to keep.
@@ -77,20 +77,20 @@ def cleanup_checkpoints(
         best_model = checkpoint_dir / 'best_model.pt'
         if best_model.exists():
             to_keep.add(best_model)
-            print(f"✅ KEEPING: {best_model.name} ({get_size_mb(best_model):.2f} MB)")
+            print(f"OK KEEPING: {best_model.name} ({get_size_mb(best_model):.2f} MB)")
     
     if keep_last:
         last_checkpoint = checkpoint_dir / 'last_checkpoint.pt'
         if last_checkpoint.exists():
             to_keep.add(last_checkpoint)
-            print(f"✅ KEEPING: {last_checkpoint.name} ({get_size_mb(last_checkpoint):.2f} MB)")
+            print(f"OK KEEPING: {last_checkpoint.name} ({get_size_mb(last_checkpoint):.2f} MB)")
     
     # Keep most recent N checkpoints.
     if keep_recent > 0:
         recent = sorted(checkpoints, key=lambda x: x[0].stat().st_mtime, reverse=True)[:keep_recent]
         for ckpt, size in recent:
             to_keep.add(ckpt)
-            print(f"✅ KEEPING (recent): {ckpt.name} ({size:.2f} MB)")
+            print(f"OK KEEPING (recent): {ckpt.name} ({size:.2f} MB)")
     
     # Identify what to delete.
     to_delete = []
@@ -102,24 +102,24 @@ def cleanup_checkpoints(
             total_size += size
     
     if not to_delete:
-        print("\n✅ Nothing to delete - all checkpoints are being kept")
+        print("\nOK Nothing to delete - all checkpoints are being kept")
         return 0, 0.0
     
-    print(f"\n🗑️  Will delete {len(to_delete)} checkpoint(s) ({total_size:.2f} MB):")
+    print(f"\n Will delete {len(to_delete)} checkpoint(s) ({total_size:.2f} MB):")
     print("-" * 70)
     for ckpt, size in to_delete:
         print(f"  - {ckpt.name}: {size:.2f} MB")
     
     if dry_run:
-        print(f"\n⚠️  DRY RUN - No files deleted. Run with --execute to actually delete.")
+        print(f"\nWARNING  DRY RUN - No files deleted. Run with --execute to actually delete.")
         return 0, total_size
     
     # Confirm deletion.
-    print(f"\n⚠️  About to delete {len(to_delete)} file(s) ({total_size:.2f} MB)")
+    print(f"\nWARNING  About to delete {len(to_delete)} file(s) ({total_size:.2f} MB)")
     response = input("Continue? (yes/no): ").strip().lower()
     
     if response != 'yes':
-        print("❌ Deletion cancelled")
+        print("FAIL Deletion cancelled")
         return 0, 0.0
     
     # Delete files.
@@ -134,11 +134,11 @@ def cleanup_checkpoints(
                 shutil.rmtree(ckpt)
             deleted_count += 1
             deleted_size += size
-            print(f"✅ Deleted: {ckpt.name}")
+            print(f"OK Deleted: {ckpt.name}")
         except Exception as e:
-            print(f"❌ Failed to delete {ckpt.name}: {e}")
+            print(f"FAIL Failed to delete {ckpt.name}: {e}")
     
-    print(f"\n✅ Deleted {deleted_count} checkpoint(s), freed {deleted_size:.2f} MB")
+    print(f"\nOK Deleted {deleted_count} checkpoint(s), freed {deleted_size:.2f} MB")
     return deleted_count, deleted_size
 
 def cleanup_logs(log_dir: Path = Path('logs'), dry_run: bool = True) -> Tuple[int, float]:
@@ -154,8 +154,8 @@ def cleanup_logs(log_dir: Path = Path('logs'), dry_run: bool = True) -> Tuple[in
     total_size = sum(get_size_mb(f) for f in log_files)
     
     if dry_run:
-        print(f"\n📝 Found {len(log_files)} log file(s) ({total_size:.2f} MB)")
-        print("⚠️  DRY RUN - No files deleted. Run with --execute to actually delete.")
+        print(f"\n Found {len(log_files)} log file(s) ({total_size:.2f} MB)")
+        print("WARNING  DRY RUN - No files deleted. Run with --execute to actually delete.")
         return 0, total_size
     
     response = input(f"\nDelete {len(log_files)} log file(s) ({total_size:.2f} MB)? (yes/no): ").strip().lower()
@@ -168,7 +168,7 @@ def cleanup_logs(log_dir: Path = Path('logs'), dry_run: bool = True) -> Tuple[in
             log_file.unlink()
             deleted += 1
         except Exception as e:
-            print(f"❌ Failed to delete {log_file.name}: {e}")
+            print(f"FAIL Failed to delete {log_file.name}: {e}")
     
     return deleted, total_size
 
@@ -188,7 +188,7 @@ def cleanup_temp_files(dry_run: bool = True) -> Tuple[int, float]:
                         deleted_count += 1
                         deleted_size += size
                     except Exception as e:
-                        print(f"❌ Failed to delete {path}: {e}")
+                        print(f"FAIL Failed to delete {path}: {e}")
                 else:
                     deleted_size += size
             elif path.is_file():
@@ -199,15 +199,15 @@ def cleanup_temp_files(dry_run: bool = True) -> Tuple[int, float]:
                         deleted_count += 1
                         deleted_size += size
                     except Exception as e:
-                        print(f"❌ Failed to delete {path}: {e}")
+                        print(f"FAIL Failed to delete {path}: {e}")
                 else:
                     deleted_size += size
     
     if deleted_size > 0:
         if dry_run:
-            print(f"\n🗑️  Would delete {deleted_count} temp file(s) ({deleted_size:.2f} MB)")
+            print(f"\n Would delete {deleted_count} temp file(s) ({deleted_size:.2f} MB)")
         else:
-            print(f"\n✅ Deleted {deleted_count} temp file(s), freed {deleted_size:.2f} MB")
+            print(f"\nOK Deleted {deleted_count} temp file(s), freed {deleted_size:.2f} MB")
     
     return deleted_count, deleted_size
 
@@ -297,9 +297,9 @@ def main():
     
     print("\n" + "=" * 70)
     if args.execute:
-        print(f"✅ Cleanup complete: {total_deleted} file(s) deleted, {total_freed:.2f} MB freed")
+        print(f"OK Cleanup complete: {total_deleted} file(s) deleted, {total_freed:.2f} MB freed")
     else:
-        print(f"📊 Dry run complete: Would delete {total_deleted} file(s), free {total_freed:.2f} MB")
+        print(f" Dry run complete: Would delete {total_deleted} file(s), free {total_freed:.2f} MB")
         print("   Run with --execute to actually delete files")
     print("=" * 70)
     
@@ -307,4 +307,5 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
+
 

@@ -214,9 +214,9 @@ def main():
     print("Max IoU:", max_iou_val)
 
     if max_iou_val < 0.1:
-        print("⚠ Boxes don't overlap → scaling/class mismatch.")
+        print("WARNING Boxes don't overlap - scaling/class mismatch.")
     else:
-        print("✅ Predictions overlap GT.")
+        print("OK Predictions overlap GT.")
 
     print("Done.")
     return 0
@@ -224,4 +224,5 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 

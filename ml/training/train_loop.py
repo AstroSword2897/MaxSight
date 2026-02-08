@@ -512,7 +512,7 @@ class ProductionTrainLoop:
         """Freeze backbone parameters safely using isinstance checks."""
         frozen_count = 0
         for name, module in self.model.named_modules():
-            # Check if this is a backbone module.
+            # Detect backbone module for separate learning rate or freezing.
             if any(bb_name in name for bb_name in ['backbone', 'resnet', 'conv1', 'bn1', 'layer1', 'layer2', 'layer3', 'layer4']):
                 for param in module.parameters():
                     param.requires_grad = False
@@ -911,7 +911,7 @@ class ProductionTrainLoop:
                                 if len(gt_boxes_valid) == 0:
                                     continue
                                 
-                                # Get detections for this image from batch results.
+                                # Extract detections for the current image from batch results.
                                 if batch_detections and len(batch_detections) > b and len(batch_detections[b]) > 0:
                                     detections_list = batch_detections[b]
                                     
@@ -955,7 +955,7 @@ class ProductionTrainLoop:
             self.ema.restore(self.model)
             self.ema.backup.clear()
         
-        # CRITICAL: Handle NaN/Inf cases and empty validation sets.
+        # Handle NaN/Inf and empty validation sets to avoid invalid metrics.
         if num_batches == 0:
             avg_loss = float('inf')
             self.logger.warning("No valid validation batches processed, returning inf loss")
@@ -1465,4 +1465,5 @@ def train_model(
         **kwargs
     )
     return trainer.train()
+
 

@@ -28,7 +28,7 @@ def download_file(url: str, dest: Path, resume: bool = True) -> bool:
     
     # Checks if file already exists.
     if dest.exists():
-        print(f"  ✓ File already exists: {dest}")
+        print(f"  [ok] File already exists: {dest}")
         return True
     
     # Uses curl when available (supports resume)
@@ -66,7 +66,7 @@ def download_file(url: str, dest: Path, resume: bool = True) -> bool:
         
         return True
     except Exception as e:
-        print(f"  ✗ Download failed: {e}")
+        print(f"  [fail] Download failed: {e}")
         return False
 
 
@@ -85,10 +85,10 @@ def extract_zip(zip_path: Path, extract_to: Path) -> bool:
                 extracted += 1
                 if extracted % 1000 == 0:
                     print(f"    Progress: {extracted}/{total} ({100*extracted/total:.1f}%)")
-            print(f"  ✓ Extracted {extracted} files")
+            print(f"  [ok] Extracted {extracted} files")
             return True
     except Exception as e:
-        print(f"  ✗ Extraction failed: {e}")
+        print(f"  [fail] Extraction failed: {e}")
         return False
 
 
@@ -106,7 +106,7 @@ def download_open_images_v6(data_dir: Path) -> bool:
     if validation_dir.exists():
         img_count = len(list(validation_dir.rglob("*.jpg")))
         if img_count > 0 and csv_path.exists():
-            print(f"  ✓ Open Images V6 already downloaded ({img_count} images)")
+            print(f"  [ok] Open Images V6 already downloaded ({img_count} images)")
             return True
     
     # Uses FiftyOne method when available.
@@ -125,7 +125,7 @@ def download_open_images_v6(data_dir: Path) -> bool:
             max_samples=None  # Download all validation images.
         )
         
-        print(f"  ✓ Downloaded {len(dataset)} images")
+        print(f"  [ok] Downloaded {len(dataset)} images")
         
         # Reorganize to expected structure.
         print("  Reorganizing files to expected structure...")
@@ -162,17 +162,17 @@ def download_open_images_v6(data_dir: Path) -> bool:
         csv_url = "https://storage.googleapis.com/openimages/v6/oidv6-validation-annotations-bbox.csv"
         print(f"  Downloading annotation CSV...")
         if download_file(csv_url, csv_path):
-            print(f"  ✓ Annotation CSV downloaded")
+            print(f"  [ok] Annotation CSV downloaded")
         
         # Verify.
         img_count = len(list(validation_dir.rglob("*.jpg")))
         if img_count > 0 and csv_path.exists():
-            print(f"\n  ✅ Open Images V6 download complete!")
+            print(f"\n  OK Open Images V6 download complete!")
             print(f"     Images: {img_count}")
-            print(f"     Annotations: ✓")
+            print(f"     Annotations: ok")
             return True
         else:
-            print(f"  ⚠ Download incomplete - some files missing")
+            print(f"  WARNING Download incomplete - some files missing")
             return False
             
     except ImportError:
@@ -201,11 +201,11 @@ def download_open_images_v6(data_dir: Path) -> bool:
     csv_url = "https://storage.googleapis.com/openimages/v6/oidv6-validation-annotations-bbox.csv"
     print(f"\n  Attempting to download annotation CSV...")
     if download_file(csv_url, csv_path):
-        print(f"  ✓ Annotation CSV downloaded")
-        print(f"  ⚠ Images still need to be downloaded manually")
+        print(f"  [ok] Annotation CSV downloaded")
+        print(f"  WARNING Images still need to be downloaded manually")
         return False
     else:
-        print(f"  ⚠ Annotation CSV download failed (manual download required)")
+        print(f"  WARNING Annotation CSV download failed (manual download required)")
         return False
 
 
@@ -245,7 +245,7 @@ def download_bdd100k(data_dir: Path) -> bool:
     labels_path = labels_dir / "bdd100k_labels_images_val.json"
     
     if download_file(labels_url, labels_zip):
-        print(f"  ✓ Labels downloaded, extracting...")
+        print(f"  [ok] Labels downloaded, extracting...")
         # Extract to temp location.
         temp_labels = data_dir / "temp_labels"
         if extract_zip(labels_zip, temp_labels):
@@ -259,10 +259,10 @@ def download_bdd100k(data_dir: Path) -> bool:
             if det_val_source and det_val_source.exists():
                 # Copy to expected location.
                 shutil.copy(det_val_source, labels_path)
-                print(f"  ✓ Labels extracted to: {labels_path}")
+                print(f"  [ok] Labels extracted to: {labels_path}")
                 labels_success = True
             else:
-                print(f"  ⚠ Could not find det_val.json in extracted files")
+                print(f"  WARNING Could not find det_val.json in extracted files")
                 labels_success = False
             
             # Cleanup.
@@ -271,7 +271,7 @@ def download_bdd100k(data_dir: Path) -> bool:
         else:
             labels_success = False
     else:
-        print(f"  ⚠ Labels download failed")
+        print(f"  WARNING Labels download failed")
         labels_success = False
     
     # Download validation images (542MB)
@@ -279,7 +279,7 @@ def download_bdd100k(data_dir: Path) -> bool:
     images_zip = data_dir / "100k_images_val.zip"
     
     if download_file(images_url, images_zip):
-        print(f"  ✓ Images downloaded, extracting...")
+        print(f"  [ok] Images downloaded, extracting...")
         # Extract to temp location.
         temp_extract = data_dir / "temp_extract"
         if extract_zip(images_zip, temp_extract):
@@ -296,10 +296,10 @@ def download_bdd100k(data_dir: Path) -> bool:
                 if val_dest.exists():
                     shutil.rmtree(val_dest)
                 shutil.move(str(val_source), str(val_dest))
-                print(f"  ✓ Validation images extracted to: {val_dest}")
+                print(f"  [ok] Validation images extracted to: {val_dest}")
                 images_success = True
             else:
-                print(f"  ⚠ Could not find val folder with images")
+                print(f"  WARNING Could not find val folder with images")
                 images_success = False
             
             # Cleanup.
@@ -308,7 +308,7 @@ def download_bdd100k(data_dir: Path) -> bool:
         else:
             images_success = False
     else:
-        print(f"  ⚠ Images download failed")
+        print(f"  WARNING Images download failed")
         images_success = False
     
     if images_success and labels_success:
@@ -317,14 +317,14 @@ def download_bdd100k(data_dir: Path) -> bool:
     # If download failed, provide manual instructions.
     if not images_success or not labels_success:
         print(f"\n" + "="*70)
-        print(f"⚠️  BDD100K Download Failed")
+        print(f"WARNING  BDD100K Download Failed")
         print(f"="*70)
         print(f"\nPossible reasons:")
         print(f"  - DNS resolution failed (dl.cv.ethz.ch not accessible)")
         print(f"  - Network/firewall blocking access")
         print(f"  - Server temporarily unavailable")
         
-        print(f"\n📋 Alternative Options:")
+        print(f"\nAlternative Options:")
         print(f"\n1. Use VPN/Proxy:")
         print(f"   - Enable VPN that can access ETH Zurich domains")
         print(f"   - Retry this script or download manually")
@@ -344,7 +344,7 @@ def download_bdd100k(data_dir: Path) -> bool:
         print(f"   - GitHub: https://github.com/bdd100k/bdd100k")
         
         print(f"\n4. Skip for Now:")
-        print(f"   - ADE20K is already downloaded ✅ (indoor scenes)")
+        print(f"   - ADE20K is already downloaded OK (indoor scenes)")
         print(f"   - BDD100K is for outdoor/driving scenarios - can add later")
     
     return images_success and labels_success
@@ -364,7 +364,7 @@ def download_ade20k(data_dir: Path) -> bool:
     # Direct download links.
     urls = {
         'validation_images': 'http://data.csail.mit.edu/places/ADEchallenge/ADEChallengeData2016.zip',
-        # Note: This zip contains both training and validation.
+        # Zip contains both training and validation splits.
     }
     
     print("\n  Downloading ADE20K dataset...")
@@ -374,7 +374,7 @@ def download_ade20k(data_dir: Path) -> bool:
     
     # Download the main zip file.
     if download_file(urls['validation_images'], zip_path):
-        print(f"  ✓ Download complete, extracting...")
+        print(f"  [ok] Download complete, extracting...")
         
         # Extract to temp location first.
         temp_extract = data_dir / "temp_extract"
@@ -400,10 +400,10 @@ def download_ade20k(data_dir: Path) -> bool:
                 shutil.rmtree(temp_extract)
                 zip_path.unlink()
                 
-                print(f"  ✓ ADE20K extracted successfully")
+                print(f"  [ok] ADE20K extracted successfully")
                 return True
     
-    print(f"  ✗ ADE20K download/extraction failed")
+    print(f"  [fail] ADE20K download/extraction failed")
     return False
 
 
@@ -427,7 +427,7 @@ def verify_dataset(dataset_name: str, data_dir: Path) -> Dict[str, bool]:
         
         if csv_file.exists():
             status['annotations'] = True
-            print(f"    Annotations: ✓")
+            print(f"    Annotations: ok")
     
     elif dataset_name == 'bdd100k':
         val_images = data_dir / "images" / "100k" / "val"
@@ -441,7 +441,7 @@ def verify_dataset(dataset_name: str, data_dir: Path) -> Dict[str, bool]:
         
         if val_labels.exists():
             status['annotations'] = True
-            print(f"    Annotations: ✓")
+            print(f"    Annotations: ok")
     
     elif dataset_name == 'ade20k':
         val_images = data_dir / "images" / "validation"
@@ -504,7 +504,7 @@ def main():
     print("  1. Open Images V6 (validation set) - Broad semantic diversity")
     print("  2. BDD100K (validation set) - Motion/outdoor/hazard realism")
     print("  3. ADE20K (validation set) - Indoor structure & objects")
-    print("\n⚠️  Note: Some datasets require manual download due to:")
+    print("\nWARNING  Note: Some datasets require manual download due to:")
     print("  - Registration requirements (BDD100K)")
     print("  - Large size distributed across many files (Open Images)")
     print("  - Authentication/rate limits")
@@ -526,19 +526,19 @@ def main():
             if path.exists():
                 status = verify_dataset(name, path)
                 if status['complete']:
-                    print(f"  ✓ Complete")
+                    print(f"  [ok] Complete")
                 else:
-                    print(f"  ⚠ Incomplete")
+                    print(f"  WARNING Incomplete")
                     all_complete = False
             else:
-                print(f"  ✗ Not found")
+                print(f"  [fail] Not found")
                 all_complete = False
         
         if all_complete:
-            print("\n✅ All inference datasets are complete!")
+            print("\nOK All inference datasets are complete!")
             return 0
         else:
-            print("\n⚠️  Some datasets are incomplete. Run without --verify-only to download.")
+            print("\nWARNING  Some datasets are incomplete. Run without --verify-only to download.")
             return 1
     
     # Download datasets.
@@ -547,17 +547,17 @@ def main():
     if not args.skip_open_images:
         results['open_images_v6'] = download_open_images_v6(args.base_dir / "open_images_v6")
     else:
-        print("\n⏭️  Skipping Open Images V6")
+        print("\nSkipping  Skipping Open Images V6")
     
     if not args.skip_bdd100k:
         results['bdd100k'] = download_bdd100k(args.base_dir / "bdd100k")
     else:
-        print("\n⏭️  Skipping BDD100K")
+        print("\nSkipping BDD100K")
     
     if not args.skip_ade20k:
         results['ade20k'] = download_ade20k(args.base_dir / "ade20k")
     else:
-        print("\n⏭️  Skipping ADE20K")
+        print("\nSkipping ADE20K")
     
     # Summary.
     print("\n" + "="*70)
@@ -565,7 +565,7 @@ def main():
     print("="*70)
     
     for name, success in results.items():
-        status = "✓ Success" if success else "⚠ Partial/Manual download required"
+        status = "Success" if success else "Partial/Manual download required"
         print(f"  {name}: {status}")
     
     print("\n" + "="*70)
@@ -590,9 +590,9 @@ def main():
         if path.exists():
             verify_dataset(name, path)
         else:
-            print("  ✗ Not found")
+            print("  [fail] Not found")
     
-    print("\n✅ Download process complete!")
+    print("\nOK Download process complete!")
     print("\nNote: Some datasets may require manual download. See instructions above.")
     
     return 0
@@ -600,4 +600,5 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
 

@@ -15,13 +15,13 @@ def main():
     
     try:
         import fiftyone as fo
-        print(f"\n✓ FiftyOne {fo.__version__} installed")
+        print(f"\n[ok] FiftyOne {fo.__version__} installed")
     except ImportError:
-        print("\n✗ FiftyOne not installed. Installing...")
+        print("\n[fail] FiftyOne not installed. Installing...")
         import subprocess
         subprocess.run([sys.executable, "-m", "pip", "install", "fiftyone", "-q"], check=True)
         import fiftyone as fo
-        print("✓ FiftyOne installed")
+        print("[ok] FiftyOne installed")
     
     data_dir = ROOT / "datasets" / "open_images_v6"
     validation_dir = data_dir / "validation"
@@ -30,7 +30,7 @@ def main():
     if validation_dir.exists():
         img_count = len(list(validation_dir.rglob("*.jpg")))
         if img_count > 1000:
-            print(f"\n✓ Already have {img_count} images")
+            print(f"\n[ok] Already have {img_count} images")
             print("  Use --force to re-download")
             return 0
     
@@ -55,7 +55,7 @@ def main():
             max_samples=None  # Download all validation images.
         )
         
-        print(f"\n✓ Downloaded {len(dataset)} images")
+        print(f"\n[ok] Downloaded {len(dataset)} images")
         
         # Reorganize to expected structure.
         print("\n  Reorganizing files...")
@@ -87,7 +87,7 @@ def main():
                 dest_path.parent.mkdir(parents=True, exist_ok=True)
                 img_path.rename(dest_path)
             
-            print("  ✓ Files reorganized")
+            print("  [ok] Files reorganized")
         
         # Download annotation CSV.
         print("\n  Downloading annotations CSV...")
@@ -108,7 +108,7 @@ def main():
                         f.write(chunk)
                         pbar.update(len(chunk))
         
-        print("  ✓ Annotations downloaded")
+        print("  [ok] Annotations downloaded")
         
         # Verify.
         img_count = len(list(validation_dir.rglob("*.jpg")))
@@ -122,14 +122,14 @@ def main():
         print(f"  Location: {validation_dir}")
         
         if img_count > 1000 and csv_size > 100000:  # >100KB for CSV.
-            print("\n✅ Open Images V6 is ready for inference!")
+            print("\nOK Open Images V6 is ready for inference!")
             return 0
         else:
-            print("\n⚠️  Download may be incomplete. Check files manually.")
+            print("\nWARNING Download may be incomplete. Check files manually.")
             return 1
             
     except Exception as e:
-        print(f"\n✗ Download failed: {e}")
+        print(f"\n[fail] Download failed: {e}")
         print("\n  Alternative: Use manual download")
         print("  See: OPEN_IMAGES_V6_DOWNLOAD_GUIDE.md")
         return 1
@@ -137,4 +137,5 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
 

@@ -7,7 +7,7 @@ import sys
 import time
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def format_size(size_bytes):
@@ -22,7 +22,7 @@ def format_size(size_bytes):
 def monitor_download():
     """Monitor download progress."""
     zip_path = Path("datasets/coco_raw/train2017.zip")
-    expected_size = 18 * 1024**3  # 18GB
+    expected_size = 18 * 1024**3  # 18GB.
     
     if not zip_path.exists():
         print("train2017.zip not found. Download may not have started.")
@@ -40,13 +40,13 @@ def monitor_download():
                 current_size = zip_path.stat().st_size
                 progress = (current_size / expected_size) * 100 if expected_size > 0 else 0
                 
-                # Calculate download speed
+                # Calculate download speed.
                 elapsed = time.time() - start_time
                 if elapsed > 0:
-                    speed = (current_size - last_size) / elapsed  # bytes per second
+                    speed = (current_size - last_size) / elapsed  # Bytes per second.
                     speed_str = format_size(speed) + "/s"
                     
-                    # Estimate time remaining
+                    # Estimate time remaining.
                     remaining_bytes = expected_size - current_size
                     if speed > 0:
                         eta_seconds = remaining_bytes / speed
@@ -65,14 +65,14 @@ def monitor_download():
                 start_time = time.time()
                 
                 # Check if download is complete (file size matches expected)
-                if current_size >= expected_size * 0.99:  # 99% threshold
-                    print("\n\n✅ Download appears complete!")
+                if current_size >= expected_size * 0.99:  # 99% threshold.
+                    print("\n\nOK Download appears complete!")
                     print(f"Final size: {format_size(current_size)}")
                     break
             else:
                 print("File not found. Waiting for download to start...")
             
-            time.sleep(5)  # Update every 5 seconds
+            time.sleep(5)  # Update every 5 seconds.
             
     except KeyboardInterrupt:
         print("\n\nMonitoring stopped.")
@@ -84,4 +84,5 @@ def monitor_download():
 
 if __name__ == "__main__":
     monitor_download()
+
 

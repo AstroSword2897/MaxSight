@@ -7,7 +7,7 @@ import argparse
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.data.coco_dataset_splitter import create_maxsight_splits_from_coco
@@ -77,7 +77,7 @@ def main():
     
     args = parser.parse_args()
     
-    # Auto-detect COCO directory
+    # Auto-detect COCO directory.
     if args.coco_dir is None:
         if Path('datasets/coco_raw').exists():
             args.coco_dir = Path('datasets/coco_raw')
@@ -97,22 +97,22 @@ def main():
     print("="*70)
     print()
     
-    # Verify COCO dataset
+    # Verify COCO dataset.
     print("Verifying COCO dataset...")
     status = verify_coco_dataset(args.coco_dir, check_coco_raw=False)
     
     if not all([status['val_images'], status['annotations'], status['val_annotations']]):
-        print("\n⚠️  COCO dataset is incomplete. Missing components:")
+        print("\nWARNING  COCO dataset is incomplete. Missing components:")
         for key, value in status.items():
             if not value:
-                print(f"  ❌ {key}")
+                print(f"  FAIL {key}")
         print("\nPlease run: python scripts/setup_coco_data.py")
         sys.exit(1)
     
-    print("✅ COCO dataset verified")
+    print("OK COCO dataset verified")
     print()
     
-    # Checks if splits already exist
+    # Checks if splits already exist.
     output_dir = args.output_dir
     train_file = output_dir / 'train.json'
     val_file = output_dir / 'val.json'
@@ -120,7 +120,7 @@ def main():
     
     if args.verify_only:
         if all(f.exists() for f in [train_file, val_file, test_file]):
-            print("✅ Training splits already exist:")
+            print("OK Training splits already exist:")
             print(f"  Train: {train_file}")
             print(f"  Val:   {val_file}")
             print(f"  Test:  {test_file}")
@@ -130,13 +130,13 @@ def main():
                 test_data_loaders(train_file, val_file, test_file, args.coco_dir)
             return
         else:
-            print("❌ Training splits not found. Run without --verify-only to create them.")
+            print("FAIL Training splits not found. Run without --verify-only to create them.")
             sys.exit(1)
     
-    # Create splits
+    # Create splits.
     print("Creating MaxSight splits from COCO...")
     
-    # Finds annotation file
+    # Finds annotation file.
     ann_file = args.coco_dir / 'annotations' / 'instances_train2017.json'
     if not ann_file.exists():
         ann_file = args.coco_dir / 'annotations' / 'instances_val2017.json'
@@ -145,7 +145,7 @@ def main():
         print(f"Error: Could not find COCO annotation file in {args.coco_dir}")
         sys.exit(1)
     
-    # Finds image directory
+    # Finds image directory.
     image_dir = args.coco_dir / 'train2017'
     if not image_dir.exists():
         image_dir = args.coco_dir / 'val2017'
@@ -166,28 +166,28 @@ def main():
         )
         
         print()
-        print("✅ Splits created successfully:")
+        print("OK Splits created successfully:")
         print(f"  Train: {train_file}")
         print(f"  Val:   {val_file}")
         print(f"  Test:  {test_file}")
         
-        # Compute class weights
+        # Compute class weights.
         print("\nComputing class weights...")
         class_weights = compute_class_weights(train_file)
         print(f"  Found {len(class_weights)} classes")
         
-        # Test data loaders if requested
+        # Test data loaders if requested.
         if args.test_loaders:
             print("\nTesting data loaders...")
             test_data_loaders(train_file, val_file, test_file, args.coco_dir)
         
-        print("\n✅ Training data pipeline ready!")
+        print("\nOK Training data pipeline ready!")
         print("\nNext steps:")
         print("1. Review training configs in ml/training/configs/")
         print("2. Run training: python scripts/train_maxsight.py --config <config_file>")
         
     except Exception as e:
-        print(f"\n❌ Error creating splits: {e}")
+        print(f"\nFAIL Error creating splits: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
@@ -205,34 +205,35 @@ def test_data_loaders(train_file: Path, val_file: Path, test_file: Path, coco_di
             test_annotation_file=test_file,
             image_dir=coco_dir,
             batch_size=4,
-            num_workers=0,  # Use 0 for testing to avoid multiprocessing issues
+            num_workers=0,  # Use 0 for testing to avoid multiprocessing issues.
             condition_mode=None,
             apply_lighting_augmentation=False
         )
         
-        print("  ✅ Data loaders created")
+        print("  OK Data loaders created")
         
-        # Get info
+        # Get info.
         train_info = get_data_info(train_loader)
         val_info = get_data_info(val_loader)
         
         print(f"  Train: {train_info['dataset_size']} samples, {train_info['num_batches']} batches")
         print(f"  Val:   {val_info['dataset_size']} samples, {val_info['num_batches']} batches")
         
-        # Loads a batch
+        # Loads a batch.
         print("  Loading sample batch...")
         batch = next(iter(train_loader))
-        print(f"  ✅ Batch loaded: {list(batch.keys())}")
+        print(f"  OK Batch loaded: {list(batch.keys())}")
         print(f"     Images shape: {batch['images'].shape}")
         print(f"     Labels shape: {batch['labels'].shape}")
         print(f"     Boxes shape:  {batch['boxes'].shape}")
         
     except Exception as e:
-        print(f"  ❌ Error testing loaders: {e}")
+        print(f"  FAIL Error testing loaders: {e}")
         import traceback
         traceback.print_exc()
 
 
 if __name__ == "__main__":
     main()
+
 

@@ -4,7 +4,7 @@
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.data.download_datasets import download_coco_dataset, verify_coco_dataset
@@ -20,7 +20,7 @@ def main():
     parser.add_argument(
         '--data_dir',
         type=Path,
-        default=None,  # Will auto-detect coco_raw or use datasets/coco
+        default=None,  # Will auto-detect coco_raw or use datasets/coco.
         help='Directory to save/check COCO dataset (default: auto-detect)'
     )
     
@@ -38,9 +38,9 @@ def main():
     
     args = parser.parse_args()
     
-    # Auto-detect data directory
+    # Auto-detect data directory.
     if args.data_dir is None:
-        # Check common locations
+        # Check common locations.
         if Path('datasets/coco_raw').exists():
             args.data_dir = Path('datasets/coco_raw')
             print(f"Auto-detected COCO dataset at: {args.data_dir}")
@@ -56,12 +56,12 @@ def main():
         status = verify_coco_dataset(args.data_dir, check_coco_raw=True)
         
         if all(status.values()):
-            print("\n✅ COCO dataset is complete and verified!")
+            print("\nOK COCO dataset is complete and verified!")
             return 0
         else:
-            print("\n⚠️  COCO dataset is incomplete:")
+            print("\nWARNING  COCO dataset is incomplete:")
             for key, value in status.items():
-                status_str = "✅" if value else "❌"
+                status_str = "OK" if value else "FAIL"
                 print(f"  {status_str} {key}")
             print("\nRun with --auto to download missing components.")
             return 1
@@ -75,20 +75,21 @@ def main():
         
         download_coco_dataset(data_dir=args.data_dir, auto_download=args.auto)
         
-        # Verify after download attempt
+        # Verify after download attempt.
         print("\n" + "="*70)
         print("Verification")
         print("="*70)
         status = verify_coco_dataset(args.data_dir)
         
         if all(status.values()):
-            print("\n✅ COCO dataset is complete and ready for training!")
+            print("\nOK COCO dataset is complete and ready for training!")
             return 0
         else:
-            print("\n⚠️  Some components are missing. Please download manually if needed.")
+            print("\nWARNING  Some components are missing. Please download manually if needed.")
             return 1
 
 
 if __name__ == "__main__":
     sys.exit(main())
+
 

@@ -653,7 +653,7 @@ class MaxSightCNN(nn.Module):
         
         # Integrated system components (spatial memory, monitor, therapy)
         # Spatial Memory System - Tracks objects across frames for navigation.
-        # CRITICAL FEATURE: Enables cognitive mapping and spatial awareness over time.
+        # Enables cognitive mapping and spatial awareness over time.
         # Used during inference to remember object positions and support navigation.
         self.spatial_memory = SpatialMemorySystem(
             memory_duration=30.0,  # Remember objects for 30 seconds.
@@ -1072,13 +1072,12 @@ class MaxSightCNN(nn.Module):
             
             # Apply audio attention if available.
             if audio_attention_map is not None:
-                # CRITICAL CONSTRAINTS:.
-                # 1. Assert spatial dimensions match.
+                # Assert spatial dimensions match before applying.
                 assert audio_attention_map.shape[-2:] == fused_features.shape[-2:], \
                     f"Audio attention {audio_attention_map.shape} must match features {fused_features.shape}"
                 assert audio_attention_map.ndim == 4, "Audio attention must be [B, 1, H, W]"
                 
-                # 2. Interpolate if needed (preserve channel count)
+                # Interpolate if needed to preserve channel count.
                 if audio_attention_map.shape[2:] != fused_features.shape[2:]:
                     audio_attention_map = F.interpolate(
                         audio_attention_map,
@@ -1338,7 +1337,7 @@ class MaxSightCNN(nn.Module):
                 fatigue_outputs = self.fatigue_head(eye_features, temporal_features)  # Dict with scores.
                 
                 # 4. ROI Priority - Attention guidance (requires scene + ROI features)
-                # Use detection features as ROI features [B, C, H, W] → flatten to [B, H*W, C].
+                # Use detection features as ROI features [B, C, H, W]; flatten to [B, H*W, C].
                 roi_features = det_feats.permute(0, 2, 3, 1).contiguous().view(batch_size, H*W, -1)  # [B, H*W, 256].
                 roi_priority_outputs = self.roi_priority_head(
                     scene_embedding=shared_scene_emb.unsqueeze(1),  # [B, 1, 256].
@@ -1434,8 +1433,7 @@ class MaxSightCNN(nn.Module):
         enable_scene_graph = self.tier_config.use_cross_task_attention if hasattr(self, 'tier_config') else False
         
         if enable_scene_graph:
-            # CRITICAL FIX (Issue 1): GPU-based class name lookup - no CPU sync!
-            # Single GPU→CPU sync for entire batch (avoids per-item sync that breaks pipeline parallelism)
+            # Single GPU-to-CPU sync for entire batch to avoid per-item sync that breaks pipeline parallelism.
             class_ids_cpu = top_k_classes_scene.cpu()  # [B, K] one sync.
             class_names_batch = [
                 [COCO_CLASSES_DICT.get(int(c), 'object') for c in class_ids_cpu[b].tolist()]
@@ -1480,7 +1478,7 @@ class MaxSightCNN(nn.Module):
         if scene_graph_invalid:
             # CRITICAL FIX (Issue 7): Hard-disable Stage B when scene graph is invalid.
             # Don't allow partial state - fail loud, fail early.
-            print("⚠️  WARNING: Scene graph invalid, skipping Stage B graph processing")
+            print("WARNING: Scene graph invalid, skipping Stage B graph processing")
             skip_stage_b = True  # Hard-disable Stage B outputs.
         else:
             # Extract spatial and semantic relations from batched output (only when non-empty for JIT trace safety)
@@ -1505,7 +1503,7 @@ class MaxSightCNN(nn.Module):
                         if rel.src in scene_node_indices and rel.dst in scene_node_indices:
                             scene_relations.append(rel)
                     
-                    # Handle batched object_embeddings: [B, K, C] -> [K, C] for this scene.
+                    # Slice batched object_embeddings [B, K, C] to [K, C] for the current scene.
                     scene_object_embeddings = scene_graph_output['object_embeddings'][b]  # [K, C].
                     scene_graphs.append({
                         'relations': scene_relations,
@@ -1540,7 +1538,7 @@ class MaxSightCNN(nn.Module):
             ).squeeze(-1).squeeze(-1).contiguous().reshape(batch_size_for_regions, num_regions, region_embs_tensor.shape[2])  # [B, num_regions, C].
             
             # ASYNC RETRIEVAL: Non-blocking retrieval for scene description enhancement.
-            # CRITICAL: Retrieval is advisory only, never blocks inference.
+            # Retrieval is advisory only and never blocks inference.
             retrieval_results = None
             if self.enable_retrieval and self.retrieval_system is not None:
                 # Prepare query embeddings for retrieval.
@@ -1816,7 +1814,7 @@ class MaxSightCNN(nn.Module):
         for i in range(len(boxes)):
             idx = int(sorted_indices[i].item())  # Get the actual index.
             
-            # Skip if we already decided to suppress this one.
+            # Skip box already marked for suppression.
             # (can happen if a lower-confidence box was processed first due to sorting)
             if suppressed[idx]:
                 continue
@@ -1824,7 +1822,7 @@ class MaxSightCNN(nn.Module):
             # Keep this box - it's the best one so far.
             keep.append(idx)
             
-            # Now suppress any boxes that overlap too much with this one.
+            # Suppress boxes that overlap too much with the kept box.
             # Only check remaining boxes (ones we haven't processed yet)
             if i < len(boxes) - 1:
                 remaining_indices = sorted_indices[i+1:]  # All boxes after current.
@@ -2181,4 +2179,5 @@ if __name__ == "__main__":
         print(f"  {condition}: {len(cond_outputs)} outputs")
     
     print("\nAll tests passed - Model ready for deployment")
+
 

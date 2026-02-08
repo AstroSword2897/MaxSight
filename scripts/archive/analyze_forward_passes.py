@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Tuple
 import sys
 from collections import defaultdict
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import MaxSightCNN, create_model, TierConfig, CapabilityTier
@@ -39,7 +39,7 @@ class ForwardPassAnalyzer:
         """Define all forward pass scenarios to test."""
         scenarios = []
         
-        # Base scenarios
+        # Base scenarios.
         base_configs = [
             {'name': 'T0_Baseline', 'tier': CapabilityTier.T0_BASELINE_CNN},
             {'name': 'T1_Attention', 'tier': CapabilityTier.T1_ATTENTION},
@@ -49,7 +49,7 @@ class ForwardPassAnalyzer:
             {'name': 'T5_Temporal', 'tier': CapabilityTier.T5_TEMPORAL},
         ]
         
-        # Input variations
+        # Input variations.
         input_variations = [
             {'batch_size': 1, 'temporal': False, 'audio': False, 'name_suffix': '_single_image'},
             {'batch_size': 4, 'temporal': False, 'audio': False, 'name_suffix': '_batch4'},
@@ -58,10 +58,10 @@ class ForwardPassAnalyzer:
             {'batch_size': 1, 'temporal': True, 'audio': True, 'name_suffix': '_temporal_audio'},
         ]
         
-        # Condition modes
+        # Condition modes.
         condition_modes = [None, 'glaucoma', 'amd', 'cataracts', 'cvi']
         
-        # Generate all combinations
+        # Generate all combinations.
         for base_config in base_configs:
             for input_var in input_variations:
                 for condition in condition_modes:
@@ -82,7 +82,7 @@ class ForwardPassAnalyzer:
         tier_config = TierConfig.for_tier(scenario['tier'])
         
         model = create_model(
-            num_classes=91,  # COCO classes
+            num_classes=91,  # COCO classes.
             use_audio=scenario['audio'],
             condition_mode=scenario['condition_mode'],
             tier_config=tier_config
@@ -98,10 +98,10 @@ class ForwardPassAnalyzer:
         batch_size = scenario['batch_size']
         
         if scenario['temporal']:
-            # Temporal: [B, T, C, H, W]
+            # Temporal: [B, T, C, H, W].
             images = torch.randn(batch_size, 8, 3, 224, 224, device=self.device)
         else:
-            # Single frame: [B, C, H, W]
+            # Single frame: [B, C, H, W].
             images = torch.randn(batch_size, 3, 224, 224, device=self.device)
         
         audio_features = None
@@ -120,16 +120,16 @@ class ForwardPassAnalyzer:
         num_runs: int = 20
     ) -> Dict:
         """Measure forward pass performance."""
-        # Warmup
+        # Warmup.
         with torch.no_grad():
             for _ in range(num_warmup):
                 _ = model(images, audio_features=audio_features, use_temporal=scenario['temporal'])
         
-        # Synchronize if using GPU
+        # Synchronize if using GPU.
         if self.device != 'cpu':
             torch.cuda.synchronize() if self.device == 'cuda' else None
         
-        # Measure
+        # Measure.
         times = []
         memory_used = []
         
@@ -143,17 +143,17 @@ class ForwardPassAnalyzer:
                     outputs = model(images, audio_features=audio_features, use_temporal=scenario['temporal'])
                 torch.cuda.synchronize()
                 elapsed = time.time() - start
-                memory_used.append(torch.cuda.max_memory_allocated() / 1024**2)  # MB
+                memory_used.append(torch.cuda.max_memory_allocated() / 1024**2)  # MB.
             else:
                 start = time.time()
                 with torch.no_grad():
                     outputs = model(images, audio_features=audio_features, use_temporal=scenario['temporal'])
                 elapsed = time.time() - start
-                memory_used.append(0)  # CPU doesn't track memory easily
+                memory_used.append(0)  # CPU doesn't track memory easily.
             
-            times.append(elapsed * 1000)  # Convert to ms
+            times.append(elapsed * 1000)  # Convert to ms.
         
-        # Analyze outputs
+        # Analyze outputs.
         output_keys = list(outputs.keys())
         output_shapes = {k: list(v.shape) if isinstance(v, torch.Tensor) else str(type(v)) 
                         for k, v in outputs.items()}
@@ -180,15 +180,15 @@ class ForwardPassAnalyzer:
         print(f"{'='*80}")
         
         try:
-            # Create model
+            # Create model.
             print("  Creating model...")
             model = self.create_model_for_scenario(scenario)
             
-            # Create inputs
+            # Create inputs.
             print("  Creating inputs...")
             images, audio_features = self.create_inputs_for_scenario(scenario)
             
-            # Measure
+            # Measure.
             print("  Measuring forward pass...")
             metrics = self.measure_forward_pass(model, images, audio_features, scenario)
             
@@ -198,13 +198,13 @@ class ForwardPassAnalyzer:
                 'status': 'success'
             }
             
-            print(f"  ✅ Mean time: {metrics['mean_time_ms']:.2f}ms")
-            print(f"  ✅ Output keys: {len(metrics['output_keys'])}")
+            print(f"  OK Mean time: {metrics['mean_time_ms']:.2f}ms")
+            print(f"  OK Output keys: {len(metrics['output_keys'])}")
             
             return result
             
         except Exception as e:
-            print(f"  ❌ Failed: {e}")
+            print(f"  FAIL Failed: {e}")
             import traceback
             traceback.print_exc()
             return {
@@ -241,14 +241,14 @@ class ForwardPassAnalyzer:
             'scenarios': []
         }
         
-        # Organize by tier
+        # Organize by tier.
         by_tier = defaultdict(list)
         for result in self.results:
             if result['status'] == 'success':
                 tier_name = result['scenario']['tier'].name
                 by_tier[tier_name].append(result)
         
-        # Summary statistics
+        # Summary statistics.
         summary = {}
         for tier, results in by_tier.items():
             times = [r['metrics']['mean_time_ms'] for r in results]
@@ -262,7 +262,7 @@ class ForwardPassAnalyzer:
         report['summary_by_tier'] = summary
         report['detailed_results'] = self.results
         
-        # Save report
+        # Save report.
         with open(output_path, 'w') as f:
             json.dump(report, f, indent=2, default=str)
         
@@ -291,9 +291,9 @@ def main():
     
     # Analyze a subset first (can expand later)
     print("\nStarting forward pass analysis...")
-    analyzer.analyze_all_scenarios(limit=30)  # Start with 30 scenarios
+    analyzer.analyze_all_scenarios(limit=30)  # Start with 30 scenarios.
     
-    # Generate report
+    # Generate report.
     report = analyzer.generate_report("forward_pass_analysis.json")
     
     return report
@@ -301,4 +301,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

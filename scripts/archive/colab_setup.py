@@ -8,14 +8,14 @@ import os
 
 def run_command(cmd, check=True):
     """Run shell command and print output."""
-    print(f"🔧 Running: {cmd}")
+    print(f" Running: {cmd}")
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.stdout:
         print(result.stdout)
     if result.stderr:
         print(result.stderr)
     if check and result.returncode != 0:
-        print(f"❌ Command failed with exit code {result.returncode}")
+        print(f"FAIL Command failed with exit code {result.returncode}")
         sys.exit(1)
     return result
 
@@ -25,26 +25,26 @@ def main():
     print("=" * 60)
     print()
     
-    # Check if running in Colab
+    # Check if running in Colab.
     try:
         import google.colab
-        print("✅ Running in Google Colab")
+        print("OK Running in Google Colab")
     except ImportError:
-        print("⚠️  Not running in Colab, but continuing anyway...")
+        print("WARNING  Not running in Colab, but continuing anyway...")
     
-    # Step 1: Install git if needed
+    # Step 1: Install git if needed.
     print("\n📦 Step 1: Installing git...")
     run_command("apt-get update", check=False)
     run_command("apt-get install -y git", check=False)
     
-    # Step 2: Clone repository
+    # Step 2: Clone repository.
     print("\n📥 Step 2: Cloning repository...")
     if not os.path.exists("2026-Prototype"):
         run_command("git clone https://github.com/AstroSword2897/2026-Prototype.git")
     else:
-        print("✅ Repository already exists, skipping clone")
+        print("OK Repository already exists, skipping clone")
     
-    # Step 3: Checkout correct branch
+    # Step 3: Checkout correct branch.
     print("\n🔀 Step 3: Checking out branch...")
     os.chdir("2026-Prototype")
     run_command("git checkout feature/multimodal_refactor", check=False)
@@ -53,37 +53,37 @@ def main():
     print("\n🔥 Step 4: Installing PyTorch with CUDA...")
     import torch
     if not torch.cuda.is_available():
-        print("⚠️  CUDA not available. Installing PyTorch with CUDA support...")
+        print("WARNING  CUDA not available. Installing PyTorch with CUDA support...")
         run_command("pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118")
     else:
-        print("✅ PyTorch with CUDA already installed")
+        print("OK PyTorch with CUDA already installed")
         print(f"   CUDA Device: {torch.cuda.get_device_name(0)}")
     
-    # Step 5: Install dependencies
+    # Step 5: Install dependencies.
     print("\n📚 Step 5: Installing dependencies...")
     run_command("pip install -r requirements.txt")
     run_command("pip install faiss-cpu")
     
-    # Step 6: Verify setup
-    print("\n✅ Step 6: Verifying setup...")
+    # Step 6: Verify setup.
+    print("\nOK Step 6: Verifying setup...")
     import torch
     print(f"   CUDA Available: {torch.cuda.is_available()}")
     if torch.cuda.is_available():
         print(f"   CUDA Device: {torch.cuda.get_device_name(0)}")
         print(f"   CUDA Version: {torch.version.cuda}")
     
-    # Step 7: Test import
+    # Step 7: Test import.
     print("\n🧪 Step 7: Testing imports...")
     sys.path.insert(0, os.getcwd())
     try:
         from ml.models.maxsight_cnn import MaxSightCNN, CapabilityTier
-        print("✅ MaxSight imports successful")
+        print("OK MaxSight imports successful")
     except Exception as e:
-        print(f"❌ Import failed: {e}")
+        print(f"FAIL Import failed: {e}")
         sys.exit(1)
     
     print("\n" + "=" * 60)
-    print("🎉 Setup Complete!")
+    print(" Setup Complete!")
     print("=" * 60)
     print("\nNext steps:")
     print("  1. Run test script:")
@@ -96,4 +96,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

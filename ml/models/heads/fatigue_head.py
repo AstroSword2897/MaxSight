@@ -139,3 +139,4 @@ class FatigueHead(nn.Module):
         
         return outputs
 
+

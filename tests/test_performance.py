@@ -37,12 +37,12 @@ def test_inference_latency():
     
     with torch.no_grad():
         for _ in range(num_runs):
-            # CRITICAL: Synchronize GPU before timing for accurate latency measurements.
+            # Synchronize GPU before timing for accurate latency measurements.
             if device.type == 'cuda':
                 torch.cuda.synchronize()
             start = time.perf_counter()
             _ = model(dummy_image)
-            # CRITICAL: Synchronize GPU after inference to ensure completion.
+            # Synchronize GPU after inference to ensure completion.
             if device.type == 'cuda':
                 torch.cuda.synchronize()
             end = time.perf_counter()
@@ -65,7 +65,7 @@ def test_inference_latency():
     assert mean_latency < 500, f"Mean latency {mean_latency:.2f}ms exceeds 500ms target"
     assert p95_latency < 600, f"P95 latency {p95_latency:.2f}ms exceeds 600ms target"
     
-    print("  ✅ PASSED: Latency within target")
+    print("  PASSED: Latency within target")
 
 
 def test_throughput():
@@ -102,7 +102,7 @@ def test_throughput():
     
     assert fps > 2.0, f"Throughput {fps:.2f} FPS below 2 FPS target"
     
-    print("  ✅ PASSED: Throughput meets target")
+    print("  PASSED: Throughput meets target")
 
 
 def test_memory_usage():
@@ -128,7 +128,7 @@ def test_memory_usage():
     
     assert int8_size_mb < 300, f"INT8 model size {int8_size_mb:.2f}MB exceeds 300MB target"
     
-    print("  ✅ PASSED: Memory usage within target")
+    print("  PASSED: Memory usage within target")
 
 
 def test_batch_processing():
@@ -168,7 +168,7 @@ def test_batch_processing():
     # Batch size 1 is fastest for mobile.
     assert results[1] < 500, f"Batch size 1 latency {results[1]:.2f}ms exceeds target"
     
-    print("  ✅ PASSED: Batch processing performance acceptable")
+    print("  PASSED: Batch processing performance acceptable")
 
 
 def test_benchmark_integration():
@@ -214,7 +214,7 @@ def test_benchmark_integration():
     
     assert overall['mean_ms'] < 500, "Benchmark mean latency exceeds target"
     
-    print("  ✅ PASSED: Benchmark integration working")
+    print("  PASSED: Benchmark integration working")
 
 
 if __name__ == "__main__":
@@ -229,5 +229,6 @@ if __name__ == "__main__":
     
     print("\n" + "=" * 50)
     print("All performance tests passed!")
+
 
 

@@ -96,7 +96,7 @@ class GradNormBalancer(nn.Module):
         gradnorm_loss = F.l1_loss(gradient_norms, target_grad_norms)
         
         # Update task weights via gradient descent on gradnorm_loss.
-        # This is done separately from main training loop.
+        # Run separately from the main training loop.
         # In practice, you'd optimize task_weights with respect to gradnorm_loss.
         
         # For now, return metrics for monitoring.
@@ -716,5 +716,6 @@ class GradNormStressIntegrator:
         self.alert_history.clear()
         self.iteration = 0
         logger.info("GradNorm stress monitoring reset")
+
 
 

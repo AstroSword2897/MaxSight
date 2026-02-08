@@ -7,7 +7,7 @@ import argparse
 from pathlib import Path
 import sys
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.data.coco_dataset_splitter import (
@@ -102,9 +102,9 @@ def main():
     
     args = parser.parse_args()
     
-    # Auto-detect annotation file if not provided
+    # Auto-detect annotation file if not provided.
     if args.annotation_file is None:
-        # Checks common COCO annotation locations
+        # Checks common COCO annotation locations.
         possible_locations = [
             args.coco_dir / 'annotations' / 'instances_train2017.json',
             args.coco_dir / 'annotations' / 'instances_val2017.json',
@@ -123,7 +123,7 @@ def main():
             print("Please specify --annotation_file or ensure COCO dataset is properly structured.")
             sys.exit(1)
     
-    # Auto-detect image directory
+    # Auto-detect image directory.
     image_dir = args.coco_dir / 'train2017'
     if not image_dir.exists():
         image_dir = args.coco_dir / 'val2017'
@@ -148,7 +148,7 @@ def main():
     print("="*60)
     print()
     
-    # Create splits
+    # Create splits.
     try:
         if args.format == 'coco':
             train_file, val_file, test_file = split_coco_dataset(
@@ -194,3 +194,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

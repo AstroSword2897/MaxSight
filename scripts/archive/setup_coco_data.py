@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 import shutil
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.data.download_datasets import verify_coco_dataset
@@ -16,7 +16,7 @@ from ml.data.download_datasets import verify_coco_dataset
 def extract_zip(zip_path: Path, extract_to: Path, description: str) -> bool:
     """Extract zip file with progress."""
     if not zip_path.exists():
-        print(f"❌ {description} zip not found: {zip_path}")
+        print(f"FAIL {description} zip not found: {zip_path}")
         return False
     
     extract_dir = extract_to.parent
@@ -28,28 +28,28 @@ def extract_zip(zip_path: Path, extract_to: Path, description: str) -> bool:
     
     try:
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            # Get total files for progress
+            # Get total files for progress.
             file_list = zip_ref.namelist()
             total_files = len(file_list)
             
             print(f"  Files: {total_files:,}")
             
-            # Extract with progress
+            # Extract with progress.
             for i, member in enumerate(file_list):
                 if (i + 1) % 1000 == 0 or i == 0:
                     print(f"  Progress: {i+1:,}/{total_files:,} files", end='\r')
                 zip_ref.extract(member, extract_to.parent)
             
-            print(f"\n✅ {description} extracted successfully")
+            print(f"\nOK {description} extracted successfully")
             return True
     except Exception as e:
-        print(f"❌ Failed to extract {description}: {e}")
+        print(f"FAIL Failed to extract {description}: {e}")
         return False
 
 
 def setup_coco_data(data_dir: Path = None) -> bool:
     """Setup COCO dataset by extracting zips and verifying."""
-    # Auto-detect location
+    # Auto-detect location.
     if data_dir is None:
         if Path('datasets/coco_raw').exists():
             data_dir = Path('datasets/coco_raw')
@@ -64,7 +64,7 @@ def setup_coco_data(data_dir: Path = None) -> bool:
     print("="*70)
     print(f"Data directory: {data_dir}\n")
     
-    # Check what we have
+    # Check what we have.
     val_zip = data_dir / "val2017.zip"
     train_zip = data_dir / "train2017.zip"
     ann_zip = data_dir / "annotations_trainval2017.zip"
@@ -75,28 +75,28 @@ def setup_coco_data(data_dir: Path = None) -> bool:
     
     extracted = False
     
-    # Extract val images if zip exists but directory doesn't
+    # Extract val images if zip exists but directory doesn't.
     if val_zip.exists() and not val_dir.exists():
         if extract_zip(val_zip, val_dir, "Val images"):
             extracted = True
     
-    # Extract train images if zip exists but directory doesn't
+    # Extract train images if zip exists but directory doesn't.
     if train_zip.exists() and not train_dir.exists():
         if extract_zip(train_zip, train_dir, "Train images"):
             extracted = True
     
-    # Extract annotations if zip exists but directory is incomplete
+    # Extract annotations if zip exists but directory is incomplete.
     if ann_zip.exists():
         if not ann_dir.exists() or len(list(ann_dir.glob("*.json"))) < 4:
             if extract_zip(ann_zip, ann_dir, "Annotations"):
                 extracted = True
     
     if extracted:
-        print("\n✅ Extraction complete!")
+        print("\nOK Extraction complete!")
     else:
-        print("\nℹ️  No extraction needed (directories already exist or zips missing)")
+        print("\nINFO  No extraction needed (directories already exist or zips missing)")
     
-    # Verify dataset
+    # Verify dataset.
     print("\n" + "="*70)
     print("Verification")
     print("="*70)
@@ -105,15 +105,15 @@ def setup_coco_data(data_dir: Path = None) -> bool:
     all_good = all(status.values())
     
     if all_good:
-        print("\n✅ COCO dataset is complete and ready for training!")
+        print("\nOK COCO dataset is complete and ready for training!")
         return True
     else:
-        print("\n⚠️  COCO dataset is incomplete:")
+        print("\nWARNING  COCO dataset is incomplete:")
         for key, value in status.items():
-            status_str = "✅" if value else "❌"
+            status_str = "OK" if value else "FAIL"
             print(f"  {status_str} {key}")
         
-        # Provide specific instructions
+        # Provide specific instructions.
         if not status['train_images']:
             print("\n📥 To download train images:")
             print("  1. Visit: http://images.cocodataset.org/zips/train2017.zip")
@@ -139,4 +139,5 @@ if __name__ == "__main__":
     
     success = setup_coco_data(args.data_dir)
     sys.exit(0 if success else 1)
+
 

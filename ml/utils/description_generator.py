@@ -591,9 +591,9 @@ class DescriptionGenerator:
         urgency_word = self.URGENCY_NAMES[urgency] if urgency < len(self.URGENCY_NAMES) else 'warning'
         
         if urgency >= 3:  # Danger.
-            return f"⚠️ DANGER: {class_name} {distance_desc} {h_dir}"
+            return f"DANGER: {class_name} {distance_desc} {h_dir}"
         elif urgency >= 2:  # Warning.
-            return f"⚠️ Warning: {class_name} {distance_desc} {h_dir}"
+            return f"Warning: {class_name} {distance_desc} {h_dir}"
         else:  # Caution.
             return f"Caution: {class_name} {distance_desc} {h_dir}"
     
@@ -623,5 +623,6 @@ class DescriptionGenerator:
 def create_description_generator(verbosity: str = 'normal') -> DescriptionGenerator:
     """Factory function to create description generator."""
     return DescriptionGenerator(verbosity=verbosity)
+
 
 

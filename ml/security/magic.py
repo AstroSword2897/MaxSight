@@ -48,3 +48,4 @@ def validate_image_magic(file_bytes: bytes, allowed_types: tuple = ('jpg', 'png'
     return detected_type is not None and detected_type in allowed_types
 
 
+

@@ -398,3 +398,4 @@ class DetectionMetrics:
         """COCO-style mAP dict; delegates to compute_coco_map."""
         return self.compute_coco_map()
 
+

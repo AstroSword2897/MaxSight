@@ -243,7 +243,7 @@ class OCRIntegration:
         
         if use_vision_framework:
             # IOS Vision framework integration (for iOS app)
-            # This would call VNRecognizeTextRequest in Swift.
+            # Call VNRecognizeTextRequest in Swift when porting to iOS.
             return self._extract_text_vision_framework(region_image)
         else:
             # Python fallback: OCR using pytesseract with confidence.
@@ -251,7 +251,7 @@ class OCRIntegration:
     
     def _extract_text_vision_framework(self, image: Image.Image) -> Tuple[Optional[str], float]:
         """Extract text using iOS Vision framework...."""
-        # In iOS app, this would be:.
+        # In iOS app, use native text recognition API.
         # Let request = VNRecognizeTextRequest { request, error in.
         # Guard let observations = request.results else { return }.
         # // Extract text from observations with confidence.
@@ -500,5 +500,6 @@ if __name__ == "__main__":
     
     for region in regions:
         print(f"  Region {region['region_id']}: confidence={region['confidence']:.2f}, box={region['box']}")
+
 
 

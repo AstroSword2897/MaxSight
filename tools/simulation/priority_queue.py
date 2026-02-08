@@ -48,13 +48,13 @@ class PriorityQueue:
             except Full:
                 # Queue is full - apply backpressure.
                 if priority_value >= MessagePriority.CRITICAL.value:
-                    # Critical: replace last critical if this is newer/higher.
+                    # Replace last critical message when the new one is newer or higher priority.
                     if self._last_critical and priority_value >= self._last_critical[0]:
                         # Remove old critical and add new one.
                         self._try_replace_critical(priority_value, message)
                         return True
                     else:
-                        # This critical is older/lower, drop it.
+                        # Drop older or lower-priority critical message.
                         self._dropped_count += 1
                         return False
                 elif priority_value >= MessagePriority.HIGH.value:
@@ -67,7 +67,7 @@ class PriorityQueue:
                             self._dropped_count += 1
                             return False
                     else:
-                        # No low-priority to drop, drop this one.
+                        # Drop incoming message when no low-priority item can be evicted.
                         self._dropped_count += 1
                         return False
                 else:
@@ -77,15 +77,14 @@ class PriorityQueue:
     
     def _try_replace_critical(self, new_priority: int, new_message: Any) -> bool:
         """Try to replace old critical message with new one."""
-        # This is complex - for now, just drop the new one if queue is full.
-        # In production, you might want to scan and replace.
+        # When queue is full, drop the new message; production may scan and replace.
         return False
     
     def _try_drop_low_priority(self) -> bool:
         """Try to remove a low-priority item from queue."""
         # Queue doesn't support selective removal easily.
         # For now, we'll just drop the incoming high-priority if queue is full.
-        # Alternative data structures may be used for production.
+        # Use a structure that supports selective removal in production.
         return False
     
     def get(self, block: bool = True, timeout: Optional[float] = None) -> Tuple[int, Any]:
@@ -111,5 +110,6 @@ class PriorityQueue:
     def full(self) -> bool:
         """Check if queue is full."""
         return self.queue.full()
+
 
 

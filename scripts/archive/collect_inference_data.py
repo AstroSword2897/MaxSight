@@ -12,7 +12,7 @@ import torch
 from torch.utils.data import DataLoader
 from datetime import datetime
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.data.dataset import MaxSightDataset
@@ -37,11 +37,11 @@ class InferenceDatasetCollector:
             'total_images': 0,
             'total_objects': 0,
             'class_distribution': Counter(),
-            'image_sizes': [],  # (W, H) tuples - consistent format
+            'image_sizes': [],  # (W, H) tuples - consistent format.
             'objects_per_image': [],
-            'box_areas': [],  # normalized area fractions
-            'box_centers': [],  # normalized (cx, cy) tuples
-            'class_cooccurrence': Counter(),  # (class1, class2) pairs
+            'box_areas': [],  # Normalized area fractions.
+            'box_centers': [],  # Normalized (cx, cy) tuples.
+            'class_cooccurrence': Counter(),  # (class1, class2) pairs.
             'metadata': {}
         }
     
@@ -59,37 +59,37 @@ class InferenceDatasetCollector:
         self.stats['objects_per_image'].append(num_objs)
         self.stats['total_objects'] += num_objs
         
-        # Track classes present in this image for co-occurrence
+        # Track classes in the current image for co-occurrence stats.
         present_classes = set()
         
-        # Process each object
+        # Process each object.
         for i in range(num_objs):
-            box = boxes[i]  # [4] tensor
+            box = boxes[i]  # [4] tensor.
             label = labels[i].item() if torch.is_tensor(labels[i]) else labels[i]
             
             # COCO format: [x, y, w, h] in pixels (not normalized)
             x, y, w, h = box.tolist()
             
-            # Normalized center coordinates
+            # Normalized center coordinates.
             cx = (x + w / 2) / W
             cy = (y + h / 2) / H
             self.stats['box_centers'].append((cx, cy))
             
-            # Normalized area fraction
+            # Normalized area fraction.
             area_fraction = (w * h) / (W * H)
             self.stats['box_areas'].append(area_fraction)
             
-            # Class distribution
+            # Class distribution.
             if 0 <= label < len(COCO_CLASSES):
                 cls_name = COCO_CLASSES[label]
                 self.stats['class_distribution'][cls_name] += 1
                 present_classes.add(cls_name)
         
-        # Class co-occurrence: count pairs of classes in same image
+        # Class co-occurrence: count pairs of classes in same image.
         present_classes_list = list(present_classes)
         for i, c1 in enumerate(present_classes_list):
             for c2 in present_classes_list[i+1:]:
-                # Count both (c1, c2) and (c2, c1) for symmetry
+                # Count both (c1, c2) and (c2, c1) for symmetry.
                 self.stats['class_cooccurrence'][(c1, c2)] += 1
                 self.stats['class_cooccurrence'][(c2, c1)] += 1
     
@@ -99,9 +99,9 @@ class InferenceDatasetCollector:
         
         try:
             dataset = MaxSightDataset(data_dir)
-            print(f"✅ Loaded {len(dataset)} images")
+            print(f"OK Loaded {len(dataset)} images")
             
-            # Collect statistics
+            # Collect statistics.
             dataloader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
             
             for batch_idx, batch in enumerate(dataloader):
@@ -111,7 +111,7 @@ class InferenceDatasetCollector:
                 if batch_idx % 100 == 0:
                     print(f"  Processing {batch_idx}/{min(max_samples or len(dataset), len(dataset))}...")
                 
-                # Handle different batch formats safely
+                # Handle different batch formats safely.
                 if isinstance(batch, dict):
                     image = batch.get('image')
                     boxes = batch.get('boxes')
@@ -125,63 +125,63 @@ class InferenceDatasetCollector:
                     boxes = None
                     labels = None
                 
-                # Ensure image is tensor and remove batch dimension
+                # Ensure image is tensor and remove batch dimension.
                 if torch.is_tensor(image):
-                    if image.dim() == 4:  # [B, C, H, W]
-                        image = image.squeeze(0)  # [C, H, W]
-                    elif image.dim() == 3:  # [C, H, W]
-                        pass  # Already correct
+                    if image.dim() == 4:  # [B, C, H, W].
+                        image = image.squeeze(0)  # [C, H, W].
+                    elif image.dim() == 3:  # [C, H, W].
+                        pass  # Already correct.
                     else:
-                        print(f"⚠️  Skipping sample {batch_idx}: unexpected image shape {image.shape}")
+                        print(f"WARNING  Skipping sample {batch_idx}: unexpected image shape {image.shape}")
                         continue
                 else:
-                    print(f"⚠️  Skipping sample {batch_idx}: image is not a tensor")
+                    print(f"WARNING  Skipping sample {batch_idx}: image is not a tensor")
                     continue
                 
-                # Handle boxes and labels - must be tensors
+                # Handle boxes and labels - must be tensors.
                 if boxes is not None and torch.is_tensor(boxes):
-                    if boxes.dim() == 2:  # [N, 4]
+                    if boxes.dim() == 2:  # [N, 4].
                         boxes = boxes.squeeze(0) if boxes.shape[0] == 1 else boxes
-                    elif boxes.dim() == 3:  # [B, N, 4]
-                        boxes = boxes.squeeze(0)  # [N, 4]
+                    elif boxes.dim() == 3:  # [B, N, 4].
+                        boxes = boxes.squeeze(0)  # [N, 4].
                     else:
-                        print(f"⚠️  Skipping sample {batch_idx}: unexpected boxes shape {boxes.shape}")
+                        print(f"WARNING  Skipping sample {batch_idx}: unexpected boxes shape {boxes.shape}")
                         continue
                 else:
-                    # No boxes - skip this sample
+                    # Skip sample when boxes are missing.
                     continue
                 
                 if labels is not None and torch.is_tensor(labels):
-                    if labels.dim() == 1:  # [N]
+                    if labels.dim() == 1:  # [N].
                         labels = labels.squeeze(0) if labels.shape[0] == 1 else labels
-                    elif labels.dim() == 2:  # [B, N]
-                        labels = labels.squeeze(0)  # [N]
+                    elif labels.dim() == 2:  # [B, N].
+                        labels = labels.squeeze(0)  # [N].
                     else:
-                        print(f"⚠️  Skipping sample {batch_idx}: unexpected labels shape {labels.shape}")
+                        print(f"WARNING  Skipping sample {batch_idx}: unexpected labels shape {labels.shape}")
                         continue
                 else:
-                    # No labels - skip this sample
+                    # Skip sample when labels are missing.
                     continue
                 
-                # Ensure boxes and labels have matching length
+                # Ensure boxes and labels have matching length.
                 if boxes.shape[0] != labels.shape[0]:
-                    print(f"⚠️  Skipping sample {batch_idx}: boxes/labels length mismatch")
+                    print(f"WARNING  Skipping sample {batch_idx}: boxes/labels length mismatch")
                     continue
                 
-                # Process sample
+                # Process sample.
                 try:
                     self.process_sample(image, boxes, labels)
                     self.stats['total_images'] += 1
                 except Exception as e:
-                    print(f"⚠️  Error processing sample {batch_idx}: {e}")
+                    print(f"WARNING  Error processing sample {batch_idx}: {e}")
                     import traceback
                     traceback.print_exc()
                     continue
             
-            print("✅ Statistics collected")
+            print("OK Statistics collected")
             
         except Exception as e:
-            print(f"⚠️  Error collecting from COCO: {e}")
+            print(f"WARNING  Error collecting from COCO: {e}")
             import traceback
             traceback.print_exc()
     
@@ -199,14 +199,14 @@ class InferenceDatasetCollector:
                 'error': 'No valid samples processed'
             }
         
-        # Image size statistics (W, H) - consistent format
+        # Image size statistics (W, H) - consistent format.
         sizes = np.array(self.stats['image_sizes'])
         
-        # Box statistics
+        # Box statistics.
         areas = np.array(self.stats['box_areas']) if self.stats['box_areas'] else np.array([])
         centers = np.array(self.stats['box_centers']) if self.stats['box_centers'] else np.array([])
         
-        # Objects per image
+        # Objects per image.
         obj_counts = np.array(self.stats['objects_per_image'])
         
         return {
@@ -260,7 +260,7 @@ class InferenceDatasetCollector:
         """Save collected statistics to JSON file."""
         final_stats = self.compute_statistics()
         
-        # Convert numpy types to native Python types for JSON serialization
+        # Convert numpy types to native Python types for JSON serialization.
         def convert_types(obj):
             if isinstance(obj, np.integer):
                 return int(obj)
@@ -279,7 +279,7 @@ class InferenceDatasetCollector:
         with open(output_path, 'w') as f:
             json.dump(final_stats, f, indent=2)
         
-        print(f"\n✅ Inference dataset statistics saved to {output_path}")
+        print(f"\nOK Inference dataset statistics saved to {output_path}")
         print(f"   Total images: {final_stats['total_images']}")
         print(f"   Total objects: {final_stats['total_objects']}")
         print(f"   Classes: {final_stats['class_distribution_counts']['total_classes']}")
@@ -298,7 +298,7 @@ def collect_inference_data(
     print("="*60)
     
     if dataset_name.lower() != 'coco':
-        print(f"⚠️  Dataset '{dataset_name}' not yet implemented. Only 'coco' is supported.")
+        print(f"WARNING  Dataset '{dataset_name}' not yet implemented. Only 'coco' is supported.")
         print("   Falling back to COCO collection...")
         dataset_name = 'coco'
     
@@ -306,6 +306,7 @@ def collect_inference_data(
     collector.collect_from_coco(data_dir, max_samples=max_samples)
     collector.save(output_path)
     return collector.compute_statistics()
+
 
 
 

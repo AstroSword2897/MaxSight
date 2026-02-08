@@ -38,7 +38,7 @@ class OutputAuthorityManager:
     
     def request_output(self, request: OutputRequest) -> bool:
         """Request an output, respecting authority hierarchy...."""
-        # If no current output, allow this one.
+        # Allow output when no current output is active.
         if self.current_output is None:
             self.current_output = request
             return True
@@ -50,7 +50,7 @@ class OutputAuthorityManager:
             self.current_output = request
             return True
         elif request.authority < self.current_output.authority:
-            # Lower authority: suppress this request.
+            # Suppress request when authority is lower than current output.
             self.suppressed_outputs.append(request)
             return False
         else:
@@ -75,5 +75,6 @@ class OutputAuthorityManager:
         """Reset manager state."""
         self.current_output = None
         self.suppressed_outputs.clear()
+
 
 

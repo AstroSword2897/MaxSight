@@ -7,23 +7,23 @@ from pathlib import Path
 from collections import Counter, defaultdict
 from typing import Dict, List, Tuple, Set, Optional
 
-# --- CONFIG ---
+# --- CONFIG ---.
 INPUT_DIR = Path("datasets")
 OUTPUT_DIR = Path("datasets/cleaned_splits")
 
 # Sample counts (absolute numbers)
-TRAIN_SAMPLES = 350000  # 350,000 training samples
-VAL_SAMPLES = 70000     # 70,000 validation samples
-# Test samples will be remaining after train + val
+TRAIN_SAMPLES = 350000  # 350,000 training samples.
+VAL_SAMPLES = 70000     # 70,000 validation samples.
+# Test samples will be remaining after train + val.
 
 # Alternative: Use ratios (set to None to use absolute counts above)
-TRAIN_RATIO = None  # Set to None to use absolute counts
-VAL_RATIO = None    # Set to None to use absolute counts
-TEST_RATIO = None   # Set to None to use absolute counts
+TRAIN_RATIO = None  # Set to None to use absolute counts.
+VAL_RATIO = None    # Set to None to use absolute counts.
+TEST_RATIO = None   # Set to None to use absolute counts.
 
 RANDOM_SEED = 42
 
-# Validate: either use ratios OR absolute counts, not both
+# Validate: either use ratios OR absolute counts, not both.
 if TRAIN_RATIO is not None:
     assert abs(TRAIN_RATIO + VAL_RATIO + TEST_RATIO - 1.0) < 1e-6, "Ratios must sum to 1.0"
 
@@ -45,7 +45,7 @@ def load_and_merge_splits() -> Tuple[List[Dict], List[Dict], List[Dict]]:
     for split in ['train', 'val', 'test']:
         ann_file = INPUT_DIR / split / "annotations.json"
         if not ann_file.exists():
-            print(f"⚠️  {split} split not found, skipping...")
+            print(f"WARNING  {split} split not found, skipping...")
             continue
         
         print(f"\nLoading {split} split...")
@@ -53,7 +53,7 @@ def load_and_merge_splits() -> Tuple[List[Dict], List[Dict], List[Dict]]:
             data = json.load(f)
         
         if not isinstance(data, dict) or 'images' not in data:
-            print(f"⚠️  {split} is not in COCO format, skipping...")
+            print(f"WARNING  {split} is not in COCO format, skipping...")
             continue
         
         # Merge images (avoid duplicates)
@@ -62,7 +62,7 @@ def load_and_merge_splits() -> Tuple[List[Dict], List[Dict], List[Dict]]:
                 all_images.append(img)
                 seen_image_ids.add(img['id'])
         
-        # Merge annotations
+        # Merge annotations.
         all_annotations.extend(data.get('annotations', []))
         
         # Merge categories (avoid duplicates)
@@ -74,7 +74,7 @@ def load_and_merge_splits() -> Tuple[List[Dict], List[Dict], List[Dict]]:
         print(f"  Images: {len(data.get('images', []))}")
         print(f"  Annotations: {len(data.get('annotations', []))}")
     
-    print(f"\n✅ Merged dataset:")
+    print(f"\nOK Merged dataset:")
     print(f"  Total unique images: {len(all_images)}")
     print(f"  Total annotations: {len(all_annotations)}")
     print(f"  Total categories: {len(all_categories)}")
@@ -89,19 +89,19 @@ def fix_bbox(ann: Dict, image_w: int, image_h: int) -> Optional[Dict]:
         Fixed annotation dict, or None if box is invalid"""
     bbox = ann.get("bbox", [])
     if len(bbox) != 4:
-        return None  # Invalid format
+        return None  # Invalid format.
     
     x, y, w, h = bbox
     
-    # Remove negative coordinates
+    # Remove negative coordinates.
     if x < 0 or y < 0 or w < 0 or h < 0:
-        # Fix by clipping to image bounds
+        # Fix by clipping to image bounds.
         x = max(0, x)
         y = max(0, y)
         w = max(0, w)
         h = max(0, h)
     
-    # Clip to image bounds
+    # Clip to image bounds.
     x = max(0, min(x, image_w))
     y = max(0, min(y, image_h))
     w = max(0, min(w, image_w - x))
@@ -111,9 +111,9 @@ def fix_bbox(ann: Dict, image_w: int, image_h: int) -> Optional[Dict]:
     if w <= 0 or h <= 0:
         return None
     
-    # Update annotation
+    # Update annotation.
     ann["bbox"] = [x, y, w, h]
-    ann["area"] = w * h  # Update area
+    ann["area"] = w * h  # Update area.
     
     return ann
 
@@ -141,7 +141,7 @@ def fix_all_bboxes(annotations: List[Dict], images: List[Dict]) -> Tuple[List[Di
         img = image_dict[img_id]
         original_bbox = ann.get("bbox", [])
         
-        # Check for issues before fixing
+        # Check for issues before fixing.
         if len(original_bbox) == 4:
             x, y, w, h = original_bbox
             img_w, img_h = img.get('width', 224), img.get('height', 224)
@@ -153,7 +153,7 @@ def fix_all_bboxes(annotations: List[Dict], images: List[Dict]) -> Tuple[List[Di
             if w <= 0 or h <= 0:
                 stats['invalid_size'] += 1
         
-        # Fix the box
+        # Fix the box.
         fixed = fix_bbox(ann.copy(), img.get('width', 224), img.get('height', 224))
         
         if fixed:
@@ -177,15 +177,15 @@ def split_dataset(images: List[Dict], annotations: List[Dict],
     random.seed(seed)
     np.random.seed(seed)
     
-    # Get all image IDs
+    # Get all image IDs.
     image_ids = [img['id'] for img in images]
-    image_ids = list(np.random.permutation(image_ids))  # Reproducible shuffle
+    image_ids = list(np.random.permutation(image_ids))  # Reproducible shuffle.
     
     num_images = len(image_ids)
     
-    # Calculate split sizes
+    # Calculate split sizes.
     if train_samples is not None and val_samples is not None:
-        # Use absolute counts
+        # Use absolute counts.
         num_train = min(train_samples, num_images)
         num_val = min(val_samples, num_images - num_train)
         num_test = num_images - num_train - num_val
@@ -195,7 +195,7 @@ def split_dataset(images: List[Dict], annotations: List[Dict],
         print(f"  Val:   {num_val:,} samples")
         print(f"  Test:  {num_test:,} samples (remaining)")
     elif train_ratio is not None and val_ratio is not None:
-        # Use ratios
+        # Use ratios.
         num_train = int(num_images * train_ratio)
         num_val = int(num_images * val_ratio)
         num_test = num_images - num_train - num_val
@@ -211,18 +211,18 @@ def split_dataset(images: List[Dict], annotations: List[Dict],
     val_ids = set(image_ids[num_train:num_train+num_val])
     test_ids = set(image_ids[num_train+num_val:])
     
-    # Verifies no overlap
+    # Verifies no overlap.
     assert len(train_ids & val_ids) == 0, "Train/Val overlap detected!"
     assert len(train_ids & test_ids) == 0, "Train/Test overlap detected!"
     assert len(val_ids & test_ids) == 0, "Val/Test overlap detected!"
     
-    print(f"\n✅ Split sizes:")
+    print(f"\nOK Split sizes:")
     print(f"  Train: {len(train_ids)} images")
     print(f"  Val: {len(val_ids)} images")
     print(f"  Test: {len(test_ids)} images")
     print(f"  Total: {len(train_ids) + len(val_ids) + len(test_ids)} images")
     
-    # Split annotations
+    # Split annotations.
     def split_annotations(ann_list: List[Dict], image_set: Set[int]) -> List[Dict]:
         return [ann for ann in ann_list if ann.get("image_id") in image_set]
     
@@ -281,7 +281,7 @@ def save_splits(splits: Dict, images: List[Dict], categories: List[Dict],
         with open(out_file, 'w') as f:
             json.dump(split_data, f, indent=2)
         
-        print(f"\n✅ {split_name.upper()} split saved:")
+        print(f"\nOK {split_name.upper()} split saved:")
         print(f"  File: {out_file}")
         print(f"  Images: {len(split_data['images'])}")
         print(f"  Annotations: {len(ann_list)}")
@@ -289,19 +289,19 @@ def save_splits(splits: Dict, images: List[Dict], categories: List[Dict],
 
 def main():
     """Main execution."""
-    # Step 1: Load and merge existing splits
+    # Step 1: Load and merge existing splits.
     print("\n[1/4] Loading and merging existing splits...")
     all_images, all_annotations, all_categories = load_and_merge_splits()
     
     if not all_images:
-        print("❌ No images found! Check your dataset structure.")
+        print("FAIL No images found! Check your dataset structure.")
         return
     
-    # Step 2: Fix bounding boxes
+    # Step 2: Fix bounding boxes.
     print("\n[2/4] Fixing bounding boxes...")
     clean_annotations, bbox_stats = fix_all_bboxes(all_annotations, all_images)
     
-    print(f"\n✅ Bounding box fixes:")
+    print(f"\nOK Bounding box fixes:")
     print(f"  Original: {bbox_stats['original']}")
     print(f"  Fixed: {bbox_stats['fixed']}")
     print(f"  Removed: {bbox_stats['removed']}")
@@ -310,7 +310,7 @@ def main():
     print(f"    - Negative coords: {bbox_stats['negative_coords']}")
     print(f"    - Invalid size: {bbox_stats['invalid_size']}")
     
-    # Step 3: Re-split dataset
+    # Step 3: Re-split dataset.
     print("\n[3/4] Re-splitting dataset with zero overlap...")
     splits = split_dataset(
         all_images, clean_annotations,
@@ -322,7 +322,7 @@ def main():
         seed=RANDOM_SEED
     )
     
-    # Step 4: Generate class distribution reports
+    # Step 4: Generate class distribution reports.
     print("\n[4/4] Generating class distribution reports...")
     reports = {}
     for split_name, (_, ann_list) in splits.items():
@@ -330,24 +330,24 @@ def main():
             ann_list, all_categories, split_name
         )
     
-    # Save splits
+    # Save splits.
     print("\n💾 Saving cleaned splits...")
     save_splits(splits, all_images, all_categories, OUTPUT_DIR)
     
-    # Save class distribution report
+    # Save class distribution report.
     report_file = OUTPUT_DIR / "class_distribution_report.json"
     with open(report_file, 'w') as f:
         json.dump(reports, f, indent=2)
     
-    print(f"\n✅ Class distribution report saved: {report_file}")
+    print(f"\nOK Class distribution report saved: {report_file}")
     
-    # Print summary
+    # Print summary.
     print("\n" + "=" * 80)
     print("SUMMARY")
     print("=" * 80)
-    print(f"✅ Fixed {bbox_stats['fixed']} bounding boxes")
-    print(f"✅ Removed {bbox_stats['removed']} invalid annotations")
-    print(f"✅ Created 3 splits with ZERO overlap")
+    print(f"OK Fixed {bbox_stats['fixed']} bounding boxes")
+    print(f"OK Removed {bbox_stats['removed']} invalid annotations")
+    print(f"OK Created 3 splits with ZERO overlap")
     
     for split_name, report in reports.items():
         print(f"\n{split_name.upper()} Split:")
@@ -356,9 +356,9 @@ def main():
         print(f"  Rare classes (<5 samples): {report['rare_<5']}")
         print(f"  Very rare classes (<2 samples): {report['very_rare_<2']}")
     
-    print("\n✅ Dataset is now ready for training!")
+    print("\nOK Dataset is now ready for training!")
     print(f"   Output directory: {OUTPUT_DIR}")
-    print("\n📊 Next steps:")
+    print("\n Next steps:")
     print("   1. Review class_distribution_report.json for weighted loss implementation")
     print("   2. Use cleaned splits in your training script")
     print("   3. Implement class-weighted or Focal Loss for rare classes")
@@ -366,4 +366,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

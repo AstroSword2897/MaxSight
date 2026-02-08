@@ -394,7 +394,7 @@ def test_head_execution_manager_latency():
     # Verifies result is correct.
     assert result['output'].sum().item() == 20.0  # 1 * 10 * 2.
     
-    print(f"✅ Test 12: HeadExecutionManager latency {avg_latency*1000:.3f}ms/exec working")
+    print(f"OK Test 12: HeadExecutionManager latency {avg_latency*1000:.3f}ms/exec working")
 
 
 def test_head_execution_manager_summary_accounting():
@@ -469,22 +469,23 @@ if __name__ == "__main__":
     test_head_execution_manager_summary_accounting()
     
     print("\n" + "="*70)
-    print("ALL ADVANCED ERROR HANDLING TESTS PASSED ✓")
+    print("ALL ADVANCED ERROR HANDLING TESTS PASSED ok")
     print("="*70)
     print("\nCoverage Summary:")
-    print("  • Forced exception fallbacks: ✓")
-    print("  • Successful execution (no fallback): ✓")
-    print("  • Complete dependency validation: ✓")
-    print("  • Missing dependency detection: ✓")
-    print("  • Partial dependency handling: ✓")
-    print("  • High uncertainty fallback: ✓")
-    print("  • Noisy input uncertainty handling: ✓")
-    print("  • Low uncertainty (no fallback): ✓")
-    print("  • HeadExecutionManager success path: ✓")
-    print("  • HeadExecutionManager exception handling: ✓")
-    print("  • HeadExecutionManager missing dependencies: ✓")
-    print("  • HeadExecutionManager latency checks: ✓")
-    print("  • HeadExecutionManager accounting: ✓")
+    print("  - Forced exception fallbacks: ok")
+    print("  - Successful execution (no fallback): ok")
+    print("  - Complete dependency validation: ok")
+    print("  - Missing dependency detection: ok")
+    print("  - Partial dependency handling: ok")
+    print("  - High uncertainty fallback: ok")
+    print("  - Noisy input uncertainty handling: ok")
+    print("  - Low uncertainty (no fallback): ok")
+    print("  - HeadExecutionManager success path: ok")
+    print("  - HeadExecutionManager exception handling: ok")
+    print("  - HeadExecutionManager missing dependencies: ok")
+    print("  - HeadExecutionManager latency checks: ok")
+    print("  - HeadExecutionManager accounting: ok")
     print("\nTotal: 13 comprehensive tests")
     print("="*70 + "\n")
+
 

@@ -118,7 +118,7 @@ class CrossModalScheduler:
         filtered_detections.sort(key=lambda x: x.get('priority', 0), reverse=True)
         
         # Limit number of outputs based on frequency.
-        # Counterproductive. This supports "Practical Usability & Safety Goals."
+        # Supports Practical Usability & Safety Goals (counterproductive otherwise).
         max_outputs = self._get_max_outputs()
         filtered_detections = filtered_detections[:max_outputs]
         
@@ -531,7 +531,10 @@ class OutputValidator:
     """Validates runtime outputs against the contract.
     Rejects symbol characters and enforces schema constraints."""
     
-    FORBIDDEN_SYMBOLS_PATTERN = re.compile(r'[✅❌✓✗✔✖=×→←↑↓▶◀▲▼■□●○★☆♦♥♠♣]')
+    # Blocklist: checkmarks, arrows, geometric shapes (Unicode escapes to avoid emoji in source).
+    FORBIDDEN_SYMBOLS_PATTERN = re.compile(
+        r'[\u2705\u274C\u2713\u2717\u2714\u2716=\u00D7\u2192\u2190\u2191\u2193\u25B6\u25C0\u25B2\u25BC\u25A0\u25A1\u25CF\u25CB\u2605\u2606\u2666\u2665\u2660\u2663]'
+    )
     
     @classmethod
     def validate_message(cls, message: str, mode: OutputMode) -> tuple[bool, Optional[str]]:
@@ -680,6 +683,7 @@ def create_dev_output(
 class OutputScheduler(CrossModalScheduler):
     """Backwards-compatible alias for CrossModalScheduler...."""
     pass
+
 
 
 

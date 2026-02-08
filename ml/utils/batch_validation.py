@@ -154,7 +154,7 @@ def validate_and_sanitize_batch(
                 # Check for invalid dimensions (silent fix for common COCO padding issues)
                 if (actual_boxes[:, 2] <= 0).any() or (actual_boxes[:, 3] <= 0).any():
                     if auto_fix:
-                        # Silent fix - this is expected from COCO data.
+                        # Silent fix for expected COCO data quirks.
                         actual_boxes[:, 2] = torch.clamp(actual_boxes[:, 2], min=1e-4)
                         actual_boxes[:, 3] = torch.clamp(actual_boxes[:, 3], min=1e-4)
                         batch['boxes'][b, :num_obj] = actual_boxes
@@ -191,4 +191,5 @@ def validate_and_sanitize_batch(
     else:
         logger.error(f"Failed to sanitize batch: {msg}")
         return batch, False, f"Auto-fix failed: {msg}"
+
 

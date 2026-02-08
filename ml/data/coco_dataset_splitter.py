@@ -89,7 +89,7 @@ def split_coco_dataset(
                 split_annotations.append(ann)
                 split_category_ids.add(ann['category_id'])
         
-        # Filter categories to only include those in this split.
+        # Restrict categories to those present in the current split.
         split_categories = [cat for cat in coco_data.get('categories', [])
                             if cat['id'] in split_category_ids]
             
@@ -357,9 +357,10 @@ if __name__ == "__main__":
             min_objects_per_image=1  # Default: require at least 1 object per image.
         )
     
-    print("\n✅ Dataset splitting complete!")
+    print("\nOK Dataset splitting complete!")
     print(f"Train: {train_file}")
     print(f"Val:   {val_file}")
     print(f"Test:  {test_file}")
+
 
 

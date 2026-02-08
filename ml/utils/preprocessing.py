@@ -914,7 +914,7 @@ class TextRegionDetector:
         
         # Simple region detection (basic implementation)
         # Note: Full contour detection would require more complex PyTorch operations.
-        # For now, return empty list as this is a fallback method.
+        # Return empty list; fallback when no regions are available.
         # In production, use model's text_head output instead.
         return []
 
@@ -1102,5 +1102,6 @@ if __name__ == "__main__":
     print("- Cached transformation matrices (3-5x speedup for RGB↔LAB)")
     print("- Optimized CLAHE with fast approximation")
     print("- Numerical stability improvements (eps, clamping)")
+
 
 

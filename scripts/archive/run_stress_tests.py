@@ -8,7 +8,7 @@ import argparse
 import logging
 from pathlib import Path
 
-# Add project root to path
+# Add project root to path.
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -40,31 +40,31 @@ def main():
     logger.info(f"Device: {args.device}")
     logger.info(f"Quick mode: {args.quick}")
     
-    # Load model
+    # Load model.
     if args.checkpoint:
         logger.info(f"Loading model from {args.checkpoint}")
         # FUTURE ENHANCEMENT: Load actual trained model for stress testing.
-        model = None  # Placeholder
+        model = None  # Placeholder.
     else:
         logger.warning("No checkpoint provided, using dummy model")
-        model = None  # Placeholder
+        model = None  # Placeholder.
     
     if model is None:
         logger.error("Model loading not implemented. Please provide a valid model.")
         return
     
-    # Create stress test config
+    # Create stress test config.
     config = StressTestConfig()
     if args.quick:
-        # Reduce test scope for quick mode
-        config.head_isolation_variants = [['detection'], ['all']]  # Only A and E
-        config.loss_scaling_factors = [1.0, 5.0]  # Only test extremes
-        config.corruption_types = ['gaussian_blur', 'random_occlusion']  # Fewer corruptions
+        # Reduce test scope for quick mode.
+        config.head_isolation_variants = [['detection'], ['all']]  # Only A and E.
+        config.loss_scaling_factors = [1.0, 5.0]  # Only test extremes.
+        config.corruption_types = ['gaussian_blur', 'random_occlusion']  # Fewer corruptions.
     
-    # Create kill switch manager
+    # Create kill switch manager.
     kill_switch_manager = HeadKillSwitchManager()
     
-    # Create stress test suite
+    # Create stress test suite.
     suite = StressTestSuite(config)
     
     # Create dummy data loaders (replace with actual loaders)
@@ -77,18 +77,18 @@ def main():
     health_report = health_checker.run_full_check()
     
     if health_report['overall_status'] == 'FAIL':
-        logger.error("❌ Health check FAILED - Tier 1 heads not safe")
+        logger.error("FAIL Health check FAILED - Tier 1 heads not safe")
         logger.error("Failures:")
         for check_name, check_results in health_report['checks'].items():
             if 'failures' in check_results:
                 for failure in check_results['failures']:
                     logger.error(f"  - {check_name}: {failure}")
-        logger.error("⚠️  Do not proceed with stress tests until Tier 1 is fixed")
+        logger.error("WARNING  Do not proceed with stress tests until Tier 1 is fixed")
         sys.exit(1)
     else:
-        logger.info("✅ Health check passed - Tier 1 heads safe")
+        logger.info("OK Health check passed - Tier 1 heads safe")
     
-    # Run stress tests
+    # Run stress tests.
     logger.info("Running stress test suite...")
     results = suite.run_all(
         model=model,
@@ -98,11 +98,11 @@ def main():
         kill_switch_manager=kill_switch_manager
     )
     
-    # Generate and save report
+    # Generate and save report.
     logger.info("Generating stress test report...")
     suite.save_report(args.output)
     
-    # Print dashboard summary
+    # Print dashboard summary.
     dashboard = results['dashboard']
     summary = dashboard['summary']
     
@@ -110,37 +110,38 @@ def main():
     print("STRESS TEST SUMMARY")
     print("="*60)
     print(f"Total Tests: {summary['total_tests']}")
-    print(f"Passed: {summary['passed']} ✅")
-    print(f"Failed: {summary['failed']} ❌")
-    print(f"Warnings: {summary['warnings']} ⚠️")
+    print(f"Passed: {summary['passed']} OK")
+    print(f"Failed: {summary['failed']} FAIL")
+    print(f"Warnings: {summary['warnings']} WARNING")
     print("="*60)
     
-    # Print failed tests
+    # Print failed tests.
     if summary['failed'] > 0:
         print("\nFAILED TESTS:")
         for test in dashboard['tests']:
-            if test['status'] == '❌':
+            if test['status'] == 'FAIL':
                 print(f"  - {test['category']}/{test['test']}")
                 if test['red_flags']:
                     for flag in test['red_flags']:
                         print(f"    🚩 {flag}")
     
-    # Print warnings
+    # Print warnings.
     if summary['warnings'] > 0:
         print("\nWARNINGS:")
         for test in dashboard['tests']:
             if test['red_flags']:
                 print(f"  - {test['test']}:")
                 for flag in test['red_flags']:
-                    print(f"    ⚠️ {flag}")
+                    print(f"    WARNING {flag}")
     
     print(f"\nFull report saved to: {args.output}")
     
-    # Exit with error code if tests failed
+    # Exit with error code if tests failed.
     if summary['failed'] > 0:
         sys.exit(1)
 
 
 if __name__ == '__main__':
     main()
+
 

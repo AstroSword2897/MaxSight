@@ -55,7 +55,7 @@ class TierTransferManager:
                 logger.error(f"NaN found in {name}")
                 return False
         
-        logger.info("✅ Source checkpoint validated")
+        logger.info("OK Source checkpoint validated")
         return True
     
     def transfer_weights(
@@ -102,7 +102,7 @@ class TierTransferManager:
         shape_mismatch = 0
         
         for target_name, target_param in target_state.items():
-            # Checks whether this parameter is transferred.
+            # Detect whether the parameter is transferred from the source model.
             should_transfer = any(pattern in target_name for pattern in transfer_patterns)
             should_skip = any(pattern in target_name for pattern in skip_patterns)
             
@@ -222,7 +222,7 @@ class TierTransferManager:
         freeze_map = {}
         
         for name, param in self.target_model.named_parameters():
-            # Checks if this is a new T5 head (not in T2)
+            # Detect new T5 head (not present in T2).
             is_new_head = any(x in name for x in [
                 'temporal', 'cross_task_attention', 'cross_modal_attention',
                 'scene_graph', 'ocr_head', 'sound_event_head',
@@ -400,5 +400,6 @@ def create_transfer_optimizer(
     optimizer = torch.optim.AdamW(param_groups)
     
     return optimizer
+
 
 

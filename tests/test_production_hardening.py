@@ -155,3 +155,4 @@ class TestSafetyBiasUrgency:
         u_large = model._get_urgency('chair', box_size=0.3, confidence=0.5)
         assert u_large >= 1
 
+

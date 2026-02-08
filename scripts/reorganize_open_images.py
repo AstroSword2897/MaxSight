@@ -19,18 +19,18 @@ def main():
     csv_dest = ROOT / "datasets" / "open_images_v6" / "validation-annotations-bbox.csv"
     
     if not fo_source.exists():
-        print(f"\n✗ Source not found: {fo_source}")
+        print(f"\nFAIL Source not found: {fo_source}")
         return 1
     
     img_count = len(list(fo_source.rglob("*.jpg")))
-    print(f"\n✓ Found {img_count:,} images in {fo_source}")
+    print(f"\nFound {img_count:,} images in {fo_source}")
     
     if dest_dir.exists():
         dest_count = len(list(dest_dir.rglob("*.jpg")))
         if dest_count > 1000:
-            print(f"✓ Already reorganized ({dest_count:,} images)")
+            print(f"Already reorganized ({dest_count:,} images)")
             if csv_dest.exists():
-                print("✅ Ready!")
+                print("OK Ready!")
                 return 0
     
     print(f"\n📦 Moving images to {dest_dir}...")
@@ -46,7 +46,7 @@ def main():
             img_path.rename(dest)
             moved += 1
     
-    print(f"✓ Moved {moved:,} images")
+    print(f"Moved {moved:,} images")
     
     # Download CSV.
     if not csv_dest.exists():
@@ -58,12 +58,13 @@ def main():
         with open(csv_dest, 'wb') as f:
             for chunk in r.iter_content(8192):
                 f.write(chunk)
-        print("✓ CSV downloaded")
+        print("CSV downloaded")
     
     final_count = len(list(dest_dir.rglob("*.jpg")))
-    print(f"\n✅ Complete! {final_count:,} images ready")
+    print(f"\nOK Complete! {final_count:,} images ready")
     return 0
 
 if __name__ == "__main__":
     sys.exit(main())
+
 

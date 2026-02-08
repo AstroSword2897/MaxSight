@@ -220,8 +220,8 @@ class MaxSightDataset(Dataset):
             # Clamp to valid ranges: center [0, 1], size [1e-4, 1].
             box_tensor[0] = torch.clamp(box_tensor[0], 0.0, 1.0)  # Cx.
             box_tensor[1] = torch.clamp(box_tensor[1], 0.0, 1.0)  # Cy.
-            box_tensor[2] = torch.clamp(box_tensor[2], 1e-4, 1.0)  # w.
-            box_tensor[3] = torch.clamp(box_tensor[3], 1e-4, 1.0)  # h.
+            box_tensor[2] = torch.clamp(box_tensor[2], 1e-4, 1.0)  # W.
+            box_tensor[3] = torch.clamp(box_tensor[3], 1e-4, 1.0)  # H.
             
             # Check for NaN/Inf.
             if torch.isnan(box_tensor).any() or torch.isinf(box_tensor).any():
@@ -254,5 +254,6 @@ class MaxSightDataset(Dataset):
             result['condition_mode'] = self.condition_mode
         
         return result
+
 
 

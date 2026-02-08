@@ -25,7 +25,7 @@ def download_with_cvdf_repo(data_dir: Path) -> bool:
     if validation_dir.exists():
         img_count = len(list(validation_dir.rglob("*.jpg")))
         if img_count > 1000:  # Reasonable threshold.
-            print(f"  ✓ Open Images V6 already has {img_count} images")
+            print(f"  [ok] Open Images V6 already has {img_count} images")
             return True
     
     # Clone or use CVDF repository.
@@ -46,9 +46,9 @@ def download_with_cvdf_repo(data_dir: Path) -> bool:
                 capture_output=True
             )
             downloader_dir = temp_dir
-            print("  ✓ Repository cloned")
+            print("  [ok] Repository cloned")
         except subprocess.CalledProcessError as e:
-            print(f"  ✗ Failed to clone repository: {e}")
+            print(f"  [fail] Failed to clone repository: {e}")
             print("\n  Alternative: Manual download required")
             print("  See: OPEN_IMAGES_V6_DOWNLOAD_GUIDE.md")
             return False
@@ -60,7 +60,7 @@ def download_with_cvdf_repo(data_dir: Path) -> bool:
         downloader_script = downloader_dir / "download.py"
     
     if not downloader_script.exists():
-        print(f"  ✗ Downloader script not found in {downloader_dir}")
+        print(f"  [fail] Downloader script not found in {downloader_dir}")
         print("  Trying alternative method...")
         return download_with_fiftyone(data_dir)
     
@@ -83,7 +83,7 @@ def download_with_cvdf_repo(data_dir: Path) -> bool:
         result = subprocess.run(cmd, cwd=str(downloader_dir))
         
         if result.returncode == 0:
-            print("  ✓ Download complete")
+            print("  [ok] Download complete")
             
             # Download annotations CSV.
             print("\n  Step 3: Downloading annotations...")
@@ -105,30 +105,30 @@ def download_with_cvdf_repo(data_dir: Path) -> bool:
                                 f.write(chunk)
                                 pbar.update(len(chunk))
                 
-                print("  ✓ Annotations downloaded")
+                print("  [ok] Annotations downloaded")
                 
                 # Verify.
                 img_count = len(list(validation_dir.rglob("*.jpg")))
                 if img_count > 0 and csv_path.exists():
-                    print(f"\n  ✅ Open Images V6 download complete!")
+                    print(f"\n  OK Open Images V6 download complete!")
                     print(f"     Images: {img_count}")
-                    print(f"     Annotations: ✓")
+                    print(f"     Annotations: [ok]")
                     return True
                 else:
-                    print(f"  ⚠ Some files may be missing")
+                    print(f"  WARNING Some files may be missing")
                     return False
                     
             except Exception as e:
-                print(f"  ⚠ CSV download failed: {e}")
+                print(f"  WARNING CSV download failed: {e}")
                 print("  You can download it manually from:")
                 print("  https://storage.googleapis.com/openimages/v6/oidv6-validation-annotations-bbox.csv")
                 return False
         else:
-            print("  ✗ Download failed")
+            print("  [fail] Download failed")
             return False
             
     except Exception as e:
-        print(f"  ✗ Downloader execution failed: {e}")
+        print(f"  [fail] Downloader execution failed: {e}")
         return download_with_fiftyone(data_dir)
 
 
@@ -147,7 +147,7 @@ def download_with_fiftyone(data_dir: Path) -> bool:
             max_samples=None
         )
         
-        print(f"  ✓ Downloaded {len(dataset)} images")
+        print(f"  [ok] Downloaded {len(dataset)} images")
         
         # Reorganize files.
         validation_dir = data_dir / "validation"
@@ -162,14 +162,14 @@ def download_with_fiftyone(data_dir: Path) -> bool:
         response.raise_for_status()
         csv_path.write_bytes(response.content)
         
-        print("  ✅ Download complete")
+        print("  OK Download complete")
         return True
         
     except ImportError:
-        print("  ✗ FiftyOne not installed. Install with: pip install fiftyone")
+        print("  [fail] FiftyOne not installed. Install with: pip install fiftyone")
         return False
     except Exception as e:
-        print(f"  ✗ FiftyOne download failed: {e}")
+        print(f"  [fail] FiftyOne download failed: {e}")
         return False
 
 
@@ -182,13 +182,14 @@ def main():
     
     # Use CVDF method.
     if download_with_cvdf_repo(data_dir):
-        print("\n✅ Success!")
+        print("\nOK Success!")
         return 0
     else:
-        print("\n⚠️  Download incomplete. See OPEN_IMAGES_V6_DOWNLOAD_GUIDE.md for manual options.")
+        print("\nWARNING  Download incomplete. See OPEN_IMAGES_V6_DOWNLOAD_GUIDE.md for manual options.")
         return 1
 
 
 if __name__ == "__main__":
     sys.exit(main())
+
 

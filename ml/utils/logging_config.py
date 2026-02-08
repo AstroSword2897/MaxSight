@@ -248,3 +248,4 @@ def is_patient_mode_enabled() -> bool:
     return _global_guard is not None and _global_guard._enabled
 
 
+

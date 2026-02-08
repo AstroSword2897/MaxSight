@@ -232,3 +232,4 @@ class StabilityManager:
             'history_length': len(self.stability_history),
         }
 
+

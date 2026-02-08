@@ -78,7 +78,7 @@ def test_training_system():
     """Test training system"""
     print("Test 4: Training System")
     # Skip training system test - requires actual data loaders.
-    # This test would need real dataset setup.
+    # Test requires real dataset setup to run fully.
     pass
 
 
@@ -169,7 +169,7 @@ if __name__ == "__main__":
             passed += 1
         except AssertionError as e:
             failed += 1
-            print(f"❌ {test.__name__}: {e}")
+            print(f"FAIL {test.__name__}: {e}")
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -179,5 +179,6 @@ if __name__ == "__main__":
         sys.exit(0)
     else:
         sys.exit(1)
+
 
 

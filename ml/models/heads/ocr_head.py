@@ -164,3 +164,4 @@ class TransformerOCRHead(nn.Module):
             'gated': gated_mask  # FIXED: Return gating information.
         }
 
+

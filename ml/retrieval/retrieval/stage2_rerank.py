@@ -72,3 +72,4 @@ class Stage2Reranker(nn.Module):
         sorted_indices = torch.argsort(scores, descending=True)
         return scores[sorted_indices], sorted_indices
 
+

@@ -21,18 +21,18 @@ def generate_detection_weights(distribution: dict, total_classes: int,
     if total_samples == 0:
         return {cls: 1.0 for cls in all_classes}
     
-    # Normalize frequencies
+    # Normalize frequencies.
     normalized_freq = [f / total_samples if total_samples > 0 else 0 for f in frequencies]
     
     if method == 'inverse_sqrt':
-        # Inverse square root: less aggressive than pure inverse
+        # Inverse square root: less aggressive than pure inverse.
         weights = [1.0 / np.sqrt(f + 1e-6) if f > 0 else 10.0 for f in normalized_freq]
     elif method == 'inverse':
-        # Pure inverse: more aggressive
+        # Pure inverse: more aggressive.
         weights = [1.0 / (f + 1e-6) if f > 0 else 10.0 for f in normalized_freq]
     elif method == 'focal_alpha':
         # Alpha values for Focal Loss (higher = more important)
-        # Rare classes get higher alpha
+        # Rare classes get higher alpha.
         weights = [min(1.0, 0.25 / (f + 1e-6)) if f > 0 else 1.0 for f in normalized_freq]
     else:
         raise ValueError(f"Unknown method: {method}")
@@ -47,10 +47,10 @@ def generate_detection_weights(distribution: dict, total_classes: int,
 def generate_urgency_weights() -> dict:
     """Generate weights for urgency head...."""
     return {
-        0: 0.5,  # Safe - downweight
-        1: 2.0,  # Caution - upweight
-        2: 2.0,  # Warning - upweight
-        3: 5.0   # Danger - heavily upweight
+        0: 0.5,  # Safe - downweight.
+        1: 2.0,  # Caution - upweight.
+        2: 2.0,  # Warning - upweight.
+        3: 5.0   # Danger - heavily upweight.
     }
 
 
@@ -62,16 +62,16 @@ def generate_distance_weights() -> dict:
     - Zone 1 (medium): ~39% - weight 1.0
     - Zone 2 (far): ~52% - weight 0.5"""
     return {
-        0: 2.0,  # Near - upweight
-        1: 1.0,  # Medium - balanced
-        2: 0.5   # Far - downweight
+        0: 2.0,  # Near - upweight.
+        1: 1.0,  # Medium - balanced.
+        2: 0.5   # Far - downweight.
     }
 
 
 def main():
     """Main execution."""
     if not REPORT_FILE.exists():
-        print(f"❌ Class distribution report not found: {REPORT_FILE}")
+        print(f"FAIL Class distribution report not found: {REPORT_FILE}")
         print("   Run scripts/fix_dataset_splits.py first!")
         return
     
@@ -79,27 +79,27 @@ def main():
     print("GENERATING CLASS WEIGHTS FOR WEIGHTED LOSS")
     print("=" * 80)
     
-    # Load distribution report
+    # Load distribution report.
     with open(REPORT_FILE, 'r') as f:
         reports = json.load(f)
     
-    # Use train split for weight calculation
+    # Use train split for weight calculation.
     train_report = reports.get('train', {})
     if not train_report:
-        print("❌ Train split not found in report!")
+        print("FAIL Train split not found in report!")
         return
     
     distribution = train_report.get('distribution', {})
     total_classes = train_report.get('total_categories', 0)
     
-    print(f"\n📊 Using train split distribution:")
+    print(f"\n Using train split distribution:")
     print(f"  Total categories: {total_classes}")
     print(f"  Annotated categories: {train_report.get('annotated_categories', 0)}")
     print(f"  Zero-annotation classes: {train_report.get('zero_annotation', 0)}")
     print(f"  Rare classes (<5 samples): {train_report.get('rare_<5', 0)}")
     
-    # Generate weights
-    print("\n🔧 Generating class weights...")
+    # Generate weights.
+    print("\n Generating class weights...")
     
     # Detection head weights (multiple methods)
     detection_weights_inverse_sqrt = generate_detection_weights(
@@ -112,11 +112,11 @@ def main():
         distribution, total_classes, method='focal_alpha'
     )
     
-    # Urgency and distance weights
+    # Urgency and distance weights.
     urgency_weights = generate_urgency_weights()
     distance_weights = generate_distance_weights()
     
-    # Compile output
+    # Compile output.
     output = {
         'detection_head': {
             'inverse_sqrt': detection_weights_inverse_sqrt,
@@ -140,18 +140,18 @@ def main():
         }
     }
     
-    # Save weights
+    # Save weights.
     with open(OUTPUT_FILE, 'w') as f:
         json.dump(output, f, indent=2)
     
-    print(f"\n✅ Class weights saved: {OUTPUT_FILE}")
+    print(f"\nOK Class weights saved: {OUTPUT_FILE}")
     
-    # Print summary
+    # Print summary.
     print("\n" + "=" * 80)
     print("WEIGHT SUMMARY")
     print("=" * 80)
     
-    # Show weight ranges
+    # Show weight ranges.
     inv_sqrt_vals = list(detection_weights_inverse_sqrt.values())
     inv_vals = list(detection_weights_inverse.values())
     
@@ -175,7 +175,7 @@ def main():
     for zone, weight in distance_weights.items():
         print(f"  Zone {zone}: {weight:.1f}")
     
-    print("\n📝 Usage in PyTorch:")
+    print("\n Usage in PyTorch:")
     print("  # Detection head (inverse_sqrt weights)")
     print("  import torch")
     print("  weights = torch.tensor([weights_dict['detection_head']['inverse_sqrt'][cls]")
@@ -189,4 +189,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

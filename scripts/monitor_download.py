@@ -37,7 +37,7 @@ def monitor_download():
                 
                 # Check if download is complete (41,620 images expected)
                 if img_count >= 41600:
-                    print(f"\n\n✅ Download appears complete! ({img_count:,} images)")
+                    print(f"\n\nOK Download appears complete! ({img_count:,} images)")
                     print("\n  Moving files to expected location...")
                     
                     # Move files.
@@ -62,7 +62,7 @@ def monitor_download():
                             img_path.rename(dest)
                             moved += 1
                     
-                    print(f"  ✓ Moved {moved} images")
+                    print(f"  [ok] Moved {moved} images")
                     break
             else:
                 print(f"\r[{time.strftime('%H:%M:%S')}] Waiting for download to start...", end="", flush=True)
@@ -78,4 +78,5 @@ def monitor_download():
 
 if __name__ == "__main__":
     monitor_download()
+
 

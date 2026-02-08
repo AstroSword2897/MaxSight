@@ -53,7 +53,7 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco"), check_coco_raw: 
         if status['train_images']:
             print(f"Train images: {img_count} images found")
         else:
-            print(f"⚠ Train images: Only {img_count} images found (expected ~118K)")
+            print(f"WARNING Train images: Only {img_count} images found (expected ~118K)")
     
     if val_img_dir.exists():
         img_count = len(list(val_img_dir.glob("*.jpg")))
@@ -61,7 +61,7 @@ def verify_coco_dataset(data_dir: Path = Path("datasets/coco"), check_coco_raw: 
         if status['val_images']:
             print(f"Val images: {img_count} images found")
         else:
-            print(f"⚠ Val images: Only {img_count} images found (expected ~5K)")
+            print(f"WARNING Val images: Only {img_count} images found (expected ~5K)")
     
     # Checks annotations.
     if ann_dir.exists():
@@ -150,7 +150,7 @@ def download_coco_dataset(data_dir: Path = Path("datasets/coco"), auto_download:
                 
                 # Skip if already exists.
                 if filepath.exists():
-                    print(f"✓ {name} already exists: {filepath}")
+                    print(f"[ok] {name} already exists: {filepath}")
                     continue
                 
                 print(f"Downloading {name} ({info['size']})...")
@@ -193,9 +193,9 @@ def download_coco_dataset(data_dir: Path = Path("datasets/coco"), auto_download:
                         continue
                 
                 if success:
-                    print(f"✓ {name} downloaded successfully")
+                    print(f"[ok] {name} downloaded successfully")
                 else:
-                    print(f"✗ {name} download failed with all methods")
+                    print(f"[fail] {name} download failed with all methods")
                     print(f"  Please download manually from: {info['url']}")
             
             print("\nDownload complete. Please extract zip files manually.")
@@ -553,7 +553,7 @@ if __name__ == "__main__":
         for key, status in coco_status.items():
             print(f"  {key}: {'PASS' if status else 'FAIL'}")
     else:
-        print("\n⚠ No datasets verified. Please download datasets first.")
+        print("\nWARNING No datasets verified. Please download datasets first.")
     
     print("\nTotal Available Training Data:")
     print("  - COCO: 200K+ images, 1.5M+ instances")
@@ -563,5 +563,6 @@ if __name__ == "__main__":
     print("  - LVIS: 164K images, 2.2M+ instances")
     print("  - AudioSet: 2M+ audio clips")
     print("\n  TOTAL: 11M+ images, 70M+ instances for maximum training data")
+
 
 

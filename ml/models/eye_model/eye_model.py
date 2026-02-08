@@ -185,7 +185,7 @@ class EyeModel(nn.Module):
         # Validate input range [0,1].
         if face_region.min() < 0.0 or face_region.max() > 1.0:
             # Warn but don't fail - might be intentional.
-            # However, this can lead to meaningless conv activations.
+            # Avoid meaningless conv activations when input is invalid.
             if self.training:
                 # In training, normalize on-the-fly.
                 face_region = torch.clamp(face_region, 0.0, 1.0)
@@ -238,5 +238,6 @@ class EyeModel(nn.Module):
             "[0, 1] for fixation, [1, 0] for saccade. "
             "If continuous probabilities are needed, modify head to use Sigmoid instead."
         )
+
 
 

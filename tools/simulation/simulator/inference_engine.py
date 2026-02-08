@@ -237,7 +237,7 @@ class InferenceEngine:
                 else:
                     outputs = self.model(image)
             
-            # CRITICAL: Synchronize GPU after inference to ensure completion.
+            # Synchronize GPU after inference to ensure completion.
             if device.type == 'cuda':
                 torch.cuda.synchronize()
             elif device.type == 'mps':
@@ -385,4 +385,5 @@ class InferenceEngine:
         self.metrics = InferenceMetrics()
         self.warmup_count = 0
         self.in_stabilization = True
+
 

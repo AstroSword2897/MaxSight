@@ -203,7 +203,7 @@ def test_training_step():
     
     print(f"  Total loss: {total_loss.item():.4f}")
     print(f"  Gradients computed: {has_gradients}")
-    print("  ✅ PASSED: Training step works correctly")
+    print("  PASSED: Training step works correctly")
 
 
 def test_data_loader():
@@ -237,7 +237,7 @@ def test_data_loader():
     
     print(f"  Batch size: {batch['image'].shape[0]}")
     print(f"  Image shape: {batch['image'].shape}")
-    print("  ✅ PASSED: Data loader works correctly")
+    print("  PASSED: Data loader works correctly")
 
 
 def test_training_loop_iteration():
@@ -303,7 +303,7 @@ def test_training_loop_iteration():
     
     print(f"  Processed {num_batches} batches")
     print(f"  Average loss: {avg_loss:.4f}")
-    print("  ✅ PASSED: Training loop iteration works")
+    print("  PASSED: Training loop iteration works")
 
 
 def test_gradient_accumulation():
@@ -362,7 +362,7 @@ def test_gradient_accumulation():
             optimizer.zero_grad()
     
     print(f"  Gradient accumulation steps: {accumulation_steps}")
-    print("  ✅ PASSED: Gradient accumulation works")
+    print("  PASSED: Gradient accumulation works")
 
 
 def test_fp32_training():
@@ -370,7 +370,7 @@ def test_fp32_training():
     print("\nTraining Pipeline Test 5: FP32 Training")
     
     if not torch.cuda.is_available():
-        print("  ⚠️ SKIPPED: CUDA not available")
+        print("  SKIPPED: CUDA not available")
         return
     
     model = create_model()
@@ -383,7 +383,7 @@ def test_fp32_training():
     loss = outputs['classifications'].sum()
     loss.backward()
     optimizer.step()
-    print("  ✅ PASSED: FP32 training works")
+    print("  PASSED: FP32 training works")
 
 
 if __name__ == "__main__":
@@ -398,5 +398,6 @@ if __name__ == "__main__":
     
     print("\n" + "=" * 50)
     print("All training pipeline tests passed!")
+
 
 

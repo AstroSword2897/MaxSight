@@ -19,10 +19,11 @@ def compute_contrastive_loss(
         object_emb.transpose(1, 2)  # [B, 256, K].
     ).squeeze(1) / temperature  # [B, K].
     
-    # This treats each object independently as positive/negative.
+    # Treat each object independently as positive or negative.
     labels = positive_mask.float()  # [B, K].
     loss = F.binary_cross_entropy_with_logits(similarity, labels, reduction='mean')
     
     return loss
+
 
 

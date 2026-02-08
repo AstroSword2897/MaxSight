@@ -75,7 +75,7 @@ class MotionHead(nn.Module):
         # Always create input_proj for standard 4D input path.
         self.input_proj = nn.Conv2d(in_channels, hidden_channels, kernel_size=1)
 
-        # NEW: Multi-scale processing (coarse H/2 → fine H)
+        # Multi-scale processing (coarse H/2 to fine H).
         if use_multi_scale:
             # Coarse network at H/2 resolution.
             self.coarse_scale_net = nn.Sequential(
@@ -133,7 +133,7 @@ class MotionHead(nn.Module):
         return_multi_scale: bool = False
     ) -> Union[torch.Tensor, Dict[str, Union[torch.Tensor, None]]]:
         """Forward pass to generate motion flow with scaled-up computation...."""
-        # CRITICAL: Unified processing - no layer skipping, no hacks.
+        # Unified processing path; no layer skipping or special-case hacks.
         # Process input to always produce [B, hidden_channels, H, W] for coarse_net.
         
         if temporal_features.dim() == 5 and self.use_temporal_stacking:
@@ -161,7 +161,7 @@ class MotionHead(nn.Module):
 
         features = self.coarse_net(features_input)
 
-        # NEW: Multi-scale processing (coarse H/2 → fine H)
+        # Multi-scale processing (coarse H/2 to fine H).
         multi_scale_flows = {}
         if self.use_multi_scale:
             # Downsample to H/2.
@@ -300,4 +300,5 @@ class ChannelSpatialAttention(nn.Module):
         x = x * spatial_att
         
         return x
+
 

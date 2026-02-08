@@ -20,16 +20,16 @@ def test_timing_import():
     
     try:
         from ml.models.maxsight_cnn import time as time_module
-        print("✅ Time module imported successfully")
+        print("OK Time module imported successfully")
         return True
     except ImportError:
         # Check if time is imported in maxsight_cnn.
         import ml.models.maxsight_cnn as maxsight_module
         if hasattr(maxsight_module, 'time'):
-            print("✅ Time module available in maxsight_cnn")
+            print("OK Time module available in maxsight_cnn")
             return True
         else:
-            print("⚠️ Time module not found in maxsight_cnn (may be imported differently)")
+            print("WARNING Time module not found in maxsight_cnn (may be imported differently)")
             return True  # Not a failure, time is a built-in.
 
 
@@ -50,11 +50,11 @@ def test_timing_flag():
         if not hasattr(model2, '_enable_timing'):
             model2._enable_timing = False
         
-        print("✅ _enable_timing flag can be set")
+        print("OK _enable_timing flag can be set")
         print(f"   - Default value: {getattr(model2, '_enable_timing', False)}")
         return True
     except Exception as e:
-        print(f"❌ Failed to set _enable_timing flag: {e}")
+        print(f"FAIL Failed to set _enable_timing flag: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -80,7 +80,7 @@ def test_timing_tracking():
         has_timing = 'stage_a_latency_ms' in outputs
         has_stage_info = 'stage_a_completed' in outputs and 'stage_b_completed' in outputs
         
-        print("✅ Timing tracking test completed")
+        print("OK Timing tracking test completed")
         print(f"   - stage_a_latency_ms in outputs: {has_timing}")
         print(f"   - Stage info in outputs: {has_stage_info}")
         
@@ -91,7 +91,7 @@ def test_timing_tracking():
         
         return has_stage_info  # At minimum, stage info is present.
     except Exception as e:
-        print(f"❌ Timing tracking test failed: {e}")
+        print(f"FAIL Timing tracking test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -118,7 +118,7 @@ def test_timing_enforcement():
         skip_reason = outputs.get('skip_stage_b_reason')
         latency = outputs.get('stage_a_latency_ms')
         
-        print("✅ Timing enforcement test completed")
+        print("OK Timing enforcement test completed")
         print(f"   - Stage B completed: {stage_b_completed}")
         print(f"   - Skip reason: {skip_reason}")
         print(f"   - Stage A latency: {latency:.2f}ms" if latency is not None else "   - Stage A latency: Not measured")
@@ -131,7 +131,7 @@ def test_timing_enforcement():
         print("   - Output structure verified")
         return True
     except Exception as e:
-        print(f"❌ Timing enforcement test failed: {e}")
+        print(f"FAIL Timing enforcement test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -157,12 +157,12 @@ def test_timing_disabled():
         assert 'stage_a_completed' in outputs
         assert 'stage_b_completed' in outputs
         
-        print("✅ Timing disabled mode works correctly")
+        print("OK Timing disabled mode works correctly")
         print("   - Inference works without timing enabled")
         print("   - Outputs structure maintained")
         return True
     except Exception as e:
-        print(f"❌ Timing disabled test failed: {e}")
+        print(f"FAIL Timing disabled test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -198,23 +198,23 @@ def test_actual_latency():
             min_latency = min(latencies)
             max_latency = max(latencies)
             
-            print("✅ Latency measurement successful")
+            print("OK Latency measurement successful")
             print(f"   - Average latency: {avg_latency:.2f}ms")
             print(f"   - Min latency: {min_latency:.2f}ms")
             print(f"   - Max latency: {max_latency:.2f}ms")
             print(f"   - Target: <150ms, Hard limit: <200ms")
             
             if avg_latency < 200:
-                print("   ✅ Within hard limit (200ms)")
+                print("   OK Within hard limit (200ms)")
             else:
-                print("   ⚠️ Exceeds hard limit (200ms)")
+                print("   WARNING Exceeds hard limit (200ms)")
             
             return True
         else:
-            print("⚠️ No latency measurements recorded")
+            print("WARNING No latency measurements recorded")
             return False
     except Exception as e:
-        print(f"❌ Latency measurement test failed: {e}")
+        print(f"FAIL Latency measurement test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -255,20 +255,21 @@ def main():
     total = len(results)
     
     for test_name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
+        status = "PASS" if result else "FAIL"
         print(f"{status}: {test_name}")
     
     print(f"\nTotal: {passed}/{total} tests passed")
     
     if passed == total:
-        print("🎉 All tests passed!")
+        print("All tests passed!")
         return 0
     else:
-        print("⚠️ Some tests failed - check output above")
+        print("WARNING Some tests failed - check output above")
         return 1
 
 
 if __name__ == "__main__":
     exit(main())
+
 
 

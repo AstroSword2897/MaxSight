@@ -12,7 +12,7 @@ import sys
 import yaml
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import torch
@@ -48,10 +48,10 @@ def create_loss_fn(config: dict, phase: int = 1):
         weights = config['loss']['phase_2_weights']
     elif phase == 3:
         weights = config['loss']['phase_3_weights']
-    else:  # phase == 4
+    else:  # Phase == 4.
         weights = config['loss']['phase_4_weights']
     
-    # Create loss functions for enabled tasks
+    # Create loss functions for enabled tasks.
     loss_functions = {}
     
     if weights.get('detection', False):
@@ -88,14 +88,14 @@ def main():
     
     args = parser.parse_args()
     
-    # Load config
+    # Load config.
     config = load_config(args.config)
     
     logger.info("="*70)
     logger.info("T2 → T5 Tier Transfer")
     logger.info("="*70)
     
-    # Create T5 model
+    # Create T5 model.
     logger.info("Creating T5 model...")
     tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
     t5_model = create_model(
@@ -103,28 +103,28 @@ def main():
         tier_config=tier_config
     )
     
-    # Initialize transfer manager
+    # Initialize transfer manager.
     transfer_mgr = TierTransferManager(
         source_checkpoint=Path(config['source']['checkpoint']),
         target_model=t5_model,
         transfer_config=config['transfer']
     )
     
-    # Validate source checkpoint
+    # Validate source checkpoint.
     if not transfer_mgr.validate_source_checkpoint():
         logger.error("Source checkpoint validation failed!")
         sys.exit(1)
     
     if args.validate_only:
-        logger.info("✅ Source checkpoint validated successfully")
+        logger.info("OK Source checkpoint validated successfully")
         return
     
-    # Transfer weights
+    # Transfer weights.
     logger.info("Transferring weights...")
     stats = transfer_mgr.transfer_weights(strict=config['transfer']['strict_transfer'])
     logger.info(f"Transfer stats: {stats}")
     
-    # Create data loaders
+    # Create data loaders.
     logger.info("Creating data loaders...")
     train_loader, val_loader, _ = create_data_loaders(
         train_annotation_file=Path("datasets/cleaned_splits/train.json"),
@@ -138,7 +138,7 @@ def main():
         apply_lighting_augmentation=False
     )
     
-    # Create optimizer with parameter groups
+    # Create optimizer with parameter groups.
     logger.info("Creating optimizer with parameter groups...")
     optimizer = create_transfer_optimizer(
         model=t5_model,
@@ -149,7 +149,7 @@ def main():
     # Create loss function (phase 1)
     loss_fn = create_loss_fn(config, phase=1)
     
-    # Create training loop
+    # Create training loop.
     train_loop = ProductionTrainLoop(
         model=t5_model,
         train_loader=train_loader,
@@ -167,14 +167,14 @@ def main():
     logger.info("Phase 3 (epochs 25-40): + Therapy/urgency")
     logger.info("Phase 4 (epochs 40+): All tasks enabled")
     
-    # Training loop with freeze/unfreeze and loss unlock
+    # Training loop with freeze/unfreeze and loss unlock.
     num_epochs = config['training']['num_epochs']
     
     for epoch in range(num_epochs):
-        # Apply freeze schedule
+        # Apply freeze schedule.
         transfer_mgr.apply_freeze_schedule(epoch)
         
-        # Get loss unlock schedule
+        # Get loss unlock schedule.
         loss_unlock = transfer_mgr.get_loss_unlock_schedule(epoch)
         
         # Determine phase (4 phases now)
@@ -187,7 +187,7 @@ def main():
         else:
             phase = 4
         
-        # Update loss function if phase changed
+        # Update loss function if phase changed.
         phase_boundaries = [
             0,
             config['transfer']['phase_1_epochs'],
@@ -199,16 +199,16 @@ def main():
             train_loop.loss_fn = loss_fn
             logger.info(f"Switched to Phase {phase} loss configuration")
         
-        # Train epoch
+        # Train epoch.
         train_metrics = train_loop.train_epoch()
         
-        # Validate
+        # Validate.
         if epoch % int(config['validation']['val_check_interval'] * len(train_loader)) == 0:
             val_metrics = train_loop.validate()
             logger.info(f"Epoch {epoch}: train_loss={train_metrics.get('loss', 0):.4f}, "
                        f"val_loss={val_metrics.get('loss', 0):.4f}")
         
-        # Save checkpoint
+        # Save checkpoint.
         if epoch % config['checkpoint']['save_every_n_epochs'] == 0:
             checkpoint_path = Path(config['checkpoint']['save_dir']) / f"epoch_{epoch}.pth"
             checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -222,9 +222,10 @@ def main():
             }, checkpoint_path)
             logger.info(f"Saved checkpoint: {checkpoint_path}")
     
-    logger.info("✅ Transfer training complete!")
+    logger.info("OK Transfer training complete!")
 
 
 if __name__ == "__main__":
     main()
+
 

@@ -452,7 +452,7 @@ if __name__ == '__main__':
     model.train()
     loss = fused.sum()
     loss.backward()
-    print("✓ Gradient checkpointing works!")
+    print("Gradient checkpointing works!")
     
     # Memory efficiency test.
     print(f"\nModel parameters: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M")

@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Dict, Any
 import json
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.collect_loss_data import collect_loss_data
@@ -32,7 +32,7 @@ def verify_model_completeness() -> Dict[str, Any]:
         'status': 'complete'
     }
     
-    # Check for stubs
+    # Check for stubs.
     import os
     stub_files = []
     for root, dirs, files in os.walk('ml/models'):
@@ -69,16 +69,16 @@ def verify_model_completeness() -> Dict[str, Any]:
         'Therapy components (STUB - placeholder)'
     ]
     
-    print(f"\n✅ Integrated components: {len(completeness['integrated'])}")
-    print(f"⚠️  Stub components: {len(completeness['stubs'])}")
-    print(f"📝 Documented stubs: {len(completeness['documented_stubs'])}")
+    print(f"\nOK Integrated components: {len(completeness['integrated'])}")
+    print(f"WARNING  Stub components: {len(completeness['stubs'])}")
+    print(f" Documented stubs: {len(completeness['documented_stubs'])}")
     
     if len(stub_files) > len(completeness['documented_stubs']):
         completeness['status'] = 'has_undocumented_stubs'
-        print("⚠️  Warning: Some stubs may not be documented")
+        print("WARNING  Warning: Some stubs may not be documented")
     else:
         completeness['status'] = 'complete'
-        print("✅ All stubs are documented")
+        print("OK All stubs are documented")
     
     return completeness
 
@@ -112,7 +112,7 @@ def generate_report(
         'recommendations': []
     }
     
-    # Add recommendations
+    # Add recommendations.
     if completeness.get('status') != 'complete':
         report['recommendations'].append("Review and document all stub components")
     
@@ -122,7 +122,7 @@ def generate_report(
     if inference_stats and inference_stats.get('total_images', 0) < 100:
         report['recommendations'].append("Consider collecting statistics from larger dataset")
     
-    # Save report
+    # Save report.
     report_path = output_dir / 'collection_report.json'
     with open(report_path, 'w') as f:
         json.dump(report, f, indent=2)
@@ -130,11 +130,11 @@ def generate_report(
     print("\n" + "="*60)
     print("Data Collection Report")
     print("="*60)
-    print(f"\n✅ Report saved to: {report_path}")
+    print(f"\nOK Report saved to: {report_path}")
     print(f"\nSummary:")
-    print(f"  Loss data: {'✅' if report['summary']['loss_data_collected'] else '❌'}")
-    print(f"  Inference stats: {'✅' if report['summary']['inference_stats_collected'] else '❌'}")
-    print(f"  Model completeness: {'✅' if report['summary']['model_completeness_verified'] else '❌'}")
+    print(f"  Loss data: {'OK' if report['summary']['loss_data_collected'] else 'FAIL'}")
+    print(f"  Inference stats: {'OK' if report['summary']['inference_stats_collected'] else 'FAIL'}")
+    print(f"  Model completeness: {'OK' if report['summary']['model_completeness_verified'] else 'FAIL'}")
     
     if report['recommendations']:
         print(f"\nRecommendations:")
@@ -169,7 +169,7 @@ def main():
     inference_stats = None
     completeness = None
     
-    # 1. Collect loss data
+    # 1. Collect loss data.
     if not args.skip_loss:
         try:
             print("\n[1/3] Collecting loss function data...")
@@ -184,13 +184,13 @@ def main():
                 collect_task_weights=True
             )
         except Exception as e:
-            print(f"❌ Loss data collection failed: {e}")
+            print(f"FAIL Loss data collection failed: {e}")
             import traceback
             traceback.print_exc()
     else:
         print("\n[1/3] Skipping loss data collection...")
     
-    # 2. Collect inference dataset statistics
+    # 2. Collect inference dataset statistics.
     if not args.skip_inference:
         try:
             print("\n[2/3] Collecting inference dataset statistics...")
@@ -198,16 +198,16 @@ def main():
                 dataset_name='coco',
                 data_dir=Path(args.data_dir),
                 output_path=output_dir / 'inference_stats.json',
-                max_samples=1000  # Limit for speed
+                max_samples=1000  # Limit for speed.
             )
         except Exception as e:
-            print(f"❌ Inference stats collection failed: {e}")
+            print(f"FAIL Inference stats collection failed: {e}")
             import traceback
             traceback.print_exc()
     else:
         print("\n[2/3] Skipping inference stats collection...")
     
-    # 3. Verify model completeness
+    # 3. Verify model completeness.
     if not args.skip_completeness:
         try:
             print("\n[3/3] Verifying model completeness...")
@@ -216,20 +216,20 @@ def main():
             completeness_path = output_dir / 'model_completeness.json'
             with open(completeness_path, 'w') as f:
                 json.dump(completeness, f, indent=2)
-            print(f"✅ Completeness report saved to: {completeness_path}")
+            print(f"OK Completeness report saved to: {completeness_path}")
         except Exception as e:
-            print(f"❌ Completeness verification failed: {e}")
+            print(f"FAIL Completeness verification failed: {e}")
             import traceback
             traceback.print_exc()
     else:
         print("\n[3/3] Skipping completeness verification...")
     
-    # 4. Generate comprehensive report
+    # 4. Generate comprehensive report.
     print("\n[4/4] Generating comprehensive report...")
     report = generate_report(loss_data, inference_stats, completeness, output_dir)
     
     print("\n" + "="*60)
-    print("✅ Data collection complete!")
+    print("OK Data collection complete!")
     print("="*60)
     print(f"\nAll data saved to: {output_dir}")
     print(f"  - Loss data: loss_data.json")
@@ -240,4 +240,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

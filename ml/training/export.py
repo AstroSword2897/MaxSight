@@ -60,7 +60,30 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
     export_device = device if device else next(model.parameters()).device
     if isinstance(export_device, torch.device):
         export_device = str(export_device)
-    
+
+    # Stub global_encoder before any trace so JIT never traverses HuggingFace CLIP (avoids segfault -11).
+    original_global_encoder = None
+    if hasattr(model, "global_encoder"):
+        try:
+            embed_dim = getattr(model.global_encoder, "embed_dim", 512)
+        except Exception:
+            embed_dim = 512
+
+        class _StubGlobalEncoder(nn.Module):
+            def __init__(self, dim: int):
+                super().__init__()
+                self.embed_dim = dim
+
+            def forward(self, images: torch.Tensor) -> torch.Tensor:
+                return images.new_zeros(images.shape[0], self.embed_dim)
+
+        original_global_encoder = model.global_encoder
+        model.global_encoder = _StubGlobalEncoder(embed_dim)
+        print("JIT export: global_encoder stubbed (avoids CLIP segfault).", flush=True)
+        logger.debug("Replaced global_encoder with traceable stub for JIT export.")
+        import gc
+        gc.collect()
+
     # Place model and input on export device; avoid MPS so JIT trace runs reliably.
     if export_device == 'cpu':
         model.cpu()
@@ -84,23 +107,6 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
             logger.debug("Disabled scene graph (use_cross_task_attention=False) for JIT trace.")
         except Exception:
             pass
-
-    # Replace CLIP-based global_encoder with a traceable stub so JIT does not traverse HuggingFace CLIP (avoids segfault -11).
-    original_global_encoder = None
-    if hasattr(model, "global_encoder") and getattr(model.global_encoder, "use_clip", False):
-        embed_dim = getattr(model.global_encoder, "embed_dim", 512)
-
-        class _StubGlobalEncoder(nn.Module):
-            def __init__(self, dim: int):
-                super().__init__()
-                self.embed_dim = dim
-
-            def forward(self, images: torch.Tensor) -> torch.Tensor:
-                return images.new_zeros(images.shape[0], self.embed_dim)
-
-        original_global_encoder = model.global_encoder
-        model.global_encoder = _StubGlobalEncoder(embed_dim)
-        logger.debug("Replaced CLIP global_encoder with traceable stub for JIT export.")
 
     # Trace wrapper first for tensor-only outputs; ignore TracerWarnings so the real failure is visible.
     import warnings
@@ -476,9 +482,9 @@ class AlertFrequency(Enum):
             base_indent = 0
             
             for i, line in enumerate(lines):
-                # Check if this is our target function.
+                # Detect whether the current line starts the target function.
                 if is_class_method:
-                    # Looks for class method: "    def func_name("
+                    # Match class method pattern (e.g. "    def func_name(").
                     if f'    def {func_name}(' in line or f'\tdef {func_name}(' in line:
                         in_target_function = True
                         base_indent = len(line) - len(line.lstrip())
@@ -487,9 +493,9 @@ class AlertFrequency(Enum):
                         func_lines.append(cleaned_line)
                         continue
                 else:
-                    # Look for standalone function: "def func_name("
+                    # Match standalone function "def func_name(" at line start.
                     if f'def {func_name}(' in line and not line.strip().startswith('class '):
-                        # Checks it's not indented (standalone function)
+                        # Ensure standalone function (no leading indent).
                         if not line.startswith(' ') and not line.startswith('\t'):
                             in_target_function = True
                             base_indent = 0
@@ -497,7 +503,7 @@ class AlertFrequency(Enum):
                             continue
                 
                 if in_target_function:
-                    # Check if we've hit the end of the function.
+                    # Detect end of function body (next def/class at same or lesser indent).
                     stripped = line.lstrip()
                     if stripped:
                         current_indent = len(line) - len(line.lstrip())
@@ -534,11 +540,11 @@ class AlertFrequency(Enum):
                     # Remove self. references.
                     func_code = re.sub(r'\bself\.', '', func_code)
                     # Replace config references - add TODO comments on separate lines.
-                    # This preserves syntax while documenting what needs to be parameterized.
+                    # Preserve syntax while documenting what to parameterize when porting.
                     lines = func_code.split('\n')
                     cleaned_lines = []
                     for line in lines:
-                        # Checks if line has config reference.
+                        # Detect config reference for parameterization TODO.
                         if 'config.' in line:
                             indent = len(line) - len(line.lstrip())
                             todo_comment = ' ' * indent + '# TODO: Parameterize config when porting to Swift.'
@@ -664,13 +670,13 @@ def export_ios_bundle(
 
 # Xcode Integration.
 
-# # 1. Add Model to Project.
+# 1. Add Model to Project.
 
 1. Drag `maxsight.pte` into your Xcode project
 2. Ensure it's added to your app target
 3. Add to "Copy Bundle Resources" in Build Phases
 
-# # 2. Install ExecuTorch Framework.
+# 2. Install ExecuTorch Framework.
 
 Add ExecuTorch to your project:
 
@@ -681,7 +687,7 @@ dependencies: [
 ]
 ```
 
-# # 3. Load Model.
+# 3. Load Model.
 
 ```swift
 import Executorch
@@ -710,7 +716,7 @@ class MaxSightModel {{
 }}
 ```
 
-# # 4. Preprocess Input.
+# 4. Preprocess Input.
 
 **Critical: Use exact ImageNet normalization values**
 
@@ -750,7 +756,7 @@ func applyConditionTransform(_ image: UIImage, condition: VisionCondition) -> UI
 }}
 ```
 
-# # 5. Run Inference.
+# 5. Run Inference.
 
 ```swift
 let model = MaxSightModel()
@@ -767,7 +773,7 @@ let outputs = try model.predict(image: inputTensor)
 // - distance_zones: [B, 100, 3] - distance zone probabilities
 ```
 
-# # 6. Postprocess Outputs.
+# 6. Postprocess Outputs.
 
 Reference `processing_reference.py` for postprocessing:
 
@@ -807,7 +813,7 @@ func postprocessDetections(
 }}
 ```
 
-# # 7. Load Configs.
+# 7. Load Configs.
 
 ```swift
 struct ModelConfig: Codable {{
@@ -866,17 +872,17 @@ See `processing_reference.py` for complete reference:
 
 # Troubleshooting.
 
-# # Model won't load.
+# Model won't load.
 - Verify `maxsight.pte` is in bundle resources
 - Check ExecuTorch framework is properly linked
 - Ensure iOS deployment target is 15.0+
 
-# # Inference fails.
+# Inference fails.
 - Verify input tensor shape matches `input_size` in config
 - Check tensor dtype is Float32
 - Ensure tensor is on CPU (ExecuTorch requirement)
 
-# # Outputs are wrong.
+# Outputs are wrong.
 - Verify preprocessing matches Python reference
 - Check postprocessing (NMS, filtering) is correct
 - Compare with `processing_reference.py` implementation
@@ -930,5 +936,6 @@ if __name__ == "__main__":
         elif fmt == "executorch":
             export_to_executorch(model, out_path)
     print("Export done.")
+
 
 

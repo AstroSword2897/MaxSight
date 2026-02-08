@@ -35,7 +35,7 @@ def test_scene_graph_consistency():
         batch_offsets=None
     )
     
-    # CRITICAL ASSERTIONS (fail loud, fail early)
+    # Fail loud and early on invalid scene graph state.
     assert edge_index.ndim == 2, f"edge_index must be 2D, got {edge_index.ndim}D"
     assert edge_index.shape[0] == 2, f"edge_index must have shape [2, E], got {edge_index.shape}"
     assert edge_index.is_contiguous(), "edge_index must be contiguous"
@@ -62,7 +62,7 @@ def test_scene_graph_consistency():
     assert relation_edges.issubset(edge_set), \
         f"Relation edges {relation_edges - edge_set} not in edge_index"
     
-    print("✅ Scene graph consistency test PASSED")
+    print("OK Scene graph consistency test PASSED")
     print(f"   Nodes: {num_nodes}")
     print(f"   Edges: {edge_index.shape[1]}")
     print(f"   Relations: {len(relations)}")
@@ -107,7 +107,7 @@ def test_scene_graph_with_pruning():
         assert pruned_edge_index.shape[1] == len(edge_map), \
             f"Pruned edge_index ({pruned_edge_index.shape[1]}) != edge_map count ({len(edge_map)})"
         
-        print("✅ Pruning test PASSED")
+        print("OK Pruning test PASSED")
         print(f"   Original edges: {edge_index.shape[1]}")
         print(f"   Pruned edges: {pruned_edge_index.shape[1]}")
         print(f"   Original relations: {len(relations)}")
@@ -122,11 +122,12 @@ if __name__ == "__main__":
     try:
         test_scene_graph_consistency()
         test_scene_graph_with_pruning()
-        print("\n✅ ALL TESTS PASSED")
+        print("\nOK ALL TESTS PASSED")
         print("   Graph structure is explicit and correct")
     except AssertionError as e:
-        print(f"\n❌ TEST FAILED: {e}")
+        print(f"\nFAIL TEST FAILED: {e}")
         print("   STOP THE PIPELINE - graph structure is broken")
         sys.exit(1)
+
 
 

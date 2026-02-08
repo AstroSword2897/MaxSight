@@ -60,3 +60,4 @@ class GlobalConfidenceAggregator(nn.Module):
 # Backward compatibility alias.
 UncertaintyHead = GlobalConfidenceAggregator
 
+

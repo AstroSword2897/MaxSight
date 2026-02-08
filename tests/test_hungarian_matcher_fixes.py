@@ -174,5 +174,6 @@ if __name__ == '__main__':
     test_matching_batch_mixed()
     test_validate_and_sanitize_batch()
     
-    print("✅ All Hungarian matcher robustness tests passed!")
+    print("OK All Hungarian matcher robustness tests passed!")
+
 

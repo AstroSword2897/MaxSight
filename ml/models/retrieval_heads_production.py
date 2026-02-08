@@ -71,7 +71,7 @@ class MultiVectorRetrievalHeads(nn.Module):
         
         # Region embeddings (with boxes)
         region_emb, region_boxes = self.region_extractor.extract_regions(images)
-        # CRITICAL: Preserve region boxes.
+        # Preserve region boxes for downstream consumers.
         embeddings['region'] = self.region_proj(region_emb)  # [B, max_regions, common_embed_dim].
         embeddings['region_boxes'] = region_boxes  # [B, max_regions, 4].
         
@@ -139,5 +139,6 @@ class MultiVectorRetrievalHeads(nn.Module):
             embeddings['scene_graph'] = torch.zeros(B, self.common_embed_dim, device=device)
         
         return embeddings
+
 
 

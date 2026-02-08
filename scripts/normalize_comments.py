@@ -13,7 +13,10 @@ def normalize_inline_comment(s: str) -> str:
         return s
     if s.startswith("#"):
         s = s[1:].lstrip()
-    if not s or s.startswith("type:") or s.startswith("noqa") or "://" in s:
+    low = s.lower()
+    if not s or low.startswith("type:") or low.startswith("noqa") or "://" in s:
+        return s
+    if s.lstrip().startswith("!/") or s.lstrip().startswith("! "):
         return s
     if len(s) > 1 and s[0].isalpha() and not s[0].isupper():
         s = s[0].upper() + s[1:]
@@ -45,7 +48,7 @@ def process_file(path: Path) -> bool:
                 indent = len(ln) - len(ln.lstrip())
                 prefix = ln[:indent]
                 part = ln.strip()[1:].strip()
-                if part and not part.startswith("type:") and "://" not in part:
+                if part and not part.strip().lower().startswith("type:") and not part.strip().lower().startswith("noqa") and "://" not in part:
                     single = normalize_inline_comment(part)
                     out.append(prefix + "# " + single)
                     changed = True
@@ -59,7 +62,8 @@ def process_file(path: Path) -> bool:
             before = line[:idx]
             if before.count('"') % 2 == 0 and before.count("'") % 2 == 0:
                 comment = line[idx + 1 :].strip()
-                if comment and not comment.startswith("type:") and not comment.startswith("noqa") and "://" not in comment:
+                clow = comment.strip().lower()
+                if comment and not clow.startswith("type:") and not clow.startswith("noqa") and "://" not in comment:
                     new_comment = normalize_inline_comment(comment)
                     if new_comment != comment:
                         line = line[: idx + 1] + " " + new_comment
@@ -73,7 +77,7 @@ def process_file(path: Path) -> bool:
 
 def main():
     py_files = list(REPO.rglob("*.py"))
-    py_files = [p for p in py_files if "archive" not in p.parts and ".git" not in p.parts]
+    py_files = [p for p in py_files if ".git" not in p.parts]
     modified = 0
     for path in sorted(py_files):
         if process_file(path):
@@ -85,4 +89,5 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
 

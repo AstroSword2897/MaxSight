@@ -20,17 +20,17 @@ def test_gradnorm_import_structure():
         has_availability_check = "GRADNORM_AVAILABLE" in content
         
         if has_import and has_availability_check:
-            print("✅ GradNorm import structure correct")
+            print("OK GradNorm import structure correct")
             print("   - Import statement found")
             print("   - Availability check found")
             return True
         else:
-            print("❌ GradNorm import structure incomplete")
+            print("FAIL GradNorm import structure incomplete")
             print(f"   - Import found: {has_import}")
             print(f"   - Availability check found: {has_availability_check}")
             return False
     except Exception as e:
-        print(f"❌ Failed to check GradNorm import: {e}")
+        print(f"FAIL Failed to check GradNorm import: {e}")
         return False
 
 
@@ -48,19 +48,19 @@ def test_gradnorm_parameters():
         has_gradnorm_update_interval = "gradnorm_update_interval" in content
         
         if has_use_gradnorm and has_gradnorm_alpha and has_gradnorm_update_interval:
-            print("✅ GradNorm parameters found")
+            print("OK GradNorm parameters found")
             print("   - use_gradnorm parameter")
             print("   - gradnorm_alpha parameter")
             print("   - gradnorm_update_interval parameter")
             return True
         else:
-            print("❌ GradNorm parameters incomplete")
+            print("FAIL GradNorm parameters incomplete")
             print(f"   - use_gradnorm: {has_use_gradnorm}")
             print(f"   - gradnorm_alpha: {has_gradnorm_alpha}")
             print(f"   - gradnorm_update_interval: {has_gradnorm_update_interval}")
             return False
     except Exception as e:
-        print(f"❌ Failed to check GradNorm parameters: {e}")
+        print(f"FAIL Failed to check GradNorm parameters: {e}")
         return False
 
 
@@ -78,19 +78,19 @@ def test_gradnorm_integration_code():
         has_error_handling = "GRADNORM_AVAILABLE" in content and "warning" in content.lower()
         
         if has_initialization and has_loss_computation:
-            print("✅ GradNorm integration code found")
+            print("OK GradNorm integration code found")
             print("   - Initialization code")
             print("   - Loss computation integration")
             if has_error_handling:
                 print("   - Error handling")
             return True
         else:
-            print("❌ GradNorm integration code incomplete")
+            print("FAIL GradNorm integration code incomplete")
             print(f"   - Initialization: {has_initialization}")
             print(f"   - Loss computation: {has_loss_computation}")
             return False
     except Exception as e:
-        print(f"❌ Failed to check GradNorm integration: {e}")
+        print(f"FAIL Failed to check GradNorm integration: {e}")
         return False
 
 
@@ -106,13 +106,13 @@ def test_timing_import():
         has_time_import = "import time" in content
         
         if has_time_import:
-            print("✅ Time module import found")
+            print("OK Time module import found")
             return True
         else:
-            print("❌ Time module import not found")
+            print("FAIL Time module import not found")
             return False
     except Exception as e:
-        print(f"❌ Failed to check timing import: {e}")
+        print(f"FAIL Failed to check timing import: {e}")
         return False
 
 
@@ -131,21 +131,21 @@ def test_timing_code():
         has_metrics = "stage_a_latency_ms" in content and "outputs[" in content
         
         if has_timing_track and has_latency_check and has_early_exit and has_metrics:
-            print("✅ Timing enforcement code found")
+            print("OK Timing enforcement code found")
             print("   - Timing tracking")
             print("   - Latency check")
             print("   - Early exit logic")
             print("   - Metrics output")
             return True
         else:
-            print("❌ Timing enforcement code incomplete")
+            print("FAIL Timing enforcement code incomplete")
             print(f"   - Timing track: {has_timing_track}")
             print(f"   - Latency check: {has_latency_check}")
             print(f"   - Early exit: {has_early_exit}")
             print(f"   - Metrics: {has_metrics}")
             return False
     except Exception as e:
-        print(f"❌ Failed to check timing code: {e}")
+        print(f"FAIL Failed to check timing code: {e}")
         return False
 
 
@@ -162,17 +162,17 @@ def test_timing_threshold():
         has_comment = "150ms" in content or "200ms" in content
         
         if has_threshold and has_comment:
-            print("✅ Timing threshold found")
+            print("OK Timing threshold found")
             print("   - 200ms hard limit")
             print("   - 150ms target documented")
             return True
         else:
-            print("⚠️ Timing threshold may not be clearly set")
+            print("WARNING Timing threshold may not be clearly set")
             print(f"   - Threshold check: {has_threshold}")
             print(f"   - Documentation: {has_comment}")
             return True  # Not a failure, just a warning.
     except Exception as e:
-        print(f"❌ Failed to check timing threshold: {e}")
+        print(f"FAIL Failed to check timing threshold: {e}")
         return False
 
 
@@ -191,21 +191,21 @@ def test_output_structure():
         has_latency = "'stage_a_latency_ms'" in content or '"stage_a_latency_ms"' in content
         
         if has_stage_a and has_stage_b and has_skip_reason and has_latency:
-            print("✅ Output structure complete")
+            print("OK Output structure complete")
             print("   - stage_a_completed")
             print("   - stage_b_completed")
             print("   - skip_stage_b_reason")
             print("   - stage_a_latency_ms")
             return True
         else:
-            print("❌ Output structure incomplete")
+            print("FAIL Output structure incomplete")
             print(f"   - stage_a_completed: {has_stage_a}")
             print(f"   - stage_b_completed: {has_stage_b}")
             print(f"   - skip_stage_b_reason: {has_skip_reason}")
             print(f"   - stage_a_latency_ms: {has_latency}")
             return False
     except Exception as e:
-        print(f"❌ Failed to check output structure: {e}")
+        print(f"FAIL Failed to check output structure: {e}")
         return False
 
 
@@ -238,23 +238,24 @@ def main():
     total = len(results)
     
     for test_name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
+        status = "PASS" if result else "FAIL"
         print(f"{status}: {test_name}")
     
     print(f"\nTotal: {passed}/{total} tests passed")
     
     if passed == total:
-        print("🎉 All structural tests passed!")
+        print("All structural tests passed!")
         print("\nNote: To run full functional tests, install PyTorch and run:")
         print("  python tests/test_gradnorm_integration.py")
         print("  python tests/test_timing_enforcement.py")
         return 0
     else:
-        print("⚠️ Some structural tests failed - check code integration")
+        print("WARNING Some structural tests failed - check code integration")
         return 1
 
 
 if __name__ == "__main__":
     exit(main())
+
 
 

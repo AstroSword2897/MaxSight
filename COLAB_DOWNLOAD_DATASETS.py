@@ -14,11 +14,11 @@ if 'COLAB_GPU' in os.environ or 'COLAB_JUPYTER_IP' in os.environ:
     # Running in Colab.
     BASE_DIR = Path("/content/drive/MyDrive/MaxSight/datasets")
     os.makedirs(BASE_DIR, exist_ok=True)
-    print(f"✓ Colab detected - using Drive: {BASE_DIR}")
+    print(f"[ok] Colab detected - using Drive: {BASE_DIR}")
 else:
     # Running locally.
     BASE_DIR = Path("/content/datasets") if Path("/content").exists() else Path("./datasets")
-    print(f"✓ Local environment - using: {BASE_DIR}")
+    print(f"[ok] Local environment - using: {BASE_DIR}")
 
 # Install FiftyOne for Open Images V6.
 print("\n📦 Installing FiftyOne...")
@@ -31,7 +31,7 @@ import fiftyone as fo
 import requests
 from tqdm import tqdm
 
-print("✓ Dependencies installed\n")
+print("[ok] Dependencies installed\n")
 
 # Download Open Images V6 Validation Set.
 
@@ -47,9 +47,9 @@ csv_path = open_images_dir / "validation-annotations-bbox.csv"
 if validation_dir.exists():
     img_count = len(list(validation_dir.rglob("*.jpg")))
     if img_count > 1000 and csv_path.exists():
-        print(f"✓ Open Images V6 already downloaded ({img_count:,} images)")
+        print(f"[ok] Open Images V6 already downloaded ({img_count:,} images)")
     else:
-        print(f"⚠ Partial download found ({img_count} images) - continuing...")
+        print(f"WARNING Partial download found ({img_count} images) - continuing...")
 else:
     print("\n📥 Downloading ~41,620 validation images (~2 GB)...")
     print("   This will take 30-60 minutes depending on connection...")
@@ -64,7 +64,7 @@ else:
             max_samples=None
         )
         
-        print(f"✓ Downloaded {len(dataset)} images")
+        print(f"[ok] Downloaded {len(dataset)} images")
         
         # Reorganize files to expected structure.
         print("  Reorganizing files...")
@@ -107,7 +107,7 @@ else:
                     img_path.rename(dest)
                     moved += 1
             
-            print(f"  ✓ Moved {moved} images to {validation_dir}")
+            print(f"  [ok] Moved {moved} images to {validation_dir}")
         
         # Download annotation CSV.
         print("\n📥 Downloading annotations CSV...")
@@ -124,19 +124,19 @@ else:
                         f.write(chunk)
                         pbar.update(len(chunk))
         
-        print("  ✓ Annotations downloaded")
+        print("  [ok] Annotations downloaded")
         
     except Exception as e:
-        print(f"⚠ FiftyOne download failed: {e}")
+        print(f"WARNING FiftyOne download failed: {e}")
         print("  You can download manually from:")
         print("  https://storage.googleapis.com/openimages/web/index.html")
 
 # Verify Open Images V6.
 img_count = len(list(validation_dir.rglob("*.jpg"))) if validation_dir.exists() else 0
 if img_count > 0 and csv_path.exists():
-    print(f"\n✅ Open Images V6: {img_count:,} images ready")
+    print(f"\nOK Open Images V6: {img_count:,} images ready")
 else:
-    print(f"\n⚠️  Open Images V6: Incomplete ({img_count} images)")
+    print(f"\nWARNING  Open Images V6: Incomplete ({img_count} images)")
 
 # Download BDD100K Validation Set.
 
@@ -151,7 +151,7 @@ labels_path = labels_dir / "bdd100k_labels_images_val.json"
 
 if images_dir.exists() and labels_path.exists():
     img_count = len(list(images_dir.glob("*.jpg")))
-    print(f"✓ BDD100K already downloaded ({img_count:,} images)")
+    print(f"[ok] BDD100K already downloaded ({img_count:,} images)")
 else:
     print("\n📥 Downloading BDD100K validation set (~600 MB)...")
     
@@ -193,7 +193,7 @@ else:
         
         if det_val_source:
             shutil.copy(det_val_source, labels_path)
-            print(f"  ✓ Labels extracted to {labels_path}")
+            print(f"  [ok] Labels extracted to {labels_path}")
         
         # Cleanup.
         shutil.rmtree(temp_labels, ignore_errors=True)
@@ -232,25 +232,25 @@ else:
             if images_dir.exists():
                 shutil.rmtree(images_dir)
             shutil.move(str(val_source), str(images_dir))
-            print(f"  ✓ Images extracted to {images_dir}")
+            print(f"  [ok] Images extracted to {images_dir}")
         
         # Cleanup.
         shutil.rmtree(temp_extract, ignore_errors=True)
         images_zip.unlink(missing_ok=True)
         
-        print("✅ BDD100K download complete")
+        print("OK BDD100K download complete")
         
     except Exception as e:
-        print(f"⚠ BDD100K download failed: {e}")
+        print(f"WARNING BDD100K download failed: {e}")
         print("  Alternative: Use FiftyOne:")
         print("  dataset = fo.zoo.load_zoo_dataset('bdd100k', split='validation')")
 
 # Verify BDD100K.
 img_count = len(list(images_dir.glob("*.jpg"))) if images_dir.exists() else 0
 if img_count > 0 and labels_path.exists():
-    print(f"✅ BDD100K: {img_count:,} images ready")
+    print(f"OK BDD100K: {img_count:,} images ready")
 else:
-    print(f"⚠️  BDD100K: Incomplete ({img_count} images)")
+    print(f"WARNING  BDD100K: Incomplete ({img_count} images)")
 
 # Download ADE20K Validation Set.
 
@@ -264,7 +264,7 @@ ade20k_val_annotations = ade20k_dir / "annotations" / "validation"
 
 if ade20k_val_images.exists() and ade20k_val_annotations.exists():
     img_count = len(list(ade20k_val_images.glob("*.jpg")))
-    print(f"✓ ADE20K already downloaded ({img_count:,} images)")
+    print(f"[ok] ADE20K already downloaded ({img_count:,} images)")
 else:
     print("\n📥 Downloading ADE20K validation set (~1 GB)...")
     
@@ -311,18 +311,18 @@ else:
         shutil.rmtree(temp_extract, ignore_errors=True)
         zip_path.unlink(missing_ok=True)
         
-        print("✅ ADE20K download complete")
+        print("OK ADE20K download complete")
         
     except Exception as e:
-        print(f"⚠ ADE20K download failed: {e}")
+        print(f"WARNING ADE20K download failed: {e}")
 
 # Verify ADE20K.
 img_count = len(list(ade20k_val_images.glob("*.jpg"))) if ade20k_val_images.exists() else 0
 ann_count = len(list(ade20k_val_annotations.glob("*.png"))) if ade20k_val_annotations.exists() else 0
 if img_count > 0 and ann_count > 0:
-    print(f"✅ ADE20K: {img_count:,} images, {ann_count:,} annotations ready")
+    print(f"OK ADE20K: {img_count:,} images, {ann_count:,} annotations ready")
 else:
-    print(f"⚠️  ADE20K: Incomplete ({img_count} images, {ann_count} annotations)")
+    print(f"WARNING  ADE20K: Incomplete ({img_count} images, {ann_count} annotations)")
 
 # Summary.
 
@@ -351,9 +351,10 @@ print(f"\n{'Dataset':<20} {'Images':<15} {'Annotations':<15} {'Status'}")
 print("-" * 70)
 
 for name, count, has_ann, target in datasets_status:
-    status = "✅ Complete" if (count > 100 and has_ann) else "⚠️  Incomplete"
-    print(f"{name:<20} {count:>6,} / {target:<8} {'✓' if has_ann else '✗':<14} {status}")
+    status = "OK Complete" if (count > 100 and has_ann) else "WARNING  Incomplete"
+    print(f"{name:<20} {count:>6,} / {target:<8} {'[ok]' if has_ann else 'no':<14} {status}")
 
-print(f"\n📁 All datasets saved to: {BASE_DIR}")
-print("\n✅ Ready for inference evaluation!")
+print(f"\n All datasets saved to: {BASE_DIR}")
+print("\nOK Ready for inference evaluation!")
+
 

@@ -43,7 +43,7 @@ def test_extreme_blur():
     detections = model.get_detections(outputs, confidence_threshold=0.1)  # Lower threshold.
     print(f"  Detections with extreme blur: {len(detections[0])}")
     
-    print("  ✅ PASSED: Model handles extreme blur")
+    print("  PASSED: Model handles extreme blur")
 
 
 def test_extreme_contrast_loss():
@@ -64,7 +64,7 @@ def test_extreme_contrast_loss():
     detections = model.get_detections(outputs, confidence_threshold=0.1)
     print(f"  Detections with extreme contrast loss: {len(detections[0])}")
     
-    print("  ✅ PASSED: Model handles extreme contrast loss")
+    print("  PASSED: Model handles extreme contrast loss")
 
 
 def test_combined_impairments():
@@ -89,7 +89,7 @@ def test_combined_impairments():
     detections = model.get_detections(outputs, confidence_threshold=0.1)
     print(f"  Detections with combined impairments: {len(detections[0])}")
     
-    print("  ✅ PASSED: Model handles combined impairments")
+    print("  PASSED: Model handles combined impairments")
 
 
 def test_very_dark_image():
@@ -111,7 +111,7 @@ def test_very_dark_image():
     detections = model.get_detections(outputs, confidence_threshold=0.1)
     print(f"  Detections with very dark image: {len(detections[0])}")
     
-    print("  ✅ PASSED: Model handles very dark images")
+    print("  PASSED: Model handles very dark images")
 
 
 def test_very_bright_image():
@@ -132,7 +132,7 @@ def test_very_bright_image():
     detections = model.get_detections(outputs, confidence_threshold=0.1)
     print(f"  Detections with very bright image: {len(detections[0])}")
     
-    print("  ✅ PASSED: Model handles very bright images")
+    print("  PASSED: Model handles very bright images")
 
 
 def test_unusual_aspect_ratios():
@@ -160,7 +160,7 @@ def test_unusual_aspect_ratios():
             print(f"  {name}: FAILED - {e}")
             raise
     
-    print("  ✅ PASSED: Model handles unusual inputs")
+    print("  PASSED: Model handles unusual inputs")
 
 
 def test_crowded_scene_simulation():
@@ -171,7 +171,7 @@ def test_crowded_scene_simulation():
     model.eval()
     
     # Create image that might have many detections.
-    # (In real scenario, this would be an actual crowded scene image)
+    # In a real scenario, use an actual crowded-scene image.
     dummy_image = torch.randn(1, 3, 224, 224)
     
     with torch.no_grad():
@@ -187,7 +187,7 @@ def test_crowded_scene_simulation():
     print(f"  Model can handle up to {num_locs} potential detections")
     assert num_detections <= num_locs, "Too many detections"
     
-    print("  ✅ PASSED: Model handles crowded scenes")
+    print("  PASSED: Model handles crowded scenes")
 
 
 def test_rapid_inference():
@@ -217,7 +217,7 @@ def test_rapid_inference():
     # Should complete without errors.
     assert avg_time < 1.0, f"Average inference time {avg_time:.2f}s too slow"
     
-    print("  ✅ PASSED: Model handles rapid inference")
+    print("  PASSED: Model handles rapid inference")
 
 
 if __name__ == "__main__":
@@ -237,5 +237,6 @@ if __name__ == "__main__":
     
     print("\n" + "=" * 50)
     print("All edge case tests passed!")
+
 
 

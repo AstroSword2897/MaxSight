@@ -93,7 +93,7 @@ def test_condition_robustness():
             
             # Calculate degradation (more lenient for severe impairments)
             # If baseline has no detections, we can't measure degradation accurately.
-            # In this case, just check that the model still runs without errors.
+            # Ensure the model still runs without errors for this condition.
             if baseline_count > 0:
                 degradation = abs(baseline_count - impaired_count) / baseline_count * 100
             else:
@@ -161,5 +161,6 @@ def test_condition_robustness():
 
 if __name__ == "__main__":
     test_condition_robustness()
+
 
 

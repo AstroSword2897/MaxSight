@@ -354,7 +354,7 @@ class StressTestEvaluator:
                 result = self.evaluate_scenario(scenario, dataloader)
                 all_results.append(result)
                 
-                status = "✓" if result['within_tolerance'] else "✗"
+                status = "ok" if result['within_tolerance'] else "fail"
                 logger.info(f"  {status} Accuracy: {result['accuracy']:.3f}, "
                           f"Drop: {result['accuracy_drop']:.3f}")
                 
@@ -726,5 +726,6 @@ def generate_stress_test_report(
         
     logger.info(f"Stress test report saved to {output_path}")
     return report
+
 
 

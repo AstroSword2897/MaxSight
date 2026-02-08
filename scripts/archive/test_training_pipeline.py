@@ -8,7 +8,7 @@ from pathlib import Path
 import torch
 import yaml
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.data.data_pipeline import create_data_loaders, get_data_info
@@ -29,7 +29,7 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
     print("Testing MaxSight Training Pipeline")
     print("="*70)
     
-    # Load config if provided
+    # Load config if provided.
     if config_path and config_path.exists():
         print(f"\nLoading config: {config_path}")
         config = load_config(config_path)
@@ -38,18 +38,18 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
         print(f"  Tier: {tier_name}")
         print(f"  Batch size: {batch_size}")
     else:
-        # Use defaults for T0
+        # Use defaults for T0.
         print("\nUsing default T0 configuration")
         tier_name = "T0_BASELINE_CNN"
         batch_size = 4
         config = None
     
-    # Check if splits exist
+    # Check if splits exist.
     train_file = Path("datasets/cleaned_splits/train.json")
     val_file = Path("datasets/cleaned_splits/val.json")
     
     if not train_file.exists() or not val_file.exists():
-        print("\n❌ Training splits not found!")
+        print("\nFAIL Training splits not found!")
         print("Please run: python scripts/setup_training_data.py")
         return False
     
@@ -64,7 +64,7 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
             test_annotation_file=None,
             image_dir=Path("datasets/coco_raw"),
             batch_size=batch_size,
-            num_workers=0,  # Use 0 for testing
+            num_workers=0,  # Use 0 for testing.
             pin_memory=False,
             condition_mode=None,
             apply_lighting_augmentation=False
@@ -73,11 +73,11 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
         train_info = get_data_info(train_loader)
         val_info = get_data_info(val_loader)
         
-        print(f"✅ Train loader: {train_info['dataset_size']} samples, {train_info['num_batches']} batches")
-        print(f"✅ Val loader:   {val_info['dataset_size']} samples, {val_info['num_batches']} batches")
+        print(f"OK Train loader: {train_info['dataset_size']} samples, {train_info['num_batches']} batches")
+        print(f"OK Val loader:   {val_info['dataset_size']} samples, {val_info['num_batches']} batches")
         
     except Exception as e:
-        print(f"❌ Failed to create data loaders: {e}")
+        print(f"FAIL Failed to create data loaders: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -87,7 +87,7 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
     print("="*70)
     
     try:
-        # Map tier name to CapabilityTier
+        # Map tier name to CapabilityTier.
         tier_map = {
             "T0_BASELINE_CNN": CapabilityTier.T0_BASELINE_CNN,
             "T1_ATTENTION": CapabilityTier.T1_ATTENTION,
@@ -106,11 +106,11 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
         )
         
         total_params = sum(p.numel() for p in model.parameters())
-        print(f"✅ Model created: {total_params/1e6:.2f}M parameters")
+        print(f"OK Model created: {total_params/1e6:.2f}M parameters")
         print(f"   Tier: {tier.name}")
         
     except Exception as e:
-        print(f"❌ Failed to create model: {e}")
+        print(f"FAIL Failed to create model: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -120,22 +120,22 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
     print("="*70)
     
     try:
-        # Get a sample batch
+        # Get a sample batch.
         batch = next(iter(train_loader))
         images = batch['images']
         
         print(f"  Input shape: {images.shape}")
         
-        # Forward pass
+        # Forward pass.
         model.eval()
         with torch.no_grad():
             outputs = model(images)
         
-        print(f"✅ Forward pass successful")
-        print(f"   Output keys: {list(outputs.keys())[:5]}...")  # Show first 5 keys
+        print(f"OK Forward pass successful")
+        print(f"   Output keys: {list(outputs.keys())[:5]}...")  # Show first 5 keys.
         
     except Exception as e:
-        print(f"❌ Forward pass failed: {e}")
+        print(f"FAIL Forward pass failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -145,7 +145,7 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
     print("="*70)
     
     try:
-        # Create loss function
+        # Create loss function.
         loss_functions = {
             'objectness': ObjectnessLoss(),
             'classification': ClassificationLoss(num_classes=80),
@@ -160,7 +160,7 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
         else:
             loss_fn = MultiHeadLoss(loss_functions)
         
-        # Compute loss
+        # Compute loss.
         model.train()
         outputs = model(images)
         
@@ -175,12 +175,12 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
         loss_dict = loss_fn(outputs, targets)
         total_loss = loss_dict.get('loss', sum(loss_dict.values()))
         
-        print(f"✅ Loss computation successful")
+        print(f"OK Loss computation successful")
         print(f"   Total loss: {total_loss.item():.4f}")
         print(f"   Loss components: {list(loss_dict.keys())}")
         
     except Exception as e:
-        print(f"❌ Loss computation failed: {e}")
+        print(f"FAIL Loss computation failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -190,7 +190,7 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
     print("="*70)
     
     try:
-        # Create optimizer
+        # Create optimizer.
         lr = config['training']['learning_rate'] if config else 1e-3
         optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
         
@@ -210,13 +210,13 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
                 'urgency': batch['urgency'],
             }
             
-            # Forward
+            # Forward.
             optimizer.zero_grad()
             outputs = model(images)
             loss_dict = loss_fn(outputs, targets)
             loss = loss_dict.get('loss', sum(loss_dict.values()))
             
-            # Backward
+            # Backward.
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
@@ -225,17 +225,17 @@ def test_training_pipeline(config_path: Path = None, num_test_batches: int = 3):
             print(f"  Batch {i+1}/{num_test_batches}: loss = {loss.item():.4f}")
         
         avg_loss = total_loss / num_test_batches
-        print(f"✅ Training steps successful")
+        print(f"OK Training steps successful")
         print(f"   Average loss: {avg_loss:.4f}")
         
     except Exception as e:
-        print(f"❌ Training steps failed: {e}")
+        print(f"FAIL Training steps failed: {e}")
         import traceback
         traceback.print_exc()
         return False
     
     print("\n" + "="*70)
-    print("✅ All Tests Passed!")
+    print("OK All Tests Passed!")
     print("="*70)
     print("\nThe training pipeline is ready for full training.")
     print("Next steps:")
@@ -267,4 +267,5 @@ if __name__ == "__main__":
     
     success = test_training_pipeline(args.config, args.num_batches)
     sys.exit(0 if success else 1)
+
 

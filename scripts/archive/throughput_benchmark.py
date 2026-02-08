@@ -52,7 +52,7 @@ class ThroughputBenchmark:
         print(f"{'='*60}")
         
         try:
-            # Create model
+            # Create model.
             tier_config = TierConfig.for_tier(tier)
             model = create_model(
                 num_classes=91,
@@ -62,7 +62,7 @@ class ThroughputBenchmark:
             model.eval()
             model = model.to(self.device)
             
-            # Create inputs
+            # Create inputs.
             if temporal:
                 images = torch.randn(batch_size, 8, 3, 224, 224, device=self.device)
             else:
@@ -72,17 +72,17 @@ class ThroughputBenchmark:
             if audio:
                 audio_features = torch.randn(batch_size, 128, device=self.device)
             
-            # Warmup
+            # Warmup.
             print("  Warming up...")
             with torch.no_grad():
                 for _ in range(num_warmup):
                     _ = model(images, audio_features=audio_features, use_temporal=temporal)
             
-            # Synchronize
+            # Synchronize.
             if self.device == 'cuda':
                 torch.cuda.synchronize()
             
-            # Benchmark
+            # Benchmark.
             print("  Running benchmark...")
             times = []
             memory_peaks = []
@@ -98,15 +98,15 @@ class ThroughputBenchmark:
                 
                 if self.device == 'cuda':
                     torch.cuda.synchronize()
-                    memory_peaks.append(torch.cuda.max_memory_allocated() / 1024**2)  # MB
+                    memory_peaks.append(torch.cuda.max_memory_allocated() / 1024**2)  # MB.
                 
-                elapsed = (time.time() - start) * 1000  # ms
+                elapsed = (time.time() - start) * 1000  # Ms.
                 times.append(elapsed)
                 
                 if (i + 1) % 10 == 0:
                     print(f"    Run {i+1}/{num_runs}: {elapsed:.2f}ms")
             
-            # Calculate statistics
+            # Calculate statistics.
             times_sorted = sorted(times)
             stats = {
                 'mean_ms': sum(times) / len(times),
@@ -121,7 +121,7 @@ class ThroughputBenchmark:
                 'max_memory_mb': max(memory_peaks) if memory_peaks else 0,
             }
             
-            # Analyze outputs
+            # Analyze outputs.
             output_info = {
                 'num_outputs': len(outputs),
                 'output_keys': list(outputs.keys()),
@@ -149,7 +149,7 @@ class ThroughputBenchmark:
             }
             
         except Exception as e:
-            print(f"  ❌ Failed: {e}")
+            print(f"  FAIL Failed: {e}")
             import traceback
             traceback.print_exc()
             return {
@@ -162,21 +162,21 @@ class ThroughputBenchmark:
         """Run comprehensive benchmark across all scenarios."""
         results = []
         
-        # Key scenarios to test
+        # Key scenarios to test.
         scenarios = [
-            # T0 Baseline
+            # T0 Baseline.
             {'name': 'T0_Single', 'tier': CapabilityTier.T0_BASELINE_CNN, 'batch': 1, 'temporal': False, 'audio': False},
             {'name': 'T0_Batch4', 'tier': CapabilityTier.T0_BASELINE_CNN, 'batch': 4, 'temporal': False, 'audio': False},
             
-            # T1 Attention
+            # T1 Attention.
             {'name': 'T1_Single', 'tier': CapabilityTier.T1_ATTENTION, 'batch': 1, 'temporal': False, 'audio': False},
             {'name': 'T1_WithAudio', 'tier': CapabilityTier.T1_ATTENTION, 'batch': 1, 'temporal': False, 'audio': True},
             
-            # T2 Hybrid ViT
+            # T2 Hybrid ViT.
             {'name': 'T2_Hybrid', 'tier': CapabilityTier.T2_HYBRID_VIT, 'batch': 1, 'temporal': False, 'audio': True},
             {'name': 'T2_Temporal', 'tier': CapabilityTier.T2_HYBRID_VIT, 'batch': 1, 'temporal': True, 'audio': True},
             
-            # T3 Cross-Task
+            # T3 Cross-Task.
             {'name': 'T3_CrossTask', 'tier': CapabilityTier.T3_CROSS_TASK, 'batch': 1, 'temporal': False, 'audio': True},
             
             # T5 Temporal (most comprehensive)
@@ -204,11 +204,11 @@ class ThroughputBenchmark:
             'summary': {}
         }
         
-        # Summary statistics
+        # Summary statistics.
         successful = [r for r in results if r.get('status') == 'success']
         
         if successful:
-            # By tier
+            # By tier.
             by_tier = defaultdict(list)
             for r in successful:
                 by_tier[r['tier']].append(r['stats']['mean_ms'])
@@ -230,11 +230,11 @@ class ThroughputBenchmark:
                 'by_tier': summary
             }
         
-        # Save report
+        # Save report.
         with open(output_path, 'w') as f:
             json.dump(report, f, indent=2, default=str)
         
-        # Print summary
+        # Print summary.
         print(f"\n{'='*80}")
         print("BENCHMARK SUMMARY")
         print(f"{'='*80}")
@@ -271,4 +271,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

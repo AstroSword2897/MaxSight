@@ -60,7 +60,7 @@ class TemporalEncoder(nn.Module):
             )
         
         # Temporal consistency head.
-        # CRITICAL FIX: Add Flatten before Linear.
+        # Flatten before Linear so spatial dimensions are collapsed.
         self.consistency_head = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(1),  # [B, C, 1, 1] -> [B, C].
@@ -174,5 +174,6 @@ class TemporalBuffer:
     def clear(self):
         """Clear the buffer."""
         self.buffer = []
+
 
 

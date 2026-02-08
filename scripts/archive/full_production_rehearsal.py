@@ -6,10 +6,10 @@ import sys
 import time
 from pathlib import Path
 
-# Add project root
+# Add project root.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Mock Flask before importing web_simulator
+# Mock Flask before importing web_simulator.
 import unittest.mock
 sys.modules['flask'] = unittest.mock.MagicMock()
 sys.modules['flask_cors'] = unittest.mock.MagicMock()
@@ -57,7 +57,7 @@ def run_rehearsal(
         ('rain_simulation', 'rain_simulation'),
         ('glare_simulation', 'glare_simulation'),
         ('camera_tilt', 'camera_tilt'),
-        ('combined_rain_glare', None),  # custom: rain then glare
+        ('combined_rain_glare', None),  # Custom: rain then glare.
     ]
 
     max_alerts = config.max_alerts_per_frame
@@ -80,7 +80,7 @@ def run_rehearsal(
             for scenario_name, transform_name in scenarios:
                 log(f"\n--- Scenario: {scenario_name} ---")
                 for frame_idx in range(num_frames):
-                    # Build test image
+                    # Build test image.
                     base = torch.rand(3, image_size[0], image_size[1])
                     if transform_name and transform_name in transforms:
                         base = transforms[transform_name](base)
@@ -162,3 +162,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

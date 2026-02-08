@@ -142,7 +142,7 @@ class EdgeCloudHybrid:
             return edge_outputs
         
         # Cloud inference (if enabled)
-        # In production, this would make HTTP request to cloud endpoint.
+        # In production, send HTTP request to cloud endpoint.
         # For now, return edge outputs with cloud flag.
         cloud_outputs = {
             'cloud_processed': False,
@@ -166,5 +166,6 @@ class EdgeCloudHybrid:
         
         # Use cloud for high urgency and good battery.
         return urgency > 0.7 and battery_level > 0.3
+
 
 

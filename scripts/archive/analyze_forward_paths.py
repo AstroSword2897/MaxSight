@@ -32,19 +32,19 @@ class ForwardPathMapper:
             'retrieval': [],
         }
         
-        # Analyze backbone
+        # Analyze backbone.
         if hasattr(model, 'hybrid_backbone') and model.hybrid_backbone is not None:
             structure['backbone'].append('hybrid_cnn_vit')
         else:
             structure['backbone'].append('resnet50_fpn')
         
-        # Analyze FPN
+        # Analyze FPN.
         if hasattr(model, 'fpn'):
             structure['fpn'].append('standard_fpn')
         if hasattr(model, 'fpn_attention'):
             structure['fpn'].append('attention_enhanced')
         
-        # Analyze heads
+        # Analyze heads.
         head_attrs = [
             'objectness_head', 'classification_head', 'box_head',
             'distance_head_module', 'urgency_head', 'uncertainty_head',
@@ -60,17 +60,17 @@ class ForwardPathMapper:
                     head_name = attr.replace('_head', '').replace('_module', '')
                     structure['heads'].append(head_name)
         
-        # Analyze fusion
+        # Analyze fusion.
         if hasattr(model, 'audio_encoder') and model.audio_encoder is not None:
             structure['fusion'].append('audio_visual')
         if hasattr(model, 'spatial_sound') and model.spatial_sound is not None:
             structure['fusion'].append('spatial_sound_mapping')
         
-        # Analyze temporal
+        # Analyze temporal.
         if hasattr(model, 'temporal_encoder') and model.temporal_encoder is not None:
             structure['temporal'].append('temporal_encoder')
         
-        # Analyze retrieval
+        # Analyze retrieval.
         if hasattr(model, 'tier_config'):
             if model.tier_config.use_retrieval:
                 structure['retrieval'].append('multi_vector_retrieval')
@@ -93,10 +93,10 @@ class ForwardPathMapper:
             'components_used': [],
         }
         
-        # Trace through forward pass
+        # Trace through forward pass.
         B = images.shape[0]
         
-        # Stage 1: Backbone
+        # Stage 1: Backbone.
         path['stages'].append({
             'name': 'backbone',
             'type': 'resnet50_fpn' if not hasattr(model, 'hybrid_backbone') or model.hybrid_backbone is None else 'hybrid_cnn_vit',
@@ -166,7 +166,7 @@ def main():
     mapper = ForwardPathMapper()
     mapper.generate_path_documentation()
     
-    # Test a few scenarios
+    # Test a few scenarios.
     print("\nTesting forward pass paths...")
     
     scenarios = [
@@ -175,7 +175,7 @@ def main():
         {'name': 'T5_Temporal', 'tier': CapabilityTier.T5_TEMPORAL, 'audio': True, 'temporal': True},
     ]
     
-    device = 'cpu'  # Use CPU for path mapping
+    device = 'cpu'  # Use CPU for path mapping.
     if torch.cuda.is_available():
         device = 'cuda'
     elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
@@ -192,7 +192,7 @@ def main():
         model.eval()
         model = model.to(device)
         
-        # Create inputs
+        # Create inputs.
         if scenario['temporal']:
             images = torch.randn(1, 8, 3, 224, 224, device=device)
         else:
@@ -200,7 +200,7 @@ def main():
         
         audio_features = torch.randn(1, 128, device=device) if scenario['audio'] else None
         
-        # Map path
+        # Map path.
         path = mapper.map_forward_path(model, images, audio_features, scenario['temporal'])
         structure = mapper.analyze_model_structure(model)
         
@@ -210,4 +210,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
