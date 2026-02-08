@@ -300,6 +300,34 @@ python scripts/train_alive_models.py \
 
 This runs `train_maxsight.py` once per condition and writes `checkpoints_<cond>/best_model.pt` under `--checkpoints-base`. Omit `--conditions` to use the default list of seven alive conditions. Then re-run inference (e.g. `improve_map_all_models.py`) to measure mAP.
 
+### Deploy top 7 conditions (1-hour checklist)
+
+Validate all seven “alive” condition checkpoints and export each to an iOS-ready bundle (PTE + configs). Target: **under 1 hour** (~5 min per condition on CPU).
+
+**Top 7 conditions:** `amblyopia`, `amd`, `color_blindness`, `cvi`, `glaucoma`, `retinitis_pigmentosa`, `strabismus`.
+
+1. **Validate only** (no export; ~2 min): Check that all 7 checkpoints exist and pass a one-batch inference.
+   ```bash
+   python scripts/deploy_top7.py \
+     --checkpoints-base /path/to/MaxSight \
+     --validate-only
+   ```
+
+2. **Full deploy** (validate + export each to `exports/top7/<condition>/`): Produces PTE, `model_config.json`, `runtime_config.json`, processing reference, and `manifest.json`.
+   ```bash
+   python scripts/deploy_top7.py \
+     --checkpoints-base /path/to/MaxSight \
+     --output-dir exports/top7
+   ```
+   Colab/Drive example:
+   ```bash
+   python scripts/deploy_top7.py \
+     --checkpoints-base /content/drive/MyDrive/MaxSight \
+     --output-dir /content/drive/MyDrive/MaxSight/exports_top7
+   ```
+
+3. **Copy to app:** Use `exports/top7/<condition>/` (or `exports_top7/<condition>/`) per condition; each folder is a self-contained iOS bundle. See each folder’s `README_XCODE.md` and `processing_reference.py` for integration.
+
 ---
 
 ## 7. Data on another disk (e.g. mounted Drive)
