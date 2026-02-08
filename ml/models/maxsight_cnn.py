@@ -1033,6 +1033,9 @@ class MaxSightCNN(nn.Module):
         else:
             batch_size = images.size(0)
         
+        # JIT trace: when scene graph disabled, output dict must be tensor-only (no bool/str/float/None)
+        enable_scene_graph = self.tier_config.use_cross_task_attention if (hasattr(self, 'tier_config') and self.tier_config is not None) else False
+        
         # Stage A: ResNet50+FPN backbone
         stage_a_start = time.perf_counter() if getattr(self, '_enable_timing', False) else None
         
@@ -1356,9 +1359,10 @@ class MaxSightCNN(nn.Module):
         
         # Stage A → Stage B handoff (when Stage B skipped, return Stage A only)
         if skip_stage_b:
-            stage_a_outputs['stage_a_latency_ms'] = stage_a_latency_ms
-            stage_a_outputs['stage_b_completed'] = False
-            stage_a_outputs['skip_stage_b_reason'] = 'high_latency' if (stage_a_latency_ms and stage_a_latency_ms > 200.0) else 'high_uncertainty'
+            if enable_scene_graph:
+                stage_a_outputs['stage_a_latency_ms'] = stage_a_latency_ms
+                stage_a_outputs['stage_b_completed'] = False
+                stage_a_outputs['skip_stage_b_reason'] = 'high_latency' if (stage_a_latency_ms and stage_a_latency_ms > 200.0) else 'high_uncertainty'
             return stage_a_outputs
         
         # Stage B context pass (Hybrid backbone uses raw images)
@@ -1370,27 +1374,25 @@ class MaxSightCNN(nn.Module):
         
         # Start outputs with Stage A results
         outputs = stage_a_outputs.copy()
-        outputs['stage_a_latency_ms'] = stage_a_latency_ms
+        if enable_scene_graph:
+            outputs['stage_a_latency_ms'] = stage_a_latency_ms
         
         # Stage B heads (Tier 2/3)
-        # Motion (temporal anchor) - only if temporal processing ran
+        # Motion (temporal anchor) - only if temporal processing ran (omit key when None for JIT)
         if temporal_outputs is not None:
             motion_features = temporal_outputs.get('motion')  # [B, 2, H, W]
-            outputs['motion'] = motion_features
-            outputs['temporal_consistency'] = temporal_outputs.get('consistency')
-        else:
-            outputs['motion'] = None
-            outputs['temporal_consistency'] = None
+            if motion_features is not None:
+                outputs['motion'] = motion_features
+            c = temporal_outputs.get('consistency')
+            if c is not None:
+                outputs['temporal_consistency'] = c
             
             # Audio outputs (Tier 2)
         if sound_outputs is not None:
             outputs['sound_classifications'] = sound_outputs['sound_probs']
             outputs['sound_direction'] = sound_outputs['direction']
             outputs['sound_urgency'] = sound_outputs['urgency']
-        else:
-            outputs['sound_classifications'] = None
-            outputs['sound_direction'] = None
-            outputs['sound_urgency'] = None
+        # else: do not add None (JIT requires consistent dict value types)
         
             # TIER 2: ROI Priority (uses motion features if available)
             # ROI Priority Head would go here - currently integrated in scene description
@@ -1707,9 +1709,7 @@ class MaxSightCNN(nn.Module):
             
             outputs['scene_description'] = description_outputs['description']
             outputs['description_logits'] = description_outputs['description_logits']
-        else:
-            outputs['scene_description'] = None
-            outputs['description_logits'] = None
+        # else: do not add None (JIT trace requires tensor-only dict)
         
         # Personalization (if user_id provided)
         if user_id is not None:
@@ -1741,9 +1741,7 @@ class MaxSightCNN(nn.Module):
             
             outputs['personalization'] = personalization
             outputs['user_object_similarity'] = similarity  # For metric learning
-        else:
-            outputs['personalization'] = None
-            outputs['user_object_similarity'] = None
+        # else: do not add None (JIT trace requires tensor-only dict)
         
         # Condition-specific enhancements
         if self.condition_mode == 'color_blindness' and hasattr(self, 'color_head'):
@@ -1796,22 +1794,21 @@ class MaxSightCNN(nn.Module):
         #   from tools.simulation.web_simulator import MaxSightSimulator
         #   simulator.step(outputs)  # Feeds outputs into simulator
         
-        # Mark which stage ran (for debugging/monitoring)
-        outputs['stage_a_completed'] = True
-        outputs['stage_b_completed'] = not skip_stage_b
-        if skip_stage_b:
-            if stage_a_latency_ms is not None and stage_a_latency_ms > 200.0:
-                outputs['skip_stage_b_reason'] = 'high_latency'
-            elif uncertainty_score is not None and (uncertainty_score > 0.7).any():
-                outputs['skip_stage_b_reason'] = 'high_uncertainty'
+        # Mark which stage ran (for debugging/monitoring); skip when JIT trace (tensor-only outputs)
+        if enable_scene_graph:
+            outputs['stage_a_completed'] = True
+            outputs['stage_b_completed'] = not skip_stage_b
+            if skip_stage_b:
+                if stage_a_latency_ms is not None and stage_a_latency_ms > 200.0:
+                    outputs['skip_stage_b_reason'] = 'high_latency'
+                elif uncertainty_score is not None and (uncertainty_score > 0.7).any():
+                    outputs['skip_stage_b_reason'] = 'high_uncertainty'
+                else:
+                    outputs['skip_stage_b_reason'] = 'unknown'
             else:
-                outputs['skip_stage_b_reason'] = 'unknown'
-        else:
-            outputs['skip_stage_b_reason'] = None
-        
-        # QUALITY: Add timing metrics for monitoring
-        if stage_a_latency_ms is not None:
-            outputs['stage_a_latency_ms'] = stage_a_latency_ms
+                outputs['skip_stage_b_reason'] = None
+            if stage_a_latency_ms is not None:
+                outputs['stage_a_latency_ms'] = stage_a_latency_ms
         
         return outputs
     
