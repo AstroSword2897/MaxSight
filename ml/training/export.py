@@ -60,19 +60,15 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
     if isinstance(export_device, torch.device):
         export_device = str(export_device)
     
-    # Move to export device
+    # Move to export device (cpu or cuda only; no MPS backend)
     if export_device == 'cpu':
         model.cpu()
     elif export_device.startswith('cuda'):
         model.cuda()
-    elif export_device == 'mps':
-        model.to('mps')
     
     dummy_input = torch.randn(*input_size)
     if export_device.startswith('cuda'):
         dummy_input = dummy_input.cuda()
-    elif export_device == 'mps':
-        dummy_input = dummy_input.to('mps')
     
     # Disable scene graph for tracing (SceneRelation is not JIT-traceable)
     original_tier = None
@@ -229,14 +225,10 @@ def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', in
             model.cpu()
         elif export_device.startswith('cuda'):
             model.cuda()
-        elif export_device == 'mps':
-            model.to('mps')
         
         dummy_input = torch.randn(*input_size)
         if export_device.startswith('cuda'):
             dummy_input = dummy_input.cuda()
-        elif export_device == 'mps':
-            dummy_input = dummy_input.to('mps')
         
         # Wrap model to handle dict outputs
         class FlattenedModel(nn.Module):
@@ -891,7 +883,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", type=str, default=None, help="Path to checkpoint (.pth/.pt); if omitted, use untrained create_model()")
     parser.add_argument("--format", type=str, choices=["jit", "coreml", "onnx", "executorch"], default=None, help="Export format (default: run all)")
     parser.add_argument("--output", type=str, default=None, help="Output path (default: test_maxsight_<format>.<ext>)")
-    parser.add_argument("--device", type=str, choices=["cpu", "cuda", "mps"], default="cpu", help="Device for export")
+    parser.add_argument("--device", type=str, choices=["cpu", "cuda"], default="cpu", help="Device for export")
     args = parser.parse_args()
 
     model = create_model()

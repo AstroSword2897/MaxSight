@@ -49,25 +49,17 @@ def seed_worker(worker_id):
 
 
 def resolve_device(requested: str) -> str:
-    # NEVER use MPS - it has backward pass errors with .view() operations
+    """Resolve device: auto → cuda if available else cpu; no MPS backend."""
     if requested == "auto":
         if torch.cuda.is_available():
             return "cuda"
         return "cpu"
-    
     if requested == "cuda" and not torch.cuda.is_available():
         logger.warning("CUDA unavailable → CPU fallback")
         return "cpu"
-    
-    if requested == "mps":
-        logger.error("MPS explicitly disabled - has backward pass errors. Use 'cpu' or 'mlx' instead.")
-        return "cpu"
-    
-    # MLX-style: use CPU (MPS has backward pass errors, never use it)
     if requested == "mlx":
-        logger.info("DEVICE=mlx → using CPU (MPS disabled due to backward pass errors)")
+        logger.info("DEVICE=mlx → using CPU")
         return "cpu"
-    
     return requested
 
 
@@ -150,8 +142,8 @@ def main():
     )
     
     # Hardware
-    parser.add_argument("--device", choices=["cpu", "cuda", "mps", "mlx", "auto"], default="auto",
-                        help="mlx = CPU (MPS disabled due to backward errors); mps also maps to CPU")
+    parser.add_argument("--device", choices=["cpu", "cuda", "mlx", "auto"], default="auto",
+                        help="Device: cpu, cuda, mlx (= CPU), or auto (cuda if available)")
     parser.add_argument("--compile", action="store_true", help="Use torch.compile (CUDA only, faster after first epoch)")
     parser.add_argument("--use-amp", action="store_true", help="Use mixed precision (FP16) on CUDA for faster training; default FP32 for stability")
     

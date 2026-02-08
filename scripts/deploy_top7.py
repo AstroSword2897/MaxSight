@@ -80,7 +80,7 @@ def main():
                         help="Only check checkpoints and run 1-batch inference; no export")
     parser.add_argument("--skip-export", action="store_true",
                         help="Same as --validate-only")
-    parser.add_argument("--device", default="cpu", choices=["cpu", "cuda", "mps"])
+    parser.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
     parser.add_argument("--quiet", action="store_true", help="Less verbose")
     args = parser.parse_args()
 

@@ -551,16 +551,12 @@ class MaxSightCNN(nn.Module):
             self.temporal_encoder = None
             self.temporal_feature_proj = None
         
-        # Scene graph encoder
+        # Scene graph encoder (no MPS backend; cpu/cuda only)
         from ml.models.scene_graph.scene_graph_encoder import SceneGraphEncoder
-        # Set to False for cloud GPU training (allows edge learning)
-        device_type = "mps" if torch.backends.mps.is_available() else "cpu"
-        mps_stable = (device_type == "mps")  # Auto-detect MPS and enable workaround
-        
         self.scene_graph_encoder = SceneGraphEncoder(
             object_embed_dim=256,
             relation_embed_dim=128,
-            mps_stable=mps_stable
+            mps_stable=False,
         )
         self.max_scene_graph_objects = 10  # Top-K constraint
         
@@ -1113,7 +1109,7 @@ class MaxSightCNN(nn.Module):
             attn = F.softmax(self.attention_weights, dim=0)
             fused_features = (attn[1] * p3_resized + attn[2] * p4 + attn[3] * p5_resized) * 0.5 + fused_features * 0.5
         
-        # Ensure contiguous for MPS compatibility before detection head
+        # Ensure contiguous before detection head
         fused_features = fused_features.contiguous()
         
         # CRITICAL: Temporal processing is MOVED to Stage B only
@@ -1141,7 +1137,7 @@ class MaxSightCNN(nn.Module):
         obj_logits = self.obj_head(det_feats_contig)   # Is there actually something?
         text_logits = self.text_head(det_feats_contig)  # Is it text?
         
-        # CRITICAL: Ensure outputs are contiguous for MPS backward pass
+        # CRITICAL: Ensure outputs are contiguous for backward pass
         cls_logits = cls_logits.contiguous()
         box_preds = box_preds.contiguous()
         obj_logits = obj_logits.contiguous()
@@ -1248,43 +1244,20 @@ class MaxSightCNN(nn.Module):
         normalized_centers = normalized_centers.flip(-1).unsqueeze(2)  # [B, K, 1, 2] for grid_sample
         
         # Sample depth at box centers (BATCHED)
-        if torch.backends.mps.is_available() and self.training:
-            # For MPS training, use bilinear interpolation manually or move to CPU
-            # Workaround: Use nearest neighbor indexing for MPS compatibility
-            depth_at_centers = F.grid_sample(
-                depth_map.unsqueeze(1).contiguous(),  # [B, 1, H, W]
-                normalized_centers.contiguous(),  # [B, K, 1, 2]
-                mode='bilinear',
-                align_corners=False,
-                padding_mode='zeros'
-            ).squeeze(1).squeeze(-1)  # [B, K]
-            
-            # Sample uncertainty
-            uncertainty_at_centers = F.grid_sample(
-                depth_uncertainty.unsqueeze(1).contiguous(),
-                normalized_centers.contiguous(),
-                mode='bilinear',
-                align_corners=False,
-                padding_mode='zeros'
-            ).squeeze(1).squeeze(-1)  # [B, K]
-        else:
-            # Standard implementation for CUDA/CPU
-            depth_at_centers = F.grid_sample(
-                depth_map.unsqueeze(1),  # [B, 1, H, W]
-                normalized_centers,  # [B, K, 1, 2]
-                mode='bilinear',
-                align_corners=False,
-                padding_mode='border'
-            ).squeeze(1).squeeze(-1)  # [B, K]
-            
-            # Sample uncertainty
-            uncertainty_at_centers = F.grid_sample(
-                depth_uncertainty.unsqueeze(1),
-                normalized_centers,
-                mode='bilinear',
-                align_corners=False,
-                padding_mode='border'
-            ).squeeze(1).squeeze(-1)  # [B, K]
+        depth_at_centers = F.grid_sample(
+            depth_map.unsqueeze(1),  # [B, 1, H, W]
+            normalized_centers,  # [B, K, 1, 2]
+            mode='bilinear',
+            align_corners=False,
+            padding_mode='border'
+        ).squeeze(1).squeeze(-1)  # [B, K]
+        uncertainty_at_centers = F.grid_sample(
+            depth_uncertainty.unsqueeze(1),
+            normalized_centers,
+            mode='bilinear',
+            align_corners=False,
+            padding_mode='border'
+        ).squeeze(1).squeeze(-1)  # [B, K]
         
         # Convert normalized depth [0, 1] to meters (calibrated per object class)
         # Vectorized depth scaling
