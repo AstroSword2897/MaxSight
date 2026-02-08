@@ -82,7 +82,7 @@ def main():
         TierConfig,
         create_model,
     )
-    from ml.training.export import export_ios_bundle
+    from ml.training.export import export_ios_bundle, export_to_coreml
 
     def _is_placeholder(p) -> bool:
         """Treat None or path containing 'path/to' as unset so we auto-detect base."""
@@ -205,6 +205,17 @@ def main():
             manifest["conditions"][cond]["export_path"] = str(bundle_path)
             if verbose:
                 print(f"    exported -> {bundle_path}")
+            coreml_path = export_to_coreml(
+                model=model,
+                save_path=str(cond_out / f"{cond}.mlpackage"),
+                input_size=(1, 3, 224, 224),
+                device="cpu",
+                validate=True,
+            )
+            if coreml_path:
+                manifest["conditions"][cond]["coreml_path"] = str(coreml_path)
+                if verbose:
+                    print(f"    CoreML -> {coreml_path}")
         except Exception as e:
             import traceback
             manifest["conditions"][cond]["error"] = f"export: {e}"
