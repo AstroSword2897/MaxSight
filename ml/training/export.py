@@ -253,34 +253,69 @@ def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', in
     
     try:
         import coremltools as ct  # type: ignore
-        
+        import dataclasses
+
         model.eval()
         export_device = device if device else 'cpu'
         if export_device == 'cpu':
             model.cpu()
         elif export_device.startswith('cuda'):
             model.cuda()
+
+        # Stub global_encoder so trace never hits CLIP (avoids segfault).
+        original_global_encoder = None
+        if hasattr(model, "global_encoder"):
+            try:
+                embed_dim = getattr(model.global_encoder, "embed_dim", 512)
+            except Exception:
+                embed_dim = 512
+            class _StubGlobalEncoder(nn.Module):
+                def __init__(self, dim: int):
+                    super().__init__()
+                    self.embed_dim = dim
+                def forward(self, images: torch.Tensor) -> torch.Tensor:
+                    return images.new_zeros(images.shape[0], self.embed_dim)
+            original_global_encoder = model.global_encoder
+            model.global_encoder = _StubGlobalEncoder(embed_dim)
+
+        # Disable scene graph so trace does not see SceneRelation or other non-traceable types.
+        original_tier = None
+        if hasattr(model, "tier_config") and model.tier_config is not None:
+            try:
+                from ml.models.maxsight_cnn import TierConfig
+                original_tier = model.tier_config
+                model.tier_config = dataclasses.replace(original_tier, use_cross_task_attention=False)  # type: ignore[arg-type]
+            except Exception:
+                pass
         
         dummy_input = torch.randn(*input_size)
         if export_device.startswith('cuda'):
             dummy_input = dummy_input.cuda()
-        
-        # Flatten dict outputs to a tuple so CoreML can consume them.
-        class FlattenedModel(nn.Module):
-            """Flatten dict outputs for CoreML compatibility."""
-            def __init__(self, model: nn.Module):
+
+        # Tensor-only wrapper then flatten to tuple so CoreML gets only tensors.
+        class _FlattenedForCoreML(nn.Module):
+            def __init__(self, inner: nn.Module):
                 super().__init__()
-                self.model = model
-            
+                self.inner = inner
             def forward(self, x: torch.Tensor):
-                outputs = self.model(x)
-                if isinstance(outputs, dict):
-                    # CoreML accepts tuple of tensors.
-                    return tuple(outputs.values())
-                return outputs
+                out = self.inner(x)
+                if isinstance(out, dict):
+                    filtered = _tensor_only_dict(out)
+                    if filtered:
+                        return tuple(filtered.values())
+                    return tuple(v for v in out.values() if isinstance(v, torch.Tensor))
+                if isinstance(out, torch.Tensor):
+                    return (out,)
+                return (torch.empty(0),)
         
-        wrapped_model = FlattenedModel(model)
-        traced_model = torch.jit.trace(wrapped_model, dummy_input, strict=False)
+        wrapped_model = _FlattenedForCoreML(_JITTraceWrapper(model))
+        try:
+            traced_model = torch.jit.trace(wrapped_model, dummy_input, strict=False)
+        finally:
+            if original_global_encoder is not None:
+                model.global_encoder = original_global_encoder
+            if original_tier is not None:
+                model.tier_config = original_tier
         
         # Validate traced model if requested.
         test_output = None

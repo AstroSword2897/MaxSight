@@ -1,0 +1,98 @@
+============================================
+COLAB — paste each block into a new cell, run in order
+============================================
+Runtime → Change runtime type → GPU (optional but faster)
+Put checkpoints at: My Drive/MaxSight/checkpoints/checkpoints_amblyopia/best_model.pt (and amd, color_blindness, cvi, glaucoma, retinitis_pigmentosa, strabismus)
+
+Uses export_7_coreml_only.py so JIT is never run (avoids hang/crash at "running torch.jit.trace").
+============================================
+
+----- CELL 1 -----
+from google.colab import drive
+drive.mount('/content/drive')
+
+----- CELL 2 -----
+# Clone or pull
+!if [ -d /content/2026-Prototype ]; then cd /content/2026-Prototype && git pull; else git clone https://github.com/AstroSword2897/2026-Prototype.git /content/2026-Prototype && cd /content/2026-Prototype; fi
+%cd /content/2026-Prototype
+!pip install -q coremltools
+
+----- CELL 2b (list Drive checkpoints and choose which to export) -----
+from pathlib import Path
+CHECKPOINTS_BASE = Path("/content/drive/MyDrive/MaxSight/checkpoints")
+# List all conditions that have best_model.pt in Drive
+available = sorted([d.name.replace("checkpoints_", "") for d in CHECKPOINTS_BASE.iterdir() if d.is_dir() and (d / "best_model.pt").exists()])
+print("Available in Drive:", available)
+print("Count:", len(available))
+
+# Edit this list to the conditions you want to export (e.g. pick 7 from the 14)
+SELECTED_CONDITIONS = ["amblyopia", "amd", "color_blindness", "cvi", "glaucoma", "retinitis_pigmentosa", "strabismus"]
+# Or select from available, e.g. first 7:
+# SELECTED_CONDITIONS = available[:7]
+# Or pick by name:
+# SELECTED_CONDITIONS = [c for c in available if c in ["amblyopia", "amd", "color_blindness", "cvi", "glaucoma", "retinitis_pigmentosa", "strabismus"]]
+print("Will export:", SELECTED_CONDITIONS)
+
+----- CELL 3 (CoreML only — paste the whole block; no script file needed) -----
+import sys, os, json
+from pathlib import Path
+REPO = Path("/content/2026-Prototype")
+sys.path.insert(0, str(REPO))
+os.environ['CHECKPOINTS_BASE'] = '/content/drive/MyDrive/MaxSight/checkpoints'
+
+import torch
+from ml.models.maxsight_cnn import COCO_CLASSES, CapabilityTier, TierConfig, create_model
+from ml.training.export import export_to_coreml
+
+# Use the list you set in Cell 2b (must run Cell 2b first)
+try:
+    CONDITIONS = SELECTED_CONDITIONS
+except NameError:
+    CONDITIONS = ["amblyopia", "amd", "color_blindness", "cvi", "glaucoma", "retinitis_pigmentosa", "strabismus"]
+
+base = Path(os.environ.get("CHECKPOINTS_BASE", REPO / "checkpoints")).resolve()
+out_root = REPO / "exports" / "top7"
+tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
+num_classes = len(COCO_CLASSES)
+manifest = {"checkpoints_base": str(base), "output_dir": str(out_root), "conditions": {}}
+
+for cond in CONDITIONS:
+    ckpt_path = base / f"checkpoints_{cond}" / "best_model.pt"
+    manifest["conditions"][cond] = {"checkpoint": str(ckpt_path), "exists": ckpt_path.exists(), "coreml_path": None, "error": None}
+    if not ckpt_path.exists():
+        print(f"  {cond}: missing checkpoint")
+        continue
+    print(f"  {cond}: loading...", flush=True)
+    try:
+        model = create_model(num_classes=num_classes, use_audio=False, condition_mode=cond, tier_config=tier_config)
+        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+        model.load_state_dict(ckpt.get("model_state_dict", ckpt), strict=False)
+        model.eval(); model.cpu()
+        with torch.no_grad():
+            out = model(torch.randn(1, 3, 224, 224))
+        if not isinstance(out, dict) or "objectness" not in out:
+            manifest["conditions"][cond]["error"] = "inference check failed"
+            continue
+        print("    Exporting CoreML...", flush=True)
+        coreml_path = export_to_coreml(model=model, save_path=str(out_root / cond / f"{cond}.mlpackage"), input_size=(1, 3, 224, 224), device="cpu", validate=False)
+        if coreml_path:
+            manifest["conditions"][cond]["coreml_path"] = str(coreml_path)
+            print(f"    -> {coreml_path}")
+    except Exception as e:
+        manifest["conditions"][cond]["error"] = str(e)
+        print(f"    error: {e}")
+
+out_root.mkdir(parents=True, exist_ok=True)
+with open(out_root / "manifest.json", "w") as f:
+    json.dump(manifest, f, indent=2)
+n = sum(1 for c in CONDITIONS if manifest["conditions"][c].get("coreml_path"))
+print(f"\nCoreML exported: {n}/{len(CONDITIONS)}")
+
+----- CELL 4 -----
+!cd /content/2026-Prototype && zip -r /content/top7.zip exports/top7
+from google.colab import files
+files.download('/content/top7.zip')
+
+============================================
+After download: unzip top7.zip. Add the 7 .mlpackage folders to Xcode (Add Files to project, Copy items, app target).
+============================================
