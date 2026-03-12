@@ -37,7 +37,14 @@ def cmd_train(args) -> int:
 
 def cmd_validate(args) -> int:
     # Run test suite first.
-    code = _run([sys.executable, "-m", "pytest", "tests/", "-v", "--tb=short", "-x"])
+    pytest_args = ["tests/", "-v", "--tb=short"]
+    if getattr(args, "skip_export_tests", False):
+        pytest_args += ["--ignore=tests/test_export_validation.py"]
+    if getattr(args, "no_x", False):
+        pass
+    else:
+        pytest_args += ["-x"]
+    code = _run([sys.executable, "-m", "pytest"] + pytest_args)
     if code != 0:
         return code
     if getattr(args, "data", False):
@@ -130,6 +137,7 @@ def main():
     p_val = sub.add_parser("validate", help="Run tests and optional checkpoint/data checks")
     p_val.add_argument("--checkpoint", help="Optional checkpoint to load and run one forward")
     p_val.add_argument("--data", action="store_true", help="Run validate_data_pipeline.py")
+    p_val.add_argument("--skip-export-tests", action="store_true", help="Skip test_export_validation (JIT trace can be flaky per docs/status.md)")
 
     # export
     p_exp = sub.add_parser("export", help="Export checkpoint to CoreML/JIT/ONNX/ExecuTorch")

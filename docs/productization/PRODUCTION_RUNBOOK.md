@@ -28,8 +28,11 @@ From repo root:
 # 1. Run full test suite
 pytest tests/ -v
 
-# 2. Run smoke (short training + inference + export sanity)
-python scripts/product/run.py smoke
+# 2. Run smoke (short training + inference sanity; use --epochs 2 on CPU)
+python scripts/product/run.py smoke --epochs 2
+
+# Optional: skip export validation tests if JIT trace fails in your environment (see docs/status.md)
+python scripts/product/run.py validate --skip-export-tests
 
 # 3. If you have a checkpoint: validate and export
 python scripts/product/run.py validate --checkpoint checkpoints/amd/best_model.pt
