@@ -19,7 +19,7 @@
 8. [Repository Stack & Technology](#-repository-stack--technology)
 9. [Current Work & Next Steps](#-current-work--next-steps)
 10. [Quick Start Guide](#-quick-start-guide)
-11. [Main Components](#main-components)
+11. [Main Components](#main-components) (includes [Component reference: what and why](#component-reference-what-each-does-and-why-its-there) and [Concrete reference: outputs, configs, env, CLI](#concrete-reference-outputs-configs-env-cli))
 12. [Testing & Validation](#-testing--validation)
 13. [Performance & Safety](#-performance--safety)
 14. [Deployment & Export](#-deployment--export)
@@ -85,15 +85,15 @@ MaxSight answers this by implementing four barrier-removal methods from accessib
 
 ### Model Statistics
 
-- **Parameters**: ~250M (comprehensive class system, T2 tier baseline)
-- **Input**: `[B, 3, 224, 224]` RGB images + audio `[B, 128]` when provided
-- **Output**: 30+ task outputs (detections, urgency, distance, depth, motion, therapy state, scene graph, OCR, etc.)
-- **Stage A Latency**: <150ms target (ResNet50+FPN only)
-- **Stage B Latency**: <500ms (opportunistic, tier-dependent)
-- **Supported Classes**: 91 COCO + 200+ accessibility classes
-- **Vision Conditions**: 13 supported conditions
-- **Task Heads**: 30+ specialized heads
-- **Export Formats**: 3 (CoreML, ONNX, ExecuTorch)
+- **Parameters**: ~250M (comprehensive class system, T2 tier baseline); T0 ~29M, T5 ~320M.
+- **Input**: `images` `[B, 3, 224, 224]` RGB (normalized with ImageNet mean/std); optional `audio_features` `[B, 128]` (e.g. MFCC); optional `condition_mode` string (e.g. `'glaucoma'`, `'amd'`, `'cataracts'`).
+- **Output**: Single dict with 30+ keys. Core keys: `obj_scores` `[B, H*W]`, `cls_logits` `[B, H*W, num_classes]`, `box_preds` `[B, H*W, 4]`, `urgency` (per detection or scene), `distance` zones, `contrast_map`, `motion_flow`, `motion_magnitude`, `fatigue_score`, `blink_rate`, `fixation_stability`, `depth_map`, `uncertainty`, `therapy_state` (if provided by pipeline), `contrast_map`, `edge_map`, `roi_utility`, `navigation_difficulty`, `glare_risk_level`, `object_findability`, `uncertainty_score`, `hazard_probs`, `time_to_hazard`, `recommended_action`, plus scene/OCR/scene graph when enabled. Exact keys depend on tier and `enable_accessibility_features`.
+- **Stage A Latency**: &lt;150ms target (ResNet50+FPN only). Decision point: skip Stage B if Stage A &gt;200ms or `uncertainty_score` &gt;0.7 (thresholds in tier/config).
+- **Stage B Latency**: &lt;500ms (opportunistic, tier-dependent).
+- **Supported Classes**: 91 COCO + 200+ accessibility classes; class IDs and names in `COCO_CLASSES_DICT` / category list used by dataset and detection head.
+- **Vision Conditions**: 13 supported (e.g. refractive errors, cataracts, glaucoma, AMD, diabetic_retinopathy, retinitis_pigmentosa, color_blindness, CVI, amblyopia, strabismus); condition affects `ml/utils/preprocessing.py` and optional dynamic conv.
+- **Task Heads**: 30+ specialized heads; each head is a `nn.Module` with a `forward()` taking shared features (and sometimes dedicated inputs like `eye_features`). Built in `ml/models/maxsight_cnn.py` when tier and `enable_accessibility_features` allow.
+- **Export Formats**: JIT (`.pt`), CoreML (`.mlpackage`), ONNX, ExecuTorch (`.pte`). Export stubs `global_encoder` (CLIP) and can disable scene graph for traceability; see `ml/training/export.py`.
 
 ---
 
@@ -338,9 +338,7 @@ The main architectural decision is the **two-stage inference pipeline** that sep
 - Never blocked by Tier 2 or Tier 3
 - Always ResNet50+FPN backbone (no hybrid, no temporal)
 
-**Decision Point**: After Stage A completes, system decides whether to run Stage B:
-- Skip Stage B if `latency >200ms` OR `uncertainty >0.7`
-- This ensures Stage A always completes, even under load
+**Decision point**: After Stage A completes, the code checks latency and uncertainty (e.g. `uncertainty_score` from uncertainty head). Skip Stage B if Stage A latency &gt;200ms or uncertainty &gt;0.7 (thresholds may be in TierConfig or inference config). Implementation: in `maxsight_cnn.py` forward, after Tier 1 heads run, a conditional branch either returns Stage A outputs only or continues to Stage B backbone and Tier 2/3 heads. This ensures Stage A always completes, even under load.
 
 #### Stage B: Context Pass (opportunistic, tier-dependent)
 
@@ -431,226 +429,41 @@ The system supports progressive tier enablement:
 
 ### Key Architectural Guarantees
 
-1. **Stage A Always ResNet50+FPN**: No hybrid backbone, no temporal processing
-   - **Mathematical Guarantee**: `backbone_A = ResNet50 + FPN` (hard-coded, no conditional logic)
-   - **Implementation**: `_forward_stage_a_backbone()` method explicitly uses ResNet50+FPN only
-   - **Why**: ResNet50+FPN is fast (<150ms), predictable, and well-tested. Hybrid backbones are slower and less predictable.
+1. **Stage A Always ResNet50+FPN**: No hybrid backbone, no temporal processing in Stage A.
+   - **Implementation**: In `ml/models/maxsight_cnn.py`, Stage A forward path uses only the ResNet50 backbone and FPN (and optional SE/CBAM on FPN when T1+). No conditional that swaps in hybrid or temporal for Stage A. Method names may be e.g. `_forward_stage_a` or inline: images → backbone → FPN → Tier 1 heads.
+   - **Why**: ResNet50+FPN is fast (&lt;150ms), predictable, and well-tested. Hybrid backbones are slower and less predictable.
 
-2. **Stage B Uses Raw Images**: Hybrid backbone processes raw images, not Stage A features
-   - **Mathematical Guarantee**: `backbone_B(images_raw) ≠ backbone_B(features_A)`
-   - **Implementation**: Stage B backbone receives original images, not Stage A features
-   - **Why**: Ensures Stage B can extract different features than Stage A (complementary, not redundant)
+2. **Stage B Uses Raw Images**: Hybrid backbone processes raw images, not Stage A features.
+   - **Implementation**: When Stage B runs, the hybrid backbone (e.g. `HybridCNNViTBackbone`) is called with the same input `images` tensor `[B,3,224,224]`, not with the FPN or detection feature tensors from Stage A. So `backbone_B(images)` is independent of Stage A features.
+   - **Why**: Ensures Stage B can extract different (complementary) features than Stage A.
 
-3. **Temporal Only in Stage B**: Temporal processing uses Stage A features as input
-   - **Mathematical Guarantee**: `temporal_features = TemporalEncoder(features_A)`
-   - **Implementation**: Temporal encoder receives Stage A FPN features, not raw images
-   - **Why**: Temporal processing is expensive. Using Stage A features (already extracted) is more efficient than re-processing raw images.
+3. **Temporal Only in Stage B**: Temporal processing uses Stage A features as input.
+   - **Implementation**: The temporal encoder (e.g. `TemporalEncoder` in `ml/models/temporal/temporal_encoder.py`) is fed a sequence of feature maps that come from Stage A (e.g. FPN output or detection feature map) over time, i.e. `feature_frames` [B, C, T, H, W] where C is the Stage A feature dimension (e.g. 256). It does not receive raw image sequences in the same way as the hybrid backbone.
+   - **Why**: Reusing Stage A features is more efficient than re-running a full backbone on each frame.
 
-4. **Retrieval is Async**: Non-blocking, advisory only
-   - **Mathematical Guarantee**: `retrieval_output = async_retrieval(query)` (non-blocking)
-   - **Implementation**: Retrieval runs in background thread, never blocks inference
-   - **Why**: Retrieval can take 100-500ms. Making it async ensures it never delays safety-critical predictions.
+4. **Retrieval is Async**: Non-blocking, advisory only.
+   - **Implementation**: Retrieval is invoked from a background thread or async worker (e.g. `ml/retrieval/retrieval/async_retrieval.py`). The main inference path does not wait for retrieval results; Tier 1 and Tier 2 outputs are produced without retrieval. Any use of retrieval (e.g. for scene description or knowledge augmentation) is advisory and does not change detection/urgency/distance.
+   - **Why**: Retrieval can take 100–500ms; keeping it async avoids delaying safety-critical outputs.
 
-5. **Safety First**: Stage A completes before Stage B decision
-   - **Mathematical Guarantee**: `t_A < t_decision` (Stage A completes before decision point)
-   - **Implementation**: Decision point is after Stage A forward pass completes
+5. **Safety First**: Stage A completes before Stage B decision.
+   - **Implementation**: In the model forward, the order is: (1) Run Stage A (backbone + FPN + Tier 1 heads), (2) Read Stage A outputs (including e.g. uncertainty_score), (3) Apply decision rule (latency and uncertainty thresholds), (4) If not skip, run Stage B and merge outputs. So `t_A` is always measured before the skip decision.
    - **Why**: Safety predictions must be available before deciding whether to run Stage B.
 
-6. **Fail-Safe**: High latency/uncertainty → skip Stage B, return Stage A only
-   - **Mathematical Guarantee**: `if t_A > 200ms OR uncertainty > 0.7: skip_B = True`
-   - **Implementation**: Decision logic checks latency and uncertainty before Stage B
+6. **Fail-Safe**: High latency or uncertainty → skip Stage B, return Stage A only.
+   - **Implementation**: Conditional in forward: if Stage A latency &gt; 200ms (or configurable threshold) or if uncertainty_score &gt; 0.7 (or configurable), do not run Stage B; return the outputs dict containing only Stage A results (and optionally empty or None for Stage B-only keys). Thresholds can live in TierConfig (e.g. `max_latency_ms`) or in a separate inference config.
    - **Why**: If Stage A is slow or uncertain, Stage B is unlikely to help and wastes resources.
 
 ### Detailed Architecture: ResNet50+FPN (Stage A)
 
-**ResNet50 Forward Pass**:
-```
-Input: [B, 3, 224, 224]
-
-# Stem
-x = Conv2d(3, 64, 7x7, stride=2)  # [B, 64, 112, 112]
-x = BatchNorm2d(64)
-x = ReLU()
-x = MaxPool2d(3x3, stride=2)     # [B, 64, 56, 56]
-
-# Stage 1 (Layer1)
-C2 = ResBlock(x, channels=64, num_blocks=3)   # [B, 256, 56, 56]
-
-# Stage 2 (Layer2)
-C3 = ResBlock(C2, channels=128, num_blocks=4)  # [B, 512, 28, 28]
-
-# Stage 3 (Layer3)
-C4 = ResBlock(C3, channels=256, num_blocks=6) # [B, 1024, 14, 14]
-
-# Stage 4 (Layer4)
-C5 = ResBlock(C4, channels=512, num_blocks=3) # [B, 2048, 7, 7]
-```
-
-**FPN Forward Pass**:
-```
-# Bottom-up pathway (already computed: C2, C3, C4, C5)
-
-# Top-down pathway
-P5 = Conv1x1(C5)                    # [B, 256, 7, 7]
-P4 = Conv1x1(C4) + Upsample(P5)      # [B, 256, 14, 14]
-P3 = Conv1x1(C3) + Upsample(P4)      # [B, 256, 28, 28]
-P2 = Conv1x1(C2) + Upsample(P3)     # [B, 256, 56, 56]
-
-# Lateral connections (1x1 conv to match channels)
-# Upsample = bilinear upsampling (2x)
-
-Where:
-- P2, P3, P4, P5 = FPN feature maps at different scales
-- All have same channels (256) but different spatial resolutions
-- P2: finest detail (56x56), P5: coarsest detail (7x7)
-```
-
-**Fused Features for Detection**:
-```
-# Resize all to same spatial size (P4 size: 14x14)
-P3_resized = Interpolate(P3, size=(14, 14))  # [B, 256, 14, 14]
-P4 = P4                                      # [B, 256, 14, 14]
-P5_resized = Interpolate(P5, size=(14, 14)) # [B, 256, 14, 14]
-
-# Concatenate along channel dimension
-Fused = Concat([P3_resized, P4, P5_resized], dim=1)  # [B, 768, 14, 14]
-
-Where:
-- 768 = 256 * 3 (three FPN levels concatenated)
-- 14x14 = 196 spatial locations (each can predict an object)
-- Multi-scale features at same resolution enable detection at all scales
-```
+**ResNet50** (torchvision): Stem Conv 7×7 stride 2, BN, ReLU, MaxPool 3×3 stride 2. Layer1→C2 [B,256,56,56], Layer2→C3 [B,512,28,28], Layer3→C4 [B,1024,14,14], Layer4→C5 [B,2048,7,7]. **FPN**: Lateral 1×1 convs to 256 ch; top-down P5, P4=P4_lat+up(P5), P3=P3_lat+up(P4), P2=P2_lat+up(P3). P2–P5 all 256 ch at 56, 28, 14, 7. **Detection fusion**: P3, P4, P5 resized to 14×14, concat → [B,768,14,14] (768=256×3); this feeds detection heads and many Tier 2 heads. See **ml/models/maxsight_cnn.py** and **docs/architecture.md**.
 
 ### Detailed Architecture: Hybrid CNN-ViT (Stage B)
 
-**CNN Branch Processing**:
-```
-# Same as Stage A ResNet50+FPN
-C2, C3, C4, C5 = ResNet50(images)
-P2, P3, P4, P5 = FPN([C2, C3, C4, C5])
-
-# Global pooling for fusion
-F_cnn = [GlobalAvgPool(P2), GlobalAvgPool(P3), GlobalAvgPool(P4), GlobalAvgPool(P5)]
-F_cnn_concat = Concat(F_cnn, dim=1)  # [B, 1024] (256 * 4)
-```
-
-**ViT Branch Processing**:
-```
-# Patch embedding
-Patches = PatchEmbed(images)  # [B, 196, 768]
-  Where: 196 = (224/16)² patches, 768 = embedding dimension
-
-# Add positional encoding
-Z_0 = Patches + PositionEmbedding  # [B, 196, 768]
-
-# Transformer blocks (12 layers)
-Z_l = TransformerBlock_l(Z_{l-1})  # l = 1...12
-  Where each TransformerBlock:
-    Z_l = LayerNorm(Z_{l-1} + MultiHeadAttention(Z_{l-1}))
-    Z_l = LayerNorm(Z_l + FFN(Z_l))
-
-# CLS token (first token)
-Z_cls = Z_12[:, 0, :]  # [B, 768]
-```
-
-**Cross-Layer Connections (Bidirectional)**:
-```
-# CNN → ViT (enhance ViT with CNN features)
-for each FPN level P_i:
-    P_i_proj = Conv1x1(P_i)  # Project to ViT dimension [B, 768, H, W]
-    P_i_pooled = AdaptiveAvgPool2d(P_i_proj, size=(14, 14))  # Match patch grid
-    P_i_flat = Flatten(P_i_pooled)  # [B, 196, 768]
-    
-    # Add to ViT patches (residual connection)
-    Z_l = Z_l + α * P_i_flat  # α = 0.1 (learnable)
-
-# ViT → CNN (enhance CNN with ViT global context)
-Z_vit_spatial = Reshape(Z_12, spatial_dims=(14, 14))  # [B, 768, 14, 14]
-Z_vit_proj = Conv1x1(Z_vit_spatial)  # Project to CNN dimension [B, 256, 14, 14]
-
-for each FPN level P_i:
-    P_i_resized = Interpolate(Z_vit_proj, size=P_i.shape[2:])
-    P_i = P_i + α * P_i_resized  # Residual connection
-
-Where:
-- α = 0.1 (learnable cross-layer scaling factor, constrained with sigmoid)
-- Bidirectional: CNN provides local features, ViT provides global context
-```
-
-**Fusion Methods**:
-```
-# Method 1: Weighted Fusion (default, most stable)
-β = learnable_weight  # Typically initialized to 0.5
-F_fused = β * F_cnn_concat + (1 - β) * Z_cls  # [B, 1024] or [B, 768]
-
-# Method 2: Cross-Attention Fusion (research mode)
-Q = Linear(F_cnn_concat)  # Query from CNN [B, 1, D]
-K = Linear(Z_cls)         # Key from ViT [B, 1, D]
-V = Linear(Z_cls)         # Value from ViT [B, 1, D]
-
-Attn = Softmax(QK^T / √d) * V  # [B, 1, D]
-F_fused = FFN(Attn.squeeze(1))  # [B, D]
-
-Where:
-- d = attention dimension (typically 512)
-- Cross-attention allows CNN to "query" ViT for relevant global context
-```
+**CNN branch**: Same ResNet50+FPN structure; output FPN levels P2–P5 (256 ch each). Global pooling (e.g. adaptive avg pool per level then concat or mean) → F_cnn vector. **ViT branch**: Patch embedding 224/16 → 196 patches, dim 768; add positional embedding; 12 transformer blocks (multi-head self-attention + FFN, LayerNorm); CLS token or mean of patch tokens → Z_cls [B,768]. **Cross-layer** (in hybrid_backbone.py): CNN→ViT: project each FPN level to 768 dim, reshape to 14×14 or patch grid, add to ViT tokens with learnable scale α (e.g. 0.1). ViT→CNN: reshape ViT sequence to spatial map, project to 256 ch, add to FPN features. **Fusion**: AdaptiveFeatureFusion: project CNN and ViT to fused_dim, gating (softmax over two branches), output = gate_cnn * cnn_proj + gate_vit * vit_proj. CrossModalAttention (CNN↔ViT): two MultiheadAttention layers (CNN queries ViT, ViT queries CNN), residual + LayerNorm. See **ml/models/backbone/hybrid_backbone.py** and **docs/SYSTEMS.md**.
 
 ### Detailed Architecture: Temporal Processing (T5 Only)
 
-**ConvLSTM Processing**:
-```
-# Input: Stage A features [B, T, C, H, W]
-# T = temporal sequence length (e.g., 8 frames)
-
-# ConvLSTM forward pass
-h_t, c_t = ConvLSTM(x_t, h_{t-1}, c_{t-1})
-
-Where:
-- h_t = hidden state [B, C_hidden, H, W]
-- c_t = cell state [B, C_hidden, H, W]
-- ConvLSTM operations:
-  i_t = σ(Conv(x_t) + Conv(h_{t-1}) + b_i)  # Input gate
-  f_t = σ(Conv(x_t) + Conv(h_{t-1}) + b_f)  # Forget gate
-  o_t = σ(Conv(x_t) + Conv(h_{t-1}) + b_o)  # Output gate
-  c_t = f_t * c_{t-1} + i_t * tanh(Conv(x_t) + Conv(h_{t-1}))
-  h_t = o_t * tanh(c_t)
-```
-
-**TimeSformer Processing**:
-```
-# Input: Stage A features [B, T, C, H, W]
-# Reshape to patches
-Patches = Reshape(features, [B, T*H*W, C])  # [B, T*196, C]
-
-# Temporal attention (across time)
-Z_temporal = MultiHeadAttention(Patches, Patches, Patches)  # [B, T*196, C]
-
-# Spatial attention (within frame)
-Z_spatial = []
-for t in range(T):
-    frame_patches = Z_temporal[:, t*196:(t+1)*196, :]
-    Z_spatial_t = MultiHeadAttention(frame_patches, frame_patches, frame_patches)
-    Z_spatial.append(Z_spatial_t)
-Z_spatial = Concat(Z_spatial, dim=1)  # [B, T*196, C]
-
-# Combine
-Z_combined = Z_temporal + Z_spatial  # Residual connection
-```
-
-**Motion Feature Extraction**:
-```
-# Optical flow estimation from temporal features
-Flow = MotionHead(temporal_features)  # [B, 2, H, W]
-  Where: Flow[:, 0, :, :] = horizontal motion (u)
-         Flow[:, 1, :, :] = vertical motion (v)
-
-# Motion magnitude
-Motion_mag = √(u² + v²)  # [B, H, W]
-
-# Motion direction
-Motion_dir = atan2(v, u)  # [B, H, W] (radians)
-```
+ConvLSTM consumes Stage A feature sequences [B, T, C, H, W]; input/forget/output gates and cell update use convs. TimeSformer: patches over time, temporal then spatial attention, residual. Motion head outputs optical flow (u, v) and magnitude/direction. See **ml/models/temporal/temporal_encoder.py** and **ml/models/temporal/conv_lstm.py**.
 
 ---
 
@@ -747,535 +560,31 @@ Motion_dir = atan2(v, u)  # [B, H, W] (radians)
 
 #### 1. Dataset Loading (`ml/data/dataset.py`)
 
-**MaxSightDataset** - Complete Implementation Details:
+**Class**: `MaxSightDataset`. **Constructor**: takes annotation path(s), image root dir, optional `condition_mode` (string), transform, and optional audio config.
 
-**COCO Format Parsing**:
-```python
-# Annotation structure:
-{
-  "images": [{"id": 1, "file_name": "image.jpg", "width": 640, "height": 480}],
-  "annotations": [{
-    "id": 1,
-    "image_id": 1,
-    "category_id": 1,  # COCO class ID
-    "bbox": [x, y, width, height],  # Absolute coordinates
-    "area": 1234.5,
-    "iscrowd": 0
-  }],
-  "categories": [{"id": 1, "name": "person", "supercategory": "person"}]
-}
+**COCO annotation structure**: Top-level keys `images`, `annotations`, `categories`. Each image: `id`, `file_name`, `width`, `height`. Each annotation: `id`, `image_id`, `category_id`, `bbox` `[x, y, width, height]` in pixels, optional `area`, `iscrowd`. Categories: `id`, `name`, optional `supercategory`. Paths in `file_name` are resolved relative to the image root directory passed to the dataset.
 
-# Normalization process:
-bbox_normalized = [
-  (x + width/2) / image_width,   # x_center
-  (y + height/2) / image_height,  # y_center
-  width / image_width,            # normalized width
-  height / image_height           # normalized height
-]
-```
+**Returned item keys** (typical): `images` (tensor `[3, H, W]` after transform), `labels` (class IDs per object), `boxes` (normalized boxes: center format or xyxy depending on pipeline), `num_objects` (int per image), `distance` (zone per object or per image if present), `urgency` (if present), optional `audio` (tensor), optional `condition_mode`. Batch collation then produces batched tensors; variable-length lists (e.g. per-image annotations) are padded or list-of-dict in the batch.
 
-**Distance Estimation Algorithm**:
-```python
-# Distance zones computed from bounding box size:
-box_area = bbox[2] * bbox[3]  # width * height (normalized)
-image_area = 1.0  # normalized
+**Box normalization**: From COCO `bbox` (x, y, w, h) in pixels, conversion to center format: `x_center = (x + w/2) / image_width`, `y_center = (y + h/2) / image_height`, `width_norm = w / image_width`, `height_norm = h / image_height`, all in [0, 1]. Used by detection loss and head targets.
 
-# Heuristic: larger boxes = closer objects
-if box_area > 0.1:  # >10% of image
-    zone = 0  # NEAR
-elif box_area > 0.01:  # >1% of image
-    zone = 1  # MEDIUM
-else:
-    zone = 2  # FAR
-```
+**Distance zones**: Typically derived from relative box area (e.g. box_area &gt; 0.1 → near, &gt; 0.01 → medium, else far) or from annotation field if present. **Urgency**: From category (e.g. person=caution, car=warning) or annotation field; used for urgency head target.
 
-**Urgency Estimation Algorithm**:
-```python
-# Urgency computed from object class and context:
-urgency_map = {
-    'person': 1,  # caution (could be moving)
-    'car': 2,     # warning (moving vehicle)
-    'bicycle': 2, # warning (moving vehicle)
-    'fire_hydrant': 0,  # safe (stationary)
-    'stop_sign': 1,     # caution (important)
-    # ... more mappings
-}
+**Preprocessing** (condition-specific): Applied in dataset or via `ml/utils/preprocessing.py`. Examples: **cataracts** — Gaussian blur (e.g. kernel 5, sigma 1.5), reduce contrast; **glaucoma** — central mask (e.g. 30% radius), darken periphery; **AMD** — darken central region (e.g. 20% radius); **retinitis_pigmentosa** — brighten, edge enhance. Normalization: ImageNet mean and std (e.g. mean [0.485, 0.456, 0.406], std [0.229, 0.224, 0.225]) and resize to 224×224 (or configurable size).
 
-# Context-aware urgency:
-if object_class in ['car', 'truck', 'bus'] and is_moving:
-    urgency = 3  # DANGER
-elif object_class in ['person', 'bicycle'] and is_moving:
-    urgency = 2  # WARNING
-else:
-    urgency = urgency_map.get(object_class, 0)  # SAFE or CAUTION
-```
+**Audio**: If used, MFCC or spectrogram features (e.g. 128-dim vector per sample) loaded or computed; shape typically `[T, F]` or `[F]` per sample, then batched. **Synthetic annotations**: Optional path to generate or fill labels when annotations are missing; implementation detail in dataset or separate script.
 
-**Condition-Specific Preprocessing**:
-```python
-# Cataracts (blur simulation):
-if condition == 'cataracts':
-    # Apply Gaussian blur
-    kernel_size = 5
-    sigma = 1.5
-    image = cv2.GaussianBlur(image, (kernel_size, kernel_size), sigma)
-    
-    # Reduce contrast
-    image = image * 0.8 + 0.1  # Reduce contrast by 20%
-
-# Glaucoma (peripheral vision loss):
-if condition == 'glaucoma':
-    # Create mask for central vision only
-    h, w = image.shape[:2]
-    center = (w//2, h//2)
-    radius = min(w, h) * 0.3  # 30% of image size
-    mask = np.zeros((h, w), dtype=np.uint8)
-    cv2.circle(mask, center, int(radius), 255, -1)
-    image = cv2.bitwise_and(image, image, mask=mask)
-    
-    # Darken peripheral regions
-    peripheral_mask = 1.0 - (mask / 255.0)
-    image = image * (1.0 - 0.5 * peripheral_mask)
-
-# AMD (central vision loss):
-if condition == 'amd':
-    # Darken central region
-    h, w = image.shape[:2]
-    center = (w//2, h//2)
-    radius = min(w, h) * 0.2  # 20% of image size
-    mask = np.zeros((h, w), dtype=np.uint8)
-    cv2.circle(mask, center, int(radius), 255, -1)
-    central_mask = mask / 255.0
-    image = image * (1.0 - 0.7 * central_mask)  # Darken center by 70%
-
-# Retinitis Pigmentosa (night blindness):
-if condition == 'retinitis_pigmentosa':
-    # Brighten image
-    image = image * 1.5  # Increase brightness by 50%
-    image = np.clip(image, 0, 1)  # Clip to valid range
-    
-    # Enhance edges
-    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    edges = cv2.Canny((gray * 255).astype(np.uint8), 50, 150)
-    image = image + 0.1 * cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
-```
-
-**Audio Feature Extraction (MFCC)**:
-```python
-# MFCC extraction process:
-# 1. Pre-emphasis filter (high-pass)
-y_preemph = np.append(y[0], y[1:] - 0.97 * y[:-1])
-
-# 2. Windowing (Hamming window)
-windowed = y_preemph * np.hamming(len(y_preemph))
-
-# 3. FFT
-fft = np.fft.rfft(windowed)
-
-# 4. Mel filterbank
-mel_filters = create_mel_filterbank(n_mels=13, n_fft=512, sample_rate=16000)
-mel_spectrum = np.dot(mel_filters, np.abs(fft) ** 2)
-
-# 5. Log
-log_mel = np.log(mel_spectrum + 1e-10)
-
-# 6. DCT (Discrete Cosine Transform)
-mfcc = scipy.fft.dct(log_mel, type=2, norm='ortho')[:13]
-
-# Result: [13] MFCC coefficients per frame
-# For 1 second audio at 16kHz with 25ms frames: ~40 frames
-# Final: [40, 13] → flattened to [520] → downsampled to [128]
-```
-
-**Synthetic Annotation Generation**:
-```python
-# For missing annotations, generate synthetic labels:
-def generate_synthetic_annotations(image, existing_annotations):
-    # 1. Detect text regions (OCR)
-    text_regions = detect_text_regions(image)
-    
-    # 2. Detect common accessibility objects
-    accessibility_objects = detect_accessibility_objects(image)
-    # e.g., door handles, handrails, braille signs
-    
-    # 3. Estimate distance from object size
-    for obj in accessibility_objects:
-        obj['distance_zone'] = estimate_distance_from_size(obj['bbox'])
-        obj['urgency'] = estimate_urgency_from_class(obj['class'])
-    
-    # 4. Combine with existing annotations
-    all_annotations = existing_annotations + accessibility_objects
-    
-    return all_annotations
-```
-
-**Features**:
-- Bounding box normalization: Converts absolute coordinates to normalized [0, 1] range
-- Distance/urgency estimation: Heuristic-based estimation from annotations
-- Image preprocessing: Condition-specific transformations (13 vision conditions)
-- Audio feature extraction: MFCC features from raw audio waveforms
-- Synthetic annotation generation: Fills missing labels for accessibility objects
+**Key methods**: `__getitem__(idx)` returns one sample dict; `__len__` returns number of images. See **docs/training-data-loading.md** and **ml/data/dataset.py**.
 
 #### 2. Data Augmentation (`ml/data/advanced_augmentation.py`)
 
-**Multi-Modal Augmentation** - Detailed Algorithms:
-
-**Image Augmentation Pipeline**:
-```python
-# 1. Geometric Transformations
-def geometric_augment(image, bboxes):
-    # Random rotation (-15° to +15°)
-    angle = np.random.uniform(-15, 15)
-    M = cv2.getRotationMatrix2D(center, angle, 1.0)
-    image = cv2.warpAffine(image, M, (w, h))
-    bboxes = rotate_bboxes(bboxes, angle, center)
-    
-    # Random scaling (0.8x to 1.2x)
-    scale = np.random.uniform(0.8, 1.2)
-    image = cv2.resize(image, None, fx=scale, fy=scale)
-    bboxes = scale_bboxes(bboxes, scale)
-    
-    # Random translation (-10% to +10%)
-    tx = np.random.uniform(-0.1, 0.1) * w
-    ty = np.random.uniform(-0.1, 0.1) * h
-    M = np.float32([[1, 0, tx], [0, 1, ty]])
-    image = cv2.warpAffine(image, M, (w, h))
-    bboxes = translate_bboxes(bboxes, tx, ty)
-    
-    # Random horizontal flip (50% probability)
-    if np.random.rand() > 0.5:
-        image = cv2.flip(image, 1)
-        bboxes = flip_bboxes_horizontal(bboxes, w)
-    
-    return image, bboxes
-
-# 2. Photometric Transformations
-def photometric_augment(image):
-    # Color jitter
-    # Brightness: ±20%
-    brightness = np.random.uniform(0.8, 1.2)
-    image = image * brightness
-    image = np.clip(image, 0, 1)
-    
-    # Contrast: ±20%
-    contrast = np.random.uniform(0.8, 1.2)
-    mean = image.mean()
-    image = (image - mean) * contrast + mean
-    image = np.clip(image, 0, 1)
-    
-    # Saturation: ±30%
-    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-    saturation = np.random.uniform(0.7, 1.3)
-    hsv[:, :, 1] = hsv[:, :, 1] * saturation
-    hsv[:, :, 1] = np.clip(hsv[:, :, 1], 0, 1)
-    image = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
-    
-    # Hue shift: ±10°
-    hue_shift = np.random.uniform(-10, 10)
-    hsv[:, :, 0] = (hsv[:, :, 0] + hue_shift) % 360
-    image = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
-    
-    # Gaussian noise
-    noise = np.random.normal(0, 0.01, image.shape)
-    image = image + noise
-    image = np.clip(image, 0, 1)
-    
-    return image
-
-# 3. Advanced Augmentations
-def advanced_augment(image):
-    # Cutout (random erasing)
-    if np.random.rand() > 0.5:
-        h, w = image.shape[:2]
-        cutout_size = int(min(h, w) * 0.2)  # 20% of image
-        x = np.random.randint(0, w - cutout_size)
-        y = np.random.randint(0, h - cutout_size)
-        image[y:y+cutout_size, x:x+cutout_size] = 0
-    
-    # Mixup (combine two images)
-    if np.random.rand() > 0.5:
-        lambda_mix = np.random.beta(0.2, 0.2)
-        image2 = get_random_image()
-        image = lambda_mix * image + (1 - lambda_mix) * image2
-    
-    # Mosaic (combine 4 images)
-    if np.random.rand() > 0.5:
-        images = [get_random_image() for _ in range(4)]
-        image = create_mosaic(images)
-    
-    return image
-```
-
-**Audio Augmentation Pipeline**:
-```python
-# 1. Time Domain Augmentations
-def time_domain_augment(audio, sample_rate=16000):
-    # Time stretching (0.8x to 1.2x speed)
-    rate = np.random.uniform(0.8, 1.2)
-    audio = librosa.effects.time_stretch(audio, rate=rate)
-    
-    # Pitch shifting (-2 to +2 semitones)
-    n_steps = np.random.uniform(-2, 2)
-    audio = librosa.effects.pitch_shift(audio, sr=sample_rate, n_steps=n_steps)
-    
-    # Time shifting (delay)
-    shift = np.random.randint(0, int(sample_rate * 0.1))  # Up to 100ms
-    audio = np.roll(audio, shift)
-    
-    return audio
-
-# 2. Frequency Domain Augmentations
-def frequency_domain_augment(mfcc_features):
-    # Add noise to MFCC coefficients
-    noise = np.random.normal(0, 0.1, mfcc_features.shape)
-    mfcc_features = mfcc_features + noise
-    
-    # Time masking (mask out random time frames)
-    if np.random.rand() > 0.5:
-        t0 = np.random.randint(0, mfcc_features.shape[0] - 10)
-        t1 = t0 + np.random.randint(5, 10)
-        mfcc_features[t0:t1, :] = 0
-    
-    # Frequency masking (mask out random frequency bins)
-    if np.random.rand() > 0.5:
-        f0 = np.random.randint(0, mfcc_features.shape[1] - 3)
-        f1 = f0 + np.random.randint(1, 3)
-        mfcc_features[:, f0:f1] = 0
-    
-    return mfcc_features
-
-# 3. Volume Augmentations
-def volume_augment(audio):
-    # Gain adjustment (-6dB to +6dB)
-    gain_db = np.random.uniform(-6, 6)
-    gain_linear = 10 ** (gain_db / 20)
-    audio = audio * gain_linear
-    audio = np.clip(audio, -1, 1)
-    
-    return audio
-```
-
-**Synchronized Multi-Modal Augmentation**:
-```python
-def synchronized_augment(image, audio, bboxes):
-    # Apply same geometric transformation to both
-    # (e.g., if image is flipped, audio channels are swapped)
-    
-    # 1. Geometric transform (affects both)
-    if np.random.rand() > 0.5:
-        # Horizontal flip
-        image = cv2.flip(image, 1)
-        bboxes = flip_bboxes_horizontal(bboxes, image.shape[1])
-        # Swap audio channels (if stereo)
-        if audio.ndim == 2:
-            audio = np.flip(audio, axis=1)
-    
-    # 2. Temporal alignment
-    # If image is time-stretched, audio should match
-    # (for video sequences)
-    
-    return image, audio, bboxes
-```
-
-**Condition-Specific Augmentation** (Simulates Vision Conditions):
-```python
-def condition_specific_augment(image, condition):
-    if condition == 'cataracts':
-        # Progressive blur (simulates cataract progression)
-        blur_level = np.random.uniform(0.5, 2.0)
-        image = cv2.GaussianBlur(image, (5, 5), blur_level)
-        
-    elif condition == 'glaucoma':
-        # Progressive peripheral loss
-        loss_percentage = np.random.uniform(0.1, 0.5)
-        image = apply_peripheral_loss(image, loss_percentage)
-        
-    elif condition == 'amd':
-        # Progressive central scotoma
-        scotoma_size = np.random.uniform(0.1, 0.3)
-        image = apply_central_scotoma(image, scotoma_size)
-        
-    elif condition == 'diabetic_retinopathy':
-        # Random dark spots (floaters)
-        num_spots = np.random.randint(5, 20)
-        image = add_dark_spots(image, num_spots)
-        
-    elif condition == 'retinitis_pigmentosa':
-        # Progressive tunnel vision
-        tunnel_radius = np.random.uniform(0.3, 0.7)
-        image = apply_tunnel_vision(image, tunnel_radius)
-        
-    return image
-```
+**Image**: Geometric — rotation (e.g. ±15°), scale (0.8–1.2), translation (e.g. ±10% of size), horizontal flip (p=0.5); applied with bbox transform so boxes stay aligned. Photometric — brightness/contrast/saturation/hue jitter, Gaussian noise (e.g. std 0.01). Advanced — cutout (random erase), mixup (combine two images with λ from Beta), mosaic (4-image grid). **Audio**: Time stretch (e.g. 0.8–1.2×), pitch shift (e.g. ±2 semitones), time shift, gain (±6 dB); frequency-domain: add noise to MFCC, time/frequency masking. **Synchronized**: Same geometric choice (e.g. flip) applied to image and audio (e.g. swap stereo channels on flip). **Condition-specific**: Per-condition transforms (cataracts blur level, glaucoma peripheral loss %, AMD scotoma size, diabetic retinopathy spots count, retinitis pigmentosa tunnel radius) to simulate that condition during training. **Entry point**: Typically a transform class or function called from the dataset or training script; see **ml/data/advanced_augmentation.py**.
 
 #### 3. Data Loader (`ml/data/data_pipeline.py`)
 
-**Features** - Complete Implementation:
+**Functions**: `create_data_loaders()` (or equivalent) builds train and val `DataLoader`; takes train/val annotation paths, image dir, batch_size, num_workers, optional condition_mode, optional collate_fn. **Collate**: Custom collate stacks `images` to `[B, 3, H, W]`; pads variable-length annotations (e.g. to max_objects per batch) or keeps as list of dicts; pads audio to max length if present. **Output batch keys**: e.g. `images`, `labels`, `boxes`, `num_objects`, `distance`, `urgency`, optional `audio_features`, optional `condition_mode`; shapes match what the model and loss expect (e.g. `boxes` `[B, max_objects, 4]`).
 
-**Custom Collate Function**:
-```python
-def custom_collate_fn(batch):
-    """
-    Handles variable-length sequences and multi-modal data.
-    
-    Challenges:
-    - Different number of objects per image
-    - Variable-length audio sequences
-    - Missing modalities (some samples have audio, some don't)
-    """
-    images = []
-    audio_features = []
-    annotations = []
-    
-    for sample in batch:
-        images.append(sample['image'])
-        if 'audio' in sample:
-            audio_features.append(sample['audio'])
-        annotations.append(sample['annotations'])
-    
-    # Stack images (same size)
-    images = torch.stack(images)
-    
-    # Pad audio features to same length
-    if audio_features:
-        max_audio_len = max(a.shape[0] for a in audio_features)
-        padded_audio = []
-        for a in audio_features:
-            if a.shape[0] < max_audio_len:
-                padding = torch.zeros(max_audio_len - a.shape[0], a.shape[1])
-                a = torch.cat([a, padding], dim=0)
-            padded_audio.append(a)
-        audio_features = torch.stack(padded_audio)
-    else:
-        audio_features = None
-    
-    # Handle variable-length annotations
-    # (keep as list, process in loss function)
-    
-    return {
-        'images': images,
-        'audio_features': audio_features,
-        'annotations': annotations
-    }
-```
-
-**Class Weight Computation**:
-```python
-def compute_class_weights(dataset, num_classes):
-    """
-    Compute class weights for imbalanced datasets.
-    
-    Formula: w_i = N_total / (N_classes * N_i)
-    
-    Where:
-    - N_total = total number of samples
-    - N_classes = number of classes
-    - N_i = number of samples in class i
-    """
-    class_counts = torch.zeros(num_classes)
-    
-    # Count samples per class
-    for sample in dataset:
-        annotations = sample['annotations']
-        for ann in annotations:
-            class_id = ann['category_id']
-            class_counts[class_id] += 1
-    
-    # Compute weights (inverse frequency)
-    total_samples = class_counts.sum()
-    class_weights = total_samples / (num_classes * class_counts + 1e-6)
-    
-    # Normalize (so max weight is 1.0)
-    class_weights = class_weights / class_weights.max()
-    
-    return class_weights
-
-# Example:
-# Class 0 (person): 10,000 samples → weight = 0.1
-# Class 1 (fire_hydrant): 100 samples → weight = 10.0
-# Result: Rare classes get 100x higher weight
-```
-
-**Auto-Detection of Image Directories**:
-```python
-def auto_detect_image_dirs(data_dir):
-    """
-    Automatically detect image directories from common structures.
-    
-    Supported structures:
-    - COCO: images/train2017/, images/val2017/
-    - Custom: train/, val/, test/
-    - Flat: all images in data_dir/
-    """
-    possible_dirs = [
-        'images/train2017',
-        'images/val2017',
-        'train',
-        'val',
-        'test',
-        'train_images',
-        'val_images',
-    ]
-    
-    for dir_name in possible_dirs:
-        full_path = Path(data_dir) / dir_name
-        if full_path.exists() and any(f.suffix in ['.jpg', '.png'] for f in full_path.iterdir()):
-            return full_path
-    
-    # Fallback: check if data_dir itself contains images
-    if any(f.suffix in ['.jpg', '.png'] for f in Path(data_dir).iterdir()):
-        return Path(data_dir)
-    
-    raise ValueError(f"Could not find image directory in {data_dir}")
-```
-
-**Efficient Batching**:
-```python
-def create_efficient_dataloader(dataset, batch_size, num_workers=8):
-    """
-    Create optimized DataLoader with proper settings.
-    """
-    return DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,  # Faster GPU transfer
-        persistent_workers=True,  # Keep workers alive between epochs
-        prefetch_factor=2,  # Prefetch 2 batches per worker
-        collate_fn=custom_collate_fn,
-    )
-
-# Why num_workers=8?
-# - Model is compute-bound (GPU waits for data)
-# - 8 workers keep GPU fed during forward/backward pass
-# - Trade-off: More memory usage, but 2-3x throughput improvement
-```
-
-**Configuration Details**:
-- `num_workers: 8` (increased from 4 for GPU feeding)
-  - **Rationale**: Model is compute-bound. GPU spends time on forward/backward pass. 8 workers ensure data is ready when GPU needs it.
-  - **Memory Impact**: ~2GB per worker (for image loading)
-  - **Throughput Improvement**: 2-3x faster than 4 workers
-  
-- `batch_size: 4-16` (tier-dependent)
-  - **T0 (29M)**: batch_size=16 (fits in GPU memory)
-  - **T2 (210M)**: batch_size=8 (with gradient accumulation)
-  - **T5 (320M)**: batch_size=4 (with gradient accumulation=8, effective batch=32)
-  
-- `pin_memory: True` (faster GPU transfer)
-  - **What it does**: Pins data in CPU memory, enables faster CPU→GPU transfer
-  - **Speedup**: ~10-20% faster data loading
-  - **Memory**: Slightly higher CPU memory usage
-  
-- `persistent_workers: True` (keep workers alive)
-  - **What it does**: Keeps worker processes alive between epochs
-  - **Speedup**: Eliminates worker startup overhead
-  - **Memory**: Workers stay in memory (acceptable trade-off)
-  
-- `prefetch_factor: 2` (prefetch batches)
-  - **What it does**: Each worker prefetches 2 batches ahead
-  - **Speedup**: Reduces data loading latency
-  - **Memory**: 2x batch memory per worker
+**Class weights**: Formula `w_i = N_total / (N_classes * N_i)` with small constant to avoid div-by-zero; then normalize so max weight is 1.0. Used for weighted cross-entropy in classification or distance/urgency. **Auto-detection of image dir**: Checks common subdirs (e.g. `images/train2017`, `images/val2017`, `train`, `val`, `test`) under data root; falls back to root if it contains images. **DataLoader kwargs**: num_workers=8, pin_memory=True, persistent_workers=True, prefetch_factor=2, shuffle=True for train, collate_fn=custom_collate_fn. **Batch sizes**: T0 often 16, T2 8, T5 4 with gradient_accumulation_steps (e.g. 8) for effective batch 32. See **ml/data/data_pipeline.py** and **docs/training-data-loading.md**.
 
 ---
 
@@ -1285,146 +594,15 @@ def create_efficient_dataloader(dataset, batch_size, num_workers=8):
 
 #### Loss Functions - Complete Formulations
 
-**1. Objectness Loss (Focal Loss)**
-```
-L_obj = -α(1 - p_t)^γ log(p_t)
+**Files**: **ml/training/losses.py** (per-head loss functions and combiners), **ml/training/head_losses.py** (head-specific helpers). **Total loss**: Weighted sum over heads; weights come from config (e.g. `ml/training/configs/t5_temporal.yaml`) or GradNorm-updated task weights.
 
-Where:
-- p_t = σ(logits) if target=1, else 1-σ(logits)
-- α = 0.25 (focusing parameter)
-- γ = 2.0 (modulating factor)
-- σ = sigmoid function
-```
+**Per-head**: **Objectness** — Focal loss, α=0.25, γ=2; input logits and binary target (object vs background). **Classification** — Focal cross-entropy, same α, γ; num_classes from config. **Box regression** — Smooth L1 (Huber), β=1.0; predicted vs target box coordinates (e.g. center format). **Distance** — Weighted cross-entropy over 3 zones (near/medium/far); class weights from dataset or fixed. **Urgency** — Focal loss with class weights [1.0, 1.5, 2.0, 3.0] for safe/caution/warning/danger. **Depth** — Uncertainty-weighted L1 (Kendall & Gal): `|d - d_gt| * exp(-u) + u`; depth head must output uncertainty. **Motion** — L2 on predicted vs target flow plus smoothness term, λ_smooth=0.1. **Therapy / contrast / scene / OCR / etc.**: Config keys (e.g. `therapy_state`, `scene_description`) control whether loss is computed and at what weight; see tier YAMLs (e.g. `therapy_state: 0.8`).
 
-**Purpose**: Handles class imbalance (many background locations vs few object locations). Focal loss downweights easy negatives and focuses on hard examples.
+**Label assignment**: **ml/training/matching.py** — e.g. Hungarian matcher for assigning ground-truth boxes to predictions for loss computation. **Config keys**: Loss weights typically in `loss_weights` or per-head keys in training config; rebalanced values (e.g. box_regression 3.0, scene_description 0.3) in tier configs.
 
-**2. Classification Loss (Focal Cross-Entropy)**
-```
-L_cls = -α(1 - p_t)^γ log(p_t)
+#### GradNorm Algorithm
 
-Where:
-- p_t = softmax(logits)[target_class]
-- α = 0.25
-- γ = 2.0
-```
-
-**Purpose**: Handles class imbalance in object detection (many "person" examples vs few "fire hydrant" examples).
-
-**3. Box Regression Loss (Smooth L1 / Huber Loss)**
-```
-L_box = {
-  0.5 * (x - x_gt)² / β    if |x - x_gt| < β
-  |x - x_gt| - 0.5 * β     otherwise
-}
-
-Where:
-- x = predicted box coordinates [x_center, y_center, width, height]
-- x_gt = ground truth box coordinates
-- β = 1.0 (transition point)
-```
-
-**Purpose**: Smooth L1 is less sensitive to outliers than L2, but smoother than L1 near zero. This helps with box regression stability.
-
-**4. Distance Zone Loss (Weighted Cross-Entropy)**
-```
-L_dist = -Σ w_i * log(softmax(logits)[target_zone])
-
-Where:
-- w_i = class weight for zone i (near/medium/far)
-- Zones: 0=near, 1=medium, 2=far
-```
-
-**Purpose**: Handles imbalance in distance zones (more "near" examples than "far" examples).
-
-**5. Urgency Loss (Focal Loss with Class Weights)**
-```
-L_urg = -w_target * α(1 - p_t)^γ log(p_t)
-
-Where:
-- w_target = [1.0, 1.5, 2.0, 3.0] for [safe, caution, warning, danger]
-- p_t = softmax(logits)[target_urgency]
-- α = 0.25, γ = 2.0
-```
-
-**Purpose**: Heavily weights danger predictions (false negatives are catastrophic for safety).
-
-**6. Depth Loss (Uncertainty-Weighted L1)**
-```
-L_depth = |d - d_gt| * exp(-u) + u
-
-Where:
-- d = predicted depth
-- d_gt = ground truth depth
-- u = predicted uncertainty (learned)
-```
-
-**Purpose**: Uncertainty-weighted loss (Kendall & Gal formulation). The model learns to predict its own uncertainty, downweighting errors in uncertain regions.
-
-**7. Motion Loss (Optical Flow Loss)**
-```
-L_motion = ||flow_pred - flow_gt||₂² + λ_smooth * R_smooth(flow_pred)
-
-Where:
-- flow_pred = [u, v] predicted optical flow
-- flow_gt = ground truth optical flow
-- R_smooth = smoothness regularization term
-- λ_smooth = 0.1 (smoothness weight)
-```
-
-**Purpose**: Predicts pixel-level motion vectors while maintaining spatial smoothness.
-
-#### GradNorm Algorithm - Complete Mathematical Formulation
-
-**GradNorm** automatically balances gradients across multiple tasks to prevent gradient warfare.
-
-**Step 1: Compute Gradient Norms**
-```
-For each task i:
-  L_i^w = w_i * L_i  (weighted loss)
-  ∇_i = ∇_θ L_i^w  (gradients w.r.t. shared parameters θ)
-  G_i = ||∇_i||₂  (gradient norm)
-```
-
-**Step 2: Compute Relative Training Rates**
-```
-L_i^rel = L_i / L_i^0  (relative loss: current / initial)
-
-Where:
-- L_i^0 = initial loss value for task i (recorded on first iteration)
-- L_i = current loss value for task i
-```
-
-**Step 3: Compute Target Gradient Norms**
-```
-Ḡ = (1/N) * Σ G_i  (average gradient norm)
-
-r_i = (L_i^rel)^α  (relative inverse training rate)
-
-G_i^target = Ḡ * r_i  (target gradient norm)
-```
-
-**Where:**
-- `α = 1.5` (restoring force hyperparameter)
-- Higher α = stronger balancing force
-- `r_i` measures how far task i is from its initial loss
-
-**Step 4: Compute GradNorm Loss**
-```
-L_gradnorm = Σ |G_i - G_i^target|
-```
-
-**Step 5: Update Task Weights**
-```
-∇_w L_gradnorm = ∂L_gradnorm / ∂w_i
-
-w_i ← w_i - η * ∇_w L_gradnorm
-```
-
-**Where:**
-- `η = 0.025` (learning rate for weight updates)
-- Weights updated every N iterations (typically 100)
-
-**Intuition**: Tasks with higher relative loss (slower learning) get higher gradient norms, which means they get more learning signal. This prevents dominant tasks from overwhelming rare tasks.
+**File**: **ml/training/task_balancing.py**. **Class**: Typically a balancer that holds task weights and updates them. **Steps**: (1) For each task i, compute weighted loss `w_i * L_i`, then gradient of that loss w.r.t. shared parameters (backbone, FPN); gradient norm G_i = L2 norm of flattened gradients. (2) On first iteration, record initial losses L_i^0. (3) Relative loss L_i^rel = L_i / L_i^0. (4) Target norm G_i^target = Ḡ * (L_i^rel)^α where Ḡ = mean of G_i, α=1.5 (restoring force). (5) GradNorm loss = Σ_i |G_i - G_i^target|. (6) Backprop GradNorm loss w.r.t. task weights w_i; update w_i with learning rate η=0.025 (or from config). (7) Clamp w_i to [0.1, 10.0]. **Update interval**: Every N steps (e.g. 100). **Extreme gradient dampening**: If G_i &gt; 10*Ḡ, reduce w_i (e.g. ×0.5). **Shared parameters**: Usually backbone + FPN; list passed to balancer or inferred from model.
 
 #### Two-Stage Inference - Mathematical Guarantees
 
@@ -1542,6 +720,8 @@ Where:
 - FFN = feedforward network
 ```
 
+**Checkpoint format**: Saved dict with at least `model_state_dict`, `optimizer_state_dict` (optional), `epoch`, `val_loss` (optional). Paths: e.g. `checkpoints/best_model.pt`, `checkpoints_<condition>/best_model.pt` for per-condition export. **Resume**: Scripts accept e.g. `--resume-from` or load checkpoint and restore model (and optionally optimizer) before continuing. **Optimizer**: Typically AdamW; learning rate from config (e.g. 7.5e-5 for T5). **Scheduler**: Often cosine or step; warmup epochs (e.g. 20 for T5) and min_lr (e.g. 1e-6) in config. **Gradient clipping**: `clip_grad_norm_(parameters, max_norm=1.0)` after backward. **Config files**: `ml/training/configs/` — e.g. `t1_attention.yaml`, `t2_hybrid_vit.yaml`, `t3_cross_task.yaml`, `t4_cross_modal.yaml`, `t5_temporal.yaml`, `t5_temporal_2phase.yaml`, `t2_to_t5_transfer.yaml`; each contains model (tier, num_classes, condition_mode), data (paths, batch_size, num_workers), training (epochs, lr, weight_decay, loss_weights, gradnorm, warmup, min_lr), and optionally transfer (freeze schedule, loss unlock schedule).
+
 ### Training Pipeline Flow
 
 ```
@@ -1613,6 +793,8 @@ Where:
 | T4 | 280M | 8.0e-5 | Cross-modal fusion |
 | T5 | 320M | 7.5e-5 | **Sweet spot** for 300-400M params at batch 32 |
 
+Config key is typically `lr` or `learning_rate` under `training` in the tier YAML. Base LR for T5 is 7.5e-5; transfer learning uses parameter groups with multipliers (e.g. cnn 0.2×, vit 0.5×, detection 0.6×, temporal 1.0×, new_heads 1.3×).
+
 **Why 7.5e-5 for T5?**
 - 1e-4 is slightly hot for:
   - Stacked attention layers
@@ -1625,41 +807,17 @@ Where:
 
 #### Weight Decay: 0.05 (Not 0.0001)
 
-**Problem with 0.0001**:
-- Too low for 300M+ parameter models
-- High overfitting risk
-- Model is too expressive without regularization
+**Problem with 0.0001**: Too low for 300M+ parameter models; high overfitting risk; model too expressive without regularization.
 
-**Why 0.05 works**:
-- Strong enough to prevent overfitting
-- Not so strong it kills learning
-- Standard for large transformer-like models
+**Why 0.05 works**: Strong enough to prevent overfitting; not so strong it kills learning; standard for large transformer-like models. Set in config as `weight_decay` (e.g. in `ml/training/configs/t5_temporal.yaml`).
 
 #### Loss Weight Rebalancing
 
-**Previous Problem**:
-```yaml
-box_regression: 5.0  # Tyrannical
-scene_description: 0.1  # Muted
-scene_graph: 0.1  # Muted
-```
+**Previous problem**: box_regression 5.0 dominated; scene_description and scene_graph at 0.1 stayed muted; semantic tasks never got enough gradient signal; GradNorm could not fully fix the imbalance.
 
-**Why this fails**:
-- Box regression dominates early training
-- Semantic tasks never get enough signal
-- GradNorm can't fully rescue extreme imbalance
+**Rebalanced solution** (in tier configs): box_regression 3.0; scene_description 0.3; scene_graph 0.3; other semantic/auxiliary heads raised to at least 0.3 where applicable. Config keys are typically under `training.loss_weights` or per-head keys (e.g. `therapy_state: 0.8` in t5_temporal.yaml).
 
-**Rebalanced Solution**:
-```yaml
-box_regression: 3.0  # Still important, not dominant
-scene_description: 0.3  # Above activation threshold
-scene_graph: 0.3  # Above activation threshold
-```
-
-**Activation Threshold (0.3)**:
-- Below 0.3: Task effectively doesn't learn
-- Above 0.3: Task gets real gradient signal
-- GradNorm can fine-tune from here
+**Activation threshold (0.3)**: Weights below ~0.3 tend to give too little gradient; above 0.3 tasks get real signal; GradNorm can then fine-tune relative magnitudes.
 
 #### Data Loader: num_workers = 8
 
@@ -1695,444 +853,13 @@ scene_graph: 0.3  # Above activation threshold
 
 **Why This Matters**: Without balancing, detection head dominates, other heads fail. With balancing, all heads learn together.
 
-**How it works** - Complete Step-by-Step Algorithm:
-
-**Step 1: Compute Gradient Norms for Each Task**
-```python
-# For each task i:
-weighted_loss_i = task_weights[i] * loss_i
-gradients_i = torch.autograd.grad(
-    weighted_loss_i, 
-    shared_params,  # Backbone, FPN parameters
-    retain_graph=True,
-    create_graph=False
-)
-# Flatten all gradients into single vector
-grad_vector = torch.cat([g.flatten() for g in gradients_i])
-gradient_norm_i = torch.norm(grad_vector, p=2)  # L2 norm
-```
-
-**Step 2: Compute Relative Training Rates**
-```python
-# On first iteration, record initial losses
-if iteration == 0:
-    initial_losses = [loss.detach() for loss in task_losses]
-
-# Compute relative loss (current / initial)
-relative_loss_i = current_loss_i / (initial_loss_i + 1e-8)
-
-# Relative inverse training rate
-# Higher relative loss = slower learning = needs more gradient
-relative_inverse_rate_i = (relative_loss_i) ** alpha
-
-Where:
-- alpha = 1.5 (restoring force hyperparameter)
-- If task is learning slowly (high relative_loss), it gets higher gradient norm
-- Example: If task loss decreased by 50%, relative_loss = 0.5, rate = 0.5^1.5 = 0.35
-```
-
-**Step 3: Compute Target Gradient Norms**
-```python
-# Average gradient norm across all tasks
-avg_grad_norm = torch.stack(gradient_norms).mean()
-
-# Target gradient norm for each task
-target_grad_norm_i = avg_grad_norm * relative_inverse_rate_i
-
-# Intuition: Tasks with slower learning get higher target gradient norm
-# This ensures they receive more gradient signal
-```
-
-**Step 4: Compute GradNorm Loss**
-```python
-# L1 loss between actual and target gradient norms
-gradnorm_loss = torch.sum(
-    torch.abs(gradient_norms - target_grad_norms)
-)
-
-# This loss measures how far actual gradient norms are from targets
-# Minimizing this loss balances gradient norms across tasks
-```
-
-**Step 5: Update Task Weights**
-```python
-# Gradient of GradNorm loss w.r.t. task weights
-grad_w = torch.autograd.grad(
-    gradnorm_loss,
-    task_weights,
-    retain_graph=False
-)
-
-# Update weights (gradient descent)
-task_weights = task_weights - lr_gradnorm * grad_w
-
-# Clamp weights to prevent extreme values
-task_weights = torch.clamp(task_weights, min=0.1, max=10.0)
-
-Where:
-- lr_gradnorm = 0.025 (learning rate for weight updates)
-- Weights updated every N iterations (typically 100)
-- Clamping prevents weights from becoming too extreme
-```
-
-**Complete Algorithm Pseudocode**:
-```python
-def gradnorm_update(model, task_losses, task_weights, shared_params, iteration):
-    # Step 1: Compute gradient norms
-    gradient_norms = []
-    for i, loss in enumerate(task_losses):
-        weighted_loss = task_weights[i] * loss
-        grads = torch.autograd.grad(
-            weighted_loss, 
-            shared_params, 
-            retain_graph=True
-        )
-        grad_norm = torch.norm(torch.cat([g.flatten() for g in grads]))
-        gradient_norms.append(grad_norm)
-    
-    # Step 2: Initialize reference losses (first iteration only)
-    if iteration == 0:
-        initial_losses = [loss.detach() for loss in task_losses]
-        return task_weights  # No update on first iteration
-    
-    # Step 3: Compute relative losses
-    relative_losses = [
-        loss.detach() / (initial_loss + 1e-8) 
-        for loss, initial_loss in zip(task_losses, initial_losses)
-    ]
-    
-    # Step 4: Compute target gradient norms
-    avg_grad_norm = torch.stack(gradient_norms).mean()
-    relative_inverse_rates = [r ** 1.5 for r in relative_losses]
-    target_grad_norms = [
-        avg_grad_norm * r 
-        for r in relative_inverse_rates
-    ]
-    
-    # Step 5: Compute GradNorm loss
-    gradnorm_loss = torch.sum(
-        torch.abs(
-            torch.stack(gradient_norms) - 
-            torch.stack(target_grad_norms)
-        )
-    )
-    
-    # Step 6: Update task weights
-    grad_w = torch.autograd.grad(gradnorm_loss, task_weights)
-    task_weights = task_weights - 0.025 * grad_w
-    task_weights = torch.clamp(task_weights, min=0.1, max=10.0)
-    
-    return task_weights, gradnorm_loss.item()
-```
-
-**Why This Works**:
-- **Prevents Gradient Warfare**: Tasks with conflicting gradients are balanced automatically
-- **Adaptive Weighting**: Tasks that learn slowly get more gradient signal (higher weight)
-- **Automatic Tuning**: No manual loss weight tuning required
-- **Stable Training**: Prevents one task from dominating others
-- **Self-Correcting**: If a task starts learning too fast, its weight decreases automatically
-
-**Auto-Dampening for Extreme Gradients**:
-```python
-# If gradient norm is too extreme, dampen it
-if gradient_norm_i > 10 * avg_grad_norm:
-    # Extreme gradient detected
-    task_weights[i] = task_weights[i] * 0.5  # Reduce weight by 50%
-    logger.warning(f"Task {i} has extreme gradient, dampening weight")
-```
+Implementation: gradient norms per task, relative losses vs initial, target norms, GradNorm L1 loss, weight update with clamp (0.1–10.0). Extreme gradients are dampened (e.g. weight ×0.5 if norm > 10× average). See **ml/training/task_balancing.py**.
 
 ### Transfer Learning: T2 → T5
 
-**Strategy**: Leverage stable 210M-param spatial model to bootstrap 320M-param temporal system.
+**Strategy**: Copy T2 spatial weights (CNN, FPN, ViT, detection/distance/urgency heads) into T5; leave temporal encoder, cross-task/cross-modal attention, and new T5 heads randomly initialized. Parameter groups use different learning rates (e.g. cnn 0.2×, vit 0.5×, detection 0.6×, temporal 1.0×, new_heads 1.3× base_lr). **Freeze schedule**: Epochs 0–5 freeze backbone and detection, train only new T5 components; epochs 5–15 unfreeze detection/classification; later epochs unfreeze backbone progressively. See **ml/training/transfer_learning.py** (TierTransferManager, transfer_weights, validate_source_checkpoint) and **docs/transferlearning.md**.
 
-**Mathematical Formulation**:
-```
-# Weight transfer
-θ_T5_spatial = θ_T2_spatial  # Copy spatial weights
-θ_T5_temporal = RandomInit()  # Random init temporal weights
-
-# Parameter grouping for different learning rates
-θ_groups = {
-    'cnn': θ_T5_spatial[:cnn_params],
-    'vit': θ_T5_spatial[cnn_params:cnn_params+vit_params],
-    'detection': θ_T5_spatial[cnn_params+vit_params:detection_params],
-    'temporal': θ_T5_temporal,
-    'new_heads': θ_T5_new_heads
-}
-
-# Learning rates per group
-lr_groups = {
-    'cnn': base_lr * 0.2,
-    'vit': base_lr * 0.5,
-    'detection': base_lr * 0.6,
-    'temporal': base_lr * 1.0,
-    'new_heads': base_lr * 1.3
-}
-```
-
-**What to Transfer** - Detailed Mapping:
-
-** Transfer (Copy Weights)**:
-```python
-# 1. CNN Backbone (ResNet50)
-T5_model.cnn_stem.load_state_dict(T2_model.cnn_stem.state_dict())
-T5_model.cnn_layer1.load_state_dict(T2_model.cnn_layer1.state_dict())
-T5_model.cnn_layer2.load_state_dict(T2_model.cnn_layer2.state_dict())
-T5_model.cnn_layer3.load_state_dict(T2_model.cnn_layer3.state_dict())
-T5_model.cnn_layer4.load_state_dict(T2_model.cnn_layer4.state_dict())
-
-# 2. FPN
-T5_model.fpn.load_state_dict(T2_model.fpn.state_dict())
-
-# 3. ViT Blocks
-T5_model.vit.patch_embed.load_state_dict(T2_model.vit.patch_embed.state_dict())
-for i in range(len(T5_model.vit.blocks)):
-    T5_model.vit.blocks[i].load_state_dict(T2_model.vit.blocks[i].state_dict())
-
-# 4. Detection Heads
-T5_model.detection_head.load_state_dict(T2_model.detection_head.state_dict())
-T5_model.cls_head.load_state_dict(T2_model.cls_head.state_dict())
-T5_model.box_head.load_state_dict(T2_model.box_head.state_dict())
-T5_model.obj_head.load_state_dict(T2_model.obj_head.state_dict())
-
-# 5. Distance/Urgency Heads
-T5_model.distance_head.load_state_dict(T2_model.distance_head.state_dict())
-T5_model.urgency_head.load_state_dict(T2_model.urgency_head.state_dict())
-```
-
-** DO NOT Transfer (Random Init)**:
-```python
-# 1. Temporal Modules (new in T5)
-T5_model.temporal_encoder = ConvLSTM(...)  # Random init
-T5_model.timesformer = TimeSformer(...)     # Random init
-
-# 2. Cross-Task Attention (dimensional mismatch)
-# T2 has different attention dimensions than T5
-T5_model.cross_task_attention = CrossTaskAttention(...)  # Random init
-
-# 3. Cross-Modal Attention (new in T5)
-T5_model.cross_modal_attention = CrossModalAttention(...)  # Random init
-
-# 4. New T5 Heads
-T5_model.predictive_alert_head = PredictiveAlertHead(...)  # Random init
-```
-
-**Freeze Schedule** - Detailed Implementation:
-
-**Epochs 0-5: Freeze CNN + ViT, Train New T5 Heads Only**
-```python
-# Freeze spatial backbone
-for param in T5_model.cnn_stem.parameters():
-    param.requires_grad = False
-for param in T5_model.cnn_layer1.parameters():
-    param.requires_grad = False
-# ... (all CNN layers)
-for param in T5_model.fpn.parameters():
-    param.requires_grad = False
-for param in T5_model.vit.parameters():
-    param.requires_grad = False
-
-# Freeze detection heads (trained in T2)
-for param in T5_model.detection_head.parameters():
-    param.requires_grad = False
-for param in T5_model.cls_head.parameters():
-    param.requires_grad = False
-
-# Train only new T5 components
-for param in T5_model.temporal_encoder.parameters():
-    param.requires_grad = True
-for param in T5_model.predictive_alert_head.parameters():
-    param.requires_grad = True
-```
-
-**Epochs 5-15: Unfreeze Detection + Classification**
-```python
-# Unfreeze detection heads
-for param in T5_model.detection_head.parameters():
-    param.requires_grad = True
-for param in T5_model.cls_head.parameters():
-    param.requires_grad = True
-for param in T5_model.box_head.parameters():
-    param.requires_grad = True
-
-# Backbone still frozen
-# This allows detection heads to adapt to temporal features
-```
-
-**Epochs 15-30: Unfreeze Top 40% ViT**
-```python
-# Unfreeze top layers of ViT (layers 8-12 out of 12)
-num_vit_layers = len(T5_model.vit.blocks)
-top_layers_start = int(num_vit_layers * 0.6)  # Top 40%
-
-for i in range(top_layers_start, num_vit_layers):
-    for param in T5_model.vit.blocks[i].parameters():
-        param.requires_grad = True
-
-# Bottom layers (0-7) still frozen
-# This allows high-level ViT features to adapt while preserving low-level features
-```
-
-**Epochs 30-45: Unfreeze Full ViT**
-```python
-# Unfreeze all ViT layers
-for param in T5_model.vit.parameters():
-    param.requires_grad = True
-
-# CNN still frozen
-# ViT can now fully adapt to temporal modeling
-```
-
-**Epochs 45+: Unfreeze CNN**
-```python
-# Unfreeze entire model
-for param in T5_model.parameters():
-    param.requires_grad = True
-
-# Full end-to-end training
-# All components can now adapt together
-```
-
-**LR Multipliers** - Detailed Implementation:
-```python
-# Create parameter groups with different learning rates
-param_groups = [
-    {
-        'params': T5_model.cnn_stem.parameters(),
-        'lr': base_lr * 0.2,  # Very low LR (pretrained, stable)
-        'name': 'cnn_stem'
-    },
-    {
-        'params': T5_model.cnn_layer1.parameters(),
-        'lr': base_lr * 0.2,
-        'name': 'cnn_layer1'
-    },
-    # ... (all CNN layers)
-    {
-        'params': T5_model.vit.blocks.parameters(),
-        'lr': base_lr * 0.5,  # Moderate LR (pretrained, but needs adaptation)
-        'name': 'vit_blocks'
-    },
-    {
-        'params': T5_model.detection_head.parameters(),
-        'lr': base_lr * 0.6,  # Slightly higher (needs adaptation to temporal)
-        'name': 'detection_head'
-    },
-    {
-        'params': T5_model.temporal_encoder.parameters(),
-        'lr': base_lr * 1.0,  # Full LR (random init, needs full learning)
-        'name': 'temporal_encoder'
-    },
-    {
-        'params': T5_model.predictive_alert_head.parameters(),
-        'lr': base_lr * 1.3,  # Higher LR (random init, new task)
-        'name': 'predictive_alert_head'
-    }
-]
-
-optimizer = torch.optim.AdamW(param_groups, lr=base_lr)
-```
-
-**Loss Unlock Schedule** - Detailed Implementation:
-```python
-def get_loss_weights_for_epoch(epoch):
-    """Get loss weights based on epoch (phased unlock)."""
-    
-    # Phase 1: Detection only (epochs 0-10)
-    if epoch < 10:
-        return {
-            'detection': 1.0,
-            'classification': 1.2,
-            'box_regression': 3.0,
-            'distance': 0.7,
-            'urgency': 1.5,
-            # All other losses = 0.0 (disabled)
-            'motion': 0.0,
-            'therapy_state': 0.0,
-            'scene_graph': 0.0,
-            'ocr': 0.0,
-            'scene_description': 0.0,
-            'sound_events': 0.0,
-            'personalization': 0.0,
-            'predictive_alerts': 0.0,
-        }
-    
-    # Phase 2: + Navigation (epochs 10-25)
-    elif epoch < 25:
-        return {
-            'detection': 1.0,
-            'classification': 1.2,
-            'box_regression': 3.0,
-            'distance': 0.7,
-            'urgency': 1.5,
-            'motion': 0.6,  # Unlocked
-            'navigation_difficulty': 0.5,  # Unlocked
-            'roi_priority': 0.4,  # Unlocked
-            # Other losses still disabled
-            'therapy_state': 0.0,
-            'scene_graph': 0.0,
-            'ocr': 0.0,
-            'scene_description': 0.0,
-            'sound_events': 0.0,
-            'personalization': 0.0,
-            'predictive_alerts': 0.0,
-        }
-    
-    # Phase 3: + Therapy/Urgency (epochs 25-40)
-    elif epoch < 40:
-        return {
-            'detection': 1.0,
-            'classification': 1.2,
-            'box_regression': 3.0,
-            'distance': 0.7,
-            'urgency': 1.5,
-            'motion': 0.6,
-            'navigation_difficulty': 0.5,
-            'roi_priority': 0.4,
-            'therapy_state': 0.8,  # Unlocked
-            # Other losses still disabled
-            'scene_graph': 0.0,
-            'ocr': 0.0,
-            'scene_description': 0.0,
-            'sound_events': 0.0,
-            'personalization': 0.0,
-            'predictive_alerts': 0.0,
-        }
-    
-    # Phase 4: All losses (epochs 40+)
-    else:
-        return {
-            'detection': 1.0,
-            'classification': 1.2,
-            'box_regression': 3.0,
-            'distance': 0.7,
-            'urgency': 1.5,
-            'motion': 0.6,
-            'navigation_difficulty': 0.5,
-            'roi_priority': 0.4,
-            'therapy_state': 0.8,
-            'scene_graph': 0.3,  # Unlocked
-            'ocr': 0.4,  # Unlocked
-            'scene_description': 0.3,  # Unlocked
-            'sound_events': 0.4,  # Unlocked
-            'personalization': 0.3,  # Unlocked
-            'predictive_alerts': 0.6,  # Unlocked
-        }
-```
-
-**Why This Schedule Works**:
-- **Early Phase (0-10)**: Establishes strong detection baseline before adding complexity
-- **Mid Phase (10-25)**: Adds navigation tasks (motion, navigation difficulty) that depend on detection
-- **Late Phase (25-40)**: Adds therapy/urgency tasks that depend on both detection and navigation
-- **Final Phase (40+)**: Enables all tasks once representation is ready
-
-**Expected Behavior**:
-- **Epochs 0-5**: Metrics noisy, loss spikes (temporal heads learning)
-- **Epochs 5-15**: Detection stabilizes (detection heads adapting)
-- **Epochs 15-30**: Navigation loss drops (ViT adapting)
-- **Epochs 30-45**: Temporal heads wake up (full ViT + temporal)
-- **Epochs 45-70**: T5 surpasses T2 (full model training)
-- **Epochs 70+**: Diminishing returns (fine-tuning)
+Phased unfreeze and loss-unlock schedules are defined in transfer configs and training scripts (e.g. detection first, then navigation, then therapy/scene/OCR/sound/personalization/predictive). Parameter groups and loss weights per epoch: see **ml/training/transfer_learning.py** and tier configs in **ml/training/configs/** (e.g. t2_to_t5_transfer.yaml). Phase 2 (epochs 10-25) unlocks motion, navigation_difficulty, roi_priority; later phases unlock therapy_state, scene_graph, OCR, scene_description, sound_events, personalization, predictive_alerts.
 
 ---
 
@@ -2556,52 +1283,183 @@ Use the test suite and training benchmark: `pytest tests/` and `python -m ml.tra
 
 ### 2. Backbone Components
 
-- **ResNet50+FPN** (`ml/models/backbone/`): Stage A backbone (always used)
-- **Hybrid CNN-ViT** (`ml/models/backbone/hybrid_backbone.py`): Stage B enhancement (T2+)
-- **Vision Transformer** (`ml/models/backbone/vit_backbone.py`): ViT components
-- **Dynamic Convolution** (`ml/models/backbone/dynamic_conv.py`): Adaptive convolution
+- **ResNet50+FPN**: ResNet50 from `torchvision` (e.g. `ResNet50_Weights.IMAGENET1K_V2`); outputs C2–C5 at strides 4, 8, 16, 32. FPN in `maxsight_cnn.py` builds P2–P5 (256 channels each); lateral 1×1 convs and top-down bilinear upsample. Fused detection features: P3, P4, P5 resized to same spatial size (e.g. 14×14) and concatenated → 768 channels. Used for all Tier 1 heads and as base for Tier 2/3 when Stage B runs.
+- **Hybrid CNN-ViT** (`ml/models/backbone/hybrid_backbone.py`): Class `HybridCNNViTBackbone`. Args: img_size=224, patch_size=16, etc. CNN branch: ResNet-like; ViT branch: patch embed (196 patches, 768 dim), 12 transformer blocks, CLS token. `AdaptiveFeatureFusion(cnn_dim, vit_dim, fused_dim)` does gated fusion; `CrossModalAttention(dim, num_heads)` does CNN↔ViT cross-attention. Used when `tier_config.use_hybrid_backbone` is True.
+- **Vision Transformer** (`ml/models/backbone/vit_backbone.py`): Standalone ViT; used if pipeline is configured for ViT-only or extra ViT path.
+- **Dynamic Convolution** (`ml/models/backbone/dynamic_conv.py`): Condition-adaptive conv layers; condition (e.g. string or embedding) modulates kernel or channel weights. Used in Stage B when `tier_config.use_dynamic_conv` is True.
 
 ### 3. Head Components
 
-- **Therapy State Head** (`ml/models/heads/therapy_state_head.py`): Unified head for fatigue, depth, contrast
-- **Motion Head** (`ml/models/heads/motion_head.py`): Temporal motion tracking
-- **OCR Head** (`ml/models/heads/ocr_head.py`): Text detection and recognition
-- **Scene Description Head** (`ml/models/heads/scene_description_head.py`): Natural language generation
-- **Sound Event Head** (`ml/models/heads/sound_event_head.py`): Audio classification
-- **Personalization Head** (`ml/models/heads/personalization_head.py`): User-specific adaptations
-- **Predictive Alert Head** (`ml/models/heads/predictive_alert_head.py`): Hazard anticipation
-- **Uncertainty Head** (`ml/models/heads/uncertainty_head.py`): Global confidence aggregator
+Heads are `nn.Module` subclasses with `forward(...)`; built in `maxsight_cnn.py` when `enable_accessibility_features` and tier allow. Shared feature input is typically detection features `det_feats` `[B, 256, H, W]` (e.g. H=W=14) or fused context.
+
+- **Therapy State Head** (`ml/models/heads/therapy_state_head.py`): Class `TherapyStateHead`. Args: eye_dim=4, motion_dim=256, temporal_dim=128, in_channels_depth=256, in_channels_contrast=256, use_lstm=True, use_depth_multi_scale=True, use_edge_aware=True. **Forward**: `eye_features` [B,4], `motion_features` [B,D] or [B,D,H,W], `depth_features` [B,256,H,W], `contrast_features` [B,256,H,W], optional `fpn_features` dict. **Outputs**: fatigue_score, blink_rate, fixation_stability, shared_features, depth_map [B,H,W], uncertainty [B,H,W], zones [B,3], contrast_map [B,H,W], optional edge_map. Does not return `therapy_state` or `progress`; pipeline may read those keys as None.
+- **Fatigue Head** (`ml/models/heads/fatigue_head.py`): `FatigueHead(eye_dim=4, temporal_dim=128, hidden_dim=64, use_lstm=True)`. Forward: eye_features [B,4], motion_features [B,temporal_dim]. Outputs: fatigue_score, blink_rate, fixation_stability, shared_features.
+- **Contrast Head** (`ml/models/heads/contrast_head.py`): `ContrastMapHead(in_channels=256, motion_dim=256, use_edge_aware=True)`. Forward: feature map. Outputs: contrast_map, optional edge_map.
+- **Motion Head** (`ml/models/heads/motion_head.py`): Forward: feature map. Outputs: flow [B,2,H,W], magnitude [B,1,H,W]. Used for motion tasks and as motion_features for therapy and predictive heads.
+- **OCR Head** (`ml/models/heads/ocr_head.py`): Text detection/recognition from image or patches; output format per implementation.
+- **Scene Description Head** (`ml/models/heads/scene_description_head.py`): Consumes global or fused features; produces natural language (e.g. list of strings or token ids).
+- **Sound Event Head** (`ml/models/heads/sound_event_head.py`): Classifies audio features to sound event classes when audio is provided.
+- **Personalization Head** (`ml/models/heads/personalization_head.py`): User embedding or modulation; input/output shape per implementation.
+- **Predictive Alert Head** (`ml/models/heads/predictive_alert_head.py`): Input: scene features, motion features (e.g. magnitude). Outputs: hazard_probs, time_to_hazard, recommended_action.
+- **Uncertainty Head** (`ml/models/heads/uncertainty_head.py`): `GlobalConfidenceAggregator(scene_dim=256, hidden_dim=128)`. Consumes scene embedding; outputs uncertainty_score [B,1]. Used for Stage B skip decision and alert suppression.
+- **ROI Priority Head** (`ml/models/heads/roi_priority_head.py`): Input: scene_embedding [B,1,256], roi_features [B,H*W,256]. Output: roi_utility [B,H*W].
+- **Glare / Navigation difficulty / Findability**: Implemented in main model (small MLP or conv); glare 4 classes, navigation_difficulty scalar, findability per location. **Depth head** (`ml/models/heads/depth_head.py`): Standalone depth-from-features if needed in addition to therapy state head.
+- **Head registry** (`ml/models/heads/__init__.py`): `HEAD_REGISTRY` maps 'contrast', 'depth', 'fatigue', 'motion', 'roi_priority', 'uncertainty' to classes; `create_head(head_type, **kwargs)` factory. TherapyStateHead is not in registry; instantiated directly in maxsight_cnn.
 
 ### 4. Temporal Processing
 
-- **Temporal Encoder** (`ml/models/temporal/temporal_encoder.py`): ConvLSTM + TimeSformer integration
-- **ConvLSTM** (`ml/models/temporal/conv_lstm.py`): Multi-layer temporal processing
-- **TimeSformer** (`ml/models/temporal/temporal_encoder.py`): Long-range temporal dependencies
+- **Temporal Encoder** (`ml/models/temporal/temporal_encoder.py`): Class `TemporalEncoder`. Args: in_channels=256, num_frames=8, hidden_dim=256, use_conv_lstm=True, use_timesformer=True. Forward: `feature_frames` 5D [B,C,T,H,W] or [B,T,C,H,W]; optional ViT patch tokens. Outputs dict: motion features, consistency score, flicker score, etc. ConvLSTM output feeds motion head and therapy/predictive heads.
+- **ConvLSTM** (`ml/models/temporal/conv_lstm.py`): Input [B,T,C,H,W]; hidden/cell states; output hidden state sequence. Kernel size 3, 2 layers by default.
+- **TimeSformer**: Long-range temporal attention over patch sequence; used when use_timesformer=True (optional import from temporal_transformer).
 
 ### 5. Scene Graph & Retrieval
 
-- **Scene Graph Encoder** (`ml/models/scene_graph/scene_graph_encoder.py`): Batched spatial/semantic relations
-- **GNN Encoder** (`ml/models/scene_graph/scene_graph_encoder.py`): Graph neural network encoding
-- **Retrieval Heads** (`ml/models/retrieval_heads_production.py`): Multi-vector retrieval
-- **Async Retrieval** (`ml/retrieval/retrieval/async_retrieval.py`): Non-blocking retrieval worker
+- **Scene Graph Encoder** (`ml/models/scene_graph/scene_graph_encoder.py`): Class `SceneGraphEncoder`. Object embeddings [N, object_embed_dim], boxes [N,4]. Spatial relations (e.g. left, right, above, below, near, far) and semantic relations from trainable classifiers; `SceneRelation` dataclass (subject, predicate, object, confidence, src, dst). Batched; MPS-stable mode detaches edge_attr for compatibility. Often stubbed for export (non-traceable types).
+- **Retrieval**: Encoders in `ml/retrieval/encoders/` (patch, region, global, OCR, depth, audio); indexing in `ml/retrieval/indexing/` (neural_index_builder, index_manager); retrieval in `ml/retrieval/retrieval/` (stage1_ann, stage2_rerank, async_retrieval, concept_retrieval, knowledge_augment). Two-stage: ANN search then rerank; async so it never blocks inference.
+- **Retrieval Heads** (`ml/models/retrieval_heads_production.py`): Multi-vector retrieval heads for production pipeline.
 
 ### 6. Training Infrastructure
 
-- **Losses** (`ml/training/losses.py`): Per-head loss functions
-- **Metrics** (`ml/training/metrics.py`): Evaluation metrics (mAP, precision, recall)
-- **Task Balancing** (`ml/training/task_balancing.py`): GradNorm, PCGrad
-- **Export** (`ml/training/export.py`): CoreML, ExecuTorch, ONNX, JIT export
+- **Losses** (`ml/training/losses.py`): Per-head loss functions; combiner for total weighted loss. **Head losses** (`ml/training/head_losses.py`): Helpers for detection, therapy, etc. **Matching** (`ml/training/matching.py`): Hungarian or similar for box-to-prediction assignment.
+- **Metrics** (`ml/training/metrics.py`): mAP, precision, recall, F1; aggregation over batches. **Validation** (`ml/training/validation.py`): Validation step and metric computation. **Evaluation** (`ml/training/evaluation.py`): Lighting-aware or condition-specific evaluation reports.
+- **Task Balancing** (`ml/training/task_balancing.py`): GradNorm (and optionally PCGrad); task weights, gradient norms, update every N steps.
+- **Transfer** (`ml/training/transfer_learning.py`): `TierTransferManager(source_checkpoint_path, target_model, config)`. Methods: `validate_source_checkpoint()`, `transfer_weights(strict=False)`. Copies matching state dict keys; leaves new modules (e.g. temporal) randomly initialized.
+- **Stability** (`ml/training/stability_manager.py`): Gradient clipping, loss scaling. **Regularization** (`ml/training/regularization.py`): Weight decay, auxiliary losses. **Quantization** (`ml/training/quantization.py`): Quantization-aware training for export.
+- **Export** (`ml/training/export.py`): `export_to_jit`, `export_to_coreml`, `export_to_onnx`, `export_to_executorch` (or similar); wrapper strips non-tensor outputs; stubs global_encoder and can disable scene graph for tracing.
 
 ### 7. Data & Augmentation
 
-- **Dataset** (`ml/data/dataset.py`): MaxSightDataset (COCO + accessibility data)
-- **Advanced Augmentation** (`ml/data/advanced_augmentation.py`): Multi-modal augmentation
-- **Multi-Modal Augment** (`ml/data/multi_modal_augment.py`): Vision + audio augmentation
+- **Dataset** (`ml/data/dataset.py`): Class `MaxSightDataset`; __getitem__ returns dict with images, labels, boxes, num_objects, distance, urgency, optional audio, condition_mode. See Data Pipeline section above for COCO keys and normalization.
+- **Data pipeline** (`ml/data/data_pipeline.py`): `create_data_loaders()` (or equivalent), custom collate, class weight computation, optional auto-detect image dirs.
+- **Advanced Augmentation** (`ml/data/advanced_augmentation.py`): Geometric, photometric, cutout/mixup/mosaic; condition-specific; see Data Pipeline section.
+- **Multi-Modal Augment** (`ml/data/multi_modal_augment.py`): Vision + audio joint augmentation when both present.
 
 ### 8. Optimization & Evaluation
 
-- **Mobile Optimizations** (`ml/optimization/mobile_optimizations.py`): Pruning, quantization, edge-cloud hybrid
-- **Evaluation Metrics** (`ml/evaluation/metrics.py`): Multi-modal, accessibility-specific metrics
+- **Mobile Optimizations** (`ml/optimization/mobile_optimizations.py`): Pruning (e.g. structured by channel), quantization, edge-cloud split. **Evaluation Metrics** (`ml/evaluation/metrics.py`): Multi-modal and accessibility-specific metrics (e.g. urgency accuracy, distance accuracy).
+
+### Component reference: what each does and why it’s there
+
+Below, every major component is described in two ways: **what it does** and **why it’s there**. For full implementation detail (inputs, outputs, file paths), see **docs/SYSTEMS.md**.
+
+**MaxSightCNN** — **What:** Runs two-stage inference (Stage A: ResNet50+FPN + Tier 1 heads; Stage B: optional hybrid/temporal + Tier 2/3 heads) and returns 30+ outputs (detections, urgency, distance, therapy state, etc.). **Why:** Single entry point that guarantees safety-first (Stage A always runs) and allows rich context when resources allow (Stage B).
+
+**ResNet50+FPN (Stage A)** — **What:** Extracts multi-scale feature maps (C2–C5, then P2–P5) from RGB input. **Why:** Fast, well-understood backbone for low-latency safety-critical predictions; FPN lets the model see objects at many scales.
+
+**Hybrid CNN–ViT (Stage B)** — **What:** Combines a CNN branch (spatial features) and a ViT branch (patch tokens + transformer) with learnable fusion and optional CNN↔ViT cross-attention. **Why:** CNN gives local detail; ViT gives global context; together they support better scene understanding and Tier 2/3 heads without touching Stage A.
+
+**Dynamic convolution** — **What:** Modulates conv kernels or channels by vision condition (e.g. glaucoma, AMD). **Why:** Lets the same model adapt preprocessing/features to the user’s condition for better accessibility.
+
+**CBAM / SE (T1)** — **What:** Channel and spatial attention (CBAM) or channel-only (SE) on FPN feature maps. **Why:** Lightweight way to emphasize informative channels and locations without changing the safety path.
+
+**Cross-modal attention (vision/audio/haptic)** — **What:** Projects vision, audio, and optional haptic to a common dimension and applies multi-head attention between modalities. **Why:** So that sound (and haptic) can disambiguate or focus visual predictions (e.g. “sound from the left” drives visual attention).
+
+**Cross-task attention (T3)** — **What:** Lets detection, scene, therapy, and other tasks share context via attention over task features. **Why:** Improves consistency and reasoning across tasks (e.g. scene graph and detection agree on relations).
+
+**Detection heads (objectness, classification, box, distance, urgency)** — **What:** Anchor-free (FCOS-style) object detection plus per-object or per-scene distance zones and urgency levels. **Why:** Core safety output: what is there, where, how far, and how urgent so the user can navigate and prioritize.
+
+**Contrast head** — **What:** Produces a contrast map (and optional edge map) from backbone features, with optional motion conditioning and edge-aware modulation. **Why:** Supports contrast-sensitivity therapy and accessibility (e.g. highlighting low-contrast obstacles).
+
+**Motion head** — **What:** Predicts optical flow (and magnitude) from feature maps. **Why:** Feeds motion tracking therapy, predictive alerts, and optional motion conditioning in therapy/depth/contrast heads.
+
+**Fatigue head** — **What:** From eye + motion features (1D), predicts fatigue_score, blink_rate, fixation_stability via shared MLP and optional LSTM. **Why:** Informs pacing and rest (e.g. TaskGenerator suggests FATIGUE_REST when fatigue is high).
+
+**Therapy state head** — **What:** Single head with three branches: (1) fatigue/gaze (same as fatigue head), (2) depth (depth map, uncertainty, near/medium/far zones), (3) contrast (contrast map, optional edge map). **Why:** One place for all therapy-related signals so session/task logic can use fatigue, depth, and contrast together.
+
+**ROI priority head** — **What:** From scene embedding and region features, outputs per-region importance (roi_utility). **Why:** Lets the system emphasize the most relevant regions for the user and therapy focus.
+
+**Predictive alert head** — **What:** From scene and motion features, predicts hazard_probs, time_to_hazard, recommended_action. **Why:** Proactive safety (e.g. “vehicle approaching”) instead of only describing the current frame.
+
+**Uncertainty head** — **What:** Aggregates confidence across outputs into a single uncertainty_score. **Why:** Used to skip or dampen Stage B and to suppress low-confidence alerts so the user isn’t overloaded or misled.
+
+**Scene description / OCR / Scene graph** — **What:** Scene description: natural language summary of the scene. OCR: text in the image. Scene graph: spatial and semantic relations between objects. **Why:** Rich context for narration, wayfinding, and relational reasoning; Tier 3 so they never block safety.
+
+**Sound event head** — **What:** Classifies sound events from audio features. **Why:** When audio is available, supports “what you hear” in addition to “what you see” for multimodal accessibility.
+
+**Personalization head** — **What:** Produces or modulates features by user (e.g. embedding or light weights). **Why:** Lets the system adapt to individual preferences and needs over time.
+
+**Glare / Navigation difficulty / Findability** — **What:** Glare: 4-class glare level. Navigation difficulty: scene complexity scalar. Findability: per-location score for how findable objects are. **Why:** Accessibility metrics to adapt feedback (e.g. simplify when navigation is hard, emphasize findability for low vision).
+
+**Temporal encoder (ConvLSTM + TimeSformer)** — **What:** Consumes sequences of Stage A features; ConvLSTM for motion, TimeSformer for long-range temporal attention; outputs motion and consistency/flicker signals. **Why:** T5 needs time-aware reasoning for motion tasks, predictive alerts, and smoother therapy state.
+
+**Multimodal fusion (EnhancedAudioEncoder, MultimodalFusion, SpatialSoundMapping)** — **What:** Encodes audio (and optionally stereo), fuses vision/audio/depth/haptic via transformer over modality tokens, maps sound to spatial attention on the image. **Why:** Single representation that combines seeing and hearing so downstream heads can use both.
+
+**Scene graph encoder** — **What:** Builds spatial and semantic relations (e.g. left_of, contains) from boxes and object embeddings; batched GNN-style encoding. **Why:** Enables “A is left of B” style reasoning and scene graph outputs; T3, often stubbed for export.
+
+**Retrieval (encoders, indexing, two-stage ANN + rerank)** — **What:** Encodes patches, regions, global, OCR, depth, audio; builds neural indexes; retrieves similar scenes then reranks. **Why:** Advisory context (e.g. “similar to a kitchen”) without ever driving Tier 1/2 safety decisions; async so it never blocks inference.
+
+**Therapy system (SessionManager, TaskGenerator, TherapyTaskIntegrator)** — **What:** SessionManager tracks sessions and logs task attempts; TaskGenerator picks next task (e.g. contrast_micro, fatigue_rest) from fatigue/uncertainty and history; TherapyTaskIntegrator builds concrete tasks from scene/detections. **Why:** Turns model outputs (fatigue, contrast, depth, motion) into structured therapy sessions and adaptive task flow.
+
+**Output scheduler** — **What:** Schedules when and how to present information on audio, haptic, and visual channels; rate-limits and respects uncertainty. **Why:** Avoids overload and ensures critical alerts get through; supports user preferences (channel, verbosity).
+
+**Preprocessing** — **What:** Condition-specific normalization, resize, and augmentations (e.g. blur for cataracts, central mask for glaucoma). **Why:** Training and inference should match the user’s vision condition so the model and therapy are relevant.
+
+**Data pipeline (MaxSightDataset, create_data_loaders, collate)** — **What:** Loads COCO-format annotations and images, applies preprocessing and augmentation, batches with variable-length handling. **Why:** Single way to feed training with the right shapes and condition mode.
+
+**Training (train_loop, losses, task_balancing, transfer_learning)** — **What:** Training loop with per-head losses, GradNorm (or similar) for task balancing, and TierTransferManager for T2→T5 transfer. **Why:** Multi-task learning without one head dominating; reuse of T2 weights for faster and stabler T5 training.
+
+**Export (JIT, CoreML, ONNX, ExecuTorch)** — **What:** Traces or converts the model to mobile- and cross-platform formats; stubs non-traceable parts (e.g. CLIP, scene graph) when needed. **Why:** Enables deployment on iOS and other targets without running full Python.
+
+**Simulator (tools/simulation)** — **What:** Web-based simulator with inference engine, overlay, scheduler, voice/haptic hooks, and configurable checkpoint. **Why:** End-to-end testing and demos without the iOS app.
+
+### Concrete reference: outputs, configs, env, CLI
+
+**Model output dict (representative keys)**  
+Exact keys depend on tier and `enable_accessibility_features`. Common keys: `obj_scores` [B, H*W], `cls_logits` [B, H*W, num_classes], `box_preds` [B, H*W, 4], `detections` (post-processed list or tensor), `urgency`, `distance`, `contrast_map` [B,1,H,W] or [B,H,W], `edge_map`, `motion_flow` [B,2,H,W], `motion_magnitude` [B,1,H,W], `fatigue_score` [B,1], `blink_rate` [B,1], `fixation_stability` [B,1], `depth_map` [B,H,W], `uncertainty` [B,H,W], `zones` [B,3], `therapy_state`, `therapy_progress` (often None), `roi_utility` [B,H*W], `navigation_difficulty` [B,1], `glare_risk_level` [B], `glare_probs` [B,4], `object_findability` [B,H*W], `uncertainty_score` [B,1], `hazard_probs`, `time_to_hazard`, `recommended_action`, `shared_scene_embedding` [B,256], plus scene graph, OCR, scene description when enabled.
+
+**TierConfig** (`ml/models/maxsight_cnn.py`)  
+Fields: `tier`, `enabled`, `use_se_attention`, `use_cbam_attention`, `use_hybrid_backbone`, `use_dynamic_conv`, `use_cross_task_attention`, `use_cross_modal_attention`, `use_temporal_modeling`, `use_retrieval`, `max_latency_ms` (e.g. 300), `min_confidence` (e.g. 0.5). `TierConfig.for_tier(tier)` returns config; current code is T5-only.
+
+**Training config YAML** (`ml/training/configs/*.yaml`)  
+Typical keys: `model` (num_classes, tier, condition_mode), `data` (data_dir, train_annotation, val_annotation, image_dir, batch_size, num_workers), `training` (epochs, lr, weight_decay, loss_weights dict, gradnorm_update_interval, warmup_epochs, min_lr, accumulate_grad_batches, mixed_precision), optional `transfer` (freeze schedule, loss unlock by epoch). Loss weight keys: e.g. detection, classification, box_regression, distance, urgency, motion, therapy_state, scene_description, scene_graph, ocr, etc.
+
+**Environment variables**  
+`MAXSIGHT_CHECKPOINT_PATH` — used by simulator or scripts for checkpoint path. `model_checkpoint_path` in `tools/simulation/config.py` overrides for simulator. Data paths often passed via CLI rather than env.
+
+**Script CLI (main entry points)**  
+- **scripts/train_maxsight.py**: `--data-dir`, `--train-annotation`, `--val-annotation`, `--image-dir`, `--epochs`, `--batch-size`, `--device` (cuda/cpu/mps), `--use-gradnorm`, `--resume-from`, optional `--hyperparameters` (path to JSON from AutoMLType).  
+- **scripts/smoke_train.py**: `--tier` (e.g. T0_BASELINE_CNN, T5_TEMPORAL), `--epochs`, `--batches`, `--force-cpu`.  
+- **scripts/gather_training_data.py**: Creates train/val/test JSONs in e.g. `datasets/cleaned_splits/`; uses `datasets/coco_raw/`; `--skip-download`, `--skip-extract` if COCO already present.  
+- **python -m ml.training.export**: `--checkpoint`, `--format` (jit/coreml/onnx/executorch), `--output`.  
+- **scripts/export_for_xcode.py**: Checkpoint path and output bundle path.  
+- **scripts/deploy_top7.py**, **scripts/export_top7_to_xcode.py**: Top-7 models per condition; checkpoints under `checkpoints_<condition>/best_model.pt`.
+
+**Therapy (application layer)**  
+- **SessionManager** (`ml/therapy/session_manager.py`): `start_session(session_config=None)` → session_id; `log_task_attempt(task_type, task_config, result)` (result has success, reaction_time, etc.); `end_session()` → report dict (skill_curve, summary); `save_session(filepath)`.  
+- **TaskGenerator** (`ml/therapy/task_generator.py`): `generate_task(uncertainty, fatigue_score, recent_performance)` → dict with task_type, difficulty, duration, highlight_strength, target_speed; if fatigue_score &gt; 0.7 returns task_type FATIGUE_REST. TaskType enum: CONTRAST_MICRO, MOTION_TRACKING, DEPTH_SHIFT, GAZE_STABILIZATION, ROI_FINDABILITY, FATIGUE_REST. `update_performance(task_result)` appends to history.  
+- **TherapyTaskIntegrator** (`ml/therapy/therapy_integration.py`): Creates task configs from scene description and detections; TherapyTaskType: ATTENTION_TRAINING, CONTRAST_RECOGNITION, EDGE_DETECTION, SPATIAL_AWARENESS, WARNING_RECOGNITION. Methods: `create_attention_task`, `create_contrast_task`, `create_edge_task`, `create_spatial_task`, `create_warning_recognition_task`, `generate_task_from_scene`.
+
+**Output scheduler** (`ml/utils/output_scheduler.py`)  
+`OutputChannel`: AUDIO, HAPTIC, VISUAL, HYBRID. `AlertFrequency`: LOW, MEDIUM, HIGH. `OutputConfig`: preferred_channel, alert_frequency, audio_volume, haptic_intensity, uncertainty_threshold, verbosity. `CrossModalScheduler(config)` schedules outputs; rate-limiting (e.g. min 300 ms between outputs); uses sound processing if available.
+
+**Preprocessing** (`ml/utils/preprocessing.py`)  
+ImagePreprocessor: normalization (ImageNet), resize (e.g. 224×224), condition-specific transforms. Condition names match dataset/training (e.g. cataracts, glaucoma, amd, retinitis_pigmentosa). RGB↔LAB and other color helpers; cached matrices for performance.
+
+**Where each module lives (file and class/function)**  
+- **MaxSightCNN**: `ml/models/maxsight_cnn.py` class `MaxSightCNN`.  
+- **ResNet50 + FPN**: Same file; backbone from torchvision, FPN built in constructor.  
+- **Hybrid backbone**: `ml/models/backbone/hybrid_backbone.py` `HybridCNNViTBackbone`, `AdaptiveFeatureFusion`, `CrossModalAttention` (CNN–ViT).  
+- **Dynamic conv**: `ml/models/backbone/dynamic_conv.py`.  
+- **CBAM/SE**: `ml/models/attention/attention.py` `CBAM`, `SEBlock`, `ChannelAttention`, `SpatialAttention`.  
+- **Cross-modal (vision/audio)**: `ml/models/attention/attention.py` `CrossModalAttention` (vision_dim, audio_dim, haptic_dim).  
+- **Cross-task attention**: `ml/models/attention/cross_task_attention.py`.  
+- **Therapy state head**: `ml/models/heads/therapy_state_head.py` `TherapyStateHead`.  
+- **Fatigue head**: `ml/models/heads/fatigue_head.py` `FatigueHead`.  
+- **Contrast head**: `ml/models/heads/contrast_head.py` `ContrastMapHead`.  
+- **Motion head**: `ml/models/heads/motion_head.py` `MotionHead`.  
+- **Temporal encoder**: `ml/models/temporal/temporal_encoder.py` `TemporalEncoder`; `ml/models/temporal/conv_lstm.py` `ConvLSTM`.  
+- **Multimodal fusion**: `ml/models/fusion/multimodal_fusion.py` `EnhancedAudioEncoder`, `MultimodalFusion`, `SpatialSoundMapping`, `HapticEmbedding`, `HapticVisualAttention`.  
+- **Scene graph**: `ml/models/scene_graph/scene_graph_encoder.py` `SceneGraphEncoder`, `SceneRelation`.  
+- **Retrieval**: `ml/retrieval/encoders/`, `ml/retrieval/indexing/`, `ml/retrieval/retrieval/` (stage1_ann, stage2_rerank, async_retrieval).  
+- **SessionManager / TaskGenerator / TherapyTaskIntegrator**: `ml/therapy/session_manager.py`, `ml/therapy/task_generator.py`, `ml/therapy/therapy_integration.py`.  
+- **Output scheduler**: `ml/utils/output_scheduler.py` `CrossModalScheduler`, `OutputConfig`, `ScheduledOutput`.  
+- **Dataset**: `ml/data/dataset.py` `MaxSightDataset`.  
+- **Data loaders**: `ml/data/data_pipeline.py` `create_data_loaders`, collate_fn.  
+- **Losses**: `ml/training/losses.py`, `ml/training/head_losses.py`; **matching**: `ml/training/matching.py`.  
+- **Task balancing**: `ml/training/task_balancing.py` (GradNorm).  
+- **Transfer**: `ml/training/transfer_learning.py` `TierTransferManager`.  
+- **Export**: `ml/training/export.py` `export_to_jit`, `export_to_coreml`, etc.  
+- **TierConfig / TierManager**: `ml/models/maxsight_cnn.py` (bottom) `TierConfig`, `TierManager`, `CapabilityTier`.
 
 ---
 
@@ -2665,6 +1523,32 @@ python -m ml.training.benchmark
 
 ## Deployment & Export
 
+### Product: a day in the life (MaxSight glasses)
+
+**Big picture.** (1) You convert PyTorch model checkpoints to CoreML (e.g. with the Colab script or `ml.training.export`) and add the `.mlpackage` files to the MaxSight app that runs on smart glasses. (2) A visually impaired person wears the glasses; the camera sees what they're looking at, the app runs the right CoreML model on that video, and the result becomes spoken descriptions and/or haptic alerts. (3) So: script → .mlpackage → glasses app → wearer gets real-time environmental awareness (objects, text, hazards) and more independence. The details below are the full day-in-the-life and benefits.
+
+**Who.** People with low vision or blindness (e.g. AMD, glaucoma, diabetic retinopathy, CVI). The glasses are tuned to their condition so descriptions and alerts match how they see (or don't see) the world.
+
+**How they use it.** They wear the glasses; the camera sees from their perspective. No phone to hold, no pointing — they look where they want information. They use **voice** ("What's in front of me?", "Read that," "Describe the room") or a **tap on the temple** for on-demand read/describe so they don't have to speak in public. **Modes:** continuous (quiet scene updates + hazard alerts) or on-demand (ask when they need detail). They can choose voice only, **haptics** only (e.g. temple buzz for caution/danger), or both.
+
+**What it does.** Names objects and positions ("door ahead left," "stairs in 2 meters," "person on your right"); **reads text** (signs, menus, labels, screens) when they look at it; **alerts for safety** (curb, vehicle, obstacle, drop-off) with urgency (safe / caution / warning / danger) via voice or haptic; **scene summary** ("kitchen, sink ahead, table left") in unfamiliar places; **findability** cues so they can locate the right pill bottle or product. All from first-person view — they just look.
+
+**Morning.** In the bathroom they ask "What's on the counter?" or look at the shelf; the glasses list items and positions. **Benefit:** they take the right medication without asking a family member or risking a mix-up. In the kitchen they get "stove clear," "cup to your right," and a buzz for obstacles. **Impact:** they make breakfast and move around without bumping or burning — more independence at the start of the day.
+
+**Leaving home.** "Path clear," "stairs in 2 meters." At the curb: "safe to cross" or "vehicle approaching — wait" (voice or haptic). **Benefit:** they cross the street without a sighted guide or guessing by sound alone. On the sidewalk: "person on your left," "obstacle ahead" + buzz. **Impact:** fewer collisions, less anxiety in crowds, ability to walk familiar and new routes on their own.
+
+**Transit and errands.** They look at the bus sign; the glasses read line, destination, and time. **Benefit:** they choose the right bus without asking a stranger. In the store they get aisle and product names when they look at labels. **Impact:** they shop for themselves without depending on staff or a companion. At the till they can have the total or keypad read — pay correctly and privately.
+
+**Work and social.** In a meeting they ask "What's on the whiteboard?" or get a short summary of who's in the room. **Benefit:** they participate on equal footing instead of missing visual cues. At lunch they look at the menu or their plate and hear it read. **Impact:** more confidence in social and work settings without extra burden on colleagues.
+
+**Evening.** At home they find the remote, the right pill bottle, the light switch; "sofa ahead," "coffee table in front of you." **Benefit:** they wind down and prepare for bed without groping or calling for help. **Impact:** less reliance on family or carers for everyday tasks; dignity and autonomy at home.
+
+**Benefit & impact (summary).** **Independence:** cross streets, shop, travel, and work with less or no need for a sighted guide. **Safety:** fewer falls and collisions thanks to obstacle and curb alerts. **Privacy:** text and environment read to them alone; processing on-device, no cloud. **Confidence:** go out, try new routes, join in at work and socially. **Dignity:** do daily tasks (medication, cooking, finding things) without asking for help every time.
+
+**Under the hood.** One CoreML model per vision condition; condition set once (or per profile). On-device only — works offline, privacy-preserving.
+
+**Pipeline for you (developer):** Train condition-specific models, convert to CoreML (e.g. Colab script or `ml.training.export`), add `.mlpackage` files to the glasses app (e.g. Xcode). The app selects the right model at runtime and runs it on each frame.
+
 ### Quick Links
 
 - **Export for Xcode**: [EXPORT_FOR_XCODE.md](EXPORT_FOR_XCODE.md) - Complete export guide
@@ -2714,463 +1598,43 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 
 ### Documentation (docs/)
 
-- **[architecture.md](docs/architecture.md)**: Model and system architecture
-- **[caching.md](docs/caching.md)**: Caching (Redis, usage)
-- **[downloads.md](docs/downloads.md)**: Dataset and asset downloads
-- **[status.md](docs/status.md)**: Project status and health
-- **[therapy_system.md](docs/therapy_system.md)**: Therapy sessions and tasks
-- **[training_architecture.md](docs/training_architecture.md)**: Training loop, losses, config
+- **[SYSTEMS.md](docs/SYSTEMS.md)**: All systems in one detailed reference (tiers, backbone, heads, fusion, temporal, therapy, retrieval, preprocessing, training, export, scene graph)
+- **[architecture.md](docs/architecture.md)**: Model and system architecture overview
+- **[therapy_system.md](docs/therapy_system.md)**: Therapy sessions, task generator, integration
+- **[training_architecture.md](docs/training_architecture.md)**: Training loop, losses, balancing, config
 - **[training-data-loading.md](docs/training-data-loading.md)**: Data pipeline and dataset
 - **[transferlearning.md](docs/transferlearning.md)**: Tier transfer and checkpoint loading
+- **[status.md](docs/status.md)**: Project status, health, device policy, limitations
+- **[downloads.md](docs/downloads.md)**: Dataset and asset downloads
+- **[caching.md](docs/caching.md)**: Caching (Redis, usage)
+- **[productization/](docs/productization/README.md)**: Productization docs (scope, safety gates, declutter, runtime boundaries, pilot protocol). **[PRODUCTION_RUNBOOK.md](docs/productization/PRODUCTION_RUNBOOK.md)** for production and real-world runbook; **`scripts/product/run.py`** for canonical train/validate/export/package/smoke.
+- **Export / Xcode**: EXPORT_MODELS_TO_XCODE.md, GET_MODELS_AND_IMPORT_XCODE.md, IMPORT_7_MODELS_TO_XCODE.md, QUICK_GET_7_MODELS.md, COLAB_EXPORT_7_MODELS.txt, xcode_import_models.md, IOS_APP_MODEL_INTEGRATION.swift
 
 **Warnings & Critical Cautions** (below): Production deployment warnings and fixes (read before deploying).
 
 ### Advanced Topics & Implementation Details
 
-#### Complete Code Examples
-
-**Example 1: Training a Model from Scratch**
-```python
-from ml.models.maxsight_cnn import MaxSightCNN
-from ml.training.train_loop import TrainingLoop
-from ml.data.data_pipeline import create_data_loaders
-from ml.training.configs import load_config
-import torch
-
-# Load configuration
-config = load_config('ml/training/configs/t2_hybrid_vit.yaml')
-
-# Create model
-model = MaxSightCNN(
-    num_classes=config['model']['num_classes'],
-    tier=config['model']['tier'],
-    condition_mode=config['model'].get('condition_mode', None)
-)
-
-# Create data loaders
-train_loader, val_loader = create_data_loaders(
-    data_dir=config['data']['data_dir'],
-    batch_size=config['data']['batch_size'],
-    num_workers=config['data']['num_workers']
-)
-
-# Create training loop
-trainer = TrainingLoop(
-    model=model,
-    train_loader=train_loader,
-    val_loader=val_loader,
-    config=config
-)
-
-# Train
-trainer.train(num_epochs=config['training']['num_epochs'])
-```
-
-**Example 2: Transfer Learning (T2 → T5)**
-```python
-from ml.training.transfer_learning import transfer_weights, create_param_groups
-from ml.models.maxsight_cnn import MaxSightCNN
-import torch
-
-# Load T2 checkpoint
-t2_checkpoint = torch.load('checkpoints/t2_best.pt')
-t2_model = MaxSightCNN(tier='T2_HYBRID_VIT')
-t2_model.load_state_dict(t2_checkpoint['model_state_dict'])
-
-# Create T5 model
-t5_model = MaxSightCNN(tier='T5_TEMPORAL')
-
-# Transfer weights
-transfer_weights(t2_model, t5_model)
-
-# Create parameter groups with different learning rates
-param_groups = create_param_groups(
-    t5_model,
-    base_lr=7.5e-5,
-    lr_multipliers={
-        'cnn': 0.2,
-        'vit': 0.5,
-        'detection': 0.6,
-        'temporal': 1.0,
-        'new_heads': 1.3
-    }
-)
-
-# Create optimizer
-optimizer = torch.optim.AdamW(param_groups, lr=7.5e-5)
-
-# Training loop with freeze schedule
-for epoch in range(150):
-    # Update freeze schedule
-    freeze_schedule = get_freeze_schedule(epoch)
-    apply_freeze_schedule(t5_model, freeze_schedule)
-    
-    # Get loss weights for this epoch
-    loss_weights = get_loss_weights_for_epoch(epoch)
-    
-    # Train epoch
-    train_epoch(t5_model, train_loader, optimizer, loss_weights)
-```
-
-**Example 3: Inference with Two-Stage Pipeline**
-```python
-from ml.models.maxsight_cnn import MaxSightCNN
-import torch
-import time
-
-# Load model
-model = MaxSightCNN(tier='T5_TEMPORAL')
-model.load_state_dict(torch.load('checkpoints/t5_best.pt'))
-model.eval()
-
-# Prepare input
-image = load_image('test_image.jpg')  # [3, 224, 224]
-image = preprocess(image)  # Normalize, resize
-image = image.unsqueeze(0)  # [1, 3, 224, 224]
-
-# Optional: Audio features
-audio_features = extract_mfcc('test_audio.wav')  # [1, 128]
-
-# Inference
-with torch.no_grad():
-    start_time = time.perf_counter()
-    
-    # Forward pass (two-stage)
-    outputs = model(
-        images=image,
-        audio_features=audio_features,
-        use_temporal=False  # Single frame
-    )
-    
-    latency = (time.perf_counter() - start_time) * 1000  # ms
-    
-    # Check if Stage B was executed
-    if 'stage_b_executed' in outputs:
-        print(f"Stage B executed: {outputs['stage_b_executed']}")
-    
-    # Access predictions
-    detections = outputs['detections']  # List of detected objects
-    urgency = outputs['urgency']  # [1, 4] urgency levels
-    distance_zones = outputs['distance_zones']  # [1, H*W, 3]
-    
-    print(f"Latency: {latency:.2f}ms")
-    print(f"Detections: {len(detections)} objects")
-    print(f"Urgency: {urgency.argmax(dim=1).item()}")
-```
-
-**Example 4: Model Export to CoreML**
-```python
-from ml.training.export import export_to_coreml
-import torch
-
-# Load model
-model = MaxSightCNN(tier='T2_HYBRID_VIT')
-model.load_state_dict(torch.load('checkpoints/t2_best.pt'))
-model.eval()
-
-# Export to CoreML
-export_to_coreml(
-    model=model,
-    output_path='exports/maxsight_t2.mlmodel',
-    input_shape=(1, 3, 224, 224),
-    quantization='int8'  # INT8 quantization for mobile
-)
-
-# Verify export
-import coremltools as ct
-mlmodel = ct.models.MLModel('exports/maxsight_t2.mlmodel')
-print(f"Model size: {mlmodel.get_spec().ByteSize() / 1024 / 1024:.2f} MB")
-```
+**Training from scratch**: Use `ml.models.maxsight_cnn.MaxSightCNN`, `ml.training.train_loop`, `ml.data.data_pipeline.create_data_loaders`, and tier configs under `ml/training/configs/`. **Transfer learning (T2→T5)**: `ml.training.transfer_learning.TierTransferManager`, `transfer_weights`, `validate_source_checkpoint`; parameter groups and freeze schedules in configs. **Inference**: Model forward accepts `images`, optional `audio_features`, `use_temporal`; outputs dict with detections, urgency, distance_zones, etc. **Export**: `ml.training.export` (export_to_coreml, export_to_jit, export_to_onnx, export_to_executorch). See **docs/SYSTEMS.md** and **scripts/train_maxsight.py --help**, **python -m ml.training.export --help**.
 
 #### Troubleshooting Guide
 
-**Problem 1: Out of Memory (OOM) During Training**
+**OOM**: Reduce batch_size, increase gradient accumulation, use gradient checkpointing or mixed precision, or use a lower tier. **Loss not decreasing**: Check learning rate (e.g. lr_finder), GradNorm metrics, loss weights (e.g. ≥0.3 for semantic tasks), data/annotations, and frozen parameters. **Stage B always skipped**: Profile Stage A latency; reduce input size or FPN levels or use INT8; raise uncertainty/latency thresholds in config. **GradNorm issues**: Verify shared params, retain_graph in task_balancing, gradnorm_update_interval, and that task losses are finite. **Export failures**: CoreML may need script instead of trace; ONNX needs input/output names and dynamic_axes; use export_to_executorch for .pte. See **docs/status.md** and **ml/training/export.py**.
 
-**Symptoms**:
-```
-RuntimeError: CUDA out of memory. Tried to allocate X GB
-```
+**Optimization**: Quantization (INT8 via ml.training.quantization), pruning (ml.optimization.mobile_optimizations), knowledge distillation (ml.training.self_supervised_pretrain). **Custom heads/losses/augmentation**: Extend base classes in ml.models.heads, ml.training.losses, ml.data.advanced_augmentation; see HEAD_REGISTRY and existing heads for patterns.
 
-**Solutions**:
-```python
-# 1. Reduce batch size
-config['data']['batch_size'] = 4  # Instead of 8
+### Repository Index
 
-# 2. Increase gradient accumulation (maintain effective batch size)
-config['training']['accumulate_grad_batches'] = 8  # Effective batch = 4 * 8 = 32
+**Scripts** (`scripts/`): train_maxsight.py (main training), smoke_train.py (short run), gather_training_data.py (splits), deploy_top7.py, export_top7_to_xcode.py, export_for_xcode.py, export_one_model.py, validate_data_pipeline.py, find_trained_checkpoints.py, AutoMLType.py (Optuna), run_production_training.sh, test_therapy_effectiveness.py, test_systems_comprehensive.py, sanity_check_inference.py, run_inference_on_inference_datasets.py, run_checkpoint_inference.py, download_inference_datasets.py, download_open_images_*.py, reorganize_open_images.py, patch_missing_images.py, normalize_comments.py, clean_comments.py, monitor_download.py, improve_map_all_models.py, get_top7_by_map.py, compare_condition_models.py, check_export_status.py, check_and_train_colab.py, create_minimal_checkpoint.py, ensure_checkpoint_layout.py, diagnose_training_speed.py, cleanup_cloud_checkpoints.py, list_saved_models.py, inference_and_deploy_top7.py, package_for_colab.sh, run_image_patcher.sh, run_mlx_style_training.sh, setup_rclone_upload.sh, run_inference_and_monitor.sh, stop_mps_backup_start_mlx.sh, resume_mlx_from_first3_mps.sh; notebooks: colab_export_top7_coreml.ipynb, train_t5_fast_colab.py.
 
-# 3. Use gradient checkpointing
-model.use_gradient_checkpointing = True
+**Docs** (`docs/`): architecture.md (model and system architecture), SYSTEMS.md (all systems in one reference), therapy_system.md (sessions, tasks, integration), training_architecture.md (loop, losses, config), training-data-loading.md (dataset, pipeline), transferlearning.md (tier transfer), status.md (health, limitations, device policy), downloads.md (datasets, assets), caching.md (Redis, usage), COMMENT_STYLE (referenced by .cursor/rules), EXPORT_MODELS_TO_XCODE.md, GET_MODELS_AND_IMPORT_XCODE.md, IMPORT_7_MODELS_TO_XCODE.md, QUICK_GET_7_MODELS.md, COLAB_EXPORT_7_MODELS.txt, xcode_import_models.md, IOS_APP_MODEL_INTEGRATION.swift.
 
-# 4. Use mixed precision training
-config['training']['mixed_precision'] = True
+**Tests** (`tests/`): test_phase0_backbone.py, test_phase1_fusion.py, test_phase2_heads.py, test_phase3_retrieval.py, test_phase4_knowledge.py, test_phase5_training.py, test_all_phases.py, test_therapy.py, test_model.py, test_comprehensive_system.py, test_training_pipeline.py, test_timing_enforcement.py, test_scene_graph_consistency.py, test_production_hardening.py, test_performance.py, test_multihead_benchmark.py, test_integration_structure.py, test_integration_constraints.py, test_hungarian_matcher_fixes.py, test_gradnorm_integration.py, test_export_validation.py, test_error_handling.py, test_edge_cases.py, test_critical_fixes.py, test_condition_specific.py.
 
-# 5. Reduce model size (use lower tier)
-model = MaxSightCNN(tier='T1_ATTENTION')  # Instead of T5_TEMPORAL
-```
+**Tools** (`tools/`): simulation/ (web_simulator.py, config.py, start_simulator.sh, comprehensive_simulator.py, simulator/ with inference_engine, overlay, scheduler, voice, haptic, types), quantization/ (validate_and_bench.py, qat_finetune.py), output_hierarchy.py.
 
-**Problem 2: Loss Not Decreasing**
+**Configs** (`ml/training/configs/`): Tier and condition YAML configs (e.g. t1_attention.yaml, t2_hybrid_vit.yaml, t3_cross_task.yaml, t4_cross_modal.yaml, t5_temporal.yaml, t5_temporal_2phase.yaml, t2_to_t5_transfer.yaml) for learning rates, loss weights, data paths, and transfer schedules.
 
-**Symptoms**:
-- Loss plateaus after a few epochs
-- Loss increases instead of decreases
-- Some heads have zero loss (not learning)
-
-**Solutions**:
-```python
-# 1. Check learning rate (might be too high or too low)
-# Use learning rate finder
-from ml.training.lr_finder import find_lr
-optimal_lr = find_lr(model, train_loader)
-print(f"Optimal LR: {optimal_lr}")
-
-# 2. Check if GradNorm is working
-# Monitor gradient norms
-gradnorm_metrics = trainer.get_gradnorm_metrics()
-print(f"Gradient norms: {gradnorm_metrics}")
-
-# 3. Check loss weights
-# Some tasks might have weights too low
-loss_weights = config['training']['loss_weights']
-for task, weight in loss_weights.items():
-    if weight < 0.3:
-        print(f"Warning: {task} has low weight ({weight})")
-
-# 4. Check data quality
-# Verify annotations are correct
-verify_annotations(dataset)
-
-# 5. Check if model is frozen incorrectly
-for name, param in model.named_parameters():
-    if not param.requires_grad:
-        print(f"Warning: {name} is frozen")
-```
-
-**Problem 3: Stage B Always Skipped**
-
-**Symptoms**:
-- `stage_b_executed = False` for all samples
-- Stage A latency consistently > 200ms
-- Uncertainty always > 0.7
-
-**Solutions**:
-```python
-# 1. Profile Stage A latency
-import torch.profiler
-
-with torch.profiler.profile(
-    activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
-    record_shapes=True
-) as prof:
-    outputs = model(images)
-
-print(prof.key_averages().table(sort_by="cuda_time_total"))
-
-# 2. Optimize Stage A
-# - Use smaller input size (224x224 instead of 320x320)
-# - Reduce FPN levels (use P3, P4, P5 only, skip P2)
-# - Use quantization (INT8)
-
-# 3. Lower uncertainty threshold
-config['inference']['uncertainty_threshold'] = 0.8  # Instead of 0.7
-
-# 4. Increase latency threshold
-config['inference']['latency_threshold_ms'] = 250  # Instead of 200
-```
-
-**Problem 4: GradNorm Not Working**
-
-**Symptoms**:
-- Task weights not updating
-- Gradient norms all zero
-- One task dominates training
-
-**Solutions**:
-```python
-# 1. Check if shared parameters are correct
-shared_params = list(model.backbone.parameters()) + list(model.fpn.parameters())
-print(f"Shared params: {len(shared_params)}")
-
-# 2. Check if retain_graph is set
-# In task_balancing.py, ensure retain_graph=True
-
-# 3. Check update interval
-config['training']['gradnorm_update_interval'] = 100  # Update every 100 iterations
-
-# 4. Check if task losses are valid
-for task, loss in task_losses.items():
-    if torch.isnan(loss) or torch.isinf(loss):
-        print(f"Warning: {task} loss is invalid: {loss}")
-
-# 5. Manually verify GradNorm
-from ml.training.task_balancing import GradNormBalancer
-balancer = GradNormBalancer(num_tasks=len(task_losses))
-weights, metrics = balancer.update_task_weights(task_losses, gradient_norms)
-print(f"Updated weights: {weights}")
-```
-
-**Problem 5: Export Fails**
-
-**Symptoms**:
-- CoreML export fails with tracing errors
-- ONNX export produces invalid model
-- ExecuTorch export fails
-
-**Solutions**:
-```python
-# 1. CoreML: Use torch.jit.script instead of torch.jit.trace
-# Tracing fails with dynamic control flow
-scripted_model = torch.jit.script(model)
-coreml_model = ct.convert(scripted_model, ...)
-
-# 2. ONNX: Specify input/output names
-torch.onnx.export(
-    model,
-    dummy_input,
-    'model.onnx',
-    input_names=['images', 'audio_features'],
-    output_names=['detections', 'urgency', 'distance'],
-    dynamic_axes={
-        'images': {0: 'batch_size'},
-        'audio_features': {0: 'batch_size'}
-    }
-)
-
-# 3. ExecuTorch: Use export_to_executorch helper
-from ml.training.export import export_to_executorch
-export_to_executorch(model, 'model.pte', quantization='int8')
-```
-
-#### Performance Optimization Techniques
-
-**1. Model Quantization**
-```python
-# INT8 Quantization (4x size reduction)
-from ml.training.quantization import quantize_model
-
-quantized_model = quantize_model(
-    model,
-    calibration_data=calibration_loader,
-    quantization_type='int8'
-)
-
-# Verify accuracy
-fp32_accuracy = evaluate(model, test_loader)
-int8_accuracy = evaluate(quantized_model, test_loader)
-print(f"Accuracy drop: {fp32_accuracy - int8_accuracy:.2f}%")
-```
-
-**2. Pruning**
-```python
-# Structured pruning (remove entire channels)
-from ml.optimization.mobile_optimizations import prune_model
-
-pruned_model = prune_model(
-    model,
-    pruning_ratio=0.3,  # Remove 30% of channels
-    method='structured'
-)
-
-# Fine-tune pruned model
-trainer = TrainingLoop(pruned_model, ...)
-trainer.train(num_epochs=10)  # Fine-tune for 10 epochs
-```
-
-**3. Knowledge Distillation**
-```python
-# Distill T5 (teacher) to T2 (student)
-from ml.training.self_supervised_pretrain import KnowledgeDistillationLoss
-
-teacher = MaxSightCNN(tier='T5_TEMPORAL')
-student = MaxSightCNN(tier='T2_HYBRID_VIT')
-
-kd_loss_fn = KnowledgeDistillationLoss(
-    temperature=4.0,
-    alpha=0.7  # 70% teacher, 30% ground truth
-)
-
-# Training loop
-for batch in train_loader:
-    teacher_outputs = teacher(batch['images'])
-    student_outputs = student(batch['images'])
-    
-    loss = kd_loss_fn(
-        student_outputs,
-        teacher_outputs,
-        batch['targets']
-    )
-    
-    loss.backward()
-    optimizer.step()
-```
-
-#### Advanced Usage Examples
-
-**Example: Custom Head Implementation**
-```python
-from ml.models.heads import BaseHead
-import torch.nn as nn
-
-class CustomAccessibilityHead(BaseHead):
-    """Custom head for accessibility-specific task."""
-    
-    def __init__(self, input_dim, num_classes):
-        super().__init__()
-        self.fc1 = nn.Linear(input_dim, 256)
-        self.fc2 = nn.Linear(256, num_classes)
-        self.dropout = nn.Dropout(0.1)
-    
-    def forward(self, features):
-        x = F.relu(self.fc1(features))
-        x = self.dropout(x)
-        x = self.fc2(x)
-        return x
-
-# Integrate into model
-model.custom_head = CustomAccessibilityHead(input_dim=512, num_classes=10)
-```
-
-**Example: Custom Loss Function**
-```python
-from ml.training.losses import BaseLoss
-import torch.nn as nn
-
-class CustomAccessibilityLoss(BaseLoss):
-    """Custom loss for accessibility task."""
-    
-    def __init__(self, alpha=0.5):
-        super().__init__()
-        self.alpha = alpha
-        self.ce_loss = nn.CrossEntropyLoss()
-        self.mse_loss = nn.MSELoss()
-    
-    def forward(self, predictions, targets):
-        # Combined classification and regression loss
-        cls_loss = self.ce_loss(predictions['cls'], targets['cls'])
-        reg_loss = self.mse_loss(predictions['reg'], targets['reg'])
-        
-        total_loss = self.alpha * cls_loss + (1 - self.alpha) * reg_loss
-        return total_loss
-```
-
-**Example: Custom Data Augmentation**
-```python
-from ml.data.advanced_augmentation import BaseAugmentation
-
-class CustomAccessibilityAugmentation(BaseAugmentation):
-    """Custom augmentation for accessibility scenarios."""
-    
-    def __call__(self, image, annotations):
-        # Simulate low vision conditions
-        if np.random.rand() > 0.5:
-            # Reduce contrast
-            image = image * 0.7 + 0.15
-        
-        # Add accessibility-specific augmentations
-        # (e.g., simulate glare, simulate tunnel vision)
-        
-        return image, annotations
-```
+**Comment style**: Follow **.cursor/rules/comment-style.mdc** (and referenced docs/COMMENT_STYLE.md if present): intent over code, 1–3 sentences, active voice, no multiline comments.
 
 ### Additional Documentation
 
