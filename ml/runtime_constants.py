@@ -19,6 +19,21 @@ FALSE_SAFE_RATE_MAX = 0.01
 DIRECTION_CORRECTNESS_MIN = 0.90
 DISTANCE_ZONE_ACCURACY_MIN = 0.85
 
+# T5 MVP runtime contract: limit shipped surface to core safety/awareness signals.
+# Model-output keys that the T5-only MVP runtime is allowed to depend on.
+MVP_MODEL_OUTPUT_KEYS = (
+    "classifications",      # logits for detection head.
+    "boxes",                # bounding boxes for hazards/objects.
+    "objectness",           # objectness scores for detections.
+    "text_regions",         # OCR/text-region logits.
+    "urgency_scores",       # per-image or per-detection urgency.
+    "distance_zones",       # coarse distance buckets.
+    "precise_distances",    # per-detection distance estimates.
+    "distance_uncertainties",
+    "uncertainty",          # global uncertainty scalar.
+    "temporal_consistency", # temporal stability features.
+)
+
 
 def check_safety_gate_report(metrics: dict) -> tuple[bool, list[str]]:
     """Return (all_passed, list of failed gate ids). metrics keys: hazard_recall, false_safe_rate, direction_correctness, distance_zone_accuracy."""
@@ -32,3 +47,14 @@ def check_safety_gate_report(metrics: dict) -> tuple[bool, list[str]]:
     if metrics.get("distance_zone_accuracy", 0) < DISTANCE_ZONE_ACCURACY_MIN:
         failed.append("SG-06")
     return (len(failed) == 0, failed)
+
+
+def filter_mvp_model_outputs(outputs: dict, *, training: bool = False) -> dict:
+    """Filter raw model outputs down to the T5 MVP runtime surface.
+
+    Training keeps the full dictionary so losses and diagnostics are unaffected;
+    runtime paths (eval/inference) can call this to enforce a smaller contract.
+    """
+    if training:
+        return outputs
+    return {k: v for k, v in outputs.items() if k in MVP_MODEL_OUTPUT_KEYS}

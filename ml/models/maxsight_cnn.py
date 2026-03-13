@@ -2034,6 +2034,10 @@ class TierConfig:
     use_retrieval: bool = True
     max_latency_ms: float = 300.0
     min_confidence: float = 0.5
+    # When True, runtime paths should restrict themselves to the T5 MVP surface
+    # (hazards, urgency, distance, OCR, temporal stability) instead of exposing
+    # the full research output dictionary.
+    mvp_runtime: bool = True
 
     @classmethod
     def for_tier(cls, tier: CapabilityTier) -> 'TierConfig':

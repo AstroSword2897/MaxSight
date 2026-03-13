@@ -56,12 +56,16 @@ class MaxSightDataset(Dataset):
         with open(self.annotation_file, 'r') as f:
             data = json.load(f)
         
-        annotations = {}
+        annotations: Dict[Any, Dict[str, Any]] = {}
         
-        # Detect format: COCO has 'images'/'annotations', custom format is simpler.
+        # Detect format: COCO-style has 'images'/'annotations'; custom format is simpler.
         if 'images' in data and 'annotations' in data:
             image_map = {img['id']: img for img in data['images']}
             category_map = {cat['id']: cat['name'] for cat in data.get('categories', [])}
+            
+            # Panoptic COCO stores per-image segments under 'segments_info'.
+            first_ann = data['annotations'][0] if data['annotations'] else {}
+            is_panoptic = 'segments_info' in first_ann
             
             # Group annotations by image_id for efficient per-image processing.
             for ann in data['annotations']:
@@ -71,61 +75,100 @@ class MaxSightDataset(Dataset):
                     annotations[image_id] = {
                         'image_path': self.image_dir / img_info.get('file_name', f'{image_id}.jpg'),
                         'objects': [],
-                        'urgency': 0,  # Default urgency (will be computed from objects)
-                        'lighting': 'normal',  # Default lighting (will be detected)
+                        'urgency': 0,
+                        'lighting': 'normal',
                         'audio_path': None
                     }
                 
-                # Extract bounding box from COCO format [x, y, width, height] in pixels.
-                bbox = ann['bbox']
-                img_info = image_map[image_id]
-                img_width = img_info.get('width', 224)
-                img_height = img_info.get('height', 224)
-                
-                # Convert to center format and normalize to [0, 1]. Clamp bbox values to prevent invalid boxes.
-                bbox_x = max(0, float(bbox[0]))
-                bbox_y = max(0, float(bbox[1]))
-                bbox_w = max(1e-3, float(bbox[2]))  # Minimum 1e-3 to avoid zero-width.
-                bbox_h = max(1e-3, float(bbox[3]))  # Minimum 1e-3 to avoid zero-height.
-                
-                cx = (bbox_x + bbox_w / 2) / max(1.0, img_width)
-                cy = (bbox_y + bbox_h / 2) / max(1.0, img_height)
-                w = bbox_w / max(1.0, img_width)
-                h = bbox_h / max(1.0, img_height)
-                
-                # Clamp normalized values to [0, 1].
-                cx = max(0.0, min(1.0, cx))
-                cy = max(0.0, min(1.0, cy))
-                w = max(1e-4, min(1.0, w))
-                h = max(1e-4, min(1.0, h))
-                
-                # Map COCO category to MaxSight class index.
-                category_name = category_map.get(ann['category_id'], 'unknown')
-                class_idx = self.class_to_idx.get(category_name, 0)
-                
-                # Estimate distance zone from box area (larger = closer)
-                box_area = w * h
-                if box_area > 0.1:
-                    distance_zone = 0  # Near.
-                elif box_area > 0.05:
-                    distance_zone = 1  # Medium.
+                if is_panoptic:
+                    segments = ann.get('segments_info', [])
+                    for seg in segments:
+                        bbox = seg.get('bbox', [0.0, 0.0, 0.0, 0.0])
+                        category_id = seg.get('category_id', 0)
+                        img_info = image_map.get(image_id, {})
+                        img_width = img_info.get('width', 224)
+                        img_height = img_info.get('height', 224)
+                        
+                        bbox_x = max(0.0, float(bbox[0]))
+                        bbox_y = max(0.0, float(bbox[1]))
+                        bbox_w = max(1e-3, float(bbox[2]))
+                        bbox_h = max(1e-3, float(bbox[3]))
+                        
+                        cx = (bbox_x + bbox_w / 2) / max(1.0, img_width)
+                        cy = (bbox_y + bbox_h / 2) / max(1.0, img_height)
+                        w = bbox_w / max(1.0, img_width)
+                        h = bbox_h / max(1.0, img_height)
+                        
+                        cx = max(0.0, min(1.0, cx))
+                        cy = max(0.0, min(1.0, cy))
+                        w = max(1e-4, min(1.0, w))
+                        h = max(1e-4, min(1.0, h))
+                        
+                        category_name = category_map.get(category_id, 'unknown')
+                        class_idx = self.class_to_idx.get(category_name, 0)
+                        
+                        box_area = w * h
+                        if box_area > 0.1:
+                            distance_zone = 0
+                        elif box_area > 0.05:
+                            distance_zone = 1
+                        else:
+                            distance_zone = 2
+                        
+                        urgency_keywords = ['car', 'truck', 'bus', 'vehicle', 'fire', 'hazard', 'stop', 'traffic']
+                        urgency = 3 if any(kw in category_name.lower() for kw in urgency_keywords) else 0
+                        
+                        annotations[image_id]['objects'].append({
+                            'box': [cx, cy, w, h],
+                            'class': class_idx,
+                            'category': category_name,
+                            'distance': distance_zone,
+                            'urgency': urgency
+                        })
+                        annotations[image_id]['urgency'] = max(annotations[image_id]['urgency'], urgency)
                 else:
-                    distance_zone = 2  # Far.
-                
-                # Estimate urgency from category (vehicles/hazards = high urgency)
-                urgency_keywords = ['car', 'truck', 'bus', 'vehicle', 'fire', 'hazard', 'stop', 'traffic']
-                urgency = 3 if any(kw in category_name.lower() for kw in urgency_keywords) else 0
-                
-                annotations[image_id]['objects'].append({
-                    'box': [cx, cy, w, h],  # Center format, normalized.
-                    'class': class_idx,
-                    'category': category_name,
-                    'distance': distance_zone,
-                    'urgency': urgency
-                })
-                
-                # Update scene urgency (max of all object urgencies)
-                annotations[image_id]['urgency'] = max(annotations[image_id]['urgency'], urgency)
+                    bbox = ann['bbox']
+                    img_info = image_map[image_id]
+                    img_width = img_info.get('width', 224)
+                    img_height = img_info.get('height', 224)
+                    
+                    bbox_x = max(0, float(bbox[0]))
+                    bbox_y = max(0, float(bbox[1]))
+                    bbox_w = max(1e-3, float(bbox[2]))
+                    bbox_h = max(1e-3, float(bbox[3]))
+                    
+                    cx = (bbox_x + bbox_w / 2) / max(1.0, img_width)
+                    cy = (bbox_y + bbox_h / 2) / max(1.0, img_height)
+                    w = bbox_w / max(1.0, img_width)
+                    h = bbox_h / max(1.0, img_height)
+                    
+                    cx = max(0.0, min(1.0, cx))
+                    cy = max(0.0, min(1.0, cy))
+                    w = max(1e-4, min(1.0, w))
+                    h = max(1e-4, min(1.0, h))
+                    
+                    category_name = category_map.get(ann['category_id'], 'unknown')
+                    class_idx = self.class_to_idx.get(category_name, 0)
+                    
+                    box_area = w * h
+                    if box_area > 0.1:
+                        distance_zone = 0
+                    elif box_area > 0.05:
+                        distance_zone = 1
+                    else:
+                        distance_zone = 2
+                    
+                    urgency_keywords = ['car', 'truck', 'bus', 'vehicle', 'fire', 'hazard', 'stop', 'traffic']
+                    urgency = 3 if any(kw in category_name.lower() for kw in urgency_keywords) else 0
+                    
+                    annotations[image_id]['objects'].append({
+                        'box': [cx, cy, w, h],
+                        'class': class_idx,
+                        'category': category_name,
+                        'distance': distance_zone,
+                        'urgency': urgency
+                    })
+                    annotations[image_id]['urgency'] = max(annotations[image_id]['urgency'], urgency)
         else:
             # Custom format: assume list of annotations.
             for ann in data:

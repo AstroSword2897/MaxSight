@@ -12,79 +12,81 @@ from ml.utils.preprocessing import ImagePreprocessor
 
 
 def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
-    """Custom collate function for MaxSight batches. Handles variable-length sequences (objects, audio) and pads appropriately."""
-    # Separate images and targets.
-    images = torch.stack([item['images'] for item in batch])
+    """Custom collate function for MaxSight batches. Handles variable-length objects, optional audio, and optional frame sequences."""
+    # Sequence mode uses 'frames' as primary image tensor; otherwise use single-frame 'images'.
+    has_frames = any('frames' in item for item in batch)
+    if has_frames:
+        frame_lists = [item['frames'] for item in batch]
+        batch_size = len(frame_lists)
+        max_t = max(frames.shape[0] for frames in frame_lists)
+        c, h, w = frame_lists[0].shape[1:]
+        frames_batch = torch.zeros(batch_size, max_t, c, h, w, dtype=frame_lists[0].dtype)
+        frame_lengths = torch.zeros(batch_size, dtype=torch.long)
+        for i, frames in enumerate(frame_lists):
+            t = frames.shape[0]
+            frames_batch[i, :t] = frames
+            frame_lengths[i] = t
+        images = frames_batch
+    else:
+        images = torch.stack([item['images'] for item in batch])
+        batch_size = len(batch)
+        frame_lengths = None
     
-    # Get batch size and determine padding size.
-    batch_size = len(batch)
     max_objects = max(item['num_objects'].item() for item in batch) if batch else 10
-    
-    # Ensure max_objects doesn't exceed actual label tensor size.
     max_objects = min(max_objects, batch[0].get('labels', torch.zeros(10)).shape[0])
     
-    # Initialize target tensors.
     labels = torch.zeros(batch_size, max_objects, dtype=torch.long)
     boxes = torch.zeros(batch_size, max_objects, 4, dtype=torch.float32)
     distance = torch.zeros(batch_size, max_objects, dtype=torch.long)
     num_objects = torch.zeros(batch_size, dtype=torch.long)
     urgency = torch.zeros(batch_size, dtype=torch.long)
     
-    # Checks if audio is present.
     has_audio = any('audio' in item for item in batch)
-    audio_tensors = []
-    audio_lengths = []
+    audio_tensors: List[torch.Tensor] = []
+    audio_lengths: List[int] = []
     
-    # Fill tensors.
     for i, item in enumerate(batch):
         num_obj = item['num_objects'].item()
         num_objects[i] = num_obj
         
-        # Copy labels, boxes, distance.
         if num_obj > 0:
             labels[i, :num_obj] = item['labels'][:num_obj]
-            
-            # Sanitize boxes: ensure minimum dimensions to prevent downstream errors.
             item_boxes = item['boxes'][:num_obj].clone()
-            item_boxes[:, 2] = torch.clamp(item_boxes[:, 2], min=1e-4)  # Width.
-            item_boxes[:, 3] = torch.clamp(item_boxes[:, 3], min=1e-4)  # Height.
+            item_boxes[:, 2] = torch.clamp(item_boxes[:, 2], min=1e-4)
+            item_boxes[:, 3] = torch.clamp(item_boxes[:, 3], min=1e-4)
             boxes[i, :num_obj] = item_boxes
-            
             distance[i, :num_obj] = item['distance'][:num_obj]
         
         urgency[i] = item['urgency']
         
-        # Handle audio if present.
         if has_audio and 'audio' in item:
-            audio = item['audio']  # [1, 13, T].
-            audio_tensors.append(audio.squeeze(0))  # [13, T].
+            audio = item['audio']
+            audio_tensors.append(audio.squeeze(0))
             audio_lengths.append(audio.shape[-1])
         elif has_audio:
-            # Pad with zeros if missing.
-            audio_tensors.append(torch.zeros(13, 100))  # Default length.
+            audio_tensors.append(torch.zeros(13, 100))
             audio_lengths.append(100)
     
-    # Build result dictionary.
-    result = {
-        'images': images,  # [B, 3, H, W].
-        'labels': labels,  # [B, max_objects].
-        'boxes': boxes,  # [B, max_objects, 4].
-        'distance': distance,  # [B, max_objects].
-        'num_objects': num_objects,  # [B].
-        'urgency': urgency,  # [B].
+    result: Dict[str, Any] = {
+        'images': images,
+        'labels': labels,
+        'boxes': boxes,
+        'distance': distance,
+        'num_objects': num_objects,
+        'urgency': urgency,
     }
     
-    # Add audio if present.
+    if has_frames:
+        result['frame_lengths'] = frame_lengths
+    
     if has_audio and audio_tensors:
-        # Pad audio to same length.
         max_audio_len = max(audio_lengths) if audio_lengths else 100
         padded_audio = torch.zeros(batch_size, 13, max_audio_len)
         for i, audio in enumerate(audio_tensors):
             padded_audio[i, :, :audio.shape[-1]] = audio
-        result['audio'] = padded_audio  # [B, 13, T].
+        result['audio'] = padded_audio
         result['audio_lengths'] = torch.tensor(audio_lengths, dtype=torch.long)
     
-    # Add condition mode if present.
     if 'condition_mode' in batch[0]:
         result['condition_mode'] = batch[0]['condition_mode']
     
