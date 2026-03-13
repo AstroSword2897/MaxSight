@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # MaxSight Full Production Training — One Shot
 # Runs: env check → dataset check → optional data prep → training → optional export.
-# Usage: ./scripts/run_production_training.sh [--skip-env] [--skip-data-check] [--no-export] [--dry-run]
+# Usage: ./scripts/ops/run_production_training.sh [--skip-env] [--skip-data-check] [--no-export] [--dry-run]
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -91,12 +91,12 @@ if [[ "$SKIP_DATA_CHECK" -eq 0 ]]; then
   echo "[2/5] Dataset check..."
   if [[ ! -d "$IMAGE_DIR" ]]; then
     echo "  Image dir missing: $IMAGE_DIR"
-    echo "  Run: python scripts/gather_training_data.py [--data-dir $DATA_DIR]"
+    echo "  Run: python scripts/ops/gather_training_data.py [--data-dir $DATA_DIR]"
     exit 1
   fi
   if [[ ! -f "$TRAIN_ANN" ]] || [[ ! -f "$VAL_ANN" ]]; then
     echo "  Splits missing. Running gather_training_data.py..."
-    python scripts/gather_training_data.py --data-dir "$DATA_DIR" --splits-dir "$SPLITS_DIR"
+    python scripts/ops/gather_training_data.py --data-dir "$DATA_DIR" --splits-dir "$SPLITS_DIR"
   fi
   echo "  Data OK: $TRAIN_ANN, $VAL_ANN"
 else
@@ -104,9 +104,9 @@ else
 fi
 
 # --- 3) Optional: Phase 3 data pipeline validation ---
-if [[ "$DRY_RUN" -eq 0 ]] && [[ -f "scripts/validate_data_pipeline.py" ]]; then
+if [[ "$DRY_RUN" -eq 0 ]] && [[ -f "scripts/ops/validate_data_pipeline.py" ]]; then
   echo "[3/5] Data pipeline validation (optional)..."
-  if python scripts/validate_data_pipeline.py --train-annotation "$TRAIN_ANN" --image-dir "$IMAGE_DIR" 2>/dev/null; then
+  if python scripts/ops/validate_data_pipeline.py --train-annotation "$TRAIN_ANN" --image-dir "$IMAGE_DIR" 2>/dev/null; then
     echo "  Data pipeline validation OK."
   else
     echo "  Data pipeline validation skipped or failed (non-fatal)."
@@ -119,7 +119,7 @@ fi
 echo "[4/5] Training..."
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "  [DRY RUN] Would run:"
-  echo "  python scripts/train_maxsight.py \\"
+    echo "  python scripts/ops/train_maxsight.py \\"
   echo "    --data-dir $DATA_DIR \\"
   echo "    --train-annotation $TRAIN_ANN \\"
   echo "    --val-annotation $VAL_ANN \\"
@@ -143,7 +143,7 @@ LR_EXTRA=()
 [[ -n "$LR_BACKBONE" ]] && LR_EXTRA+=(--lr-backbone "$LR_BACKBONE")
 [[ -n "$LR_HEAD" ]] && LR_EXTRA+=(--lr-head "$LR_HEAD")
 
-python scripts/train_maxsight.py \
+python scripts/ops/train_maxsight.py \
   --data-dir "$DATA_DIR" \
   --train-annotation "$TRAIN_ANN" \
   --val-annotation "$VAL_ANN" \

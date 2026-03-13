@@ -77,4 +77,4 @@ export CHECKPOINT_INTERVAL=5
 export RESUME_FROM="$BACKUP_DIR/last_checkpoint.pt"
 export RESUME_MODEL_ONLY=1
 
-exec ./scripts/run_production_training.sh --no-export "$@"
+exec ./scripts/ops/run_production_training.sh --no-export "$@"

@@ -5,8 +5,8 @@ This document summarizes the current status of the MaxSight repo: what is implem
 ## Implementation status
 
 - **Model (MaxSightCNN):** Implemented in `ml/models/maxsight_cnn.py` with tiered capabilities (T0–T5). Backbone (ResNet50 + FPN), hybrid ViT, temporal encoder, and 30+ heads are present and gated by tier and condition.
-- **Training:** Training loop, losses, task balancing (e.g. GradNorm), and validation live in `ml/training/`. Scripts such as `scripts/train_maxsight.py` and `scripts/smoke_train.py` are the main entry points. Data pipeline and dataset are in `ml/data/`.
-- **Export:** JIT, ExecuTorch (.pte), CoreML, and ONNX export are in `ml/training/export.py`. iOS bundle export and top-7 deploy are supported via `scripts/deploy_top7.py` and `scripts/export_top7_to_xcode.py`.
+- **Training:** Training loop, losses, task balancing (e.g. GradNorm), and validation live in `ml/training/`. Ops scripts live under `scripts/ops/` (e.g. `scripts/ops/train_maxsight.py`, `scripts/ops/smoke_train.py`), and the canonical runner is `python scripts/product/run.py`. Data pipeline and dataset are in `ml/data/`.
+- **Export:** JIT, ExecuTorch (.pte), CoreML, and ONNX export are in `ml/training/export.py`. iOS bundle export and top-7 deploy scripts live under `scripts/ops/` and `scripts/research_archive/` (canonical packaging is `scripts/ops/export_for_xcode.py`).
 - **Therapy:** Session management, task generation, and therapy integration are in `ml/therapy/`. See `docs/therapy_system.md`.
 - **Retrieval:** Encoders, indexing, and two-stage retrieval are in `ml/retrieval/`. Used when the tier enables retrieval.
 - **Simulation and tooling:** Simulation, quantization, and benchmarking live under `tools/` and `ml/training/benchmark.py`.
@@ -20,7 +20,7 @@ This document summarizes the current status of the MaxSight repo: what is implem
 ## Known limitations and risks
 
 - **JIT / ExecuTorch export:** Tracing can hit unsupported ops or segfaults (e.g. with CLIP or scene graph). The export pipeline stubs `global_encoder` (CLIP) when needed; if export still exits (e.g. 139), the failure may be in another submodule or the environment. Using CPU and JIT-only (`--device cpu`, `--quick`) often improves stability.
-- **Checkpoints and conditions:** Top-7 export expects checkpoints under `checkpoints_<condition>/best_model.pt`. If a condition is missing, that condition is skipped. Use `scripts/find_trained_checkpoints.py` to discover paths.
+- **Checkpoints and conditions:** Top-7 export expects checkpoints under `checkpoints_<condition>/best_model.pt`. If a condition is missing, that condition is skipped. Use `scripts/ops/find_trained_checkpoints.py` to discover paths.
 - **Data:** Training and evaluation assume COCO (or compatible) annotations and image layout. Incorrect paths or missing annotations will cause failures; verify with the data pipeline or download docs (`docs/downloads.md`).
 
 ## Branch and deployment

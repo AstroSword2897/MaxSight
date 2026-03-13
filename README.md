@@ -3,7 +3,7 @@
 **Production-Grade Accessibility System** | **Multi-Task Deep Learning for Environmental Understanding**
 
 **Last Updated**: 2026-02  
-**Status**: Production-ready training and data pipeline. Run `scripts/gather_training_data.py` then `scripts/train_maxsight.py`. See **docs/status.md** for current status.
+**Status**: Production-ready training and data pipeline. Use `python scripts/product/run.py` for canonical `train/validate/export/package/smoke` (or call ops scripts directly under `scripts/ops/`). See **docs/status.md** for current status.
 
 ---
 
@@ -1089,8 +1089,8 @@ Phased unfreeze and loss-unlock schedules are defined in transfer configs and tr
 
 ### Immediate next steps
 
-1. **Data**: Run `python scripts/gather_training_data.py` if you haven’t (creates `datasets/cleaned_splits/` and uses `datasets/coco_raw/`). Use `--skip-download` / `--skip-extract` if COCO is already present.
-2. **Smoke check**: `python scripts/smoke_train.py --tier T0_BASELINE_CNN --epochs 2 --force-cpu`
+1. **Data**: Run `python scripts/ops/gather_training_data.py` if you haven’t (creates `datasets/cleaned_splits/` and uses `datasets/coco_raw/`). Use `--skip-download` / `--skip-extract` if COCO is already present.
+2. **Smoke check**: `python scripts/product/run.py smoke --epochs 2` (or `python scripts/ops/smoke_train.py --epochs 2 --force-cpu`)
 3. **Full training**: Use the training command from [Full Training](#full-training-annotation-based-cloud-gpu-recommended) with your `--data-dir`, `--train-annotation`, `--val-annotation`, `--image-dir` (cloud GPU recommended for full runs).
 4. **Export**: After a checkpoint exists, `python -m ml.training.export --checkpoint <path> --format <jit|coreml|onnx|executorch> --output <path>`.
 5. **Simulator with trained model**: Set `model_checkpoint_path` in `tools/simulation/config.py` or use `ComprehensiveSimulator(model_path=...)`. See **docs/architecture.md** (export section) and **README** for deployment.
@@ -1207,7 +1207,7 @@ See **docs/status.md** for device and hardware notes.
 ### Requirements before training
 
 1. **Install deps**: `pip install -r requirements.txt`
-2. **Prepare data**: Run once: `python scripts/gather_training_data.py` (`--skip-download` / `--skip-extract` if COCO is already present). This creates `datasets/cleaned_splits/maxsight_train.json`, `maxsight_val.json`, `maxsight_test.json`.
+2. **Prepare data**: Run once: `python scripts/ops/gather_training_data.py` (`--skip-download` / `--skip-extract` if COCO is already present). This creates `datasets/cleaned_splits/maxsight_train.json`, `maxsight_val.json`, `maxsight_test.json`.
 3. **Hardware**: For full training use a CUDA GPU; for smoke/short runs CPU or MPS is fine.
 
 See **docs/status.md** and **docs/downloads.md** for setup and data requirements.
@@ -1216,17 +1216,17 @@ See **docs/status.md** and **docs/downloads.md** for setup and data requirements
 
 ```bash
 # Tier choices: T0_BASELINE_CNN, T1_ATTENTION, T2_HYBRID_VIT, T3_CROSS_TASK, T4_CROSS_MODAL, T5_TEMPORAL
-python scripts/smoke_train.py --tier T0_BASELINE_CNN --epochs 2 --batches 5
+python scripts/ops/smoke_train.py --epochs 2 --batches 5 --force-cpu
 
 # Force CPU (short run only)
-python scripts/smoke_train.py --tier T0_BASELINE_CNN --force-cpu --epochs 2 --batches 3
+python scripts/ops/smoke_train.py --epochs 2 --batches 3 --force-cpu
 ```
 
 ### Full Training (annotation-based; Cloud GPU recommended)
 
 ```bash
 # After running gather_training_data.py, use the paths it prints:
-python scripts/train_maxsight.py \
+python scripts/ops/train_maxsight.py \
   --data-dir datasets/coco_raw \
   --train-annotation datasets/cleaned_splits/maxsight_train.json \
   --val-annotation datasets/cleaned_splits/maxsight_val.json \
@@ -1239,19 +1239,19 @@ python scripts/train_maxsight.py \
 
 Optional: run **AutoML** (Optuna) first, then train with best params:  
 `python scripts/AutoMLType.py --data-dir ... --train-annotation ... --val-annotation ... --image-dir ...`  
-Then: `python scripts/train_maxsight.py ... --hyperparameters checkpoints_tuning/best_hyperparameters.json`
+Then: `python scripts/ops/train_maxsight.py ... --hyperparameters checkpoints_tuning/best_hyperparameters.json`
 
 ### One-shot production training
 
 To run env check, dataset check, data-pipeline validation when desired, full training, and export when desired in one go:
 
 ```bash
-./scripts/run_production_training.sh
+./scripts/ops/run_production_training.sh
 ```
 
 Options: `--skip-env`, `--skip-data-check`, `--no-export`, `--dry-run`. Override via env: `DATA_DIR`, `EPOCHS`, `BATCH_SIZE`, `LR`, `DEVICE`, `HYPERPARAMETERS` (path to `best_hyperparameters.json` from AutoMLType.py).  
 Optional **Phase 3 data validation** (no invalid values; class weights):  
-`python scripts/validate_data_pipeline.py --train-annotation datasets/cleaned_splits/maxsight_train.json --image-dir datasets/coco_raw`
+`python scripts/ops/validate_data_pipeline.py --train-annotation datasets/cleaned_splits/maxsight_train.json --image-dir datasets/coco_raw`
 
 ### Validation and benchmarking
 
@@ -1622,25 +1622,31 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 
 **Optimization**: Quantization (INT8 via ml.training.quantization), pruning (ml.optimization.mobile_optimizations), knowledge distillation (ml.training.self_supervised_pretrain). **Custom heads/losses/augmentation**: Extend base classes in ml.models.heads, ml.training.losses, ml.data.advanced_augmentation; see HEAD_REGISTRY and existing heads for patterns.
 
-### Repository Index
+### Repository Index (Production-Focused)
 
-**Scripts** (`scripts/`): train_maxsight.py (main training), smoke_train.py (short run), gather_training_data.py (splits), deploy_top7.py, export_top7_to_xcode.py, export_for_xcode.py, export_one_model.py, validate_data_pipeline.py, find_trained_checkpoints.py, AutoMLType.py (Optuna), run_production_training.sh, test_therapy_effectiveness.py, test_systems_comprehensive.py, sanity_check_inference.py, run_inference_on_inference_datasets.py, run_checkpoint_inference.py, download_inference_datasets.py, download_open_images_*.py, reorganize_open_images.py, patch_missing_images.py, normalize_comments.py, clean_comments.py, monitor_download.py, improve_map_all_models.py, get_top7_by_map.py, compare_condition_models.py, check_export_status.py, check_and_train_colab.py, create_minimal_checkpoint.py, ensure_checkpoint_layout.py, diagnose_training_speed.py, cleanup_cloud_checkpoints.py, list_saved_models.py, inference_and_deploy_top7.py, package_for_colab.sh, run_image_patcher.sh, run_mlx_style_training.sh, setup_rclone_upload.sh, run_inference_and_monitor.sh, stop_mps_backup_start_mlx.sh, resume_mlx_from_first3_mps.sh; notebooks: colab_export_top7_coreml.ipynb, train_t5_fast_colab.py.
-
-**Docs** (`docs/`): architecture.md (model and system architecture), SYSTEMS.md (all systems in one reference), therapy_system.md (sessions, tasks, integration), training_architecture.md (loop, losses, config), training-data-loading.md (dataset, pipeline), transferlearning.md (tier transfer), status.md (health, limitations, device policy), downloads.md (datasets, assets), caching.md (Redis, usage), COMMENT_STYLE (referenced by .cursor/rules), EXPORT_MODELS_TO_XCODE.md, GET_MODELS_AND_IMPORT_XCODE.md, IMPORT_7_MODELS_TO_XCODE.md, QUICK_GET_7_MODELS.md, COLAB_EXPORT_7_MODELS.txt, xcode_import_models.md, IOS_APP_MODEL_INTEGRATION.swift.
-
-**Tests** (`tests/`): test_phase0_backbone.py, test_phase1_fusion.py, test_phase2_heads.py, test_phase3_retrieval.py, test_phase4_knowledge.py, test_phase5_training.py, test_all_phases.py, test_therapy.py, test_model.py, test_comprehensive_system.py, test_training_pipeline.py, test_timing_enforcement.py, test_scene_graph_consistency.py, test_production_hardening.py, test_performance.py, test_multihead_benchmark.py, test_integration_structure.py, test_integration_constraints.py, test_hungarian_matcher_fixes.py, test_gradnorm_integration.py, test_export_validation.py, test_error_handling.py, test_edge_cases.py, test_critical_fixes.py, test_condition_specific.py.
-
-**Tools** (`tools/`): simulation/ (web_simulator.py, config.py, start_simulator.sh, comprehensive_simulator.py, simulator/ with inference_engine, overlay, scheduler, voice, haptic, types), quantization/ (validate_and_bench.py, qat_finetune.py), output_hierarchy.py.
-
-**Configs** (`ml/training/configs/`): Tier and condition YAML configs (e.g. t1_attention.yaml, t2_hybrid_vit.yaml, t3_cross_task.yaml, t4_cross_modal.yaml, t5_temporal.yaml, t5_temporal_2phase.yaml, t2_to_t5_transfer.yaml) for learning rates, loss weights, data paths, and transfer schedules.
-
-**Comment style**: Follow **.cursor/rules/comment-style.mdc** (and referenced docs/COMMENT_STYLE.md if present): intent over code, 1–3 sentences, active voice, no multiline comments.
+- **Product pipeline**:
+  - `scripts/product/run.py`: canonical entrypoint for `train`, `validate`, `export`, `package`, `smoke`. Use this instead of chaining individual scripts.
+  - `scripts/ops/`: operational utilities (data prep, long-run training, export helpers) that call into library code under `ml/` and `app/`.
+  - `scripts/research_archive/`: experimental and legacy scripts for reference only; not part of the production path.
+  - `scripts/pilot_eval/`: pilot- and study-specific evaluation helpers.
+- **Docs** (`docs/`):
+  - `architecture.md`: model and system architecture.
+  - `SYSTEMS.md`: all systems in one detailed reference.
+  - `training_architecture.md`: training loop, losses, balancing, config.
+  - `training-data-loading.md`: dataset and pipeline.
+  - `transferlearning.md`: T2→T5 and other transfer paths.
+  - `status.md`: health, limitations, device policy.
+  - `productization/`: scope, safety gates, declutter map, runtime boundaries, pilot protocol, production runbook.
+- **Tests** (`tests/`): unit, integration, performance, and safety tests (see Testing & Validation section).
+- **Tools** (`tools/`): simulator, quantization, and other developer tools that are not on the device runtime path.
+- **Configs** (`ml/training/configs/`): tier and condition YAML configs for learning rates, loss weights, data paths, and transfer schedules.
+- **Comment style**: see `.cursor/rules/comment-style.mdc` and `docs/COMMENT_STYLE*.md` (intent-focused, single-line comments).
 
 ### Additional Documentation
 
-- **[Training Setup Summary](TRAINING_SETUP_SUMMARY.md)**: Training preparation guide
-- **[What Has Been Done](WHAT_HAS_BEEN_DONE.md)**: Complete accomplishment summary
-- **docs/**: Architecture, caching, downloads, status, therapy, training, transfer learning (see Documentation section above)
+- **[Training Setup Summary](TRAINING_SETUP_SUMMARY.md)**: Training preparation guide.
+- **[What Has Been Done](WHAT_HAS_BEEN_DONE.md)**: Complete accomplishment summary.
+- **docs/**: Architecture, caching, downloads, status, therapy, training, transfer learning (see Documentation section above).
 
 ---
 

@@ -9,7 +9,7 @@ cd "$REPO_ROOT"
 if [ -n "$CHECKPOINTS_BASE" ] && [ -d "$CHECKPOINTS_BASE" ]; then
   BASE="$CHECKPOINTS_BASE"
 else
-  BASE=$(python scripts/find_trained_checkpoints.py 2>/dev/null) || true
+  BASE=$(python scripts/ops/find_trained_checkpoints.py 2>/dev/null) || true
   if [ -z "$BASE" ] || [ ! -d "$BASE" ]; then
     echo "Set CHECKPOINTS_BASE to the folder containing checkpoints_<condition>/best_model.pt (trained weights)."
     echo "Example: CHECKPOINTS_BASE=\"\$HOME/Google Drive/My Drive/MaxSight\" ./scripts/improve_map_all_models.sh"
@@ -29,7 +29,7 @@ echo ""
 # 2) Sweep confidence and NMS IoU to find best mAP (no retraining)
 echo "=== Sweeping confidence and NMS IoU to improve mAP ==="
 SWEEP_OUTPUT=$(mktemp)
-python scripts/optimize_inference.py \
+python scripts/research_archive/optimize_inference.py \
   --val-annotation "$VAL_ANN" \
   --image-dir "$IMAGE_DIR" \
   --checkpoints-base "$BASE" \
@@ -48,7 +48,7 @@ rm -f "$SWEEP_OUTPUT"
 # 3) Run full inference with best params for all conditions
 echo ""
 echo "=== Full inference with best params (confidence=$BEST_CONF, nms_iou=$BEST_NMS) ==="
-python scripts/run_checkpoint_inference.py \
+python scripts/ops/run_checkpoint_inference.py \
   --val-annotation "$VAL_ANN" \
   --image-dir "$IMAGE_DIR" \
   --checkpoints-base "$BASE" \

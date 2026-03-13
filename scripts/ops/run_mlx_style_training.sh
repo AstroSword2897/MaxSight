@@ -25,4 +25,4 @@ export EARLY_STOPPING_PATIENCE="${EARLY_STOPPING_PATIENCE:-10}"
 export CHECKPOINT_INTERVAL="${CHECKPOINT_INTERVAL:-5}"
 export LR="${LR:-1e-4}"
 
-exec ./scripts/run_production_training.sh "$@"
+exec ./scripts/ops/run_production_training.sh "$@"

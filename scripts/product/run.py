@@ -16,7 +16,7 @@ def _run(cmd: list, env=None) -> int:
 
 
 def cmd_train(args) -> int:
-    script = REPO / "scripts" / "train_maxsight.py"
+    script = REPO / "scripts" / "ops" / "train_maxsight.py"
     if not script.exists():
         print("train_maxsight.py not found", file=sys.stderr)
         return 1
@@ -48,7 +48,7 @@ def cmd_validate(args) -> int:
     if code != 0:
         return code
     if getattr(args, "data", False):
-        script = REPO / "scripts" / "validate_data_pipeline.py"
+        script = REPO / "scripts" / "ops" / "validate_data_pipeline.py"
         if script.exists():
             code = _run([sys.executable, str(script)])
             if code != 0:
@@ -87,7 +87,7 @@ def cmd_export(args) -> int:
 
 
 def cmd_package(args) -> int:
-    script = REPO / "scripts" / "export_for_xcode.py"
+    script = REPO / "scripts" / "ops" / "export_for_xcode.py"
     if not script.exists():
         print("export_for_xcode.py not found", file=sys.stderr)
         return 1
@@ -97,7 +97,7 @@ def cmd_package(args) -> int:
 
 
 def cmd_smoke(args) -> int:
-    script = REPO / "scripts" / "smoke_train.py"
+    script = REPO / "scripts" / "ops" / "smoke_train.py"
     if not script.exists():
         print("smoke_train.py not found", file=sys.stderr)
         return 1

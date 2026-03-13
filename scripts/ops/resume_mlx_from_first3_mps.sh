@@ -61,4 +61,4 @@ echo "  RESUME_MODEL_ONLY=1 (new LRs, scheduler, batch 4, grad acc 4)"
 echo "  DEVICE=$DEVICE  BATCH_SIZE=$BATCH_SIZE  GRAD_ACC=$GRAD_ACC  EPOCHS=$EPOCHS"
 echo "============================================================"
 
-exec ./scripts/run_production_training.sh "$@"
+exec ./scripts/ops/run_production_training.sh "$@"

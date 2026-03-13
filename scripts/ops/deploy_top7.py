@@ -101,7 +101,7 @@ def main():
         print("No checkpoints base found. Either:", file=sys.stderr)
         print("  1. Pass --checkpoints-base /path/to/dir (folder containing checkpoints_amblyopia/best_model.pt etc.)", file=sys.stderr)
         print("  2. Set CHECKPOINTS_BASE and run again", file=sys.stderr)
-        print("  3. Run: python scripts/find_trained_checkpoints.py  (to see if any known path has checkpoints)", file=sys.stderr)
+        print("  3. Run: python scripts/ops/find_trained_checkpoints.py  (to see if any known path has checkpoints)", file=sys.stderr)
         return 1
     base = base.resolve()
     out_root = Path(args.output_dir).resolve()
@@ -282,7 +282,7 @@ def main():
         print(f"No best_model.pt found for any of the top 7 under: {base}", file=sys.stderr)
         print("Each condition needs: <base>/checkpoints_<cond>/best_model.pt", file=sys.stderr)
         print("Train first: python scripts/train_alive_models.py --checkpoints-base <base> --data-dir <data> --train-annotation ... --val-annotation ...", file=sys.stderr)
-        print("Or copy trained checkpoints into that layout. Discover path: python scripts/find_trained_checkpoints.py", file=sys.stderr)
+        print("Or copy trained checkpoints into that layout. Discover path: python scripts/ops/find_trained_checkpoints.py", file=sys.stderr)
         return 1
 
     if not (all_ok and (validate_only or all_exported)):

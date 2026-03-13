@@ -163,7 +163,7 @@ if [ "$UPLOAD_DATASETS" = true ]; then
         if [ -d "$HOME/fiftyone/open-images-v6/validation" ]; then
             # Need to reorganize first or upload from FiftyOne location
             echo "    ⚠️  Note: Uploading from FiftyOne location"
-            echo "    Consider reorganizing first: python scripts/reorganize_open_images.py"
+            echo "    Consider reorganizing first: python scripts/ops/reorganize_open_images.py"
             rclone copy "$HOME/fiftyone/open-images-v6" "gdrive:$DRIVE_FOLDER/datasets/open_images_v6" --progress --transfers 4
         else
             rclone copy "$OI6_SOURCE" "gdrive:$DRIVE_FOLDER/datasets/open_images_v6" --progress --transfers 4

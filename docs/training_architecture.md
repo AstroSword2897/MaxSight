@@ -4,7 +4,7 @@ This document describes how training is structured: loop, losses, balancing, val
 
 ## Overview
 
-Training is implemented in `ml/training/` and driven by scripts such as `scripts/train_maxsight.py` and `scripts/smoke_train.py`. The loop loads data via the data pipeline, runs forward and backward passes, computes a multi-task loss, and optionally runs validation and checkpointing.
+Training is implemented in `ml/training/` and driven by ops scripts under `scripts/ops/` (e.g. `scripts/ops/train_maxsight.py`, `scripts/ops/smoke_train.py`) or via the canonical product runner `python scripts/product/run.py train|smoke`. The loop loads data via the data pipeline, runs forward and backward passes, computes a multi-task loss, and optionally runs validation and checkpointing.
 
 ## Training loop
 

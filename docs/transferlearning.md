@@ -46,7 +46,7 @@ Transfer learning lets you reuse weights from a trained model (e.g. T2) when tra
 ## Related code
 
 - **Transfer manager:** `ml/training/transfer_learning.py`
-- **Training loop and checkpointing:** `ml/training/train_loop.py`, `scripts/train_maxsight.py`
+- **Training loop and checkpointing:** `ml/training/train_loop.py`, `scripts/ops/train_maxsight.py` (or `python scripts/product/run.py train`)
 - **Model creation and tier config:** `ml/models/maxsight_cnn.py` (e.g. `create_model()`, `TierConfig.for_tier()`)
 
 For training setup and data, see `docs/training_architecture.md` and `docs/training-data-loading.md`. For model tiers and architecture, see `docs/architecture.md`.

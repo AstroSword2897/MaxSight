@@ -6,6 +6,12 @@ from enum import Enum
 import torch
 import re
 
+from ml.runtime_constants import (
+    CRITICAL_URGENCY_THRESHOLD,
+    ALERTS_PER_MINUTE_CAP,
+    MIN_CHANNEL_INTERVAL_S,
+)
+
 try:
     from ml.utils.sound_processing import SoundProcessor, SoundClass, SoundDirection
     SOUND_PROCESSING_AVAILABLE = True
@@ -67,12 +73,12 @@ class CrossModalScheduler:
         self.last_output_time: Dict[str, float] = {}
         # Cross-channel rate limiting to prevent sensory overload.
         self.last_output_by_channel: Dict[OutputChannel, float] = {}
-        self.min_channel_interval = 0.3  # 300ms between ANY outputs (except emergencies)
+        self.min_channel_interval = MIN_CHANNEL_INTERVAL_S
         self.output_history: List[ScheduledOutput] = []
         # Track previous outputs for smooth audio transitions (Sprint 3 Day 22)
         self.previous_outputs: Dict[str, ScheduledOutput] = {}
         # Sound processing (Sprint 3 Day 26)
-        if SOUND_PROCESSING_AVAILABLE:
+        if SOUND_PROCESSING_AVAILABLE and SoundProcessor is not None:
             self.sound_processor = SoundProcessor()
         else:
             self.sound_processor = None
@@ -86,9 +92,9 @@ class CrossModalScheduler:
         """Schedule outputs based on detections and model outputs."""
         scheduled = []
         
-        # Process high-urgency items even when uncertainty is high.
-        critical_detections = [d for d in detections if d.get('urgency', 0) >= 3]
-        normal_detections = [d for d in detections if d.get('urgency', 0) < 3]
+        # Process high-urgency items even when uncertainty is high (SG-07).
+        critical_detections = [d for d in detections if d.get('urgency', 0) >= CRITICAL_URGENCY_THRESHOLD]
+        normal_detections = [d for d in detections if d.get('urgency', 0) < CRITICAL_URGENCY_THRESHOLD]
         
         # Get uncertainty - suppress if too high (only for normal detections) By ensuring only reliable information is presented.
         uncertainty = model_outputs.get('uncertainty', torch.tensor(0.0))
@@ -115,10 +121,15 @@ class CrossModalScheduler:
         # Sort by priority (highest first)
         filtered_detections.sort(key=lambda x: x.get('priority', 0), reverse=True)
         
-        # Limit number of outputs based on frequency. Supports Practical Usability & Safety Goals (counterproductive otherwise).
+        # Limit outputs per frame (SG-08); critical always included.
         max_outputs = self._get_max_outputs()
-        filtered_detections = filtered_detections[:max_outputs]
-        
+        max_per_frame = min(max_outputs, max(2, ALERTS_PER_MINUTE_CAP // 6))
+        n_critical = len(critical_detections)
+        n_normal_cap = max(0, max_per_frame - n_critical)
+        limited_normal = filtered_normal[:n_normal_cap]
+        filtered_detections = critical_detections + limited_normal
+        filtered_detections.sort(key=lambda x: x.get('priority', 0), reverse=True)
+
         # Schedule each detection. Channels, timing, and descriptions.
         for det in filtered_detections:
             output = self._create_output_for_detection(det, model_outputs, timestamp)

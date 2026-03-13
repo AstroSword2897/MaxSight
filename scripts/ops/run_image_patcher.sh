@@ -17,7 +17,7 @@ echo "Training can continue running - this runs independently"
 echo ""
 
 # Run patcher with output to log file
-python3 scripts/patch_missing_images.py \
+python3 scripts/ops/patch_missing_images.py \
     --split "${SPLIT}" \
     --workers 4 \
     --root /Users/nani/2026-Prototype \

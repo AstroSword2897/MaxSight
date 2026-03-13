@@ -32,7 +32,7 @@ if [ "$need_discover" -eq 1 ]; then
   if [ -z "$CHECKPOINTS_BASE" ]; then
     echo "No checkpoints found. Looked in: $REPO_ROOT/checkpoints, $REPO_ROOT/backups, $REPO_ROOT" | tee -a "$LOG_FILE"
     echo "Expected: <base>/checkpoints_<condition>/best_model.pt" | tee -a "$LOG_FILE"
-    echo "To create dir layout: python scripts/ensure_checkpoint_layout.py" | tee -a "$LOG_FILE"
+    echo "To create dir layout: python scripts/ops/ensure_checkpoint_layout.py" | tee -a "$LOG_FILE"
     exit 1
   fi
 fi
@@ -42,7 +42,7 @@ echo "Log: $LOG_FILE" | tee -a "$LOG_FILE"
 echo "Val: $VAL_ANN | Image dir: $IMAGE_DIR | Checkpoints: $CHECKPOINTS_BASE" | tee -a "$LOG_FILE"
 echo "---" | tee -a "$LOG_FILE"
 
-python scripts/run_checkpoint_inference.py \
+python scripts/ops/run_checkpoint_inference.py \
   --val-annotation "$VAL_ANN" \
   --image-dir "$IMAGE_DIR" \
   --checkpoints-base "$CHECKPOINTS_BASE" \
