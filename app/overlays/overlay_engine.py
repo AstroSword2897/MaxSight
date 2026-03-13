@@ -1,11 +1,4 @@
-"""
-Overlay Engine
-
-Renders visual overlays for therapy guidance.
-
-Phase 4: Overlay Engine & UX Guidance
-See docs/therapy_system_implementation_plan.md for implementation details.
-"""
+"""Overlay Engine Renders visual overlays for therapy guidance. Phase 4: Overlay Engine & UX Guidance See docs/therapy_system_implementation_plan.md for implementation details."""
 
 from typing import Dict, List, Tuple, Optional, Any
 import numpy as np
@@ -18,26 +11,11 @@ from PIL import Image
 
 
 class OverlayEngine:
-    """
-    Renders visual overlays for therapy guidance.
-    
-    Overlay types:
-    - Subtle halo
-    - Edge glow (contrast reinforcement)
-    - Depth "soft fog" for near objects
-    - Motion trace for tracking tasks
-    - Gaze indicator
-    - Gentle arrows for guidance
-    
-    Safety constraints:
-    - Never obscure more than 10% of screen
-    - No bright colors
-    - Overlays must fade after task ends
-    """
+    """Renders visual overlays for therapy guidance."""
     
     def __init__(self, screen_size: Tuple[int, int] = (224, 224)):
         self.screen_size = screen_size
-        self.max_overlay_percent = 0.10  # 10% max screen coverage
+        self.max_overlay_percent = 0.10  # 10% max screen coverage.
         self.active_overlays = []
     
     def add_halo(
@@ -46,23 +24,13 @@ class OverlayEngine:
         radius: float,
         intensity: float = 0.3
     ) -> Dict[str, Any]:
-        """
-        Add subtle halo overlay.
-        
-        Arguments:
-            center: (x, y) center position [0, 1]
-            radius: Radius in pixels
-            intensity: Opacity [0, 1]
-        
-        Returns:
-            Overlay configuration
-        """
+        """Add subtle halo overlay."""
         overlay = {
             'type': 'halo',
             'center': center,
             'radius': radius,
-            'intensity': min(intensity, 0.5),  # Cap at 50% opacity
-            'color': (255, 255, 255)  # White, subtle
+            'intensity': min(intensity, 0.5),  # Cap at 50% opacity.
+            'color': (255, 255, 255)  # White, subtle.
         }
         self.active_overlays.append(overlay)
         return overlay
@@ -73,23 +41,13 @@ class OverlayEngine:
         width: float = 2.0,
         intensity: float = 0.4
     ) -> Dict[str, Any]:
-        """
-        Add edge glow for contrast reinforcement.
-        
-        Arguments:
-            edges: List of (x, y) edge points
-            width: Glow width in pixels
-            intensity: Opacity [0, 1]
-        
-        Returns:
-            Overlay configuration
-        """
+        """Add edge glow for contrast reinforcement."""
         overlay = {
             'type': 'edge_glow',
             'edges': edges,
             'width': width,
             'intensity': min(intensity, 0.5),
-            'color': (200, 200, 255)  # Subtle blue-white
+            'color': (200, 200, 255)  # Subtle blue-white.
         }
         self.active_overlays.append(overlay)
         return overlay
@@ -99,22 +57,13 @@ class OverlayEngine:
         depth_map: np.ndarray,
         near_threshold: float = 0.3
     ) -> Dict[str, Any]:
-        """
-        Add depth "soft fog" for near objects.
-        
-        Arguments:
-            depth_map: Depth map [H, W] with values [0, 1]
-            near_threshold: Threshold for "near" objects
-        
-        Returns:
-            Overlay configuration
-        """
+        """Add depth "soft fog" for near objects."""
         overlay = {
             'type': 'depth_fog',
             'depth_map': depth_map,
             'near_threshold': near_threshold,
-            'intensity': 0.2,  # Very subtle
-            'color': (150, 150, 150)  # Gray fog
+            'intensity': 0.2,  # Very subtle.
+            'color': (150, 150, 150)  # Gray fog.
         }
         self.active_overlays.append(overlay)
         return overlay
@@ -124,22 +73,13 @@ class OverlayEngine:
         path: List[Tuple[float, float]],
         width: float = 3.0
     ) -> Dict[str, Any]:
-        """
-        Add motion trace for tracking tasks.
-        
-        Arguments:
-            path: List of (x, y) positions
-            width: Trace width in pixels
-        
-        Returns:
-            Overlay configuration
-        """
+        """Add motion trace for tracking tasks."""
         overlay = {
             'type': 'motion_trace',
             'path': path,
             'width': width,
             'intensity': 0.6,
-            'color': (100, 200, 255)  # Light blue
+            'color': (100, 200, 255)  # Light blue.
         }
         self.active_overlays.append(overlay)
         return overlay
@@ -149,22 +89,13 @@ class OverlayEngine:
         position: Tuple[float, float],
         size: float = 10.0
     ) -> Dict[str, Any]:
-        """
-        Add gaze position indicator.
-        
-        Arguments:
-            position: (x, y) gaze position [0, 1]
-            size: Indicator size in pixels
-        
-        Returns:
-            Overlay configuration
-        """
+        """Add gaze position indicator."""
         overlay = {
             'type': 'gaze_indicator',
             'position': position,
             'size': size,
             'intensity': 0.5,
-            'color': (255, 200, 100)  # Orange-yellow
+            'color': (255, 200, 100)  # Orange-yellow.
         }
         self.active_overlays.append(overlay)
         return overlay
@@ -175,24 +106,14 @@ class OverlayEngine:
         end: Tuple[float, float],
         width: float = 5.0
     ) -> Dict[str, Any]:
-        """
-        Add gentle arrow for guidance.
-        
-        Arguments:
-            start: (x, y) start position [0, 1]
-            end: (x, y) end position [0, 1]
-            width: Arrow width in pixels
-        
-        Returns:
-            Overlay configuration
-        """
+        """Add gentle arrow for guidance."""
         overlay = {
             'type': 'guidance_arrow',
             'start': start,
             'end': end,
             'width': width,
             'intensity': 0.4,
-            'color': (150, 255, 150)  # Light green
+            'color': (150, 255, 150)  # Light green.
         }
         self.active_overlays.append(overlay)
         return overlay
@@ -204,22 +125,11 @@ class OverlayEngine:
         urgency_scores: Optional[np.ndarray] = None,
         text_regions: Optional[List[Dict[str, Any]]] = None
     ) -> Image.Image:
-        """
-        Create overlay with bounding boxes, labels, and text regions.
-        
-        Arguments:
-            base_image: PIL Image
-            detections: List of detection dictionaries with 'bbox', 'class_name', 'confidence'
-            urgency_scores: Optional urgency scores array
-            text_regions: Optional list of text region dictionaries
-        
-        Returns:
-            PIL Image with overlays
-        """
+        """Create overlay with bounding boxes, labels, and text regions."""
         if not CV2_AVAILABLE:
             return base_image
         
-        # Convert PIL to OpenCV format
+        # Convert PIL to OpenCV format.
         img_array = np.array(base_image)
         if len(img_array.shape) == 2:
             img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
@@ -228,7 +138,7 @@ class OverlayEngine:
         
         h, w = img_array.shape[:2]
         
-        # Draw detection bounding boxes
+        # Draw detection bounding boxes.
         for det in detections:
             bbox = det.get('bbox', [])
             if len(bbox) == 4:
@@ -236,23 +146,23 @@ class OverlayEngine:
                 x1, y1 = int(x1 * w), int(y1 * h)
                 x2, y2 = int(x2 * w), int(y2 * h)
                 
-                # Color based on urgency or confidence
+                # Color based on urgency or confidence.
                 confidence = det.get('confidence', 0.5)
                 if urgency_scores is not None and len(urgency_scores) > 0:
                     urgency = int(urgency_scores.argmax())
                     if urgency >= 3:
-                        color = (0, 0, 255)  # Red for danger
+                        color = (0, 0, 255)  # Red for danger.
                     elif urgency >= 2:
-                        color = (0, 165, 255)  # Orange for warning
+                        color = (0, 165, 255)  # Orange for warning.
                     else:
-                        color = (0, 255, 0)  # Green for safe
+                        color = (0, 255, 0)  # Green for safe.
                 else:
                     color = (0, 255, 255) if confidence > 0.7 else (255, 255, 0)
                 
-                # Draw bounding box
+                # Draw bounding box.
                 cv2.rectangle(img_array, (x1, y1), (x2, y2), color, 2)
                 
-                # Draw label
+                # Draw label.
                 class_name = det.get('class_name', 'object')
                 label = f"{class_name} {confidence:.2f}"
                 label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
@@ -261,7 +171,7 @@ class OverlayEngine:
                 cv2.putText(img_array, label, (x1, y1 - 5),
                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         
-        # Draw text regions
+        # Draw text regions.
         if text_regions:
             for text_region in text_regions:
                 bbox = text_region.get('bbox', [])
@@ -275,19 +185,11 @@ class OverlayEngine:
                         cv2.putText(img_array, text[:20], (x1, y1 - 5),
                                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 255), 1)
         
-        # Convert back to PIL Image
+        # Convert back to PIL Image.
         return Image.fromarray(img_array)
     
     def render_overlays(self, base_image: np.ndarray) -> np.ndarray:
-        """
-        Render all active overlays onto base image.
-        
-        Arguments:
-            base_image: Base image [H, W, 3]
-        
-        Returns:
-            Image with overlays [H, W, 3]
-        """
+        """Render all active overlays onto base image. Arguments: base_image: Base image [H, W, 3] Returns: Image with overlays [H, W, 3]."""
         if not CV2_AVAILABLE:
             return base_image.copy()
         
@@ -326,4 +228,10 @@ class OverlayEngine:
             overlay['intensity'] *= fade_factor
             if overlay['intensity'] < 0.01:
                 self.active_overlays.remove(overlay)
+
+
+
+
+
+
 

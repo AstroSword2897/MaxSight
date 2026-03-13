@@ -1,17 +1,4 @@
-"""
-Unified Therapy State Head for MaxSight 3.0
-
-Combines Fatigue/Gaze, Depth/Focus, and Contrast heads into a single modular Stage B head.
-All outputs produced in one dictionary for async/non-blocking Stage B integration.
-
-CRITICAL DESIGN:
-- Single unified head for all therapy state outputs
-- Motion features as temporal anchor for all tasks
-- FPN multi-scale support for depth
-- Edge-aware contrast estimation
-- LSTM for fatigue/gaze temporal continuity
-- All outputs in normalized [0, 1] range for interpretability
-"""
+"""Unified Therapy State Head for MaxSight 3.0."""
 
 import torch
 import torch.nn as nn
@@ -20,14 +7,7 @@ from typing import Dict, Optional, Tuple
 
 
 class TherapyStateHead(nn.Module):
-    """
-    Unified Therapy State Head:
-    - Fatigue/Gaze: fatigue_score, blink_rate, fixation_stability
-    - Depth/Focus: depth_map, uncertainty, zones (near/mid/far)
-    - Contrast: contrast_map, edge_map (optional)
-    
-    All tasks share motion features as temporal anchor for consistency.
-    """
+    """Unified Therapy State Head:."""
     
     def __init__(
         self,
@@ -47,7 +27,7 @@ class TherapyStateHead(nn.Module):
     ):
         super().__init__()
         
-        # --- Fatigue/Gaze shared backbone ---
+        # --- Fatigue/Gaze shared backbone ---.
         self.eye_dim = eye_dim
         self.temporal_dim = temporal_dim
         self.hidden_dim = hidden_dim
@@ -87,7 +67,7 @@ class TherapyStateHead(nn.Module):
         
         self.lstm_hidden = None
         
-        # --- Depth/Focus ---
+        # --- Depth/Focus ---.
         self.in_channels_depth = in_channels_depth
         self.motion_dim = motion_dim
         self.use_depth_multi_scale = use_depth_multi_scale
@@ -96,7 +76,7 @@ class TherapyStateHead(nn.Module):
         if motion_dim > 0:
             self.motion_proj_depth = nn.Conv2d(motion_dim, in_channels_depth, kernel_size=1, bias=False)
         
-        # Depth branch
+        # Depth branch.
         self.depth_branch = nn.Sequential(
             nn.Conv2d(in_channels_depth, 128, kernel_size=3, padding=1, bias=False),
             nn.GroupNorm(8, 128),
@@ -106,7 +86,7 @@ class TherapyStateHead(nn.Module):
             nn.ReLU(inplace=True)
         )
         
-        # Uncertainty branch
+        # Uncertainty branch.
         self.uncertainty_branch = nn.Sequential(
             nn.Conv2d(in_channels_depth, 64, kernel_size=3, padding=1, bias=False),
             nn.GroupNorm(8, 64),
@@ -116,7 +96,7 @@ class TherapyStateHead(nn.Module):
             nn.ReLU(inplace=True)
         )
         
-        # Depth output
+        # Depth output.
         if depth_activation == 'sigmoid':
             self.depth_conv = nn.Sequential(nn.Conv2d(64, 1, 1), nn.Sigmoid())
         elif depth_activation == 'softplus':
@@ -132,7 +112,7 @@ class TherapyStateHead(nn.Module):
                 'p4': nn.Conv2d(256, 64, 1)
             })
         
-        # Zone head
+        # Zone head.
         ZONE_DEPTH_FEAT_DIM = 64
         ZONE_DEPTH_STATS_DIM = 3
         ZONE_INPUT_DIM = ZONE_DEPTH_FEAT_DIM + ZONE_DEPTH_STATS_DIM
@@ -144,7 +124,6 @@ class TherapyStateHead(nn.Module):
             nn.Linear(32, 3)
         )
         
-        # --- Contrast ---
         self.in_channels_contrast = in_channels_contrast
         self.use_edge_aware = use_edge_aware
         
@@ -160,7 +139,7 @@ class TherapyStateHead(nn.Module):
                 nn.Conv2d(32, 1, kernel_size=1)
             )
         
-        # Contrast estimation network
+        # Contrast estimation network.
         self.conv1_contrast = nn.Conv2d(in_channels_contrast, 128, kernel_size=3, padding=1, bias=False)
         self.bn1_contrast = nn.BatchNorm2d(128)
         self.conv2_contrast = nn.Conv2d(128, 64, kernel_size=3, padding=1, bias=False)
@@ -168,7 +147,7 @@ class TherapyStateHead(nn.Module):
         self.conv3_contrast = nn.Conv2d(64, 1, kernel_size=1)
         self.relu = nn.ReLU(inplace=True)
         
-        # Initialize weights
+        # Initialize weights.
         self._initialize_weights()
     
     def _make_head(self, input_dim: int) -> nn.Module:
@@ -193,48 +172,26 @@ class TherapyStateHead(nn.Module):
     
     def forward(
         self,
-        eye_features: torch.Tensor,  # [B, eye_dim]
-        motion_features: torch.Tensor,  # [B, motion_dim] or [B, motion_dim, H, W]
-        depth_features: torch.Tensor,  # [B, in_channels_depth, H, W]
-        contrast_features: torch.Tensor,  # [B, in_channels_contrast, H, W]
+        eye_features: torch.Tensor,  # [B, eye_dim].
+        motion_features: torch.Tensor,  # [B, motion_dim] or [B, motion_dim, H, W].
+        depth_features: torch.Tensor,  # [B, in_channels_depth, H, W].
+        contrast_features: torch.Tensor,  # [B, in_channels_contrast, H, W].
         fpn_features: Optional[Dict[str, torch.Tensor]] = None
     ) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass for all therapy state outputs.
-        
-        Args:
-            eye_features: Eye tracking features [B, eye_dim]
-            motion_features: Motion features [B, motion_dim] (for fatigue) or [B, motion_dim, H, W] (for depth/contrast)
-            depth_features: Depth input features [B, in_channels_depth, H, W]
-            contrast_features: Contrast input features [B, in_channels_contrast, H, W]
-            fpn_features: Optional FPN features for multi-scale depth
-        
-        Returns:
-            Dictionary with all outputs:
-            - 'fatigue_score': [B, 1]
-            - 'blink_rate': [B, 1]
-            - 'fixation_stability': [B, 1]
-            - 'shared_features': [B, hidden_dim//2]
-            - 'depth_map': [B, H, W]
-            - 'uncertainty': [B, H, W]
-            - 'zones': [B, 3]
-            - 'contrast_map': [B, H, W]
-            - 'edge_map': [B, H, W] (optional)
-        """
+        """Forward pass for all therapy state outputs."""
         B = eye_features.shape[0]
         device = eye_features.device
         
-        # --- Fatigue/Gaze ---
-        # Extract motion features for fatigue (if 2D, pool to 1D)
+        # --- Fatigue/Gaze ---. Extract motion features for fatigue (if 2D, pool to 1D)
         if motion_features.dim() == 4:
-            # [B, motion_dim, H, W] -> [B, motion_dim]
+            # [B, motion_dim, H, W] -> [B, motion_dim].
             motion_1d = F.adaptive_avg_pool2d(motion_features, 1).squeeze(-1).squeeze(-1)
         elif motion_features.dim() == 2:
-            motion_1d = motion_features  # [B, motion_dim]
+            motion_1d = motion_features  # [B, motion_dim].
         else:
             raise ValueError(f"Expected motion_features to be 2D [B, D] or 4D [B, D, H, W], got {motion_features.shape}")
         
-        # Ensure temporal_dim matches motion_dim for concatenation
+        # Ensure temporal_dim matches motion_dim for concatenation.
         if motion_1d.shape[1] != self.temporal_dim:
             # Project if needed (create on first use)
             if not hasattr(self, 'motion_proj_fatigue'):
@@ -245,7 +202,7 @@ class TherapyStateHead(nn.Module):
         initial_features = self.initial_net(combined)
         
         if self.use_lstm and self.lstm is not None:
-            seq = initial_features.unsqueeze(1)  # [B, 1, hidden_dim]
+            seq = initial_features.unsqueeze(1)  # [B, 1, hidden_dim].
             lstm_out, self.lstm_hidden = self.lstm(seq, self.lstm_hidden)
             lstm_features = lstm_out.squeeze(1)
         else:
@@ -257,8 +214,7 @@ class TherapyStateHead(nn.Module):
         blink_rate = self.blink_rate_head(shared_features)
         fixation_stability = self.fixation_stability_head(shared_features)
         
-        # --- Depth/Focus ---
-        # Motion-conditioned depth (if motion is 4D)
+        # --- Depth/Focus ---. Motion-conditioned depth (if motion is 4D)
         if motion_features.dim() == 4 and hasattr(self, 'motion_proj_depth'):
             motion_proj = self.motion_proj_depth(motion_features)
             if motion_proj.shape[2:] != depth_features.shape[2:]:
@@ -288,11 +244,11 @@ class TherapyStateHead(nn.Module):
                     depth_feat_list.append(proj_feat)
             depth_feat = torch.stack(depth_feat_list, dim=0).mean(dim=0)
         
-        depth_map = self.depth_conv(depth_feat).squeeze(1)  # [B, H, W]
-        uncertainty = self.uncertainty_conv(uncertainty_feat).squeeze(1)  # [B, H, W]
+        depth_map = self.depth_conv(depth_feat).squeeze(1)  # [B, H, W].
+        uncertainty = self.uncertainty_conv(uncertainty_feat).squeeze(1)  # [B, H, W].
         
-        # Zone classification
-        depth_flat = depth_map.contiguous().reshape(B, -1)
+        # Zone classification.
+        depth_flat = depth_map.contiguous().reshape(B, -1).float()  # Ensure float for quantile.
         p25 = torch.quantile(depth_flat, 0.25, dim=1)
         p50 = torch.quantile(depth_flat, 0.5, dim=1)
         p75 = torch.quantile(depth_flat, 0.75, dim=1)
@@ -302,7 +258,6 @@ class TherapyStateHead(nn.Module):
         zone_input = torch.cat([depth_pooled, depth_stats], dim=1)
         zones = self.zone_head(zone_input)
         
-        # --- Contrast ---
         # Motion-conditioned contrast (if motion is 4D)
         if motion_features.dim() == 4 and hasattr(self, 'motion_proj_contrast'):
             motion_proj = self.motion_proj_contrast(motion_features)
@@ -315,21 +270,21 @@ class TherapyStateHead(nn.Module):
                 )
             contrast_features = contrast_features + motion_proj
         
-        # Edge-aware modulation
+        # Edge-aware modulation.
         if self.use_edge_aware:
-            edge_logits = self.edge_conv(contrast_features)  # [B, 1, H, W]
+            edge_logits = self.edge_conv(contrast_features)  # [B, 1, H, W].
             edge_map = torch.clamp(edge_logits, 0, 1)
             modulated_features = contrast_features * (1.0 + edge_map)
         else:
             edge_map = None
             modulated_features = contrast_features
         
-        # Contrast estimation
+        # Contrast estimation.
         x = self.relu(self.bn1_contrast(self.conv1_contrast(modulated_features)))
         x = self.relu(self.bn2_contrast(self.conv2_contrast(x)))
-        contrast_map = torch.sigmoid(self.conv3_contrast(x)).squeeze(1)  # [B, H, W]
+        contrast_map = torch.sigmoid(self.conv3_contrast(x)).squeeze(1)  # [B, H, W].
         
-        # Build output dictionary
+        # Build output dictionary.
         outputs = {
             'fatigue_score': fatigue_score,
             'blink_rate': blink_rate,
@@ -342,7 +297,13 @@ class TherapyStateHead(nn.Module):
         }
         
         if edge_map is not None:
-            outputs['edge_map'] = edge_map.squeeze(1)  # [B, H, W]
+            outputs['edge_map'] = edge_map.squeeze(1)  # [B, H, W].
         
         return outputs
+
+
+
+
+
+
 

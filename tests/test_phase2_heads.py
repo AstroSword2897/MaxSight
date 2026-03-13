@@ -1,13 +1,4 @@
-"""
-Comprehensive Tests for Phase 2: Advanced Multi-Task Heads
-
-Tests all Phase 2 components:
-- Transformer-Based OCR Head
-- Scene Description Head
-- Sound Event Classification Head
-- Personalization Head
-- Predictive Alert Head
-"""
+"""Comprehensive Tests for Phase 2: Advanced Multi-Task Heads."""
 
 import torch
 import torch.nn as nn
@@ -15,7 +6,7 @@ import pytest
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -38,7 +29,7 @@ class TestOCRHead:
         )
         ocr_head.eval()
         
-        features = torch.randn(2, 10, 256)  # [B, N_regions, D]
+        features = torch.randn(2, 10, 256)  # [B, N_regions, D].
         outputs = ocr_head(features)
         
         assert outputs is not None
@@ -89,14 +80,14 @@ class TestSoundEventHead:
         
         sound_head = SoundEventHead(
             freq_bins=128,
-            num_classes=15,  # Match actual default
-            num_directions=4,  # Match actual default
+            num_classes=15,  # Match actual default.
+            num_directions=4,  # Match actual default.
             embed_dim=256
         )
         sound_head.eval()
         
-        # Input should be spectrogram: [B, T, freq_bins]
-        spectrogram = torch.randn(2, 10, 128)  # [B, T, freq_bins]
+        # Input is spectrogram: [B, T, freq_bins].
+        spectrogram = torch.randn(2, 10, 128)  # [B, T, freq_bins].
         outputs = sound_head(spectrogram)
         
         assert outputs is not None
@@ -128,8 +119,8 @@ class TestPersonalizationHead:
         )
         personal_head.eval()
         
-        scene_features = torch.randn(2, 512)  # [B, input_dim]
-        user_id = torch.LongTensor([0, 1])  # [B] - required parameter
+        scene_features = torch.randn(2, 512)  # [B, input_dim].
+        user_id = torch.LongTensor([0, 1])  # [B] - required parameter.
         
         outputs = personal_head(scene_features, user_id)
         
@@ -158,7 +149,7 @@ class TestPredictiveAlertHead:
         alert_head.eval()
         
         scene_features = torch.randn(2, 512)
-        motion_features = torch.randn(2, 256)  # [B, D] not [B, T, D]
+        motion_features = torch.randn(2, 256)  # [B, D] not [B, T, D].
         
         outputs = alert_head(scene_features, motion_features)
         
@@ -177,4 +168,10 @@ def run_all_tests():
 
 if __name__ == "__main__":
     run_all_tests()
+
+
+
+
+
+
 

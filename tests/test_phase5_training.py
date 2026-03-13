@@ -1,13 +1,4 @@
-"""
-Comprehensive Tests for Phase 5: Advanced Training Techniques
-
-Tests all Phase 5 components:
-- Self-Supervised Pretraining (MAE, SimCLR)
-- Knowledge Distillation
-- Data Augmentation
-- Continual Learning (EWC)
-- Cross-View Training
-"""
+"""Comprehensive Tests for Phase 5: Advanced Training Techniques."""
 
 import torch
 import torch.nn as nn
@@ -15,7 +6,7 @@ import pytest
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -31,23 +22,23 @@ class TestSelfSupervisedPretraining:
         """Test MAE loss computation."""
         from ml.training.self_supervised_pretrain import MAELoss
         
-        # MAELoss is a loss function, not a model
+        # MAELoss is a loss function, not a model.
         mae_loss = MAELoss(patch_size=16)
         
-        # Create dummy reconstructed patches, target patches, and mask
-        B, N = 2, 196  # 14x14 patches
+        # Create dummy reconstructed patches, target patches, and mask.
+        B, N = 2, 196  # 14x14 patches.
         P = 16
         C = 3
         patch_dim = P * P * C
         
         recon = torch.randn(B, N, patch_dim)
         target = torch.randn(B, N, patch_dim)
-        mask = torch.rand(B, N) > 0.25  # 75% masked
+        mask = torch.rand(B, N) > 0.25  # 75% masked.
         
         loss = mae_loss(recon, target, mask)
         
         assert isinstance(loss, torch.Tensor)
-        assert loss.dim() == 0  # Scalar
+        assert loss.dim() == 0  # Scalar.
         assert loss.item() >= 0
     
     def test_simclr_import(self):
@@ -59,18 +50,18 @@ class TestSelfSupervisedPretraining:
         """Test SimCLR loss computation."""
         from ml.training.self_supervised_pretrain import SimCLRLoss
         
-        # SimCLRLoss is a loss function, not a model
+        # SimCLRLoss is a loss function, not a model.
         simclr_loss = SimCLRLoss(temperature=0.07)
         
-        # Create dummy normalized embeddings from two augmented views
+        # Create dummy normalized embeddings from two augmented views.
         B, D = 4, 256
-        z1 = torch.randn(B, D)  # Embeddings from view 1
-        z2 = torch.randn(B, D)  # Embeddings from view 2
+        z1 = torch.randn(B, D)  # Embeddings from view 1.
+        z2 = torch.randn(B, D)  # Embeddings from view 2.
         
         loss = simclr_loss(z1, z2)
         
         assert isinstance(loss, torch.Tensor)
-        assert loss.dim() == 0  # Scalar
+        assert loss.dim() == 0  # Scalar.
         assert loss.item() >= 0
 
 
@@ -86,10 +77,10 @@ class TestKnowledgeDistillation:
         """Test Knowledge Distillation loss computation."""
         from ml.training.self_supervised_pretrain import KnowledgeDistillationLoss
         
-        # KnowledgeDistillationLoss is a loss function, not a model
+        # KnowledgeDistillationLoss is a loss function, not a model.
         kd_loss = KnowledgeDistillationLoss(temperature=3.0, alpha=0.7)
         
-        # Create dummy logits
+        # Create dummy logits.
         B, C = 4, 10
         student_logits = torch.randn(B, C)
         teacher_logits = torch.randn(B, C)
@@ -129,12 +120,11 @@ class TestContinualLearning:
         model = nn.Linear(10, 10)
         ewc = ElasticWeightConsolidation(model, lambda_ewc=0.4)
         
-        # Set dummy Fisher info and optimal params (attribute is 'fisher', not 'fisher_info')
         for name, param in model.named_parameters():
             ewc.fisher[name] = torch.ones_like(param.data)
             ewc.optimal_params[name] = param.data.clone()
         
-        # Compute EWC penalty
+        # Compute EWC penalty.
         ewc_penalty = ewc.penalty()
         
         assert ewc_penalty is not None
@@ -156,16 +146,16 @@ class TestDataAugmentation:
         
         augment = MultiModalAugmentation()
         
-        # MultiModalAugmentation expects single image tensor, not batch
-        image = torch.randn(3, 224, 224)  # [C, H, W] not [B, C, H, W]
-        audio = torch.randn(128)  # Single audio sample
+        # MultiModalAugmentation expects single image tensor, not batch.
+        image = torch.randn(3, 224, 224)  # [C, H, W] not [B, C, H, W].
+        audio = torch.randn(128)  # Single audio sample.
         
         try:
             aug_image, aug_audio = augment(image, audio)
             assert aug_image.shape == image.shape
             assert aug_audio is None or aug_audio.shape == audio.shape
         except Exception as e:
-            # May fail due to transform requirements
+            # May fail due to transform requirements.
             pytest.skip(f"Multi-modal augmentation test skipped: {e}")
     
     def test_synthetic_scene_generator_import(self):
@@ -202,7 +192,7 @@ class TestCrossViewTraining:
             assert loss is not None
             assert isinstance(loss, torch.Tensor)
         except Exception as e:
-            # May fail if dependencies missing
+            # May fail if dependencies missing.
             pytest.skip(f"Cross-view training test skipped: {e}")
 
 
@@ -217,4 +207,10 @@ def run_all_tests():
 
 if __name__ == "__main__":
     run_all_tests()
+
+
+
+
+
+
 

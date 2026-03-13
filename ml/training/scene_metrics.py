@@ -17,7 +17,7 @@ class SceneMetrics:
     
     def reset(self):
         """Reset all accumulators."""
-        # Urgency metrics
+        # Urgency metrics.
         self.urgency_correct = 0
         self.urgency_total = 0
         self.urgency_confusion = torch.zeros(
@@ -35,12 +35,12 @@ class SceneMetrics:
             dtype=torch.long
         )
         
-        # Per-urgency-level accuracy
+        # Per-urgency-level accuracy.
         self.urgency_level_correct = defaultdict(int)
         self.urgency_level_total = defaultdict(int)
         
-        # Latency tracking
-        self.inference_times = []  # Store inference times in milliseconds
+        # Latency tracking.
+        self.inference_times = []  # Store inference times in milliseconds.
     
     def update_urgency(
         self,
@@ -51,7 +51,7 @@ class SceneMetrics:
         pred_urgency = pred_urgency.cpu()
         gt_urgency = gt_urgency.cpu()
         
-        # Count correct predictions
+        # Count correct predictions.
         correct = (pred_urgency == gt_urgency).sum().item()
         total = pred_urgency.numel()
         
@@ -62,18 +62,18 @@ class SceneMetrics:
         pred_flat = pred_urgency.flatten().long()
         gt_flat = gt_urgency.flatten().long()
         
-        # Filter valid indices
+        # Filter valid indices.
         valid_mask = (pred_flat >= 0) & (pred_flat < self.num_urgency_levels) & \
                      (gt_flat >= 0) & (gt_flat < self.num_urgency_levels)
         pred_valid = pred_flat[valid_mask]
         gt_valid = gt_flat[valid_mask]
         
         if len(pred_valid) > 0:
-            # Vectorized confusion matrix update
+            # Vectorized confusion matrix update.
             indices = gt_valid * self.num_urgency_levels + pred_valid
             self.urgency_confusion.reshape(-1).index_add_(0, indices, torch.ones_like(indices, dtype=torch.long))
             
-            # Update per-level totals and corrects
+            # Update per-level totals and corrects.
             for g_idx in gt_valid.unique():
                 g_idx_int = int(g_idx.item())
                 self.urgency_level_total[g_idx_int] += int((gt_valid == g_idx_int).sum().item())
@@ -94,7 +94,7 @@ class SceneMetrics:
             pred_distance = pred_distance[valid_mask]
             gt_distance = gt_distance[valid_mask]
         
-        # Count correct predictions
+        # Count correct predictions.
         correct = (pred_distance == gt_distance).sum().item()
         total = pred_distance.numel()
         
@@ -105,14 +105,14 @@ class SceneMetrics:
         pred_flat = pred_distance.flatten().long()
         gt_flat = gt_distance.flatten().long()
         
-        # Filter valid indices
+        # Filter valid indices.
         valid_mask = (pred_flat >= 0) & (pred_flat < self.num_distance_zones) & \
                      (gt_flat >= 0) & (gt_flat < self.num_distance_zones)
         pred_valid = pred_flat[valid_mask]
         gt_valid = gt_flat[valid_mask]
         
         if len(pred_valid) > 0:
-            # Vectorized confusion matrix update
+            # Vectorized confusion matrix update.
             indices = gt_valid * self.num_distance_zones + pred_valid
             self.distance_confusion.reshape(-1).index_add_(0, indices, torch.ones_like(indices, dtype=torch.long))
     
@@ -141,11 +141,11 @@ class SceneMetrics:
         """Return normalized confusion matrices (percentages)."""
         urgency_norm = self.urgency_confusion.float()
         urgency_row_sums = urgency_norm.sum(dim=1, keepdim=True)
-        urgency_norm = urgency_norm / (urgency_row_sums + 1e-8) * 100  # Percentage
+        urgency_norm = urgency_norm / (urgency_row_sums + 1e-8) * 100  # Percentage.
         
         distance_norm = self.distance_confusion.float()
         distance_row_sums = distance_norm.sum(dim=1, keepdim=True)
-        distance_norm = distance_norm / (distance_row_sums + 1e-8) * 100  # Percentage
+        distance_norm = distance_norm / (distance_row_sums + 1e-8) * 100  # Percentage.
         
         return {
             'urgency': urgency_norm,
@@ -159,17 +159,17 @@ class SceneMetrics:
             'distance_accuracy': self.compute_distance_accuracy(),
         }
         
-        # Add per-urgency-level accuracies
+        # Add per-urgency-level accuracies.
         per_urgency = self.get_per_urgency_accuracy()
         for level, acc in per_urgency.items():
             metrics[f'urgency_level_{level}_accuracy'] = acc
         
-        # Add latency stats if available
+        # Add latency stats if available.
         if len(self.inference_times) > 0:
             latency_stats = self.get_latency_stats()
             metrics.update(latency_stats)
         else:
-            # Return zeros instead of empty dict for consistency
+            # Return zeros instead of empty dict for consistency.
             metrics.update({
                 'mean_latency_ms': 0.0,
                 'median_latency_ms': 0.0,
@@ -203,4 +203,10 @@ class SceneMetrics:
     def reset_latency(self) -> None:
         """Reset latency tracking."""
         self.inference_times = []
+
+
+
+
+
+
 

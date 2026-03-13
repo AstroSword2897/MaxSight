@@ -1,0 +1,20 @@
+---
+description: Comment writing style for the whole repo (intent, concise, active voice)
+globs: "**/*.py"
+alwaysApply: true
+---
+
+# Comment style
+
+When adding or editing comments in Python (or any code), follow **docs/COMMENT_STYLE.md**.
+
+- **Explain intent, not code.** Say why, not what the line does.
+- **1–3 sentences, present tense, active voice.** No filler ("This...", "The...").
+- **No redundancy.** If the code is clear, omit the comment.
+- **Consistent:** Capitalize first word; end full sentences with a period.
+- **Non-obvious choices:** Add one line of context or constraint.
+- **No CRITICAL/OPTIMIZED/QUALITY labels** unless you replace them with the actual reason (e.g. "Enforce contiguous layout so CUDA runs without copy.").
+- **TODO:** Use `TODO: <actionable note>.` not "fix later".
+- **No multiline comments.** Use single-line `#` only; one thought per line.
+
+Reference: `docs/COMMENT_STYLE.md`. Cheat sheet: `docs/COMMENT_STYLE_CHEATSHEET.md`.

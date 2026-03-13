@@ -1,8 +1,4 @@
-"""
-Personal Mode for Phase 6: Active Scene Exploration & Personalization
-
-Enhances MaxSight with user-specific adaptations and active exploration.
-"""
+"""Personal Mode for Phase 6: Active Scene Exploration & Personalization Enhances MaxSight with user-specific adaptations and active exploration."""
 
 import torch
 import torch.nn as nn
@@ -27,15 +23,7 @@ class PersonalizationState:
 
 
 class PersonalMode:
-    """
-    Personal mode manager for Phase 6.
-    
-    Handles:
-    - User preference learning
-    - Active scene exploration
-    - Predictive navigation guidance
-    - Adaptive fusion weights
-    """
+    """Personal mode manager for Phase 6. Handles: - User preference learning - Active scene exploration - Predictive navigation guidance - Adaptive fusion weights."""
     
     def __init__(
         self,
@@ -45,7 +33,7 @@ class PersonalMode:
         self.embed_dim = embed_dim
         self.num_modalities = num_modalities
         
-        # Initialize components
+        # Initialize components.
         self.meta_fusion = MetaFusionWeights(
             num_modalities=num_modalities,
             embed_dim=embed_dim
@@ -57,7 +45,7 @@ class PersonalMode:
             embed_dim=embed_dim
         )
         
-        # User state tracking
+        # User state tracking.
         self.user_states: Dict[str, PersonalizationState] = {}
         
     def get_user_state(self, user_id: str) -> PersonalizationState:
@@ -76,12 +64,12 @@ class PersonalMode:
         """Update user preferences based on task performance."""
         state = self.get_user_state(user_id)
         
-        # Update task history
+        # Update task history.
         state.task_history.append(task_type)
-        if len(state.task_history) > 100:  # Keep last 100 tasks
+        if len(state.task_history) > 100:  # Keep last 100 tasks.
             state.task_history.pop(0)
         
-        # Update performance metrics
+        # Update performance metrics.
         if task_type not in state.performance_metrics:
             state.performance_metrics[task_type] = []
         state.performance_metrics[task_type].append(performance_score)
@@ -90,13 +78,13 @@ class PersonalMode:
         if task_type not in state.preferences:
             state.preferences[task_type] = performance_score
         else:
-            alpha = 0.1  # Learning rate
+            alpha = 0.1  # Learning rate.
             state.preferences[task_type] = (
                 alpha * performance_score + (1 - alpha) * state.preferences[task_type]
             )
         
-        # Adapt fusion weights
-        if state.adaptation_count % 10 == 0:  # Adapt every 10 tasks
+        # Adapt fusion weights.
+        if state.adaptation_count % 10 == 0:  # Adapt every 10 tasks.
             user_profile = UserProfile(
                 user_id=user_id,
                 preferred_modalities=preferred_modalities or ['vision', 'audio'],
@@ -118,21 +106,8 @@ class PersonalMode:
         urgency: Optional[float] = None,
         confidence: Optional[float] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Fuse modalities with personalized weights.
-        
-        Args:
-            modality_embeddings: Dict mapping modality to embedding
-            user_id: Optional user ID for personalization
-            task_type: Optional task type
-            urgency: Optional urgency score
-            confidence: Optional confidence score
-        
-        Returns:
-            fused_embedding: Fused embedding
-            fusion_weights: Fusion weights used
-        """
-        # Convert user_id to tensor if provided
+        """Fuse modalities with personalized weights."""
+        # Convert user_id to tensor if provided.
         user_id_tensor = None
         if user_id is not None:
             # Simple hash-based user ID (in production, use proper user ID mapping)
@@ -154,18 +129,12 @@ class PersonalMode:
         user_id: Optional[str] = None,
         urgency: Optional[float] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Determine which regions to explore next.
-        
-        Returns:
-            exploration_scores: Scores for each region
-            selected_regions: Indices of regions to explore
-        """
-        # Get user preference if available
+        """Determine which regions to explore next. Returns: exploration_scores: Scores for each region selected_regions: Indices of regions to explore."""
+        # Get user preference if available.
         user_preference = None
         if user_id:
             state = self.get_user_state(user_id)
-            # Use average preference as exploration bias
+            # Use average preference as exploration bias.
             if state.preferences:
                 user_preference = sum(state.preferences.values()) / len(state.preferences)
         
@@ -186,12 +155,7 @@ class PersonalMode:
         goal_embedding: torch.Tensor,
         scene_context: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
-        """
-        Predict navigation path and generate guidance.
-        
-        Returns:
-            Dictionary with navigation predictions
-        """
+        """Predict navigation path and generate guidance. Returns: Dictionary with navigation predictions."""
         return self.navigation_guidance(
             current_embedding=current_embedding,
             goal_embedding=goal_embedding,
@@ -204,34 +168,29 @@ class PersonalMode:
         user_id: Optional[str] = None,
         task_type: Optional[str] = None
     ) -> Dict[str, torch.Tensor]:
-        """
-        Apply personalization to model outputs.
-        
-        Args:
-            model_outputs: Raw model outputs
-            user_id: Optional user ID
-            task_type: Optional task type
-        
-        Returns:
-            Personalized outputs
-        """
+        """Apply personalization to model outputs."""
         personalized = model_outputs.copy()
         
         if user_id:
             state = self.get_user_state(user_id)
             
-            # Adjust output verbosity based on preferences
+            # Adjust output verbosity based on preferences.
             if task_type in state.preferences:
                 preference = state.preferences[task_type]
                 
-                # Scale outputs based on preference
-                # Higher preference = more detailed outputs
-                scale_factor = 0.5 + preference  # [0.5, 1.5]
+                # Scale outputs based on preference. Higher preference = more detailed outputs.
+                scale_factor = 0.5 + preference  # [0.5, 1.5].
                 
-                # Apply to relevant outputs
+                # Apply to relevant outputs.
                 if 'scene_description' in personalized:
                     # Could adjust description length, etc.
                     pass
         
         return personalized
+
+
+
+
+
+
 

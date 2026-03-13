@@ -1,8 +1,4 @@
-"""
-Input Validation Utilities for MaxSight
-
-Provides validation for Base64, file uploads, and other user inputs.
-"""
+"""Input Validation Utilities for MaxSight Provides validation for Base64, file uploads, and other user inputs."""
 
 import base64
 import binascii
@@ -11,15 +7,7 @@ from ml.security.magic import validate_image_magic
 
 
 def is_valid_b64(s: str) -> bool:
-    """
-    Validate Base64 string format.
-    
-    Args:
-        s: String to validate
-    
-    Returns:
-        True if valid Base64, False otherwise
-    """
+    """Validate Base64 string format. Args: s: String to validate Returns: True if valid Base64, False otherwise."""
     try:
         base64.b64decode(s, validate=True)
         return True
@@ -28,33 +16,18 @@ def is_valid_b64(s: str) -> bool:
 
 
 def decode_and_validate_image(base64_str: str, max_size_mb: int = 10, allowed_types: tuple = ('jpg', 'png', 'gif', 'bmp', 'webp', 'tiff')) -> tuple[bool, Optional[bytes], Optional[str]]:
-    """
-    Decode Base64 image and validate format and size.
-    
-    Args:
-        base64_str: Base64-encoded image string
-        max_size_mb: Maximum file size in MB
-        allowed_types: Tuple of allowed image types
-    
-    Returns:
-        Tuple of (is_valid, decoded_bytes, error_message)
-        If valid: (True, bytes, None)
-        If invalid: (False, None, error_message)
-    """
-    # Validate Base64 format
+    """Decode Base64 image and validate format and size."""
     if not is_valid_b64(base64_str):
         return False, None, "Invalid Base64 format"
     
     try:
-        # Decode Base64
         decoded = base64.b64decode(base64_str)
         
-        # Check size
         size_mb = len(decoded) / (1024 * 1024)
         if size_mb > max_size_mb:
             return False, None, f"File too large: {size_mb:.2f}MB > {max_size_mb}MB"
         
-        # Validate magic number
+        # Validate file signature to prevent malicious uploads.
         if not validate_image_magic(decoded, allowed_types):
             return False, None, f"Invalid image format. Allowed: {allowed_types}"
         
@@ -62,4 +35,10 @@ def decode_and_validate_image(base64_str: str, max_size_mb: int = 10, allowed_ty
         
     except Exception as e:
         return False, None, f"Decoding error: {str(e)}"
+
+
+
+
+
+
 

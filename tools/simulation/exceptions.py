@@ -1,7 +1,4 @@
-"""
-Custom exceptions for MaxSight Web Simulator.
-Provides consistent error handling hierarchy.
-"""
+"""Custom exceptions for MaxSight Web Simulator. Provides consistent error handling hierarchy."""
 
 
 class MaxSightSimulatorError(Exception):
@@ -57,4 +54,5 @@ class ValidationError(MaxSightSimulatorError):
 class ModelError(MaxSightSimulatorError):
     """Model inference errors."""
     pass
+
 

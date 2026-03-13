@@ -1,7 +1,4 @@
-"""
-Degraded mode tracking for MaxSight Web Simulator.
-Explicit failure modes instead of silent degradation.
-"""
+"""Degraded mode tracking for MaxSight Web Simulator. Explicit failure modes instead of silent degradation."""
 from enum import Enum
 from typing import Dict, Set, Any
 from dataclasses import dataclass, field
@@ -11,12 +8,12 @@ from threading import Lock
 class DegradedMode(Enum):
     """Types of degraded operation."""
     NORMAL = "normal"
-    VISION_UNSTABLE = "vision_unstable"  # Model inference issues
-    AUDIO_UNAVAILABLE = "audio_unavailable"  # TTS/voice feedback down
-    TEXT_DETECTION_OFFLINE = "text_detection_offline"  # OCR not working
-    HAPTIC_UNAVAILABLE = "haptic_unavailable"  # Haptic feedback down
-    MEMORY_FULL = "memory_full"  # Spatial memory at capacity
-    PROCESSING_SLOW = "processing_slow"  # Performance degradation
+    VISION_UNSTABLE = "vision_unstable"  # Model inference issues.
+    AUDIO_UNAVAILABLE = "audio_unavailable"  # TTS/voice feedback down.
+    TEXT_DETECTION_OFFLINE = "text_detection_offline"  # OCR not working.
+    HAPTIC_UNAVAILABLE = "haptic_unavailable"  # Haptic feedback down.
+    MEMORY_FULL = "memory_full"  # Spatial memory at capacity.
+    PROCESSING_SLOW = "processing_slow"  # Performance degradation.
 
 
 @dataclass
@@ -74,4 +71,6 @@ class DegradedState:
             messages.append("Processing slower than normal")
         
         return "; ".join(messages) if messages else "Degraded operation"
+
+
 

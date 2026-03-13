@@ -1,7 +1,4 @@
-"""
-Input validation for MaxSight Web Simulator.
-Validates all user inputs before processing.
-"""
+"""Input validation for MaxSight Web Simulator. Validates all user inputs before processing."""
 from typing import Any, Dict, Optional
 from PIL import Image
 from io import BytesIO
@@ -11,18 +8,7 @@ from .config import config
 
 
 def validate_session_id(session_id: Optional[str]) -> str:
-    """
-    Validate session ID format.
-    
-    Args:
-        session_id: Session ID to validate
-    
-    Returns:
-        Validated session ID
-    
-    Raises:
-        ValidationError: If session ID is invalid
-    """
+    """Validate session ID format. Args: session_id: Session ID to validate Returns: Validated session ID Raises: ValidationError: If session ID is invalid."""
     if not session_id:
         raise ValidationError("Session ID is required")
     
@@ -40,18 +26,7 @@ def validate_session_id(session_id: Optional[str]) -> str:
 
 
 def validate_condition(condition: str) -> str:
-    """
-    Validate visual condition.
-    
-    Args:
-        condition: Condition name to validate
-    
-    Returns:
-        Validated condition name
-    
-    Raises:
-        ValidationError: If condition is invalid
-    """
+    """Validate visual condition."""
     valid_conditions = [
         'normal', 'myopia', 'hyperopia', 'astigmatism', 'cataracts',
         'glaucoma', 'amd', 'diabetic_retinopathy', 'retinitis_pigmentosa',
@@ -68,18 +43,7 @@ def validate_condition(condition: str) -> str:
 
 
 def validate_scenario(scenario: str) -> str:
-    """
-    Validate scenario name.
-    
-    Args:
-        scenario: Scenario name to validate
-    
-    Returns:
-        Validated scenario name
-    
-    Raises:
-        ValidationError: If scenario is invalid
-    """
+    """Validate scenario name. Args: scenario: Scenario name to validate Returns: Validated scenario name Raises: ValidationError: If scenario is invalid."""
     valid_scenarios = [
         'general', 'navigation', 'text_reading', 'therapy', 'safety', 'accessibility'
     ]
@@ -94,18 +58,7 @@ def validate_scenario(scenario: str) -> str:
 
 
 def validate_output_mode(mode: str) -> str:
-    """
-    Validate output mode.
-    
-    Args:
-        mode: Output mode to validate
-    
-    Returns:
-        Validated output mode
-    
-    Raises:
-        ValidationError: If mode is invalid
-    """
+    """Validate output mode. Args: mode: Output mode to validate Returns: Validated output mode Raises: ValidationError: If mode is invalid."""
     valid_modes = ['patient', 'clinician', 'dev']
     
     if not mode:
@@ -118,24 +71,11 @@ def validate_output_mode(mode: str) -> str:
 
 
 def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Image:
-    """
-    Validate and load image file.
-    
-    Args:
-        image_bytes: Image file bytes
-        max_size_mb: Maximum size in MB (uses config if None)
-    
-    Returns:
-        PIL Image object
-    
-    Raises:
-        InvalidImageError: If image format is invalid
-        ImageTooLargeError: If image is too large
-    """
+    """Validate and load image file."""
     if max_size_mb is None:
         max_size_mb = config.max_image_size_mb
     
-    # Check size
+    # Check size.
     size_mb = len(image_bytes) / (1024 * 1024)
     if size_mb > max_size_mb:
         raise ImageTooLargeError(
@@ -145,33 +85,33 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
     if len(image_bytes) == 0:
         raise InvalidImageError("Empty image file")
     
-    # Try to open image
+    # Opens image file.
     try:
-        # Ensure we have bytes, not a BytesIO object
+        # Ensure we have bytes, not a BytesIO object.
         if isinstance(image_bytes, BytesIO):
-            image_bytes.seek(0)  # Reset position if it's already a BytesIO
+            image_bytes.seek(0)  # Reset position if it's already a BytesIO.
             image_bytes = image_bytes.read()
         
-        # Ensure we have actual bytes
+        # Ensure we have actual bytes.
         if not isinstance(image_bytes, bytes):
             raise InvalidImageError(
                 f"Expected bytes, got {type(image_bytes).__name__}. "
                 "Please ensure the image file is properly read."
             )
         
-        # Create BytesIO buffer and ensure it's at position 0
+        # Create BytesIO buffer and ensure it's at position 0.
         image_buffer = BytesIO(image_bytes)
         image_buffer.seek(0)
         
-        # Open image
+        # Open image.
         try:
             image = Image.open(image_buffer)
         except Exception as open_error:
-            # Check if it's a format issue
+            # Checks if it's a format issue.
             error_msg = str(open_error)
             if 'cannot identify' in error_msg.lower() or 'cannot open' in error_msg.lower():
-                # Try to detect format from file signature
-                if image_bytes[:4] == b'\x00\x00\x00\x20':  # HEIC signature
+                # Detect format from file signature.
+                if image_bytes[:4] == b'\x00\x00\x00\x20':  # HEIC signature.
                     raise InvalidImageError(
                         "HEIC/HEIF format is not supported. Please convert to JPEG or PNG. "
                         "You can use Preview on Mac: File > Export > Format: JPEG"
@@ -194,7 +134,7 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
         # Load image to verify it's valid (forces decoding)
         image.load()
         
-        # Check format
+        # Checks format.
         if image.format not in config.allowed_image_formats:
             raise InvalidImageError(
                 f"Unsupported image format: {image.format}. "
@@ -210,24 +150,13 @@ def validate_image_file(image_bytes: bytes, max_size_mb: int = None) -> Image.Im
 
 
 def validate_image_data(image_data: str) -> Image.Image:
-    """
-    Validate base64 encoded image data.
-    
-    Args:
-        image_data: Base64 encoded image string (may include data URI prefix)
-    
-    Returns:
-        PIL Image object
-    
-    Raises:
-        InvalidImageError: If image data is invalid
-    """
+    """Validate base64 encoded image data."""
     try:
-        # Remove data URI prefix if present
+        # Remove data URI prefix if present.
         if ',' in image_data:
             image_data = image_data.split(',')[1]
         
-        # Decode base64
+        # Decode base64.
         image_bytes = base64.b64decode(image_data)
         
         return validate_image_file(image_bytes)
@@ -239,18 +168,7 @@ def validate_image_data(image_data: str) -> Image.Image:
 
 
 def validate_init_request(data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Validate /api/init request data.
-    
-    Args:
-        data: Request JSON data
-    
-    Returns:
-        Validated and normalized data
-    
-    Raises:
-        ValidationError: If validation fails
-    """
+    """Validate /api/init request data. Args: data: Request JSON data Returns: Validated and normalized data Raises: ValidationError: If validation fails."""
     if not isinstance(data, dict):
         raise ValidationError("Request body must be a JSON object")
     
@@ -278,4 +196,10 @@ def validate_init_request(data: Dict[str, Any]) -> Dict[str, Any]:
     validated['start_session'] = bool(data.get('start_session', False))
     
     return validated
+
+
+
+
+
+
 

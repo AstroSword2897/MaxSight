@@ -1,7 +1,4 @@
-"""
-Edge Case Tests for MaxSight Model
-Tests extreme conditions, combined impairments, and unusual scenarios.
-"""
+"""Edge Case Tests for MaxSight Model Tests extreme conditions, combined impairments, and unusual scenarios."""
 
 import torch
 import numpy as np
@@ -10,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model
@@ -31,9 +28,9 @@ def test_extreme_blur():
     model = create_model()
     model.eval()
     
-    # Create image with extreme blur
+    # Create image with extreme blur.
     dummy_image = torch.randn(1, 3, 224, 224)
-    extreme_blur = apply_refractive_error_blur(dummy_image, sigma=10.0)  # Very high blur
+    extreme_blur = apply_refractive_error_blur(dummy_image, sigma=10.0)  # Very high blur.
     
     with torch.no_grad():
         outputs = model(extreme_blur)
@@ -42,10 +39,10 @@ def test_extreme_blur():
     assert 'classifications' in outputs, "Model failed on extreme blur"
     assert outputs['classifications'].shape[0] == 1, "Batch size incorrect"
     
-    detections = model.get_detections(outputs, confidence_threshold=0.1)  # Lower threshold
+    detections = model.get_detections(outputs, confidence_threshold=0.1)  # Lower threshold.
     print(f"  Detections with extreme blur: {len(detections[0])}")
     
-    print("  ✅ PASSED: Model handles extreme blur")
+    print("  PASSED: Model handles extreme blur")
 
 
 def test_extreme_contrast_loss():
@@ -56,7 +53,7 @@ def test_extreme_contrast_loss():
     model.eval()
     
     dummy_image = torch.randn(1, 3, 224, 224)
-    extreme_contrast = apply_cataract_contrast(dummy_image, contrast_factor=0.1)  # Very low contrast
+    extreme_contrast = apply_cataract_contrast(dummy_image, contrast_factor=0.1)  # Very low contrast.
     
     with torch.no_grad():
         outputs = model(extreme_contrast)
@@ -66,7 +63,7 @@ def test_extreme_contrast_loss():
     detections = model.get_detections(outputs, confidence_threshold=0.1)
     print(f"  Detections with extreme contrast loss: {len(detections[0])}")
     
-    print("  ✅ PASSED: Model handles extreme contrast loss")
+    print("  PASSED: Model handles extreme contrast loss")
 
 
 def test_combined_impairments():
@@ -78,7 +75,7 @@ def test_combined_impairments():
     
     dummy_image = torch.randn(1, 3, 224, 224)
     
-    # Apply multiple impairments sequentially
+    # Apply multiple impairments sequentially.
     impaired = apply_refractive_error_blur(dummy_image, sigma=5.0)
     impaired = apply_cataract_contrast(impaired, contrast_factor=0.4)
     impaired = apply_low_light(impaired, brightness_factor=0.3)
@@ -91,7 +88,7 @@ def test_combined_impairments():
     detections = model.get_detections(outputs, confidence_threshold=0.1)
     print(f"  Detections with combined impairments: {len(detections[0])}")
     
-    print("  ✅ PASSED: Model handles combined impairments")
+    print("  PASSED: Model handles combined impairments")
 
 
 def test_very_dark_image():
@@ -101,8 +98,8 @@ def test_very_dark_image():
     model = create_model()
     model.eval()
     
-    # Create very dark image
-    dummy_image = torch.randn(1, 3, 224, 224) * 0.1  # Very dark
+    # Create very dark image.
+    dummy_image = torch.randn(1, 3, 224, 224) * 0.1  # Very dark.
     very_dark = apply_low_light(dummy_image, brightness_factor=0.1)
     
     with torch.no_grad():
@@ -113,7 +110,7 @@ def test_very_dark_image():
     detections = model.get_detections(outputs, confidence_threshold=0.1)
     print(f"  Detections with very dark image: {len(detections[0])}")
     
-    print("  ✅ PASSED: Model handles very dark images")
+    print("  PASSED: Model handles very dark images")
 
 
 def test_very_bright_image():
@@ -123,8 +120,8 @@ def test_very_bright_image():
     model = create_model()
     model.eval()
     
-    # Create very bright image
-    dummy_image = torch.ones(1, 3, 224, 224) * 0.9  # Very bright
+    # Create very bright image.
+    dummy_image = torch.ones(1, 3, 224, 224) * 0.9  # Very bright.
     
     with torch.no_grad():
         outputs = model(dummy_image)
@@ -134,7 +131,7 @@ def test_very_bright_image():
     detections = model.get_detections(outputs, confidence_threshold=0.1)
     print(f"  Detections with very bright image: {len(detections[0])}")
     
-    print("  ✅ PASSED: Model handles very bright images")
+    print("  PASSED: Model handles very bright images")
 
 
 def test_unusual_aspect_ratios():
@@ -144,7 +141,7 @@ def test_unusual_aspect_ratios():
     model = create_model()
     model.eval()
     
-    # Test with edge case inputs
+    # Test with edge case inputs.
     test_cases = [
         ("All zeros", torch.zeros(1, 3, 224, 224)),
         ("All ones", torch.ones(1, 3, 224, 224)),
@@ -162,7 +159,7 @@ def test_unusual_aspect_ratios():
             print(f"  {name}: FAILED - {e}")
             raise
     
-    print("  ✅ PASSED: Model handles unusual inputs")
+    print("  PASSED: Model handles unusual inputs")
 
 
 def test_crowded_scene_simulation():
@@ -172,24 +169,23 @@ def test_crowded_scene_simulation():
     model = create_model()
     model.eval()
     
-    # Create image that might have many detections
-    # (In real scenario, this would be an actual crowded scene image)
+    # Create image that might have many detections. In a real scenario, use an actual crowded-scene image.
     dummy_image = torch.randn(1, 3, 224, 224)
     
     with torch.no_grad():
         outputs = model(dummy_image)
     
-    # Get all detections with low threshold
+    # Get all detections with low threshold.
     detections = model.get_detections(outputs, confidence_threshold=0.05)
     num_detections = len(detections[0]) if detections else 0
     
     print(f"  Detections in scene: {num_detections}")
-    print(f"  Model can handle up to {outputs['num_locations']} potential detections")
+    nl = outputs['num_locations']
+    num_locs = int(nl.item()) if hasattr(nl, 'item') else int(nl)
+    print(f"  Model can handle up to {num_locs} potential detections")
+    assert num_detections <= num_locs, "Too many detections"
     
-    # Model should handle many detections without crashing
-    assert num_detections <= outputs['num_locations'], "Too many detections"
-    
-    print("  ✅ PASSED: Model handles crowded scenes")
+    print("  PASSED: Model handles crowded scenes")
 
 
 def test_rapid_inference():
@@ -216,10 +212,10 @@ def test_rapid_inference():
     print(f"  Processed {num_inferences} inferences in {total_time:.2f}s")
     print(f"  Average time per inference: {avg_time*1000:.2f}ms")
     
-    # Should complete without errors
+    # Should complete without errors.
     assert avg_time < 1.0, f"Average inference time {avg_time:.2f}s too slow"
     
-    print("  ✅ PASSED: Model handles rapid inference")
+    print("  PASSED: Model handles rapid inference")
 
 
 if __name__ == "__main__":
@@ -239,4 +235,10 @@ if __name__ == "__main__":
     
     print("\n" + "=" * 50)
     print("All edge case tests passed!")
+
+
+
+
+
+
 

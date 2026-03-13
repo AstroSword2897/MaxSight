@@ -1,14 +1,4 @@
-"""
-Stress Testing and Edge Case Evaluation
-
-Implements:
-- Stress test dataset generation
-- Edge case scenarios
-- Robustness evaluation
-- Performance degradation measurement
-- Inference benchmarking
-- Fallback system for uncertain predictions
-"""
+"""Stress Testing and Edge Case Evaluation."""
 
 import torch
 import torch.nn as nn
@@ -25,7 +15,6 @@ from collections import defaultdict
 logger = logging.getLogger(__name__)
 
 
-# ==================== Edge Case Scenarios ====================
 
 @dataclass
 class EdgeCaseScenario:
@@ -34,11 +23,11 @@ class EdgeCaseScenario:
     description: str
     severity: str  # 'low', 'medium', 'high', 'critical'
     transform_fn: Optional[Callable] = None
-    expected_drop: float = 0.0  # Expected accuracy drop
+    expected_drop: float = 0.0  # Expected accuracy drop.
     
     
 EDGE_CASE_SCENARIOS = [
-    # Lighting extremes
+    # Lighting extremes.
     EdgeCaseScenario(
         name="extreme_overexposure",
         description="Heavily overexposed images (bright sunlight, flash)",
@@ -58,7 +47,7 @@ EDGE_CASE_SCENARIOS = [
         expected_drop=0.12
     ),
     
-    # Motion and blur
+    # Motion and blur.
     EdgeCaseScenario(
         name="severe_motion_blur",
         description="Heavy motion blur from camera shake or fast movement",
@@ -72,7 +61,7 @@ EDGE_CASE_SCENARIOS = [
         expected_drop=0.18
     ),
     
-    # Occlusion
+    # Occlusion.
     EdgeCaseScenario(
         name="heavy_occlusion",
         description="Objects 50%+ occluded by other objects",
@@ -86,7 +75,7 @@ EDGE_CASE_SCENARIOS = [
         expected_drop=0.15
     ),
     
-    # Viewpoint
+    # Viewpoint.
     EdgeCaseScenario(
         name="extreme_angle",
         description="Objects viewed from unusual angles",
@@ -106,7 +95,7 @@ EDGE_CASE_SCENARIOS = [
         expected_drop=0.08
     ),
     
-    # Environmental
+    # Environmental.
     EdgeCaseScenario(
         name="rain_droplets",
         description="Camera lens with rain droplets",
@@ -126,7 +115,7 @@ EDGE_CASE_SCENARIOS = [
         expected_drop=0.18
     ),
     
-    # Camera artifacts
+    # Camera artifacts.
     EdgeCaseScenario(
         name="heavy_compression",
         description="Severe JPEG compression artifacts",
@@ -146,7 +135,7 @@ EDGE_CASE_SCENARIOS = [
         expected_drop=0.08
     ),
     
-    # Out of distribution
+    # Out of distribution.
     EdgeCaseScenario(
         name="unusual_colors",
         description="Objects with unusual/unexpected colors",
@@ -268,12 +257,9 @@ def generate_edge_case_transforms() -> Dict[str, Callable]:
     return transforms
 
 
-# ==================== Stress Test Evaluation ====================
 
 class StressTestEvaluator:
-    """
-    Evaluate model robustness under stress conditions.
-    """
+    """Evaluate model robustness under stress conditions."""
     
     def __init__(self, 
                  model: nn.Module,
@@ -308,13 +294,13 @@ class StressTestEvaluator:
                     
                 images = images.to(self.device)
                 
-                # Apply stress transform
+                # Apply stress transform.
                 if transform_fn:
                     images = torch.stack([transform_fn(img) for img in images])
                     
                 outputs = self.model(images)
                 
-                # Handle different output formats
+                # Handle different output formats.
                 if isinstance(outputs, dict):
                     logits = outputs.get('logits') or outputs.get('classifications')
                 else:
@@ -368,11 +354,11 @@ class StressTestEvaluator:
                 result = self.evaluate_scenario(scenario, dataloader)
                 all_results.append(result)
                 
-                status = "✓" if result['within_tolerance'] else "✗"
+                status = "ok" if result['within_tolerance'] else "fail"
                 logger.info(f"  {status} Accuracy: {result['accuracy']:.3f}, "
                           f"Drop: {result['accuracy_drop']:.3f}")
                 
-        # Summary
+        # Summary.
         passed = sum(1 for r in all_results if r['within_tolerance'])
         failed = len(all_results) - passed
         
@@ -396,7 +382,7 @@ class StressTestEvaluator:
         if not results:
             return 0
             
-        # Weight by severity
+        # Weight by severity.
         severity_weights = {'low': 0.5, 'medium': 1.0, 'high': 1.5, 'critical': 2.0}
         
         weighted_scores = []
@@ -405,7 +391,7 @@ class StressTestEvaluator:
         for r in results:
             weight = severity_weights.get(r['severity'], 1.0)
             
-            # Score based on accuracy relative to expected drop
+            # Score based on accuracy relative to expected drop.
             if r['expected_drop'] > 0:
                 performance_ratio = 1 - (r['accuracy_drop'] / r['expected_drop'])
             else:
@@ -418,7 +404,6 @@ class StressTestEvaluator:
         return sum(weighted_scores) / total_weight if total_weight > 0 else 0
 
 
-# ==================== Inference Benchmarking ====================
 
 @dataclass
 class InferenceBenchmark:
@@ -467,10 +452,10 @@ class InferenceBenchmarker:
         """Run inference benchmark."""
         batch_size = input_shape[0]
         
-        # Create dummy input
+        # Create dummy input.
         x = torch.randn(input_shape, device=self.device)
         
-        # Warmup
+        # Warmup.
         for _ in range(warmup_iterations):
             with torch.no_grad():
                 _ = self.model(x)
@@ -478,7 +463,7 @@ class InferenceBenchmarker:
         if self.device == 'cuda':
             torch.cuda.synchronize()
             
-        # Benchmark
+        # Benchmark.
         latencies = []
         
         for _ in range(benchmark_iterations):
@@ -491,16 +476,16 @@ class InferenceBenchmarker:
                 torch.cuda.synchronize()
                 
             end = time.perf_counter()
-            latencies.append((end - start) * 1000)  # ms
+            latencies.append((end - start) * 1000)  # Ms.
             
-        # Memory usage
+        # Memory usage.
         if self.device == 'cuda':
             memory_mb = torch.cuda.max_memory_allocated() / 1024 / 1024
         else:
             import psutil
             memory_mb = psutil.Process().memory_info().rss / 1024 / 1024
             
-        # Parameter count
+        # Parameter count.
         num_params = sum(p.numel() for p in self.model.parameters())
         
         return InferenceBenchmark(
@@ -540,7 +525,6 @@ class InferenceBenchmarker:
         return results
 
 
-# ==================== Fallback System ====================
 
 @dataclass
 class FallbackConfig:
@@ -554,9 +538,7 @@ class FallbackConfig:
 
 
 class PredictionFallbackSystem:
-    """
-    Handle uncertain predictions with fallback strategies.
-    """
+    """Handle uncertain predictions with fallback strategies."""
     
     def __init__(self, 
                  model: nn.Module,
@@ -572,22 +554,14 @@ class PredictionFallbackSystem:
     def predict_with_fallback(self,
                              image: torch.Tensor,
                              return_confidence: bool = True) -> Dict:
-        """
-        Make prediction with fallback handling.
-        
-        Returns dict with:
-        - prediction: class index or None
-        - confidence: prediction confidence
-        - used_fallback: whether fallback was triggered
-        - fallback_reason: reason for fallback if any
-        """
+        """Make prediction with fallback handling."""
         self.total_predictions += 1
         self.model.eval()
         
         with torch.no_grad():
             outputs = self.model(image)
             
-        # Extract logits
+        # Extract logits.
         if isinstance(outputs, dict):
             logits = outputs.get('logits') or outputs.get('classifications')
         else:
@@ -596,7 +570,7 @@ class PredictionFallbackSystem:
         if logits is None:
             return self._trigger_fallback("No logits produced", image)
             
-        # Compute confidence
+        # Compute confidence.
         probs = F.softmax(logits, dim=-1)
         max_prob, pred = probs.max(dim=-1)
         confidence = max_prob.item()
@@ -605,7 +579,7 @@ class PredictionFallbackSystem:
         entropy = -(probs * torch.log(probs + 1e-10)).sum(dim=-1).item()
         normalized_entropy = entropy / np.log(probs.size(-1))
         
-        # Decide on fallback
+        # Decide on fallback.
         if confidence < self.config.confidence_threshold:
             return self._trigger_fallback(
                 f"Low confidence: {confidence:.3f}", 
@@ -622,7 +596,7 @@ class PredictionFallbackSystem:
                 initial_conf=confidence
             )
             
-        # Confident prediction
+        # Confident prediction.
         return {
             'prediction': pred.item(),
             'confidence': confidence,
@@ -648,7 +622,7 @@ class PredictionFallbackSystem:
             'initial_prediction': initial_pred
         }
         
-        # Try backup model
+        # Try backup model.
         if self.backup_model is not None and self.config.use_ensemble:
             with torch.no_grad():
                 backup_outputs = self.backup_model(image)
@@ -668,12 +642,12 @@ class PredictionFallbackSystem:
                     result['fallback_source'] = 'backup_model'
                     return result
                     
-        # Conservative mode: return most common/safe prediction
+        # Conservative mode: return most common/safe prediction.
         if self.config.conservative_mode and initial_pred is not None:
             result['prediction'] = initial_pred
             result['is_conservative'] = True
             
-        # Log fallback
+        # Log fallback.
         self.fallback_log.append({
             'reason': reason,
             'initial_pred': initial_pred,
@@ -690,7 +664,7 @@ class PredictionFallbackSystem:
             
         reasons = defaultdict(int)
         for log in self.fallback_log:
-            # Extract reason category
+            # Extract reason category.
             if 'Low confidence' in log['reason']:
                 reasons['low_confidence'] += 1
             elif 'High uncertainty' in log['reason']:
@@ -733,7 +707,7 @@ def generate_stress_test_report(
         'recommendations': []
     }
     
-    # Generate recommendations
+    # Generate recommendations.
     if stress_results.get('robustness_score', 0) < 70:
         report['recommendations'].append(
             "Consider adding more augmentation for edge cases"
@@ -752,4 +726,10 @@ def generate_stress_test_report(
         
     logger.info(f"Stress test report saved to {output_path}")
     return report
+
+
+
+
+
+
 

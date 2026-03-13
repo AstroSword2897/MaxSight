@@ -1,13 +1,10 @@
-"""
-Comprehensive System Tests - Maximum Data & Classes
-Tests the complete MaxSight system with 347 classes for user guidance
-"""
+"""Comprehensive System Tests - Maximum Data & Classes Tests the complete MaxSight system with 347 classes for user guidance."""
 
 import torch
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import (
@@ -19,9 +16,9 @@ from collections import Counter
 
 
 def test_class_system():
-    """Test comprehensive class system"""
+    """Test comprehensive class system."""
     print("Test 1: Comprehensive Class System")
-    # Check for duplicates
+    # Check for duplicates.
     duplicates = [item for item, count in Counter(COCO_CLASSES).items() if count > 1]
     assert len(duplicates) == 0, f"Found duplicates: {duplicates}"
     
@@ -31,7 +28,7 @@ def test_class_system():
 
 
 def test_model_creation():
-    """Test model creation with comprehensive classes"""
+    """Test model creation with comprehensive classes."""
     print("Test 2: Model Creation")
     model = create_model()
     assert model.num_classes == len(COCO_CLASSES), f"Model classes {model.num_classes} != {len(COCO_CLASSES)}"
@@ -43,12 +40,11 @@ def test_model_creation():
     total_params = sum(p.numel() for p in model.parameters())
     int8_size_mb = total_params / 1024 / 1024
     
-    # Model size check - allow larger models for comprehensive class system (250M params = ~240MB INT8)
     assert int8_size_mb < 300, f"Model size {int8_size_mb:.1f} MB exceeds target of 300 MB"
 
 
 def test_forward_pass():
-    """Test forward pass with and without audio"""
+    """Test forward pass with and without audio."""
     print("Test 3: Forward Pass")
     model = create_model(use_audio=True)
     model.eval()
@@ -56,11 +52,11 @@ def test_forward_pass():
     dummy_image = torch.randn(2, 3, 224, 224)
     dummy_audio = torch.randn(2, 128)
     
-    # Test with audio
+    # Test with audio.
     with torch.no_grad():
         outputs = model(dummy_image, dummy_audio)
     
-    # Check that outputs exist and have correct keys
+    # Check that outputs exist and have correct keys.
     assert 'classifications' in outputs, "Missing classifications output"
     assert 'boxes' in outputs, "Missing boxes output"
     assert 'objectness' in outputs, "Missing objectness output"
@@ -70,7 +66,7 @@ def test_forward_pass():
     assert outputs['boxes'].dim() >= 2, "Boxes should be at least 2D"
     assert outputs['objectness'].dim() >= 1, "Objectness should be at least 1D"
     
-    # Test without audio
+    # Test without audio.
     with torch.no_grad():
         outputs_no_audio = model(dummy_image)
     
@@ -78,15 +74,14 @@ def test_forward_pass():
 
 
 def test_training_system():
-    """Test training system"""
+    """Test training system."""
     print("Test 4: Training System")
-    # Skip training system test - requires actual data loaders
-    # This test would need real dataset setup
+    # Skip training system test - requires actual data loaders. Test requires real dataset setup to run fully.
     pass
 
 
 def test_detections():
-    """Test detection system"""
+    """Test detection system."""
     print("Test 5: Detection System")
     model = create_model(use_audio=True)
     model.eval()
@@ -96,7 +91,7 @@ def test_detections():
     
     with torch.no_grad():
         outputs = model(dummy_image, dummy_audio)
-        # get_detections may not exist or may have different signature
+        # Get_detections may not exist or may have different signature.
         if hasattr(model, 'get_detections'):
             try:
                 detections = model.get_detections(outputs, confidence_threshold=0.3)
@@ -111,7 +106,7 @@ def test_detections():
 
 
 def test_visual_conditions():
-    """Test all visual condition modes"""
+    """Test all visual condition modes."""
     print("Test 6: Visual Condition Support")
     conditions = [
         'myopia', 'hyperopia', 'astigmatism', 'presbyopia', 'refractive_errors',
@@ -123,28 +118,28 @@ def test_visual_conditions():
         try:
             model = create_model(condition_mode=cond)
             model.eval()
-            # Verify model can be created
+            # Verify model can be created.
             assert model is not None, f"Failed to create model for condition: {cond}"
             
-            # Test forward pass
+            # Test forward pass.
             dummy_image = torch.randn(1, 3, 224, 224)
             with torch.no_grad():
                 outputs = model(dummy_image)
             assert 'classifications' in outputs, f"Missing classifications for condition: {cond}"
             
-            # Test preprocessor can be created
+            # Test preprocessor can be created.
             preprocessor = ImagePreprocessor(condition_mode=cond)
             assert preprocessor is not None, f"Failed to create preprocessor for condition: {cond}"
         except Exception as e:
-            # Log but don't fail - some conditions might not be fully implemented
+            # Log but don't fail - some conditions might not be fully implemented.
             print(f"  Warning: Condition {cond} test failed: {e}")
     
-    # Test passed - no return value needed
+    # Test passed - no return value needed.
     assert True
 
 
 def test_data_sources():
-    """Test data source configuration"""
+    """Test data source configuration."""
     print("Test 7: Data Sources")
     # Verify class counts are correct (allow flexibility in actual counts)
     assert len(COCO_BASE_CLASSES) > 0, f"COCO base classes should exist, got {len(COCO_BASE_CLASSES)}"
@@ -168,11 +163,11 @@ if __name__ == "__main__":
     
     for test in tests:
         try:
-            test()  # Tests should use assert, not return values
+            test()  # Tests should use assert, not return values.
             passed += 1
         except AssertionError as e:
             failed += 1
-            print(f"❌ {test.__name__}: {e}")
+            print(f"FAIL {test.__name__}: {e}")
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -182,4 +177,10 @@ if __name__ == "__main__":
         sys.exit(0)
     else:
         sys.exit(1)
+
+
+
+
+
+
 

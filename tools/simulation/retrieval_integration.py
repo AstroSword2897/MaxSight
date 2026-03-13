@@ -1,8 +1,4 @@
-"""
-Retrieval Integration for Phase 8: Simulator Integration & UI
-
-Integrates retrieval system into simulator for enhanced scene understanding.
-"""
+"""Retrieval Integration for Phase 8: Simulator Integration & UI Integrates retrieval system into simulator for enhanced scene understanding."""
 
 import torch
 from typing import Dict, List, Optional, Tuple
@@ -13,14 +9,7 @@ from ml.models.retrieval_heads_production import MultiVectorRetrievalHeads
 
 
 class RetrievalIntegration:
-    """
-    Retrieval integration for simulator (Phase 8).
-    
-    Provides:
-    - Scene retrieval for similar contexts
-    - Knowledge-augmented responses
-    - Historical context access
-    """
+    """Retrieval integration for simulator (Phase 8). Provides: - Scene retrieval for similar contexts - Knowledge-augmented responses - Historical context access."""
     
     def __init__(
         self,
@@ -29,7 +18,7 @@ class RetrievalIntegration:
     ):
         self.embed_dim = embed_dim
         
-        # Initialize retrieval components
+        # Initialize retrieval components.
         self.global_encoder = GlobalEncoder(embed_dim=embed_dim)
         self.retrieval_heads = MultiVectorRetrievalHeads(
             global_dim=embed_dim,
@@ -37,8 +26,8 @@ class RetrievalIntegration:
             patch_dim=embed_dim
         )
         
-        # Initialize retrieval stages
-        self.stage1 = None  # Will be initialized when index is loaded
+        # Initialize retrieval stages.
+        self.stage1 = None  # Will be initialized when index is loaded.
         self.stage2 = Stage2Reranker(
             embedding_dims={'global': embed_dim},
             hidden_dim=128,
@@ -71,24 +60,14 @@ class RetrievalIntegration:
         query_embedding: torch.Tensor,
         top_k: int = 5
     ) -> List[Dict]:
-        """
-        Retrieve similar scenes from index.
-        
-        Args:
-            query_embedding: Query embedding [embed_dim]
-            top_k: Number of results to return
-        
-        Returns:
-            List of similar scene results
-        """
+        """Retrieve similar scenes from index."""
         if not self.index_loaded or self.stage1 is None:
             return []
         
-        # Stage 1: ANN search
+        # Stage 1: ANN search.
         indices, distances = self.stage1(query_embedding.unsqueeze(0))
         
-        # Stage 2: Reranking (if needed)
-        # For now, return Stage 1 results
+        # Stage 2: Reranking (if needed) For now, return Stage 1 results.
         results = []
         for i, (idx, dist) in enumerate(zip(indices[0][:top_k], distances[0][:top_k])):
             results.append({
@@ -104,27 +83,18 @@ class RetrievalIntegration:
         model_outputs: Dict[str, torch.Tensor],
         images: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
-        """
-        Enhance model outputs with retrieval context.
-        
-        Args:
-            model_outputs: Raw model outputs
-            images: Input images
-        
-        Returns:
-            Enhanced outputs with retrieval context
-        """
+        """Enhance model outputs with retrieval context."""
         enhanced = model_outputs.copy()
         
         if not self.index_loaded:
             enhanced['retrieval_available'] = False
             return enhanced
         
-        # Extract global embedding
+        # Extract global embedding.
         try:
-            global_emb = self.global_encoder(images)  # [B, embed_dim]
+            global_emb = self.global_encoder(images)  # [B, embed_dim].
             
-            # Retrieve similar scenes
+            # Retrieve similar scenes.
             similar_scenes = []
             for b in range(global_emb.shape[0]):
                 scenes = self.retrieve_similar_scenes(global_emb[b])
@@ -137,4 +107,10 @@ class RetrievalIntegration:
             enhanced['retrieval_error'] = str(e)
         
         return enhanced
+
+
+
+
+
+
 

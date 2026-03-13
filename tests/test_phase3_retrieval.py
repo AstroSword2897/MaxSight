@@ -1,12 +1,4 @@
-"""
-Comprehensive Tests for Phase 3: Multi-Vector Retrieval System
-
-Tests all Phase 3 components:
-- Retrieval Encoders (Global, Region, Patch, Depth, OCR, Audio, Scene Graph)
-- Attention-Based Fusion
-- FAISS Indexing
-- Two-Stage Retrieval
-"""
+"""Comprehensive Tests for Phase 3: Multi-Vector Retrieval System."""
 
 import torch
 import torch.nn as nn
@@ -15,7 +7,7 @@ import sys
 from pathlib import Path
 import numpy as np
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -81,7 +73,7 @@ class TestAttentionFusion:
         
         query = torch.randn(2, 256)
         embeddings = {
-            'global': torch.randn(2, 256),  # [B, D] not [B, N, D]
+            'global': torch.randn(2, 256),  # [B, D] not [B, N, D].
             'region': torch.randn(2, 128),
             'patch': torch.randn(2, 64)
         }
@@ -117,7 +109,7 @@ class TestFAISSIndexing:
         
         builder = NeuralIndexBuilder(embed_dim=256, index_type='hnsw')
         
-        # Create dummy vectors
+        # Create dummy vectors.
         vectors = np.random.randn(100, 256).astype('float32')
         
         builder.build_index(vectors)
@@ -130,11 +122,11 @@ class TestFAISSIndexing:
         
         builder = NeuralIndexBuilder(embed_dim=256, index_type='hnsw')
         
-        # Build index
+        # Build index.
         vectors = np.random.randn(100, 256).astype('float32')
         builder.build_index(vectors)
         
-        # Search
+        # Search.
         query = np.random.randn(1, 256).astype('float32')
         distances, indices = builder.search(query, k=5)
         
@@ -165,22 +157,22 @@ class TestTwoStageRetrieval:
         from ml.retrieval.indexing.neural_index_builder import NeuralIndexBuilder
         import numpy as np
         
-        # Create a small index for testing
-        builder = NeuralIndexBuilder(embed_dim=256, index_type='flat')  # Use flat for small test
+        # Create a small index for testing.
+        builder = NeuralIndexBuilder(embed_dim=256, index_type='flat')  # Use flat for small test.
         vectors = np.random.randn(100, 256).astype('float32')
         index = builder.build_index(vectors)
         
         retrieval = Stage1ANN(index=index)
         
-        # Create dummy query
+        # Create dummy query.
         query = np.random.randn(256).astype('float32')
         
         distances, indices = retrieval.search(query, k=5)
         
         assert distances is not None
         assert indices is not None
-        assert distances.shape[0] == 1  # Batch size
-        assert len(indices[0]) == 5  # k results
+        assert distances.shape[0] == 1  # Batch size.
+        assert len(indices[0]) == 5  # K results.
     
     def test_stage2_reranking(self):
         """Test Stage 2 reranking."""
@@ -192,8 +184,7 @@ class TestTwoStageRetrieval:
         )
         reranker.eval()
         
-        # Create dummy candidates (list of dicts)
-        # Use proper dimensions that match embedding_dims
+        # Create dummy candidates (list of dicts) Use proper dimensions that match embedding_dims.
         candidates = [
             {'global': torch.randn(256), 'region': torch.randn(128), 'patch': torch.randn(64)}
             for _ in range(10)
@@ -226,4 +217,10 @@ def run_all_tests():
 
 if __name__ == "__main__":
     run_all_tests()
+
+
+
+
+
+
 

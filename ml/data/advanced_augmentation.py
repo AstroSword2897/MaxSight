@@ -1,14 +1,4 @@
-"""
-Advanced Data Augmentation for Real-World Robustness
-
-Implements comprehensive augmentation strategies including:
-- Geometric transforms (rotation, flips, perspective)
-- Photometric transforms (contrast, brightness, color jitter)
-- Noise injection (Gaussian, salt-and-pepper, motion blur)
-- Occlusion simulation (random erasing, cutout)
-- Weather/environmental effects (fog, rain, snow simulation)
-- Camera artifacts (lens distortion, chromatic aberration)
-"""
+"""Advanced Data Augmentation for Real-World Robustness."""
 
 import torch
 import torch.nn as nn
@@ -24,7 +14,7 @@ from dataclasses import dataclass, field
 @dataclass
 class AugmentationConfig:
     """Configuration for augmentation pipeline."""
-    # Geometric
+    # Geometric.
     rotation_range: Tuple[float, float] = (-30, 30)
     scale_range: Tuple[float, float] = (0.8, 1.2)
     translate_range: Tuple[float, float] = (-0.1, 0.1)
@@ -32,44 +22,42 @@ class AugmentationConfig:
     flip_horizontal_prob: float = 0.5
     flip_vertical_prob: float = 0.1
     
-    # Photometric
+    # Photometric.
     brightness_range: Tuple[float, float] = (0.7, 1.3)
     contrast_range: Tuple[float, float] = (0.7, 1.3)
     saturation_range: Tuple[float, float] = (0.7, 1.3)
     hue_range: Tuple[float, float] = (-0.1, 0.1)
     gamma_range: Tuple[float, float] = (0.8, 1.2)
     
-    # Noise
+    # Noise.
     gaussian_noise_std: float = 0.05
     salt_pepper_prob: float = 0.02
     motion_blur_kernel: int = 7
     motion_blur_prob: float = 0.3
     
-    # Occlusion
+    # Occlusion.
     random_erasing_prob: float = 0.3
     random_erasing_scale: Tuple[float, float] = (0.02, 0.2)
     cutout_prob: float = 0.2
     cutout_size: int = 32
     
-    # Weather
+    # Weather.
     fog_prob: float = 0.1
     rain_prob: float = 0.1
     snow_prob: float = 0.05
     
-    # Camera artifacts
+    # Camera artifacts.
     lens_distortion_prob: float = 0.1
     jpeg_compression_prob: float = 0.2
     jpeg_quality_range: Tuple[int, int] = (50, 95)
     
-    # Edge cases
+    # Edge cases.
     extreme_lighting_prob: float = 0.15
     partial_occlusion_prob: float = 0.25
 
 
 class AdvancedAugmentation:
-    """
-    Comprehensive augmentation pipeline for real-world robustness.
-    """
+    """Comprehensive augmentation pipeline for real-world robustness."""
     
     def __init__(self, config: Optional[AugmentationConfig] = None):
         self.config = config or AugmentationConfig()
@@ -77,7 +65,7 @@ class AdvancedAugmentation:
     def __call__(self, image: torch.Tensor, 
                  targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:
         """Apply augmentation pipeline."""
-        # Randomly select augmentations
+        # Randomly select augmentations.
         augmentations = self._select_augmentations()
         
         for aug_fn in augmentations:
@@ -89,13 +77,13 @@ class AdvancedAugmentation:
         """Select random subset of augmentations."""
         augmentations = []
         
-        # Always apply some geometric
+        # Always apply some geometric.
         if random.random() < self.config.flip_horizontal_prob:
             augmentations.append(self.horizontal_flip)
         if random.random() < self.config.flip_vertical_prob:
             augmentations.append(self.vertical_flip)
         
-        # Rotation and scale
+        # Rotation and scale.
         augmentations.append(self.random_affine)
         
         # Photometric (always apply some)
@@ -119,19 +107,18 @@ class AdvancedAugmentation:
         if random.random() < self.config.rain_prob:
             augmentations.append(self.rain_effect)
             
-        # Edge cases
+        # Edge cases.
         if random.random() < self.config.extreme_lighting_prob:
             augmentations.append(self.extreme_lighting)
         if random.random() < self.config.partial_occlusion_prob:
             augmentations.append(self.partial_occlusion)
             
-        # Camera artifacts
+        # Camera artifacts.
         if random.random() < self.config.jpeg_compression_prob:
             augmentations.append(self.jpeg_compression)
             
         return augmentations
     
-    # ==================== Geometric Transforms ====================
     
     def horizontal_flip(self, image: torch.Tensor, 
                        targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:
@@ -141,7 +128,7 @@ class AdvancedAugmentation:
         if targets and 'boxes' in targets:
             boxes = targets['boxes'].clone()
             if len(boxes) > 0:
-                # Flip x coordinates
+                # Flip x coordinates.
                 width = image.shape[-1]
                 boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
                 targets['boxes'] = boxes
@@ -170,7 +157,7 @@ class AdvancedAugmentation:
         tx = random.uniform(*self.config.translate_range)
         ty = random.uniform(*self.config.translate_range)
         
-        # Build affine matrix
+        # Build affine matrix.
         theta = torch.tensor([
             [scale * math.cos(math.radians(angle)), 
              -scale * math.sin(math.radians(angle)), tx],
@@ -178,7 +165,7 @@ class AdvancedAugmentation:
              scale * math.cos(math.radians(angle)), ty]
         ], dtype=image.dtype, device=image.device)
         
-        # Ensure batch dimension
+        # Ensure batch dimension.
         if image.dim() == 3:
             image = image.unsqueeze(0)
             squeeze = True
@@ -192,19 +179,18 @@ class AdvancedAugmentation:
         if squeeze:
             image = image.squeeze(0)
             
-        # Note: bbox adjustment for rotation is complex, skip for now
+        # Note: bbox adjustment for rotation is complex, skip for now.
         return image, targets
     
-    # ==================== Photometric Transforms ====================
     
     def color_jitter(self, image: torch.Tensor,
                     targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:
         """Random color jittering."""
-        # Brightness
+        # Brightness.
         brightness = random.uniform(*self.config.brightness_range)
         image = image * brightness
         
-        # Contrast
+        # Contrast.
         contrast = random.uniform(*self.config.contrast_range)
         mean = image.mean(dim=(-2, -1), keepdim=True)
         image = (image - mean) * contrast + mean
@@ -215,7 +201,7 @@ class AdvancedAugmentation:
             gray = image.mean(dim=-3, keepdim=True)
             image = (image - gray) * saturation + gray
             
-        # Clamp to valid range
+        # Clamp to valid range.
         image = image.clamp(0, 1)
         
         return image, targets
@@ -226,16 +212,16 @@ class AdvancedAugmentation:
         condition = random.choice(['overexposed', 'underexposed', 'harsh_shadows'])
         
         if condition == 'overexposed':
-            # Simulate overexposure
+            # Simulate overexposure.
             image = image * random.uniform(1.5, 2.5)
             image = image.clamp(0, 1)
             
         elif condition == 'underexposed':
-            # Simulate underexposure
+            # Simulate underexposure.
             image = image * random.uniform(0.2, 0.5)
             
         elif condition == 'harsh_shadows':
-            # Add shadow gradient
+            # Add shadow gradient.
             h, w = image.shape[-2:]
             shadow = torch.linspace(0.3, 1.0, w, device=image.device)
             shadow = shadow.reshape(1, 1, 1, w).expand_as(image)
@@ -243,7 +229,6 @@ class AdvancedAugmentation:
             
         return image, targets
     
-    # ==================== Noise Injection ====================
     
     def gaussian_noise(self, image: torch.Tensor,
                       targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:
@@ -271,11 +256,11 @@ class AdvancedAugmentation:
         kernel_size = self.config.motion_blur_kernel
         angle = random.uniform(0, 360)
         
-        # Create motion blur kernel
+        # Create motion blur kernel.
         kernel = torch.zeros(kernel_size, kernel_size, device=image.device)
         center = kernel_size // 2
         
-        # Draw line at angle
+        # Draw line at angle.
         for i in range(kernel_size):
             offset = i - center
             x = int(center + offset * math.cos(math.radians(angle)))
@@ -286,7 +271,7 @@ class AdvancedAugmentation:
         kernel = kernel / kernel.sum()
         kernel = kernel.reshape(1, 1, kernel_size, kernel_size)
         
-        # Apply convolution per channel
+        # Apply convolution per channel.
         if image.dim() == 3:
             image = image.unsqueeze(0)
             squeeze = True
@@ -304,7 +289,6 @@ class AdvancedAugmentation:
             
         return image, targets
     
-    # ==================== Occlusion Simulation ====================
     
     def random_erasing(self, image: torch.Tensor,
                       targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:
@@ -323,7 +307,7 @@ class AdvancedAugmentation:
                 x = random.randint(0, w - ew)
                 y = random.randint(0, h - eh)
                 
-                # Fill with random noise or mean
+                # Fill with random noise or mean.
                 if random.random() < 0.5:
                     image[..., y:y+eh, x:x+ew] = torch.rand_like(
                         image[..., y:y+eh, x:x+ew])
@@ -356,13 +340,13 @@ class AdvancedAugmentation:
         """Simulate partial occlusion by another object."""
         h, w = image.shape[-2:]
         
-        # Random polygon occlusion
+        # Random polygon occlusion.
         num_points = random.randint(3, 6)
         center_x = random.randint(w//4, 3*w//4)
         center_y = random.randint(h//4, 3*h//4)
         radius = random.randint(h//8, h//3)
         
-        # Create mask
+        # Create mask.
         mask = torch.ones_like(image)
         y_coords, x_coords = torch.meshgrid(
             torch.arange(h, device=image.device),
@@ -373,14 +357,13 @@ class AdvancedAugmentation:
         dist = torch.sqrt((x_coords - center_x)**2 + (y_coords - center_y)**2)
         occlusion_mask = dist < radius
         
-        # Apply occlusion
+        # Apply occlusion.
         image = image.clone()
         occlusion_color = random.uniform(0.1, 0.3)
         image[..., occlusion_mask] = occlusion_color
         
         return image, targets
     
-    # ==================== Weather Effects ====================
     
     def fog_effect(self, image: torch.Tensor,
                   targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:
@@ -404,7 +387,7 @@ class AdvancedAugmentation:
             y = random.randint(0, h-1)
             length = random.randint(3, 10)
             
-            # Draw streak
+            # Draw streak.
             for i in range(length):
                 ny = min(y + i, h - 1)
                 if 0 <= ny < h and 0 <= x < w:
@@ -413,24 +396,22 @@ class AdvancedAugmentation:
         image = image * 0.8 + rain_layer * 0.2
         return image.clamp(0, 1), targets
     
-    # ==================== Camera Artifacts ====================
     
     def jpeg_compression(self, image: torch.Tensor,
                         targets: Optional[Dict] = None) -> Tuple[torch.Tensor, Optional[Dict]]:
         """Simulate JPEG compression artifacts."""
         quality = random.randint(*self.config.jpeg_quality_range)
         
-        # Convert to PIL, compress, convert back
-        # For efficiency, simulate with block artifacts
+        # Convert to PIL, compress, convert back. For efficiency, simulate with block artifacts.
         block_size = 8
         h, w = image.shape[-2:]
         
-        # Round to block boundaries
+        # Round to block boundaries.
         new_h = (h // block_size) * block_size
         new_w = (w // block_size) * block_size
         
         if new_h > 0 and new_w > 0:
-            # Average within blocks
+            # Average within blocks.
             image_reshaped = image[..., :new_h, :new_w]
             image_reshaped = image_reshaped.reshape(
                 *image.shape[:-2], 
@@ -439,12 +420,12 @@ class AdvancedAugmentation:
             )
             block_means = image_reshaped.mean(dim=(-3, -1), keepdim=True)
             
-            # Add some variation based on quality
+            # Add some variation based on quality.
             noise_scale = (100 - quality) / 500
             noise = torch.randn_like(block_means) * noise_scale
             block_means = (block_means + noise).clamp(0, 1)
             
-            # Expand back
+            # Expand back.
             image_reshaped = block_means.expand_as(image_reshaped)
             image[..., :new_h, :new_w] = image_reshaped.reshape(
                 *image.shape[:-2], new_h, new_w)
@@ -453,10 +434,7 @@ class AdvancedAugmentation:
 
 
 class StressTestAugmentation(AdvancedAugmentation):
-    """
-    Stress-test augmentation for edge case robustness testing.
-    Applies more aggressive transforms to find model weaknesses.
-    """
+    """Stress-test augmentation for edge case robustness testing. Applies more aggressive transforms to find model weaknesses."""
     
     def __init__(self):
         config = AugmentationConfig(
@@ -486,12 +464,7 @@ class MixUp:
         
     def __call__(self, images: torch.Tensor, 
                  labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
-        """
-        Apply MixUp.
-        
-        Returns:
-            Mixed images, labels_a, labels_b, lambda
-        """
+        """Apply MixUp. Returns: Mixed images, labels_a, labels_b, lambda."""
         if self.alpha > 0:
             lam = np.random.beta(self.alpha, self.alpha)
         else:
@@ -526,7 +499,7 @@ class CutMix:
         
         h, w = images.shape[-2:]
         
-        # Get cut region
+        # Get cut region.
         cut_rat = np.sqrt(1 - lam)
         cut_w = int(w * cut_rat)
         cut_h = int(h * cut_rat)
@@ -542,25 +515,20 @@ class CutMix:
         mixed_images = images.clone()
         mixed_images[..., y1:y2, x1:x2] = images[index, ..., y1:y2, x1:x2]
         
-        # Adjust lambda to actual proportion
+        # Adjust lambda to actual proportion.
         lam = 1 - ((x2 - x1) * (y2 - y1) / (h * w))
         
         return mixed_images, labels, labels[index], lam
 
 
 def create_augmentation_pipeline(mode: str = 'train') -> AdvancedAugmentation:
-    """
-    Create augmentation pipeline based on mode.
-    
-    Args:
-        mode: 'train', 'val', 'test', or 'stress_test'
-    """
+    """Create augmentation pipeline based on mode. Args: mode: 'train', 'val', 'test', or 'stress_test'"""
     if mode == 'train':
         return AdvancedAugmentation()
     elif mode == 'stress_test':
         return StressTestAugmentation()
     else:
-        # Minimal augmentation for val/test
+        # Minimal augmentation for val/test.
         return AdvancedAugmentation(AugmentationConfig(
             rotation_range=(0, 0),
             scale_range=(1, 1),
@@ -573,4 +541,10 @@ def create_augmentation_pipeline(mode: str = 'train') -> AdvancedAugmentation:
             extreme_lighting_prob=0,
             partial_occlusion_prob=0
         ))
+
+
+
+
+
+
 

@@ -1,8 +1,4 @@
-"""
-Stage 1: Fast Approximate Nearest Neighbor Search
-
-Fast ANN search on fused embeddings for candidate retrieval.
-"""
+"""Stage 1: Fast Approximate Nearest Neighbor Search Fast ANN search on fused embeddings for candidate retrieval."""
 
 import numpy as np
 import faiss
@@ -11,12 +7,7 @@ import time
 
 
 class Stage1ANN:
-    """
-    Stage 1 ANN search for fast candidate retrieval.
-    
-    Uses FAISS index for approximate nearest neighbor search.
-    Target latency: <20ms for HNSW, <50ms for IVF-PQ
-    """
+    """Stage 1 ANN search for fast candidate retrieval. Uses FAISS index for approximate nearest neighbor search. Target latency: <20ms for HNSW, <50ms for IVF-PQ."""
     
     def __init__(
         self,
@@ -30,58 +21,43 @@ class Stage1ANN:
     
     def search(
         self,
-        query: np.ndarray,  # [embed_dim] or [B, embed_dim]
+        query: np.ndarray,  # [embed_dim] or [B, embed_dim].
         k: int = 200,
-        ef_search: Optional[int] = None  # For HNSW
+        ef_search: Optional[int] = None  # For HNSW.
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Search for top-K candidates.
-        
-        Args:
-            query: Query embedding [embed_dim] or [B, embed_dim]
-            k: Number of candidates to retrieve
-            ef_search: EF parameter for HNSW (higher = more accurate, slower)
-        
-        Returns:
-            distances: Distances to candidates [B, k]
-            indices: Candidate indices [B, k]
-        """
+        """Search for top-K candidates."""
         if self.index is None:
             raise ValueError("Index not initialized. Provide index or index_path.")
         
-        # Ensure query is 2D
+        # Ensure query is 2D.
         if query.ndim == 1:
             query = query.reshape(1, -1)
         
         query = query.astype('float32')
         
-        # Set ef_search for HNSW if provided
+        # Set ef_search for HNSW if provided.
         if ef_search is not None and hasattr(self.index, 'hnsw'):
             self.index.hnsw.efSearch = ef_search
         
-        # Search
+        # Search.
         start_time = time.time()
         distances, indices = self.index.search(query, k)
-        elapsed = (time.time() - start_time) * 1000  # ms
+        elapsed = (time.time() - start_time) * 1000  # Ms.
         
         return distances, indices
     
     def batch_search(
         self,
-        queries: np.ndarray,  # [B, embed_dim]
+        queries: np.ndarray,  # [B, embed_dim].
         k: int = 200
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Batch search for multiple queries.
-        
-        Args:
-            queries: Query embeddings [B, embed_dim]
-            k: Number of candidates per query
-        
-        Returns:
-            distances: Distances [B, k]
-            indices: Indices [B, k]
-        """
+        """Batch search for multiple queries."""
         return self.search(queries, k)
+
+
+
+
+
+
 
 

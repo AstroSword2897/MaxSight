@@ -1,8 +1,4 @@
-"""
-Production-grade Quantization-Aware Training (QAT) for MaxSight models.
-
-Use this when PTQ degrades accuracy >1% on critical heads (embedding, bbox, urgency).
-"""
+"""Production-grade Quantization-Aware Training (QAT) for MaxSight models. Use this when PTQ degrades accuracy >1% on critical heads (embedding, bbox, urgency)."""
 
 import torch
 import torch.nn as nn
@@ -18,7 +14,7 @@ from copy import deepcopy
 import json
 import sys
 
-# Add parent directory to path for imports
+# Add parent directory to path for imports.
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from ml.training.losses import MaxSightLoss
@@ -37,17 +33,10 @@ def set_seed(seed: int = 42):
 
 
 def fuse_maxsight_model(model: nn.Module):
-    """
-    Fuse conv+bn+relu patterns for MaxSight CNN architecture.
-    
-    MaxSight uses ResNet50 backbone with FPN, so we fuse:
-    - ResNet layers (conv+bn+relu)
-    - FPN layers (conv+bn+relu)
-    - Detection head layers (conv+bn+relu)
-    """
+    """Fuse conv+bn+relu patterns for MaxSight CNN architecture."""
     patterns = []
     
-    # Auto-detect fusion patterns in all modules
+    # Auto-detect fusion patterns in all modules.
     for name, module in model.named_modules():
         try:
             children = list(module._modules.keys())
@@ -63,7 +52,7 @@ def fuse_maxsight_model(model: nn.Module):
         except Exception:
             continue
     
-    # Remove duplicates
+    # Remove duplicates.
     unique_patterns = []
     seen = set()
     for p in patterns:
@@ -72,7 +61,7 @@ def fuse_maxsight_model(model: nn.Module):
             seen.add(p_tuple)
             unique_patterns.append(p)
     
-    # Apply fusion
+    # Apply fusion.
     fused_count = 0
     for p in unique_patterns:
         try:
@@ -86,10 +75,7 @@ def fuse_maxsight_model(model: nn.Module):
 
 
 class QATTrainer:
-    """
-    Production QAT trainer with multi-head loss support and validation.
-    Integrated with MaxSightLoss for proper multi-task training.
-    """
+    """Production QAT trainer with multi-head loss support and validation. Integrated with MaxSightLoss for proper multi-task training."""
     
     def __init__(
         self,
@@ -106,8 +92,8 @@ class QATTrainer:
         warmup_epochs: int = 1,
         log_interval: int = 50,
         num_classes: int = 48,
-        freeze_backbone: bool = True,  # Freeze backbone for QAT fine-tuning
-        freeze_backbone_epochs: int = 2,  # Unfreeze after N epochs
+        freeze_backbone: bool = True,  # Freeze backbone for QAT fine-tuning.
+        freeze_backbone_epochs: int = 2,  # Unfreeze after N epochs.
     ):
         self.model = model
         self.train_loader = train_loader
@@ -126,7 +112,7 @@ class QATTrainer:
         self.freeze_backbone = freeze_backbone
         self.freeze_backbone_epochs = freeze_backbone_epochs
         
-        # Identify backbone parameters
+        # Identify backbone parameters.
         self.backbone_params = []
         self.head_params = []
         for name, param in model.named_parameters():
@@ -149,10 +135,10 @@ class QATTrainer:
         model_qat = deepcopy(self.model).to('cpu')
         model_qat.eval()
         
-        # Set backend
+        # Set backend.
         torch.backends.quantized.engine = self.backend
         
-        # Fuse modules
+        # Fuse modules.
         if self.fuse:
             try:
                 model_qat = fuse_maxsight_model(model_qat)
@@ -160,7 +146,7 @@ class QATTrainer:
             except Exception as e:
                 warnings.warn(f"Fusion failed: {e}")
         
-        # Set qconfig for QAT
+        # Set qconfig for QAT.
         qconfig = quantization.get_default_qat_qconfig(self.backend)
         
         # Use per-channel weight quantization for qnnpack (mobile/ARM)
@@ -172,7 +158,7 @@ class QATTrainer:
             except Exception:
                 pass
         
-        # Set qconfig on model (PyTorch typing quirk - this is valid)
+        # Set qconfig on model (valid despite PyTorch typing quirk).
         setattr(model_qat, 'qconfig', qconfig)  # type: ignore
         
         # Prepare for QAT (inserts fake quantization modules)
@@ -188,7 +174,7 @@ class QATTrainer:
         num_batches = 0
         
         for batch_idx, batch in enumerate(self.train_loader):
-            # Handle MaxSight dataset format
+            # Handle MaxSight dataset format.
             if isinstance(batch, (list, tuple)):
                 inputs = batch[0]
                 targets = batch[1] if len(batch) > 1 else {}
@@ -201,7 +187,7 @@ class QATTrainer:
             if inputs is not None:
                 inputs = inputs.to(self.device)
             
-            # Move targets to device
+            # Move targets to device.
             if isinstance(targets, dict):
                 targets = {k: v.to(self.device) if torch.is_tensor(v) else v 
                           for k, v in targets.items()}
@@ -210,7 +196,7 @@ class QATTrainer:
             
             optimizer.zero_grad()
             
-            # Forward pass
+            # Forward pass.
             outputs = model(inputs)
             
             # Compute loss (MaxSightLoss expects outputs dict and targets dict)
@@ -218,13 +204,13 @@ class QATTrainer:
                 loss_dict = self.loss_fn(outputs, targets)
                 loss = loss_dict['total_loss']
             else:
-                # Fallback for generic loss functions
+                # Fallback for generic loss functions.
                 loss = self.loss_fn(outputs, targets)
             
-            # Backward pass
+            # Backward pass.
             loss.backward()
             
-            # Gradient clipping for stability
+            # Gradient clipping for stability.
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             
             optimizer.step()
@@ -247,7 +233,7 @@ class QATTrainer:
         
         with torch.no_grad():
             for batch in self.val_loader:
-                # Handle MaxSight dataset format
+                # Handle MaxSight dataset format.
                 if isinstance(batch, (list, tuple)):
                     inputs = batch[0]
                     targets = batch[1] if len(batch) > 1 else {}
@@ -260,7 +246,7 @@ class QATTrainer:
                 if inputs is not None:
                     inputs = inputs.to(self.device)
                 
-                # Move targets to device
+                # Move targets to device.
                 if isinstance(targets, dict):
                     targets = {k: v.to(self.device) if torch.is_tensor(v) else v 
                               for k, v in targets.items()}
@@ -269,7 +255,7 @@ class QATTrainer:
                 
                 outputs = model(inputs)
                 
-                # Compute loss
+                # Compute loss.
                 if isinstance(self.loss_fn, MaxSightLoss):
                     loss_dict = self.loss_fn(outputs, targets)
                     loss = loss_dict['total_loss']
@@ -290,29 +276,26 @@ class QATTrainer:
         return metrics
     
     def train(self) -> Dict[str, Any]:
-        """
-        Run full QAT training loop.
-        Returns dict with best model path and training history.
-        """
+        """Run full QAT training loop. Returns dict with best model path and training history."""
         print("Starting Quantization-Aware Training (QAT)")
         
-        # Prepare model for QAT
+        # Prepare model for QAT.
         model_qat = self.prepare_model_for_qat()
         
-        # Setup optimizer with backbone freezing support
+        # Setup optimizer with backbone freezing support.
         if self.freeze_backbone:
-            # Freeze backbone initially
+            # Freeze backbone initially.
             for param in self.backbone_params:
                 param.requires_grad = False
             print("Backbone frozen for QAT fine-tuning (training heads only)")
-            # Only optimize heads
+            # Only optimize heads.
             optimizer = AdamW(
                 self.head_params,
                 lr=self.lr,
                 weight_decay=1e-4
             )
         else:
-            # Full model training with different LRs
+            # Full model training with different LRs.
             param_groups = [
                 {'params': self.backbone_params, 'lr': self.lr * 0.1},
                 {'params': self.head_params, 'lr': self.lr}
@@ -332,24 +315,24 @@ class QATTrainer:
         best_epoch = -1
         best_model_state = None
         
-        # Training loop
+        # Training loop.
         for epoch in range(self.epochs):
             print(f"\nEpoch {epoch+1}/{self.epochs}")
             print("-" * 70)
             
-            # Unfreeze backbone after freeze_backbone_epochs
+            # Unfreeze backbone after freeze_backbone_epochs.
             if self.freeze_backbone and epoch == self.freeze_backbone_epochs:
                 for param in self.backbone_params:
                     param.requires_grad = True
                 print("Backbone unfrozen (full model QAT)")
-                # Recreate optimizer with all parameters
+                # Recreate optimizer with all parameters.
                 param_groups = [
                     {'params': self.backbone_params, 'lr': self.lr * 0.1},
                     {'params': self.head_params, 'lr': self.lr}
                 ]
                 optimizer = AdamW(param_groups, weight_decay=1e-4)
             
-            # Enable/disable observer and fake quant based on warmup
+            # Enable/disable observer and fake quant based on warmup.
             if epoch < self.warmup_epochs:
                 print("  [Warmup] Enabling observers, disabling fake quantization")
                 model_qat.apply(torch.ao.quantization.enable_observer)
@@ -359,28 +342,28 @@ class QATTrainer:
                 model_qat.apply(torch.ao.quantization.enable_observer)
                 model_qat.apply(torch.ao.quantization.enable_fake_quant)
             
-            # Train
+            # Train.
             train_loss = self.train_epoch(model_qat, optimizer, epoch)
             self.history['train_loss'].append(train_loss)
             self.history['lr'].append(optimizer.param_groups[0]['lr'])
             
-            # Validate
+            # Validate.
             val_metrics = self.validate(model_qat, epoch)
             val_loss = val_metrics['loss']
             self.history['val_loss'].append(val_loss)
             self.history['val_metrics'].append(val_metrics)
             
-            # Save best model
+            # Save best model.
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 best_epoch = epoch
                 best_model_state = deepcopy(model_qat.state_dict())
                 print(f"  New best model (loss: {best_val_loss:.4f})")
             
-            # Step scheduler
+            # Step scheduler.
             scheduler.step()
             
-            # Save checkpoint
+            # Save checkpoint.
             checkpoint_path = self.output_dir / f'qat_checkpoint_epoch{epoch+1}.pt'
             torch.save({
                 'epoch': epoch,
@@ -393,27 +376,27 @@ class QATTrainer:
         
         print(f"\nQAT Training Complete! Best epoch: {best_epoch+1}")
         
-        # Load best model and convert to INT8
+        # Load best model and convert to INT8.
         if best_model_state is not None:
             model_qat.load_state_dict(best_model_state)
         model_qat.eval()
         model_qat.to('cpu')
         
-        # Disable observers before conversion
+        # Disable observers before conversion.
         model_qat.apply(torch.ao.quantization.disable_observer)
         
-        # Convert to fully quantized INT8 model
+        # Convert to fully quantized INT8 model.
         print("\nConverting QAT model to INT8...")
         model_int8 = quantization.convert(model_qat, inplace=False)
         
-        # Save models
+        # Save models.
         qat_model_path = self.output_dir / 'model_qat_best.pt'
         int8_model_path = self.output_dir / 'model_int8_from_qat.pt'
         
         torch.save(best_model_state, qat_model_path)
         torch.save(model_int8.state_dict(), int8_model_path)
         
-        # Save training history
+        # Save training history.
         history_path = self.output_dir / 'qat_history.json'
         with open(history_path, 'w') as f:
             json.dump({
@@ -438,7 +421,7 @@ class QATTrainer:
         }
 
 
-# CLI usage
+# CLI usage.
 if __name__ == "__main__":
     import argparse
     
@@ -465,7 +448,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Dynamic model import
+    # Dynamic model import.
     import importlib.util
     spec = importlib.util.spec_from_file_location("model_def", args.model_file)
     if spec is None or spec.loader is None:
@@ -482,7 +465,7 @@ if __name__ == "__main__":
     # Setup dataloaders (adapt to your dataset)
     from torch.utils.data import DataLoader, TensorDataset
     
-    # Dummy dataloaders - replace with actual MaxSight dataset
+    # Dummy dataloaders - replace with actual MaxSight dataset.
     print("Creating dummy dataloaders - replace with actual MaxSight dataset")
     train_data = TensorDataset(
         torch.randn(100, 3, 224, 224),
@@ -496,10 +479,10 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_data, batch_size=args.batch_size)
     
-    # Use MaxSightLoss
+    # Use MaxSightLoss.
     loss_fn = MaxSightLoss(num_classes=args.num_classes)
     
-    # Create trainer
+    # Create trainer.
     trainer = QATTrainer(
         model=model,
         train_loader=train_loader,
@@ -513,11 +496,17 @@ if __name__ == "__main__":
         num_classes=args.num_classes
     )
     
-    # Run QAT
+    # Run QAT.
     results = trainer.train()
     
     print("\nQAT Results:")
     print(f"  Best model: {results['qat_model_path']}")
     print(f"  INT8 model: {results['int8_model_path']}")
     print(f"  Best validation loss: {results['best_val_loss']:.4f}")
+
+
+
+
+
+
 

@@ -1,8 +1,4 @@
-"""
-Redis Caching Utilities for MaxSight
-
-Provides Redis-based caching for model outputs and responses with TTL support.
-"""
+"""Redis Caching Utilities for MaxSight Provides Redis-based caching for model outputs and responses with TTL support."""
 
 import os
 import pickle
@@ -22,13 +18,7 @@ class RedisCache:
     """Redis-based cache with TTL support."""
     
     def __init__(self, redis_url: Optional[str] = None, default_ttl: int = 60):
-        """
-        Initialize Redis cache.
-        
-        Args:
-            redis_url: Redis connection URL (defaults to REDIS_URL env var)
-            default_ttl: Default TTL in seconds
-        """
+        """Initialize Redis cache. Args: redis_url: Redis connection URL (defaults to REDIS_URL env var) default_ttl: Default TTL in seconds."""
         if not REDIS_AVAILABLE:
             raise ImportError("redis package not installed. Install with: pip install redis")
         
@@ -71,16 +61,7 @@ class RedisCache:
 
 
 def cache_key(*args, **kwargs) -> str:
-    """
-    Generate cache key from function arguments.
-    
-    Args:
-        *args: Positional arguments
-        **kwargs: Keyword arguments
-    
-    Returns:
-        MD5 hash of serialized arguments
-    """
+    """Generate cache key from function arguments. Args: *args: Positional arguments **kwargs: Keyword arguments Returns: MD5 hash of serialized arguments."""
     key_data = {
         'args': args,
         'kwargs': kwargs
@@ -90,39 +71,34 @@ def cache_key(*args, **kwargs) -> str:
 
 
 def cached(ttl: int = 60, redis_url: Optional[str] = None):
-    """
-    Decorator for caching function results.
-    
-    Args:
-        ttl: Time to live in seconds
-        redis_url: Redis connection URL
-    
-    Usage:
-        @cached(ttl=300)
-        def expensive_function(x, y):
-            return x + y
-    """
+    """Decorator for caching function results."""
     cache = RedisCache(redis_url=redis_url, default_ttl=ttl) if REDIS_AVAILABLE else None
     
     def decorator(func: Callable) -> Callable:
         def wrapper(*args, **kwargs):
             if cache is None:
-                # Redis not available, just call function
+                # Redis not available, just call function.
                 return func(*args, **kwargs)
             
-            # Generate cache key
+            # Generate cache key.
             key = f"{func.__name__}:{cache_key(*args, **kwargs)}"
             
-            # Try to get from cache
+            # Get from cache when present.
             cached_value = cache.get(key)
             if cached_value is not None:
                 return cached_value
             
-            # Compute and cache
+            # Compute and cache.
             result = func(*args, **kwargs)
             cache.set(key, result, ttl=ttl)
             return result
         
         return wrapper
     return decorator
+
+
+
+
+
+
 

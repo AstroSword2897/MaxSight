@@ -1,7 +1,4 @@
-"""
-Error Handling, Fallback Logic, Kill Switches, and Ethical Safeguards for MaxSight
-Handles error propagation, runtime head control, and safety mechanisms.
-"""
+"""Error Handling, Fallback Logic, Kill Switches, and Ethical Safeguards for MaxSight Handles error propagation, runtime head control, and safety mechanisms."""
 
 import torch
 import torch.nn as nn
@@ -40,14 +37,7 @@ def with_fallback(
     fallback_func: Optional[Callable] = None,
     log_error: bool = True
 ):
-    """
-    Decorator to add fallback logic to functions.
-    
-    Arguments:
-        fallback_value: Default value to return on error
-        fallback_func: Function to call for fallback (takes same args as original)
-        log_error: Whether to log errors
-    """
+    """Decorator to add fallback logic to functions."""
     def decorator(func: Callable):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -70,12 +60,7 @@ def with_fallback(
 
 
 def with_timeout(timeout_ms: float = 1000.0):
-    """
-    Decorator to add timeout to functions.
-    
-    Arguments:
-        timeout_ms: Timeout in milliseconds
-    """
+    """Decorator to add timeout to functions. Arguments: timeout_ms: Timeout in milliseconds."""
     def decorator(func: Callable):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -92,15 +77,7 @@ def with_timeout(timeout_ms: float = 1000.0):
 
 
 class HeadExecutionManager:
-    """
-    Manages head execution with error handling and fallbacks.
-    
-    Handles:
-    - Dependency validation
-    - Error propagation
-    - Fallback execution
-    - Timeout management
-    """
+    """Manages head execution with error handling and fallbacks. Handles: - Dependency validation - Error propagation - Fallback execution - Timeout management."""
     
     def __init__(
         self,
@@ -121,27 +98,15 @@ class HeadExecutionManager:
         dependencies: List[str],
         fallback_func: Optional[Callable] = None
     ) -> Dict[str, Any]:
-        """
-        Execute a head with error handling and fallbacks.
-        
-        Arguments:
-            head_name: Name of the head
-            head_func: Function to execute
-            inputs: Input dictionary
-            dependencies: List of required dependency keys
-            fallback_func: Optional fallback function
-        
-        Returns:
-            Head outputs dictionary
-        """
-        # Validate dependencies
+        """Execute a head with error handling and fallbacks."""
+        # Validate dependencies.
         missing_deps = [dep for dep in dependencies if dep not in inputs]
         if missing_deps:
             if self.enable_fallbacks and fallback_func:
                 logger.warning(f"{head_name} missing dependencies {missing_deps}, using fallback")
                 try:
                     result = fallback_func(**inputs)
-                    # Log fallback usage
+                    # Log fallback usage.
                     self.execution_log.append({
                         'head': head_name,
                         'success': False,
@@ -161,23 +126,23 @@ class HeadExecutionManager:
             else:
                 raise DependencyError(f"{head_name} missing dependencies: {missing_deps}")
         
-        # Execute with timeout
+        # Execute with timeout.
         start_time = time.perf_counter()
         try:
             result = head_func(**inputs)
             elapsed_ms = (time.perf_counter() - start_time) * 1000
             
-            # Check timeout
+            # Check timeout.
             if elapsed_ms > self.timeout_ms:
                 logger.warning(f"{head_name} exceeded timeout ({elapsed_ms:.2f}ms > {self.timeout_ms}ms)")
                 if self.enable_fallbacks and fallback_func:
                     return fallback_func(**inputs)
             
-            # Validate result
+            # Validate result.
             if result is None:
                 raise HeadExecutionError(f"{head_name} returned None")
             
-            # Check for NaN/Inf
+            # Check for NaN/Inf.
             if isinstance(result, torch.Tensor):
                 if torch.isnan(result).any() or torch.isinf(result).any():
                     logger.warning(f"{head_name} produced NaN/Inf, using fallback")
@@ -185,7 +150,7 @@ class HeadExecutionManager:
                         return fallback_func(**inputs)
                     return self._get_default_outputs(head_name)
             
-            # Log execution
+            # Log execution.
             self.execution_log.append({
                 'head': head_name,
                 'success': True,
@@ -198,7 +163,7 @@ class HeadExecutionManager:
         except Exception as e:
             logger.error(f"{head_name} execution failed: {e}")
             
-            # Try fallback
+            # Try fallback.
             if self.enable_fallbacks and fallback_func:
                 try:
                     fallback_result = fallback_func(**inputs)
@@ -212,7 +177,7 @@ class HeadExecutionManager:
                 except Exception as fallback_error:
                     logger.error(f"Fallback for {head_name} also failed: {fallback_error}")
             
-            # Return default outputs
+            # Return default outputs.
             self.execution_log.append({
                 'head': head_name,
                 'success': False,
@@ -235,7 +200,7 @@ class HeadExecutionManager:
             'glare': torch.zeros(1, 4),
             'findability': torch.zeros(1, 196),
             'navigation_difficulty': torch.zeros(1, 1),
-            'uncertainty': torch.ones(1, 1),  # High uncertainty = low confidence
+            'uncertainty': torch.ones(1, 1),  # High uncertainty = low confidence.
         }
         
         if head_name in defaults:
@@ -247,16 +212,7 @@ class HeadExecutionManager:
         uncertainty: torch.Tensor,
         outputs: Dict[str, Any]
     ) -> bool:
-        """
-        Check if uncertainty is high enough to trigger fallback.
-        
-        Arguments:
-            uncertainty: Uncertainty tensor
-            outputs: Current outputs
-        
-        Returns:
-            True if fallback should be used
-        """
+        """Check if uncertainty is high enough to trigger fallback."""
         if not self.enable_fallbacks:
             return False
         
@@ -301,20 +257,7 @@ def safe_head_execution(
     manager: Optional[HeadExecutionManager] = None,
     fallback_func: Optional[Callable] = None
 ) -> Dict[str, Any]:
-    """
-    Safely execute a head with error handling.
-    
-    Arguments:
-        head_name: Name of the head
-        head_func: Function to execute
-        inputs: Input dictionary
-        dependencies: Required dependencies
-        manager: Optional HeadExecutionManager instance
-        fallback_func: Optional fallback function
-    
-    Returns:
-        Head outputs
-    """
+    """Safely execute a head with error handling."""
     if manager is None:
         manager = HeadExecutionManager()
     
@@ -327,9 +270,7 @@ def safe_head_execution(
     )
 
 
-# ============================================================================
-# Head Kill Switch System
-# ============================================================================
+# Head Kill Switch System.
 
 class HeadKillSwitchManager:
     """Runtime-configurable head disabling manager."""
@@ -409,7 +350,7 @@ class HeadKillSwitchManager:
         if device is None:
             device = torch.device('cpu')
         
-        # Infer shape from input if available
+        # Infer shape from input if available.
         batch_size = 1
         for value in kwargs.values():
             if torch.is_tensor(value) and value.dim() > 0:
@@ -484,9 +425,7 @@ def wrap_heads_with_killswitch(
     return model
 
 
-# ============================================================================
-# Ethical Safeguards
-# ============================================================================
+# Ethical Safeguards.
 
 class UncertaintySuppressor:
     """Ensures uncertainty suppresses potentially harmful actions."""
@@ -528,7 +467,7 @@ class UncertaintySuppressor:
                 suppressed_outputs = self._hard_suppress(suppressed_outputs)
             elif self.suppression_mode == 'graded':
                 suppressed_outputs = self._graded_suppress(suppressed_outputs, uncertainty_value)
-            else:  # soft
+            else:  # Soft.
                 suppressed_outputs = self._soft_suppress(suppressed_outputs, uncertainty_value)
         
         return suppressed_outputs
@@ -717,7 +656,7 @@ class EthicalGuard:
             if not safety_info['safe']:
                 suppressed_outputs = self.safety_checker.filter_unsafe_outputs(suppressed_outputs, uncertainty)
         
-        # Check if any suppression occurred
+        # Check if any suppression occurred.
         suppressed = False
         if isinstance(outputs, dict) and isinstance(suppressed_outputs, dict):
             for key in set(outputs.keys()) | set(suppressed_outputs.keys()):
@@ -746,4 +685,10 @@ def apply_ethical_guards(
         enable_safety_checks=enable_safety_checks
     )
     return guard.guard_outputs(outputs)
+
+
+
+
+
+
 

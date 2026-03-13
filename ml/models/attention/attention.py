@@ -1,11 +1,4 @@
-"""
-MaxSight 3.0 Attention Modules - Consolidated Production Version
-
-All attention modules in one file:
-- CBAM/SE (optimized with safety checks)
-- Cross-Modal Attention (vision/audio/haptic fusion)
-- Cross-Task Attention (detection/OCR/description linking)
-"""
+"""MaxSight 3.0 Attention Modules - Consolidated Production Version."""
 
 import torch
 import torch.nn as nn
@@ -13,21 +6,19 @@ import torch.nn.functional as F
 from typing import Optional, Tuple
 
 
-# ============================================================================
-# CBAM / SE Attention
-# ============================================================================
+# CBAM / SE Attention.
 
 class ChannelAttention(nn.Module):
     """Channel attention with safety checks and GPU optimization."""
     
     def __init__(self, channels: int, reduction: int = 16):
         super().__init__()
-        hidden_channels = max(1, channels // reduction)  # Safety check
+        hidden_channels = max(1, channels // reduction)  # Safety check.
         
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.max_pool = nn.AdaptiveMaxPool2d(1)
         
-        # GPU-optimized Conv2d
+        # GPU-optimized Conv2d.
         self.shared_mlp = nn.Sequential(
             nn.Conv2d(channels, hidden_channels, 1, bias=False),
             nn.ReLU(inplace=True),
@@ -75,7 +66,7 @@ class SEBlock(nn.Module):
     
     def __init__(self, channels: int, reduction: int = 16):
         super().__init__()
-        hidden_channels = max(1, channels // reduction)  # Safety check
+        hidden_channels = max(1, channels // reduction)  # Safety check.
         
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Sequential(
@@ -89,9 +80,7 @@ class SEBlock(nn.Module):
         return x * self.fc(self.avg_pool(x))
 
 
-# ============================================================================
-# Cross-Modal Attention
-# ============================================================================
+# Cross-Modal Attention.
 
 class CrossModalAttention(nn.Module):
     """Cross-modal attention for vision/audio/haptic fusion."""
@@ -160,9 +149,7 @@ class CrossModalAttention(nn.Module):
         return fused, vision_enhanced, audio_enhanced
 
 
-# ============================================================================
-# Cross-Task Attention
-# ============================================================================
+# Cross-Task Attention.
 
 class CrossTaskAttention(nn.Module):
     """Cross-task attention linking detection/OCR/description."""
@@ -221,4 +208,10 @@ class CrossTaskAttention(nn.Module):
             desc_enhanced = desc_enhanced.squeeze(1)
         
         return det_enhanced, ocr_enhanced, desc_enhanced
+
+
+
+
+
+
 

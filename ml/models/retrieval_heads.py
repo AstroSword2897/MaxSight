@@ -45,30 +45,30 @@ class MultiVectorRetrievalHeads(nn.Module):
         """Extract all embedding types."""
         embeddings = {}
         
-        # Global embedding
+        # Global embedding.
         embeddings['global'] = self.global_encoder(images)
         
-        # Region embeddings
+        # Region embeddings.
         region_emb, region_boxes = self.region_extractor.extract_regions(images)
         embeddings['region'] = region_emb
         
-        # Patch embeddings
+        # Patch embeddings.
         embeddings['patch'] = self.patch_extractor(images)
         
-        # Depth embeddings
+        # Depth embeddings.
         embeddings['depth'] = self.depth_extractor(images)
         
-        # OCR embeddings
+        # OCR embeddings.
         if text_snippets is not None:
             ocr_emb, _ = self.ocr_encoder(text_snippets)
             embeddings['ocr'] = ocr_emb
         
-        # Audio embeddings
+        # Audio embeddings.
         if audio is not None:
             audio_emb, spatial = self.audio_encoder(audio)
             embeddings['audio'] = audio_emb
         
-        # Scene graph embeddings
+        # Scene graph embeddings.
         if scene_graph is not None:
             sg_emb = self.scene_graph_encoder(
                 scene_graph['node_features'],
@@ -78,4 +78,10 @@ class MultiVectorRetrievalHeads(nn.Module):
             embeddings['scene_graph'] = sg_emb
         
         return embeddings
+
+
+
+
+
+
 

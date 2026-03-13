@@ -35,17 +35,17 @@ class MaxSightDataset(Dataset):
         self.apply_lighting_augmentation = apply_lighting_augmentation
         self.max_objects = max_objects
         
-        # Initialize preprocessor with condition-specific transforms
+        # Initialize preprocessor with condition-specific transforms.
         self.preprocessor = ImagePreprocessor(condition_mode=condition_mode)
         
         # Class name to index mapping (must be defined before _load_annotations)
         self.class_to_idx = {cls_name: idx for idx, cls_name in enumerate(COCO_CLASSES)}
         self.idx_to_class = {idx: cls_name for idx, cls_name in enumerate(COCO_CLASSES)}
         
-        # Load annotations
+        # Load annotations.
         self.annotations = self._load_annotations()
         
-        # Create image/annotation mapping
+        # Create image/annotation mapping.
         self.image_ids = list(self.annotations.keys()) if self.annotations else []
     
     def _load_annotations(self) -> Dict[str, Any]:
@@ -56,15 +56,18 @@ class MaxSightDataset(Dataset):
         with open(self.annotation_file, 'r') as f:
             data = json.load(f)
         
-        annotations = {}
+        annotations: Dict[Any, Dict[str, Any]] = {}
         
-        # Detect format: COCO has 'images'/'annotations', custom format is simpler
+        # Detect format: COCO-style has 'images'/'annotations'; custom format is simpler.
         if 'images' in data and 'annotations' in data:
-            # COCO format: parse standard structure with separate images/annotations/categories sections
             image_map = {img['id']: img for img in data['images']}
             category_map = {cat['id']: cat['name'] for cat in data.get('categories', [])}
             
-            # Group annotations by image_id for efficient per-image processing
+            # Panoptic COCO stores per-image segments under 'segments_info'.
+            first_ann = data['annotations'][0] if data['annotations'] else {}
+            is_panoptic = 'segments_info' in first_ann
+            
+            # Group annotations by image_id for efficient per-image processing.
             for ann in data['annotations']:
                 image_id = ann['image_id']
                 if image_id not in annotations:
@@ -72,64 +75,102 @@ class MaxSightDataset(Dataset):
                     annotations[image_id] = {
                         'image_path': self.image_dir / img_info.get('file_name', f'{image_id}.jpg'),
                         'objects': [],
-                        'urgency': 0,  # Default urgency (will be computed from objects)
-                        'lighting': 'normal',  # Default lighting (will be detected)
+                        'urgency': 0,
+                        'lighting': 'normal',
                         'audio_path': None
                     }
                 
-                # Extract bounding box from COCO format [x, y, width, height] in pixels
-                bbox = ann['bbox']
-                img_info = image_map[image_id]
-                img_width = img_info.get('width', 224)
-                img_height = img_info.get('height', 224)
-                
-                # Convert to center format and normalize to [0, 1]
-                # Clamp bbox values to prevent invalid boxes
-                bbox_x = max(0, float(bbox[0]))
-                bbox_y = max(0, float(bbox[1]))
-                bbox_w = max(1e-3, float(bbox[2]))  # Minimum 1e-3 to avoid zero-width
-                bbox_h = max(1e-3, float(bbox[3]))  # Minimum 1e-3 to avoid zero-height
-                
-                cx = (bbox_x + bbox_w / 2) / max(1.0, img_width)
-                cy = (bbox_y + bbox_h / 2) / max(1.0, img_height)
-                w = bbox_w / max(1.0, img_width)
-                h = bbox_h / max(1.0, img_height)
-                
-                # Clamp normalized values to [0, 1]
-                cx = max(0.0, min(1.0, cx))
-                cy = max(0.0, min(1.0, cy))
-                w = max(1e-4, min(1.0, w))
-                h = max(1e-4, min(1.0, h))
-                
-                # Map COCO category to MaxSight class index
-                category_name = category_map.get(ann['category_id'], 'unknown')
-                class_idx = self.class_to_idx.get(category_name, 0)
-                
-                # Estimate distance zone from box area (larger = closer)
-                box_area = w * h
-                if box_area > 0.1:
-                    distance_zone = 0  # Near
-                elif box_area > 0.05:
-                    distance_zone = 1  # Medium
+                if is_panoptic:
+                    segments = ann.get('segments_info', [])
+                    for seg in segments:
+                        bbox = seg.get('bbox', [0.0, 0.0, 0.0, 0.0])
+                        category_id = seg.get('category_id', 0)
+                        img_info = image_map.get(image_id, {})
+                        img_width = img_info.get('width', 224)
+                        img_height = img_info.get('height', 224)
+                        
+                        bbox_x = max(0.0, float(bbox[0]))
+                        bbox_y = max(0.0, float(bbox[1]))
+                        bbox_w = max(1e-3, float(bbox[2]))
+                        bbox_h = max(1e-3, float(bbox[3]))
+                        
+                        cx = (bbox_x + bbox_w / 2) / max(1.0, img_width)
+                        cy = (bbox_y + bbox_h / 2) / max(1.0, img_height)
+                        w = bbox_w / max(1.0, img_width)
+                        h = bbox_h / max(1.0, img_height)
+                        
+                        cx = max(0.0, min(1.0, cx))
+                        cy = max(0.0, min(1.0, cy))
+                        w = max(1e-4, min(1.0, w))
+                        h = max(1e-4, min(1.0, h))
+                        
+                        category_name = category_map.get(category_id, 'unknown')
+                        class_idx = self.class_to_idx.get(category_name, 0)
+                        
+                        box_area = w * h
+                        if box_area > 0.1:
+                            distance_zone = 0
+                        elif box_area > 0.05:
+                            distance_zone = 1
+                        else:
+                            distance_zone = 2
+                        
+                        urgency_keywords = ['car', 'truck', 'bus', 'vehicle', 'fire', 'hazard', 'stop', 'traffic']
+                        urgency = 3 if any(kw in category_name.lower() for kw in urgency_keywords) else 0
+                        
+                        annotations[image_id]['objects'].append({
+                            'box': [cx, cy, w, h],
+                            'class': class_idx,
+                            'category': category_name,
+                            'distance': distance_zone,
+                            'urgency': urgency
+                        })
+                        annotations[image_id]['urgency'] = max(annotations[image_id]['urgency'], urgency)
                 else:
-                    distance_zone = 2  # Far
-                
-                # Estimate urgency from category (vehicles/hazards = high urgency)
-                urgency_keywords = ['car', 'truck', 'bus', 'vehicle', 'fire', 'hazard', 'stop', 'traffic']
-                urgency = 3 if any(kw in category_name.lower() for kw in urgency_keywords) else 0
-                
-                annotations[image_id]['objects'].append({
-                    'box': [cx, cy, w, h],  # Center format, normalized
-                    'class': class_idx,
-                    'category': category_name,
-                    'distance': distance_zone,
-                    'urgency': urgency
-                })
-                
-                # Update scene urgency (max of all object urgencies)
-                annotations[image_id]['urgency'] = max(annotations[image_id]['urgency'], urgency)
+                    bbox = ann['bbox']
+                    img_info = image_map[image_id]
+                    img_width = img_info.get('width', 224)
+                    img_height = img_info.get('height', 224)
+                    
+                    bbox_x = max(0, float(bbox[0]))
+                    bbox_y = max(0, float(bbox[1]))
+                    bbox_w = max(1e-3, float(bbox[2]))
+                    bbox_h = max(1e-3, float(bbox[3]))
+                    
+                    cx = (bbox_x + bbox_w / 2) / max(1.0, img_width)
+                    cy = (bbox_y + bbox_h / 2) / max(1.0, img_height)
+                    w = bbox_w / max(1.0, img_width)
+                    h = bbox_h / max(1.0, img_height)
+                    
+                    cx = max(0.0, min(1.0, cx))
+                    cy = max(0.0, min(1.0, cy))
+                    w = max(1e-4, min(1.0, w))
+                    h = max(1e-4, min(1.0, h))
+                    
+                    category_name = category_map.get(ann['category_id'], 'unknown')
+                    class_idx = self.class_to_idx.get(category_name, 0)
+                    
+                    box_area = w * h
+                    if box_area > 0.1:
+                        distance_zone = 0
+                    elif box_area > 0.05:
+                        distance_zone = 1
+                    else:
+                        distance_zone = 2
+                    
+                    urgency_keywords = ['car', 'truck', 'bus', 'vehicle', 'fire', 'hazard', 'stop', 'traffic']
+                    urgency = 3 if any(kw in category_name.lower() for kw in urgency_keywords) else 0
+                    
+                    annotations[image_id]['objects'].append({
+                        'box': [cx, cy, w, h],
+                        'class': class_idx,
+                        'category': category_name,
+                        'distance': distance_zone,
+                        'urgency': urgency
+                    })
+                    annotations[image_id]['urgency'] = max(annotations[image_id]['urgency'], urgency)
         else:
-            # Custom format: assume list of annotations
+            # Custom format: assume list of annotations.
             for ann in data:
                 image_id = ann.get('image_id', ann.get('id', len(annotations)))
                 annotations[image_id] = {
@@ -150,12 +191,12 @@ class MaxSightDataset(Dataset):
         image_id = self.image_ids[idx]
         ann = self.annotations[image_id]
         
-        # Load image from file
+        # Load image from file.
         image_path = ann['image_path']
         if isinstance(image_path, str):
             image_path = Path(image_path)
         
-        # Handle missing/corrupted files with fallback
+        # Handle missing/corrupted files with fallback.
         if not image_path.exists():
             image = Image.fromarray(np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8))
         else:
@@ -164,18 +205,18 @@ class MaxSightDataset(Dataset):
             except Exception:
                 image = Image.fromarray(np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8))
         
-        # Apply preprocessing with optional lighting augmentation
+        # Apply preprocessing with optional lighting augmentation.
         if self.apply_lighting_augmentation:
-            # Use preprocessing with lighting detection
+            # Use preprocessing with lighting detection.
             preprocessed = self.preprocessor.preprocess_with_lighting(image)
             image_tensor = preprocessed['image']
             lighting = preprocessed.get('lighting', ann.get('lighting', 'normal'))
         else:
-            # Standard preprocessing without lighting augmentation
+            # Standard preprocessing without lighting augmentation.
             image_tensor = self.preprocessor(image)
             lighting = ann.get('lighting', 'normal')
         
-        # Load audio if available
+        # Load audio if available.
         audio_tensor = None
         if self.audio_dir and ann.get('audio_path'):
             audio_path = self.audio_dir / ann['audio_path']
@@ -183,9 +224,9 @@ class MaxSightDataset(Dataset):
                 try:
                     # Load audio and extract features (MFCC or raw waveform)
                     waveform, sample_rate = torchaudio.load(str(audio_path))
-                    # Use first channel if stereo, resample to 16kHz if needed
+                    # Use first channel if stereo, resample to 16kHz if needed.
                     if waveform.shape[0] > 1:
-                        waveform = waveform[0:1]  # Take first channel
+                        waveform = waveform[0:1]  # Take first channel.
                     if sample_rate != 16000:
                         resampler = torchaudio.transforms.Resample(sample_rate, 16000)
                         waveform = resampler(waveform)
@@ -195,36 +236,36 @@ class MaxSightDataset(Dataset):
                         n_mfcc=13,
                         melkwargs={'n_fft': 400, 'hop_length': 160, 'n_mels': 23}
                     )
-                    audio_tensor = mfcc_transform(waveform)  # [1, 13, T]
+                    audio_tensor = mfcc_transform(waveform)  # [1, 13, T].
                 except Exception:
-                    # Fallback on error
+                    # Fallback on error.
                     audio_tensor = None
         
-        # Extract objects and format targets
+        # Extract objects and format targets.
         objects = ann.get('objects', [])
         num_objs = min(len(objects), self.max_objects)
         
-        # Initialize padded arrays
+        # Initialize padded arrays.
         labels = torch.zeros(self.max_objects, dtype=torch.long)
         boxes = torch.zeros(self.max_objects, 4, dtype=torch.float32)
         distance = torch.zeros(self.max_objects, dtype=torch.long)
         
-        # Fill with actual objects
+        # Fill with actual objects.
         for i in range(num_objs):
             obj = objects[i]
             labels[i] = obj.get('class', 0)
             
-            # Validate and clamp box coordinates
+            # Validate and clamp box coordinates.
             box = obj.get('box', [0.5, 0.5, 0.1, 0.1])
             box_tensor = torch.tensor(box, dtype=torch.float32)
             
-            # Clamp to valid ranges: center [0, 1], size [1e-4, 1]
-            box_tensor[0] = torch.clamp(box_tensor[0], 0.0, 1.0)  # cx
-            box_tensor[1] = torch.clamp(box_tensor[1], 0.0, 1.0)  # cy
-            box_tensor[2] = torch.clamp(box_tensor[2], 1e-4, 1.0)  # w
-            box_tensor[3] = torch.clamp(box_tensor[3], 1e-4, 1.0)  # h
+            # Clamp to valid ranges: center [0, 1], size [1e-4, 1].
+            box_tensor[0] = torch.clamp(box_tensor[0], 0.0, 1.0)  # Cx.
+            box_tensor[1] = torch.clamp(box_tensor[1], 0.0, 1.0)  # Cy.
+            box_tensor[2] = torch.clamp(box_tensor[2], 1e-4, 1.0)  # W.
+            box_tensor[3] = torch.clamp(box_tensor[3], 1e-4, 1.0)  # H.
             
-            # Check for NaN/Inf
+            # Check for NaN/Inf.
             if torch.isnan(box_tensor).any() or torch.isinf(box_tensor).any():
                 box_tensor = torch.tensor([0.5, 0.5, 0.1, 0.1], dtype=torch.float32)
             
@@ -236,23 +277,29 @@ class MaxSightDataset(Dataset):
         if objects:
             urgency = max(urgency, max(obj.get('urgency', 0) for obj in objects))
         
-        # Build return dictionary
+        # Build return dictionary.
         result = {
-            'images': image_tensor,  # [3, H, W] preprocessed image
+            'images': image_tensor,  # [3, H, W] preprocessed image.
             'labels': labels,  # [max_objects] class labels (padded)
-            'boxes': boxes,  # [max_objects, 4] bounding boxes in center format (cx, cy, w, h)
+            'boxes': boxes,
             'urgency': torch.tensor(urgency, dtype=torch.long),  # Scene urgency (0-3)
             'distance': distance, 
-            'num_objects': torch.tensor(num_objs, dtype=torch.long),  # Valid object count
-            'lighting': lighting  # Lighting condition string
+            'num_objects': torch.tensor(num_objs, dtype=torch.long),  # Valid object count.
+            'lighting': lighting  # Lighting condition string.
         }
         
-        # Add optional fields
+        # Add optional fields.
         if audio_tensor is not None:
-            result['audio'] = audio_tensor  # [1, 13, T] MFCC features
+            result['audio'] = audio_tensor  # [1, 13, T] MFCC features.
         
         if self.condition_mode:
             result['condition_mode'] = self.condition_mode
         
         return result
+
+
+
+
+
+
 

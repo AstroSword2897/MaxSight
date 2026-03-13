@@ -1,9 +1,4 @@
-"""
-Data pipeline for MaxSight training.
-
-Creates data loaders with proper batching, augmentation, and condition-specific transforms.
-Supports multi-modal data (images, audio) and various visual conditions.
-"""
+"""Data pipeline for MaxSight training."""
 
 import torch
 from torch.utils.data import DataLoader, WeightedRandomSampler
@@ -17,77 +12,81 @@ from ml.utils.preprocessing import ImagePreprocessor
 
 
 def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
-    """
-    Custom collate function for MaxSight batches.
+    """Custom collate function for MaxSight batches. Handles variable-length objects, optional audio, and optional frame sequences."""
+    # Sequence mode uses 'frames' as primary image tensor; otherwise use single-frame 'images'.
+    has_frames = any('frames' in item for item in batch)
+    if has_frames:
+        frame_lists = [item['frames'] for item in batch]
+        batch_size = len(frame_lists)
+        max_t = max(frames.shape[0] for frames in frame_lists)
+        c, h, w = frame_lists[0].shape[1:]
+        frames_batch = torch.zeros(batch_size, max_t, c, h, w, dtype=frame_lists[0].dtype)
+        frame_lengths = torch.zeros(batch_size, dtype=torch.long)
+        for i, frames in enumerate(frame_lists):
+            t = frames.shape[0]
+            frames_batch[i, :t] = frames
+            frame_lengths[i] = t
+        images = frames_batch
+    else:
+        images = torch.stack([item['images'] for item in batch])
+        batch_size = len(batch)
+        frame_lengths = None
     
-    Handles variable-length sequences (objects, audio) and pads appropriately.
-    """
-    # Separate images and targets
-    images = torch.stack([item['images'] for item in batch])
-    
-    # Get batch size and max objects
-    batch_size = len(batch)
     max_objects = max(item['num_objects'].item() for item in batch) if batch else 10
-    
-    # Pad to max_objects in batch (or use dataset max_objects)
     max_objects = min(max_objects, batch[0].get('labels', torch.zeros(10)).shape[0])
     
-    # Initialize target tensors
     labels = torch.zeros(batch_size, max_objects, dtype=torch.long)
     boxes = torch.zeros(batch_size, max_objects, 4, dtype=torch.float32)
     distance = torch.zeros(batch_size, max_objects, dtype=torch.long)
     num_objects = torch.zeros(batch_size, dtype=torch.long)
     urgency = torch.zeros(batch_size, dtype=torch.long)
     
-    # Check if audio is present
     has_audio = any('audio' in item for item in batch)
-    audio_tensors = []
-    audio_lengths = []
+    audio_tensors: List[torch.Tensor] = []
+    audio_lengths: List[int] = []
     
-    # Fill tensors
     for i, item in enumerate(batch):
         num_obj = item['num_objects'].item()
         num_objects[i] = num_obj
         
-        # Copy labels, boxes, distance
         if num_obj > 0:
             labels[i, :num_obj] = item['labels'][:num_obj]
-            boxes[i, :num_obj] = item['boxes'][:num_obj]
+            item_boxes = item['boxes'][:num_obj].clone()
+            item_boxes[:, 2] = torch.clamp(item_boxes[:, 2], min=1e-4)
+            item_boxes[:, 3] = torch.clamp(item_boxes[:, 3], min=1e-4)
+            boxes[i, :num_obj] = item_boxes
             distance[i, :num_obj] = item['distance'][:num_obj]
         
         urgency[i] = item['urgency']
         
-        # Handle audio if present
         if has_audio and 'audio' in item:
-            audio = item['audio']  # [1, 13, T]
-            audio_tensors.append(audio.squeeze(0))  # [13, T]
+            audio = item['audio']
+            audio_tensors.append(audio.squeeze(0))
             audio_lengths.append(audio.shape[-1])
         elif has_audio:
-            # Pad with zeros if missing
-            audio_tensors.append(torch.zeros(13, 100))  # Default length
+            audio_tensors.append(torch.zeros(13, 100))
             audio_lengths.append(100)
     
-    # Build result dictionary
-    result = {
-        'images': images,  # [B, 3, H, W]
-        'labels': labels,  # [B, max_objects]
-        'boxes': boxes,  # [B, max_objects, 4]
-        'distance': distance,  # [B, max_objects]
-        'num_objects': num_objects,  # [B]
-        'urgency': urgency,  # [B]
+    result: Dict[str, Any] = {
+        'images': images,
+        'labels': labels,
+        'boxes': boxes,
+        'distance': distance,
+        'num_objects': num_objects,
+        'urgency': urgency,
     }
     
-    # Add audio if present
+    if has_frames:
+        result['frame_lengths'] = frame_lengths
+    
     if has_audio and audio_tensors:
-        # Pad audio to same length
         max_audio_len = max(audio_lengths) if audio_lengths else 100
         padded_audio = torch.zeros(batch_size, 13, max_audio_len)
         for i, audio in enumerate(audio_tensors):
             padded_audio[i, :, :audio.shape[-1]] = audio
-        result['audio'] = padded_audio  # [B, 13, T]
+        result['audio'] = padded_audio
         result['audio_lengths'] = torch.tensor(audio_lengths, dtype=torch.long)
     
-    # Add condition mode if present
     if 'condition_mode' in batch[0]:
         result['condition_mode'] = batch[0]['condition_mode']
     
@@ -111,32 +110,10 @@ def create_data_loaders(
     use_weighted_sampling: bool = False,
     class_weights: Optional[Dict[int, float]] = None
 ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
-    """
-    Create train/val/test data loaders for MaxSight training.
-    
-    Arguments:
-        train_annotation_file: Path to training annotations (JSON)
-        val_annotation_file: Path to validation annotations (JSON)
-        test_annotation_file: Optional path to test annotations
-        image_dir: Directory containing images (default: auto-detect from annotations)
-        audio_dir: Optional directory containing audio clips
-        batch_size: Batch size for training
-        num_workers: Number of data loading workers
-        pin_memory: Whether to pin memory for faster GPU transfer
-        condition_mode: Visual condition to simulate ('glaucoma', 'amd', 'cataracts', etc.)
-        apply_lighting_augmentation: Whether to apply lighting augmentation
-        max_objects: Maximum objects per image (for padding)
-        shuffle_train: Whether to shuffle training data
-        drop_last: Whether to drop last incomplete batch
-        use_weighted_sampling: Whether to use weighted sampling for class imbalance
-        class_weights: Optional dictionary mapping class_idx -> weight
-    
-    Returns:
-        Tuple of (train_loader, val_loader, test_loader)
-    """
-    # Auto-detect image directory if not provided
+    """Create train/val/test data loaders for MaxSight training."""
+    # Auto-detect image directory if not provided.
     if image_dir is None:
-        # Try common locations
+        # Checks common locations.
         possible_dirs = [
             train_annotation_file.parent.parent / 'train2017',
             train_annotation_file.parent.parent / 'val2017',
@@ -146,14 +123,14 @@ def create_data_loaders(
         ]
         for dir_path in possible_dirs:
             if dir_path.exists():
-                image_dir = dir_path.parent  # Use parent to allow train2017/val2017 subdirs
+                image_dir = dir_path.parent  # Use parent to allow train2017/val2017 subdirs.
                 break
         
         if image_dir is None:
-            # Default to annotation file parent
+            # Default to annotation file parent.
             image_dir = train_annotation_file.parent.parent
     
-    # Create datasets
+    # Create datasets.
     train_dataset = MaxSightDataset(
         data_dir=image_dir.parent if 'train2017' in str(image_dir) or 'val2017' in str(image_dir) else image_dir,
         annotation_file=train_annotation_file,
@@ -169,7 +146,7 @@ def create_data_loaders(
         annotation_file=val_annotation_file,
         image_dir=image_dir / 'val2017' if (image_dir / 'val2017').exists() else image_dir,
         audio_dir=audio_dir,
-        condition_mode=None,  # No augmentation for validation
+        condition_mode=None,  # No augmentation for validation.
         apply_lighting_augmentation=False,
         max_objects=max_objects
     )
@@ -186,17 +163,17 @@ def create_data_loaders(
             max_objects=max_objects
         )
     
-    # Create samplers if using weighted sampling
+    # Create samplers if using weighted sampling.
     train_sampler = None
     if use_weighted_sampling and class_weights:
-        # Compute sample weights based on class distribution
+        # Compute sample weights based on class distribution.
         sample_weights = []
         for idx in range(len(train_dataset)):
             sample = train_dataset[idx]
             labels = sample['labels']
             num_obj = sample['num_objects'].item()
             
-            # Weight by most frequent class in sample
+            # Weight by most frequent class in sample.
             if num_obj > 0:
                 class_idx = labels[0].item()
                 weight = class_weights.get(class_idx, 1.0)
@@ -210,9 +187,9 @@ def create_data_loaders(
             num_samples=len(sample_weights),
             replacement=True
         )
-        shuffle_train = False  # Sampler handles shuffling
+        shuffle_train = False  # Sampler handles shuffling.
     
-    # Create data loaders
+    # Create data loaders.
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -250,52 +227,42 @@ def create_data_loaders(
 
 
 def compute_class_weights(annotation_file: Path) -> Dict[int, float]:
-    """
-    Compute class weights from annotations for handling class imbalance.
-    
-    Returns:
-        Dictionary mapping class_idx -> weight (inverse frequency)
-    """
+    """Compute class weights from annotations for handling class imbalance. Returns: Dictionary mapping class_idx -> weight (inverse frequency)"""
     with open(annotation_file, 'r') as f:
         data = json.load(f)
     
-    # Count class frequencies
+    # Count class frequencies.
     class_counts = defaultdict(int)
     total_objects = 0
     
     if 'images' in data and 'annotations' in data:
-        # COCO format
+        # COCO format.
         for ann in data['annotations']:
             category_id = ann.get('category_id', 0)
             class_counts[category_id] += 1
             total_objects += 1
     else:
-        # Custom format
+        # Custom format.
         for ann in data:
             for obj in ann.get('objects', []):
                 class_idx = obj.get('class', 0)
                 class_counts[class_idx] += 1
                 total_objects += 1
     
-    # Compute inverse frequency weights
+    # Compute inverse frequency weights.
     if total_objects == 0:
         return {}
     
     class_weights = {}
     for class_idx, count in class_counts.items():
-        # Inverse frequency: more frequent = lower weight
+        # Inverse frequency: more frequent = lower weight.
         class_weights[class_idx] = total_objects / (len(class_counts) * count)
     
     return class_weights
 
 
 def get_data_info(loader: DataLoader) -> Dict[str, Any]:
-    """
-    Get information about a data loader (dataset size, batch count, etc.).
-    
-    Returns:
-        Dictionary with dataset statistics
-    """
+    """Get information about a data loader (dataset size, batch count, etc.). Returns: Dictionary with dataset statistics."""
     dataset = loader.dataset
     batch_size = loader.batch_size
     
@@ -307,7 +274,7 @@ def get_data_info(loader: DataLoader) -> Dict[str, Any]:
         'pin_memory': loader.pin_memory,
     }
     
-    # Sample a batch to get tensor shapes
+    # Sample a batch to get tensor shapes.
     try:
         sample_batch = next(iter(loader))
         info['batch_shapes'] = {
@@ -318,4 +285,10 @@ def get_data_info(loader: DataLoader) -> Dict[str, Any]:
         info['batch_shapes'] = 'Unable to sample batch'
     
     return info
+
+
+
+
+
+
 

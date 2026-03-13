@@ -1,12 +1,4 @@
-"""
-Comprehensive Tests for Phase 1: Multi-Modal Sensor Fusion
-
-Tests all Phase 1 components:
-- Enhanced Audio Encoder
-- Spatial Sound Mapping
-- Haptic Feedback Embedding
-- Multi-Modal Transformer Fusion
-"""
+"""Comprehensive Tests for Phase 1: Multi-Modal Sensor Fusion Tests all Phase 1 components: - Enhanced Audio Encoder - Spatial Sound Mapping - Haptic Feedback Embedding - Multi-Modal Transformer Fusion."""
 
 import torch
 import torch.nn as nn
@@ -14,7 +6,7 @@ import pytest
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -47,8 +39,8 @@ class TestEnhancedAudioEncoder:
         )
         encoder.eval()
         
-        # Test with sequence input
-        audio_features = torch.randn(2, 10, 128)  # [B, T, F]
+        # Test with sequence input.
+        audio_features = torch.randn(2, 10, 128)  # [B, T, F].
         audio_embed, spatial_attn = encoder(audio_features)
         
         assert audio_embed.shape == (2, 256)
@@ -146,7 +138,7 @@ class TestHapticEmbedding:
         haptic = HapticEmbedding(haptic_dim=64, embed_dim=128)
         haptic.eval()
         
-        haptic_pattern = torch.randn(2, 10, 64)  # [B, T, D]
+        haptic_pattern = torch.randn(2, 10, 64)  # [B, T, D].
         haptic_embedding, pattern_logits = haptic(haptic_pattern)
         
         assert haptic_embedding.shape == (2, 128)
@@ -206,8 +198,7 @@ class TestMultimodalFusion:
         depth_features = torch.randn(2, 128)
         haptic_features = torch.randn(2, 64)
         
-        # Fix: haptic_token is incorrectly defined as Parameter(Parameter(...))
-        # Just test without haptic for now
+        # Fix: haptic_token is incorrectly defined as Parameter(Parameter(...)) Just test without haptic for now.
         fused = fusion(vision_features, audio_features, depth_features, None)
         
         assert fused.shape == (2, 512)
@@ -244,4 +235,10 @@ def run_all_tests():
 
 if __name__ == "__main__":
     run_all_tests()
+
+
+
+
+
+
 

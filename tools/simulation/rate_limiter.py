@@ -1,7 +1,4 @@
-"""
-Rate limiting for MaxSight Web Simulator.
-Prevents abuse and ensures fair resource usage.
-"""
+"""Rate limiting for MaxSight Web Simulator. Prevents abuse and ensures fair resource usage."""
 import time
 from typing import Dict, Optional
 from collections import defaultdict
@@ -10,47 +7,32 @@ from .exceptions import RateLimitError
 
 
 class RateLimiter:
-    """
-    Thread-safe rate limiter using token bucket algorithm.
-    """
+    """Thread-safe rate limiter using token bucket algorithm."""
     
     def __init__(self, requests_per_minute: int, window_seconds: int = 60):
-        """
-        Args:
-            requests_per_minute: Maximum requests allowed per minute
-            window_seconds: Time window in seconds (default 60)
-        """
+        """Args requests_per_minute: Maximum requests allowed per minute window_seconds: Time window in seconds (default 60)"""
         self.requests_per_minute = requests_per_minute
         self.window_seconds = window_seconds
-        self.requests: Dict[str, list] = defaultdict(list)  # session_id -> timestamps
+        self.requests: Dict[str, list] = defaultdict(list)  # Session_id -> timestamps.
         self.lock = Lock()
     
     def check_rate_limit(self, session_id: str, identifier: Optional[str] = None) -> None:
-        """
-        Check if request is within rate limit.
-        
-        Args:
-            session_id: Session identifier
-            identifier: Optional additional identifier (e.g., IP address)
-        
-        Raises:
-            RateLimitError: If rate limit exceeded
-        """
+        """Check if request is within rate limit."""
         key = f"{session_id}:{identifier}" if identifier else session_id
         now = time.time()
         
         with self.lock:
-            # Clean old requests outside window
+            # Clean old requests outside window.
             cutoff = now - self.window_seconds
             self.requests[key] = [ts for ts in self.requests[key] if ts > cutoff]
             
-            # Check limit
+            # Check limit.
             if len(self.requests[key]) >= self.requests_per_minute:
                 raise RateLimitError(
                     f"Rate limit exceeded: {self.requests_per_minute} requests per {self.window_seconds} seconds"
                 )
             
-            # Record this request
+            # Record request for rate limiting.
             self.requests[key].append(now)
     
     def get_remaining(self, session_id: str, identifier: Optional[str] = None) -> int:
@@ -77,4 +59,10 @@ class GlobalRateLimiter:
     def get_remaining(self, identifier: str) -> int:
         """Get remaining global requests."""
         return self.limiter.get_remaining("global", identifier)
+
+
+
+
+
+
 

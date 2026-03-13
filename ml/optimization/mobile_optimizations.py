@@ -1,12 +1,4 @@
-"""
-Mobile Efficiency Optimizations for Phase 7: Optimization & Mobile Deployment
-
-Includes:
-- Model pruning
-- Knowledge distillation for mobile
-- Dynamic head disabling
-- Memory-efficient inference
-"""
+"""Mobile Efficiency Optimizations for Phase 7: Optimization & Mobile Deployment Includes: - Model pruning - Knowledge distillation for mobile - Dynamic head disabling - Memory-efficient inference."""
 
 import torch
 import torch.nn as nn
@@ -16,15 +8,7 @@ import copy
 
 
 class MobileOptimizer:
-    """
-    Mobile optimization utilities for Phase 7.
-    
-    Provides:
-    - Model pruning
-    - Head disabling for efficiency
-    - Memory-efficient inference
-    - Dynamic tier adjustment
-    """
+    """Mobile optimization utilities for Phase 7. Provides: - Model pruning - Head disabling for efficiency - Memory-efficient inference - Dynamic tier adjustment."""
     
     @staticmethod
     def prune_model(
@@ -32,37 +16,17 @@ class MobileOptimizer:
         pruning_ratio: float = 0.3,
         method: str = 'magnitude'
     ) -> nn.Module:
-        """
-        Prune model weights for mobile deployment.
-        
-        ⚠️ CRITICAL WARNING: Pruned models MUST be fine-tuned after pruning!
-        Accuracy typically drops 5-15% immediately after pruning. Fine-tune for
-        minimum 10-20 epochs to recover accuracy. See example:
-        
-        ```python
-        pruned_model = MobileOptimizer.prune_model(model, pruning_ratio=0.3)
-        trainer = TrainingLoop(pruned_model, train_loader, val_loader, config)
-        trainer.train(num_epochs=10)  # CRITICAL: Fine-tune after pruning
-        ```
-        
-        Args:
-            model: Model to prune
-            pruning_ratio: Fraction of weights to prune (0.0-1.0)
-            method: Pruning method ('magnitude', 'gradient', 'random')
-        
-        Returns:
-            Pruned model (MUST be fine-tuned before use!)
-        """
+        """Prune model weights for mobile deployment."""
         pruned_model = copy.deepcopy(model)
         pruned_model.eval()
         
-        # Collect all weights
+        # Collect all weights.
         weights = []
         for module in pruned_model.modules():
             if isinstance(module, (nn.Conv2d, nn.Linear)):
                 weights.append(module.weight.data)
         
-        # Calculate threshold
+        # Calculate threshold.
         all_weights = torch.cat([w.flatten() for w in weights])
         threshold_idx = int(len(all_weights) * pruning_ratio)
         
@@ -71,7 +35,7 @@ class MobileOptimizer:
         else:
             threshold = torch.median(torch.abs(all_weights))
         
-        # Prune weights
+        # Prune weights.
         pruned_count = 0
         total_count = 0
         
@@ -91,19 +55,10 @@ class MobileOptimizer:
         model: nn.Module,
         heads_to_disable: List[str]
     ) -> nn.Module:
-        """
-        Disable specific heads for efficiency.
-        
-        Args:
-            model: Model to modify
-            heads_to_disable: List of head names to disable
-        
-        Returns:
-            Model with disabled heads
-        """
+        """Disable specific heads for efficiency."""
         for name, module in model.named_modules():
             if any(head_name in name for head_name in heads_to_disable):
-                # Replace with identity
+                # Replace with identity.
                 if hasattr(module, 'forward'):
                     module.forward = lambda x: torch.zeros_like(x) if torch.is_tensor(x) else {}
         
@@ -111,17 +66,12 @@ class MobileOptimizer:
     
     @staticmethod
     def estimate_memory_usage(model: nn.Module, input_size: Tuple[int, ...]) -> Dict[str, float]:
-        """
-        Estimate memory usage for mobile deployment.
-        
-        Returns:
-            Dictionary with memory estimates (MB)
-        """
-        # Model parameters
+        """Estimate memory usage for mobile deployment. Returns: Dictionary with memory estimates (MB)"""
+        # Model parameters.
         param_size = sum(p.numel() * p.element_size() for p in model.parameters())
         param_size_mb = param_size / (1024 ** 2)
         
-        # Model buffers
+        # Model buffers.
         buffer_size = sum(b.numel() * b.element_size() for b in model.buffers())
         buffer_size_mb = buffer_size / (1024 ** 2)
         
@@ -151,13 +101,7 @@ class MobileOptimizer:
 
 
 class EdgeCloudHybrid:
-    """
-    Edge-Cloud Hybrid Architecture for Phase 7.
-    
-    Splits computation between edge device and cloud:
-    - Edge: Fast, lightweight inference (Stage A)
-    - Cloud: Heavy processing (Stage B, retrieval, etc.)
-    """
+    """Edge-Cloud Hybrid Architecture for Phase 7."""
     
     def __init__(
         self,
@@ -173,16 +117,7 @@ class EdgeCloudHybrid:
         images: torch.Tensor,
         use_cloud: Optional[bool] = None
     ) -> Dict[str, torch.Tensor]:
-        """
-        Hybrid forward pass.
-        
-        Args:
-            images: Input images
-            use_cloud: Whether to use cloud (overrides self.use_cloud)
-        
-        Returns:
-            Combined outputs from edge and cloud
-        """
+        """Hybrid forward pass."""
         use_cloud = use_cloud if use_cloud is not None else self.use_cloud
         
         # Edge inference (always runs)
@@ -192,14 +127,14 @@ class EdgeCloudHybrid:
             return edge_outputs
         
         # Cloud inference (if enabled)
-        # In production, this would make HTTP request to cloud endpoint
-        # For now, return edge outputs with cloud flag
+        # In production, send HTTP request to cloud endpoint.
+        # For now, return edge outputs with cloud flag.
         cloud_outputs = {
             'cloud_processed': False,
             'cloud_latency_ms': 0.0
         }
         
-        # Merge outputs
+        # Merge outputs.
         combined = {**edge_outputs, **cloud_outputs}
         
         return combined
@@ -210,20 +145,16 @@ class EdgeCloudHybrid:
         battery_level: float,
         network_available: bool = True
     ) -> bool:
-        """
-        Determine if cloud processing should be used.
-        
-        Args:
-            urgency: Urgency score [0, 1]
-            battery_level: Battery level [0, 1]
-            network_available: Whether network is available
-        
-        Returns:
-            True if cloud should be used
-        """
+        """Determine if cloud processing should be used."""
         if not network_available:
             return False
         
-        # Use cloud for high urgency and good battery
+        # Use cloud for high urgency and good battery.
         return urgency > 0.7 and battery_level > 0.3
+
+
+
+
+
+
 

@@ -1,7 +1,4 @@
-"""
-Structured logging for MaxSight Web Simulator.
-Component-based logging with consistent format.
-"""
+"""Structured logging for MaxSight Web Simulator. Component-based logging with consistent format."""
 import logging
 import json
 from typing import Any, Dict, Optional
@@ -24,11 +21,11 @@ class StructuredFormatter(logging.Formatter):
             'line': record.lineno
         }
         
-        # Add exception info if present
+        # Add exception info if present.
         if record.exc_info:
             log_data['exception'] = self.formatException(record.exc_info)
         
-        # Add extra fields
+        # Add extra fields.
         if hasattr(record, 'session_id'):
             log_data['session_id'] = record.session_id
         if hasattr(record, 'user_id'):
@@ -36,7 +33,7 @@ class StructuredFormatter(logging.Formatter):
         if hasattr(record, 'request_id'):
             log_data['request_id'] = record.request_id
         
-        # Add any extra fields
+        # Add any extra fields.
         for key, value in record.__dict__.items():
             if key not in ['name', 'msg', 'args', 'created', 'filename', 'funcName',
                           'levelname', 'levelno', 'lineno', 'module', 'msecs',
@@ -106,25 +103,17 @@ class ComponentLogger:
 
 
 def setup_structured_logging(log_level: str = None) -> logging.Logger:
-    """
-    Setup structured logging for the simulator.
-    
-    Args:
-        log_level: Logging level (uses config if None)
-    
-    Returns:
-        Configured logger
-    """
+    """Setup structured logging for the simulator. Args: log_level: Logging level (uses config if None) Returns: Configured logger."""
     if log_level is None:
         log_level = config.log_level
     
     logger = logging.getLogger('maxsight_simulator')
     logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
     
-    # Remove existing handlers
+    # Remove existing handlers.
     logger.handlers.clear()
     
-    # Create console handler
+    # Create console handler.
     handler = logging.StreamHandler()
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(StructuredFormatter())
@@ -136,15 +125,13 @@ def setup_structured_logging(log_level: str = None) -> logging.Logger:
 
 
 def get_component_logger(component: str) -> ComponentLogger:
-    """
-    Get logger for a specific component.
-    
-    Args:
-        component: Component name (e.g., 'session', 'api', 'core')
-    
-    Returns:
-        ComponentLogger instance
-    """
+    """Get logger for a specific component. Args: component: Component name (e.g., 'session', 'api', 'core') Returns: ComponentLogger instance."""
     base_logger = logging.getLogger('maxsight_simulator')
     return ComponentLogger(component, base_logger)
+
+
+
+
+
+
 

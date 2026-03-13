@@ -1,14 +1,4 @@
-"""
-Comprehensive MaxSight Simulator
-End-to-end simulation with real-world data support for testing and visualization.
-
-Features:
-- Real image/video input support
-- Live model inference
-- Visual overlays and feedback
-- Performance metrics
-- Export capabilities
-"""
+"""Comprehensive MaxSight Simulator."""
 
 import torch
 import torch.cuda  # For torch.cuda.synchronize()
@@ -21,7 +11,7 @@ from PIL import Image
 import cv2
 import logging
 
-# Add parent directory to path
+# Add parent directory to path.
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -32,24 +22,13 @@ from ml.therapy.session_manager import SessionManager
 from ml.therapy.task_generator import TaskGenerator
 from ml.utils.logging_config import setup_logging
 
-# Setup logging
+# Setup logging.
 logger = setup_logging(log_level="INFO")
 logger = logging.getLogger(__name__)
 
 
 class ComprehensiveSimulator:
-    """
-    Comprehensive simulator for MaxSight system with real-world data support.
-    
-    Supports:
-    - Image files (JPG, PNG)
-    - Video files (MP4, AVI)
-    - Camera input (webcam)
-    - Real-time inference
-    - Visual overlays
-    - Performance metrics
-    - Session logging
-    """
+    """Comprehensive simulator for MaxSight system with real-world data support."""
     
     def __init__(
         self,
@@ -58,19 +37,11 @@ class ComprehensiveSimulator:
         device: Optional[str] = None,
         verbose: bool = True
     ):
-        """
-        Initialize simulator.
-        
-        Arguments:
-            model_path: Path to saved model checkpoint (optional)
-            condition_mode: Visual condition mode (e.g., 'glaucoma', 'cataracts')
-            device: Device to run on ('cpu', 'cuda', 'mps')
-            verbose: Enable verbose output
-        """
+        """Initialize simulator."""
         self.verbose = verbose
         self.condition_mode = condition_mode
         
-        # Device setup
+        # Device setup.
         if device is None:
             if torch.cuda.is_available():
                 self.device = torch.device('cuda')
@@ -84,7 +55,7 @@ class ComprehensiveSimulator:
         if self.verbose:
             logger.info(f"Initializing simulator on device: {self.device}")
         
-        # Load model
+        # Load model.
         if model_path and Path(model_path).exists():
             if self.verbose:
                 logger.info(f"Loading model from: {model_path}")
@@ -97,17 +68,17 @@ class ComprehensiveSimulator:
         self.model = self.model.to(self.device)
         self.model.eval()
         
-        # Initialize preprocessing
+        # Initialize preprocessing.
         self.preprocessor = ImagePreprocessor(condition_mode=condition_mode)
         
-        # Initialize output scheduler
+        # Initialize output scheduler.
         self.scheduler = OutputScheduler()
         
-        # Initialize therapy components
+        # Initialize therapy components.
         self.session_manager = SessionManager()
         self.task_generator = TaskGenerator()
         
-        # Statistics
+        # Statistics.
         self.stats = {
             'frames_processed': 0,
             'total_inference_time': 0.0,
@@ -116,7 +87,7 @@ class ComprehensiveSimulator:
             'fps': 0.0
         }
         
-        # Session data
+        # Session data.
         self.session_logs = []
         self.is_running = False
     
@@ -127,31 +98,20 @@ class ComprehensiveSimulator:
         output_path: Optional[str] = None,
         show_overlay: bool = True
     ) -> Dict[str, Any]:
-        """
-        Process a single image file.
-        
-        Arguments:
-            image_path: Path to image file
-            save_output: Save output visualization
-            output_path: Path to save output (if save_output=True)
-            show_overlay: Show visual overlays
-        
-        Returns:
-            Processing results dictionary
-        """
+        """Process a single image file."""
         if self.verbose:
             print(f"\nProcessing image: {image_path}")
         
-        # Load image
+        # Load image.
         image = Image.open(image_path).convert('RGB')
         original_size = image.size
         
-        # Preprocess
+        # Preprocess.
         start_time = time.perf_counter()
         preprocessed = self.preprocessor.preprocess(image)
         preprocess_time = time.perf_counter() - start_time
         
-        # Convert to tensor
+        # Convert to tensor.
         if isinstance(preprocessed, Image.Image):
             import torchvision.transforms as T
             to_tensor = T.ToTensor()
@@ -159,23 +119,23 @@ class ComprehensiveSimulator:
         else:
             image_tensor = preprocessed.unsqueeze(0).to(self.device)
         
-        # Inference
+        # Inference.
         inference_start = time.perf_counter()
         with torch.no_grad():
             outputs = self.model(image_tensor)
         inference_time = time.perf_counter() - inference_start
         
-        # Post-process detections
+        # Post-process detections.
         detections = self.model.get_detections(outputs, confidence_threshold=0.3)
         
-        # Update statistics
+        # Update statistics.
         self.stats['frames_processed'] += 1
         self.stats['total_inference_time'] += inference_time
         self.stats['total_detections'] += len(detections[0]) if detections else 0
         self.stats['avg_latency_ms'] = (self.stats['total_inference_time'] / 
                                         self.stats['frames_processed'] * 1000)
         
-        # Create result
+        # Create result.
         result = {
             'image_path': image_path,
             'original_size': original_size,
@@ -195,7 +155,7 @@ class ComprehensiveSimulator:
             'timestamp': time.time()
         }
         
-        # Schedule outputs
+        # Schedule outputs.
         scheduled = self.scheduler.schedule_outputs(
             detections=detections[0] if detections else [],
             urgency_scores=outputs['urgency_scores'][0].cpu().numpy(),
@@ -203,10 +163,10 @@ class ComprehensiveSimulator:
         )
         result['scheduled_outputs'] = scheduled
         
-        # Log session
+        # Log session.
         self.session_logs.append(result)
         
-        # Create visualization if requested
+        # Create visualization if requested.
         if show_overlay or save_output:
             vis_image = self._create_visualization(image, detections[0] if detections else [], outputs)
             
@@ -231,18 +191,7 @@ class ComprehensiveSimulator:
         max_frames: Optional[int] = None,
         save_frames: bool = False
     ) -> Dict[str, Any]:
-        """
-        Process a video file frame by frame.
-        
-        Arguments:
-            video_path: Path to video file
-            output_path: Path to save output video (optional)
-            max_frames: Maximum number of frames to process
-            save_frames: Save individual frame outputs
-        
-        Returns:
-            Video processing results
-        """
+        """Process a video file frame by frame."""
         if self.verbose:
             print(f"\nProcessing video: {video_path}")
         
@@ -258,7 +207,7 @@ class ComprehensiveSimulator:
         if self.verbose:
             print(f"  Video: {width}x{height} @ {fps:.2f} FPS, {total_frames} frames")
         
-        # Setup output video writer if requested
+        # Setup output video writer if requested.
         out_writer = None
         if output_path:
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -277,29 +226,29 @@ class ComprehensiveSimulator:
             if max_frames and frame_count >= max_frames:
                 break
             
-            # Convert BGR to RGB
+            # Convert BGR to RGB.
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame_pil = Image.fromarray(frame_rgb)
             
-            # Process frame
+            # Process frame.
             result = self.process_image_frame(frame_pil, frame_number=frame_count)
             frame_results.append(result)
             
-            # Create visualization
+            # Create visualization.
             vis_frame = self._create_visualization(
                 frame_pil,
                 result['detections'],
                 result['outputs']
             )
             
-            # Convert back to BGR for OpenCV
+            # Convert back to BGR for OpenCV.
             vis_frame_bgr = cv2.cvtColor(np.array(vis_frame), cv2.COLOR_RGB2BGR)
             
-            # Write to output video
+            # Write to output video.
             if out_writer:
                 out_writer.write(vis_frame_bgr)
             
-            # Save individual frames if requested
+            # Save individual frames if requested.
             if save_frames:
                 frame_output_path = Path(output_path).parent / f"frame_{frame_count:06d}.jpg"
                 vis_frame.save(str(frame_output_path))
@@ -316,7 +265,7 @@ class ComprehensiveSimulator:
         
         self.is_running = False
         
-        # Calculate video statistics
+        # Calculate video statistics.
         video_stats = {
             'total_frames': frame_count,
             'video_fps': fps,
@@ -347,10 +296,10 @@ class ComprehensiveSimulator:
         frame_number: int = 0
     ) -> Dict[str, Any]:
         """Process a single image frame (internal method)."""
-        # Preprocess
+        # Preprocess.
         preprocessed = self.preprocessor.preprocess(image)
         
-        # Convert to tensor
+        # Convert to tensor.
         if isinstance(preprocessed, Image.Image):
             import torchvision.transforms as T
             to_tensor = T.ToTensor()
@@ -358,16 +307,16 @@ class ComprehensiveSimulator:
         else:
             image_tensor = preprocessed.unsqueeze(0).to(self.device)
         
-        # Inference
+        # Inference.
         inference_start = time.perf_counter()
         with torch.no_grad():
             outputs = self.model(image_tensor)
         inference_time = time.perf_counter() - inference_start
         
-        # Post-process
+        # Post-process.
         detections = self.model.get_detections(outputs, confidence_threshold=0.3)
         
-        # Update statistics
+        # Update statistics.
         self.stats['frames_processed'] += 1
         self.stats['total_inference_time'] += inference_time
         self.stats['total_detections'] += len(detections[0]) if detections else 0
@@ -396,18 +345,7 @@ class ComprehensiveSimulator:
         output_dir: Optional[str] = None,
         max_images: Optional[int] = None
     ) -> Dict[str, Any]:
-        """
-        Process all images in a directory.
-        
-        Arguments:
-            directory: Directory containing images
-            pattern: File pattern to match (e.g., "*.jpg", "*.png")
-            output_dir: Directory to save outputs
-            max_images: Maximum number of images to process
-        
-        Returns:
-            Directory processing results
-        """
+        """Process all images in a directory."""
         if self.verbose:
             print(f"\nProcessing directory: {directory}")
         
@@ -472,7 +410,7 @@ class ComprehensiveSimulator:
         ax.imshow(image)
         ax.axis('off')
         
-        # Draw detections
+        # Draw detections.
         for det in detections:
             if 'bbox' in det:
                 bbox = det['bbox']
@@ -480,7 +418,7 @@ class ComprehensiveSimulator:
                 width = x2 - x1
                 height = y2 - y1
                 
-                # Color by urgency
+                # Color by urgency.
                 urgency = det.get('urgency', 0)
                 colors = ['green', 'yellow', 'orange', 'red']
                 color = colors[min(urgency, 3)]
@@ -489,14 +427,14 @@ class ComprehensiveSimulator:
                                linewidth=2, edgecolor=color, facecolor='none')
                 ax.add_patch(rect)
                 
-                # Label
+                # Label.
                 label = det.get('class_name', 'object')
                 confidence = det.get('confidence', 0.0)
                 ax.text(x1, y1 - 5, f"{label} ({confidence:.2f})",
                        bbox=dict(boxstyle='round', facecolor=color, alpha=0.7),
                        fontsize=8, color='white', weight='bold')
         
-        # Convert to PIL Image
+        # Convert to PIL Image.
         fig.canvas.draw()
         buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
         buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
@@ -556,7 +494,7 @@ def main():
     
     args = parser.parse_args()
     
-    # Initialize simulator
+    # Initialize simulator.
     simulator = ComprehensiveSimulator(
         condition_mode=args.condition,
         device=args.device,
@@ -565,17 +503,17 @@ def main():
     
     input_path = Path(args.input)
     
-    # Process based on input type
+    # Process based on input type.
     if input_path.is_file():
         if input_path.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp']:
-            # Image file
+            # Image file.
             result = simulator.process_image(
                 str(input_path),
                 save_output=args.output is not None,
                 output_path=args.output
             )
         elif input_path.suffix.lower() in ['.mp4', '.avi', '.mov']:
-            # Video file
+            # Video file.
             result = simulator.process_video(
                 str(input_path),
                 output_path=args.output,
@@ -585,7 +523,7 @@ def main():
             print(f"Unsupported file type: {input_path.suffix}")
             return
     elif input_path.is_dir():
-        # Directory
+        # Directory.
         result = simulator.process_directory(
             str(input_path),
             output_dir=args.output,
@@ -595,11 +533,11 @@ def main():
         print(f"Input not found: {args.input}")
         return
     
-    # Save session if requested
+    # Save session if requested.
     if args.save_session:
         simulator.save_session(args.save_session)
     
-    # Print final statistics
+    # Print final statistics.
     stats = simulator.get_statistics()
     print("\n" + "=" * 50)
     print("Final Statistics:")
@@ -611,4 +549,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
 

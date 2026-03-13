@@ -1,12 +1,4 @@
-"""
-Production-grade validation utilities for MaxSight.
-
-Provides:
-- Input validation
-- Model validation
-- Data validation
-- Configuration validation
-"""
+"""Production-grade validation utilities for MaxSight. Provides: - Input validation - Model validation - Data validation - Configuration validation."""
 
 import torch
 import torch.nn as nn
@@ -20,16 +12,7 @@ def validate_model_inputs(
     images: torch.Tensor,
     expected_shape: Tuple[int, ...] = (4,)
 ) -> bool:
-    """
-    Validate model input tensors.
-    
-        Arguments:
-        images: Input image tensor
-        expected_shape: Expected tensor dimensions (e.g., (4,) for [B, C, H, W])
-    
-    Returns:
-        True if valid, raises ValueError if invalid
-    """
+    """Validate model input tensors."""
     if not torch.is_tensor(images):
         raise ValueError(f"Images must be a tensor, got {type(images)}")
     
@@ -53,16 +36,7 @@ def validate_model_outputs(
     outputs: Dict[str, torch.Tensor],
     expected_keys: Optional[list] = None
 ) -> bool:
-    """
-    Validate model output dictionary.
-    
-        Arguments:
-        outputs: Model outputs dictionary
-        expected_keys: Optional list of expected keys
-    
-    Returns:
-        True if valid, raises ValueError if invalid
-    """
+    """Validate model output dictionary."""
     if not isinstance(outputs, dict):
         raise ValueError(f"Outputs must be a dictionary, got {type(outputs)}")
     
@@ -82,19 +56,7 @@ def validate_batch(
     batch: Any,
     required_keys: Optional[list] = None
 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    """
-    Validate and parse training batch.
-    
-        Arguments:
-        batch: Batch from DataLoader
-        required_keys: Optional list of required keys in targets
-    
-    Returns:
-        Tuple of (images, targets)
-    
-    Raises:
-        ValueError: If batch is invalid
-    """
+    """Validate and parse training batch."""
     if isinstance(batch, (list, tuple)):
         if len(batch) < 1:
             raise ValueError("Batch must contain at least images")
@@ -108,10 +70,10 @@ def validate_batch(
     else:
         raise ValueError(f"Unsupported batch format: {type(batch)}")
     
-    # Validate images
+    # Validate images.
     validate_model_inputs(images)
     
-    # Validate targets if required keys specified
+    # Validate targets if required keys specified.
     if required_keys:
         missing_keys = set(required_keys) - set(targets.keys())
         if missing_keys:
@@ -124,16 +86,7 @@ def validate_checkpoint(
     checkpoint: Dict[str, Any],
     required_keys: Optional[list] = None
 ) -> bool:
-    """
-    Validate checkpoint dictionary.
-    
-        Arguments:
-        checkpoint: Checkpoint dictionary
-        required_keys: Optional list of required keys
-    
-    Returns:
-        True if valid, raises ValueError if invalid
-    """
+    """Validate checkpoint dictionary."""
     if not isinstance(checkpoint, dict):
         raise ValueError(f"Checkpoint must be a dictionary, got {type(checkpoint)}")
     
@@ -142,9 +95,15 @@ def validate_checkpoint(
         if missing_keys:
             raise ValueError(f"Missing checkpoint keys: {missing_keys}")
     
-    # Validate model_state_dict exists
+    # Validate model_state_dict exists.
     if 'model_state_dict' not in checkpoint:
         raise ValueError("Checkpoint must contain 'model_state_dict'")
     
     return True
+
+
+
+
+
+
 
