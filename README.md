@@ -10,20 +10,21 @@
 ## Table of Contents
 
 1. [Project Overview & Goals](#-project-overview--goals)
-2. [Actions Taken - Complete Development History](#-actions-taken---complete-development-history)
-3. [System Architecture - Deep Dive](#-system-architecture---deep-dive)
-4. [Data Flow & Processing Pipeline](#-data-flow--processing-pipeline)
-5. [Training Flow & Hyperparameter Strategy](#-training-flow--hyperparameter-strategy)
-6. [Inference Flow & Real-Time Processing](#-inference-flow--real-time-processing)
-7. [Effectiveness & Results](#-effectiveness--results)
-8. [Repository Stack & Technology](#-repository-stack--technology)
-9. [Current Work & Next Steps](#-current-work--next-steps)
-10. [Quick Start Guide](#-quick-start-guide)
-11. [Main Components](#main-components) (includes [Component reference: what and why](#component-reference-what-each-does-and-why-its-there) and [Concrete reference: outputs, configs, env, CLI](#concrete-reference-outputs-configs-env-cli))
-12. [Testing & Validation](#-testing--validation)
-13. [Performance & Safety](#-performance--safety)
-14. [Deployment & Export](#-deployment--export)
-15. [Documentation](#-documentation)
+2. [Productization Summary (from reports)](#productization-summary-from-reports)
+3. [Actions Taken - Complete Development History](#-actions-taken---complete-development-history)
+4. [System Architecture - Deep Dive](#-system-architecture---deep-dive)
+5. [Data Flow & Processing Pipeline](#-data-flow--processing-pipeline)
+6. [Training Flow & Hyperparameter Strategy](#-training-flow--hyperparameter-strategy)
+7. [Inference Flow & Real-Time Processing](#-inference-flow--real-time-processing)
+8. [Effectiveness & Results](#-effectiveness--results)
+9. [Repository Stack & Technology](#-repository-stack--technology)
+10. [Current Work & Next Steps](#-current-work--next-steps)
+11. [Quick Start Guide](#-quick-start-guide)
+12. [Main Components](#main-components) (includes [Component reference: what and why](#component-reference-what-each-does-and-why-its-there) and [Concrete reference: outputs, configs, env, CLI](#concrete-reference-outputs-configs-env-cli))
+13. [Testing & Validation](#-testing--validation)
+14. [Performance & Safety](#-performance--safety)
+15. [Deployment & Export](#-deployment--export)
+16. [Documentation](#-documentation)
 
 ---
 
@@ -88,12 +89,79 @@ MaxSight answers this by implementing four barrier-removal methods from accessib
 - **Parameters**: ~250M (comprehensive class system, T2 tier baseline); T0 ~29M, T5 ~320M.
 - **Input**: `images` `[B, 3, 224, 224]` RGB (normalized with ImageNet mean/std); optional `audio_features` `[B, 128]` (e.g. MFCC); optional `condition_mode` string (e.g. `'glaucoma'`, `'amd'`, `'cataracts'`).
 - **Output**: Single dict with 30+ keys. Core keys: `obj_scores` `[B, H*W]`, `cls_logits` `[B, H*W, num_classes]`, `box_preds` `[B, H*W, 4]`, `urgency` (per detection or scene), `distance` zones, `contrast_map`, `motion_flow`, `motion_magnitude`, `fatigue_score`, `blink_rate`, `fixation_stability`, `depth_map`, `uncertainty`, `therapy_state` (if provided by pipeline), `contrast_map`, `edge_map`, `roi_utility`, `navigation_difficulty`, `glare_risk_level`, `object_findability`, `uncertainty_score`, `hazard_probs`, `time_to_hazard`, `recommended_action`, plus scene/OCR/scene graph when enabled. Exact keys depend on tier and `enable_accessibility_features`.
-- **Stage A Latency**: &lt;150ms target (ResNet50+FPN only). Decision point: skip Stage B if Stage A &gt;200ms or `uncertainty_score` &gt;0.7 (thresholds in tier/config).
+- **Stage A Latency**: **≤ 80 ms** target (ResNet50+FPN only). Decision point: skip Stage B if Stage A &gt; 80 ms or `uncertainty_score` &gt; 0.7 (thresholds in tier/config). See `ml/runtime_constants.py` (LATENCY_MEDIAN_MS, LATENCY_P95_MS).
 - **Stage B Latency**: &lt;500ms (opportunistic, tier-dependent).
 - **Supported Classes**: 91 COCO + 200+ accessibility classes; class IDs and names in `COCO_CLASSES_DICT` / category list used by dataset and detection head.
 - **Vision Conditions**: 13 supported (e.g. refractive errors, cataracts, glaucoma, AMD, diabetic_retinopathy, retinitis_pigmentosa, color_blindness, CVI, amblyopia, strabismus); condition affects `ml/utils/preprocessing.py` and optional dynamic conv.
 - **Task Heads**: 30+ specialized heads; each head is a `nn.Module` with a `forward()` taking shared features (and sometimes dedicated inputs like `eye_features`). Built in `ml/models/maxsight_cnn.py` when tier and `enable_accessibility_features` allow.
 - **Export Formats**: JIT (`.pt`), CoreML (`.mlpackage`), ONNX, ExecuTorch (`.pte`). Export stubs `global_encoder` (CLIP) and can disable scene graph for traceability; see `ml/training/export.py`.
+
+---
+
+## Productization Summary (from reports)
+
+This section consolidates the important information from **docs/productization/** so release, safety, and product decisions are visible in one place. Full detail remains in the linked docs.
+
+### Intended use and scope (V1)
+
+MaxSight is an **assistive smart-glasses system** that helps visually impaired users understand nearby hazards, orientation cues, and everyday context through **spoken and haptic guidance**. V1 focus: safety-critical awareness (hazards, obstacle proximity, directional cues), daily independence (text reading, finding objects/signs, route cues), and low-verbosity situational summaries. **Explicit non-claims**: MaxSight is assistive guidance, not autonomous navigation; users should not rely on it as their only mobility safety aid; it does not provide medical diagnosis or treatment advice. See **docs/productization/01_product_scope_and_claims.md**.
+
+### Mandatory safety gates (V1 release blockers)
+
+All mandatory gates must pass before release. Failure on any blocks release.
+
+| Gate ID | Metric | Threshold | Blocker if failed |
+|--------|--------|-----------|--------------------|
+| SG-01 | Hazard recall (critical hazards) | ≥ 0.95 | Yes |
+| SG-02 | False-safe rate | ≤ 0.01 | Yes |
+| SG-03 | Time-to-alert p95 | ≤ 80 ms | Yes |
+| SG-04 | Time-to-alert median | ≤ 80 ms | Yes |
+| SG-05 | Directional cue correctness | ≥ 0.90 | Yes |
+| SG-06 | Distance zone accuracy (near/medium/far) | ≥ 0.85 | Yes |
+| SG-07 | Critical hazards still surfaced under uncertainty | 100% | Yes |
+| SG-08 | Overload guardrail (alerts/min in dense scenes) | ≤ 12 avg unless emergency | Yes |
+
+Critical hazards include moving vehicles in crossing context, immediate collision obstacles, curb/drop-off hazards. **Release decision**: run gate suite → signed gate report → block on any failed mandatory gate; approve only with **safety owner sign-off**. See **docs/productization/02_safety_first_release_gates.md**.
+
+### Canonical commands (product pipeline)
+
+Use **`python scripts/product/run.py`** for the canonical surface. All paths from repo root.
+
+| Command | Purpose | How to run |
+|--------|---------|------------|
+| **train** | Train production model | `run.py train --data-dir <path> [--config <yaml>]` |
+| **validate** | Tests + optional checkpoint/data checks | `run.py validate [--checkpoint <path>] [--skip-export-tests]` |
+| **export** | Checkpoint → CoreML/JIT/ONNX | `run.py export --checkpoint <path> --format coreml --output <path>` |
+| **package** | Xcode-ready bundle | `run.py package --checkpoint <path> --output <dir>` |
+| **smoke** | Short training + inference sanity | `run.py smoke [--epochs 2]` |
+| **transfer** | T2 → T5 weight transfer | `run.py transfer --source <T2_ckpt> [--config ml/training/configs/t2_to_t5_transfer.yaml]` |
+
+### T2 → T5 path (T5 MVP)
+
+1. **T2 source**: Train with config that disables temporal/cross-task: `run.py train --data-dir <path> --config ml/training/configs/t2_hybrid_vit.yaml --train-annotation ... --val-annotation ...`. Checkpoint → `checkpoints/t2_hybrid_vit/`.
+2. **Transfer**: `run.py transfer --source checkpoints/t2_hybrid_vit/best_model.pth --config ml/training/configs/t2_to_t5_transfer.yaml`. Writes e.g. `checkpoints/t5_temporal_transfer/t5_from_t2_init.pt`.
+3. **T5 fine-tune**: `run.py train --data-dir <path> --resume-from checkpoints/t5_temporal_transfer/t5_from_t2_init.pt ...` (optionally with video/sequence data).
+
+### MVP runtime contract (shipped app)
+
+The shipped T5 MVP must depend only on **MVP output keys** in `ml.runtime_constants.MVP_MODEL_OUTPUT_KEYS` (classifications, boxes, objectness, text_regions, urgency_scores, distance_zones, precise_distances, uncertainty, temporal_consistency, etc.). The app should use **`ml.runtime_constants.filter_mvp_model_outputs(outputs, training=False)`** in the production inference path. Export/package use the full model; filtering is applied at runtime.
+
+### Runtime boundaries and pilot
+
+- **Critical path**: hazard detection, urgency, direction, distance, alert scheduling; always runs, never blocked by enhancement features.
+- **Secondary path**: OCR, scene summaries, retrieval; never blocks critical path.
+- **Pilot validation**: real-world scenarios, KPIs, and review loop are in **docs/productization/05_pilot_validation_protocol.md**. Deployment: train → export to CoreML → package for Xcode → integrate into glasses app → run pilot per protocol.
+
+### Where the full reports live
+
+| Doc | Content |
+|-----|---------|
+| **01_product_scope_and_claims.md** | Product boundaries, claims matrix, non-claims |
+| **02_safety_first_release_gates.md** | Full gate definitions, evidence artifacts, roles |
+| **03_pipeline_declutter_map.md** | Script consolidation and canonical surface |
+| **04_runtime_boundary_spec.md** | Critical vs secondary contract, degraded modes |
+| **05_pilot_validation_protocol.md** | Pilot scenarios, metrics, incident classification |
+| **PRODUCTION_RUNBOOK.md** | Step-by-step production and deployment |
 
 ---
 
@@ -109,7 +177,7 @@ MaxSight answers this by implementing four barrier-removal methods from accessib
 - Created backbone abstraction layer
 
 **Results**:
-- Stage A backbone: ResNet50+FPN (always used, <150ms target)
+- Stage A backbone: ResNet50+FPN (always used, ≤ 80 ms target)
 - Stage B backbone: Hybrid CNN-ViT (T2+), Temporal (T5+)
 - Multi-scale feature extraction via FPN
 - Support for progressive tier enablement
@@ -315,7 +383,7 @@ MaxSight answers this by implementing four barrier-removal methods from accessib
 
 The main architectural decision is the **two-stage inference pipeline** that separates safety-critical predictions from enhancement features.
 
-#### Stage A: Fast Safety Pass (<150ms, every frame)
+#### Stage A: Fast Safety Pass (≤ 80 ms, every frame)
 
 **Purpose**: Provide safety-critical information that must never be blocked.
 
@@ -334,11 +402,11 @@ The main architectural decision is the **two-stage inference pipeline** that sep
 
 **Properties**:
 - Highest loss priority in training
-- Target: <150ms per frame
+- Target: ≤ 80 ms per frame
 - Never blocked by Tier 2 or Tier 3
 - Always ResNet50+FPN backbone (no hybrid, no temporal)
 
-**Decision point**: After Stage A completes, the code checks latency and uncertainty (e.g. `uncertainty_score` from uncertainty head). Skip Stage B if Stage A latency &gt;200ms or uncertainty &gt;0.7 (thresholds may be in TierConfig or inference config). Implementation: in `maxsight_cnn.py` forward, after Tier 1 heads run, a conditional branch either returns Stage A outputs only or continues to Stage B backbone and Tier 2/3 heads. This ensures Stage A always completes, even under load.
+**Decision point**: After Stage A completes, the code checks latency and uncertainty (e.g. `uncertainty_score` from uncertainty head). Skip Stage B if Stage A latency &gt; 80 ms or uncertainty &gt; 0.7 (thresholds in TierConfig / `ml/runtime_constants.py`). Implementation: in `maxsight_cnn.py` forward, after Tier 1 heads run, a conditional branch either returns Stage A outputs only or continues to Stage B backbone and Tier 2/3 heads. This ensures Stage A always completes, even under load.
 
 #### Stage B: Context Pass (opportunistic, tier-dependent)
 
@@ -375,7 +443,7 @@ Heads are organized into 3 tiers by criticality:
 
 **Properties**:
 - Highest loss priority in training
-- Target: <150ms per frame
+- Target: ≤ 80 ms per frame
 - Never blocked by Tier 2 or Tier 3
 - Always ResNet50+FPN backbone (no hybrid, no temporal)
 
@@ -431,7 +499,7 @@ The system supports progressive tier enablement:
 
 1. **Stage A Always ResNet50+FPN**: No hybrid backbone, no temporal processing in Stage A.
    - **Implementation**: In `ml/models/maxsight_cnn.py`, Stage A forward path uses only the ResNet50 backbone and FPN (and optional SE/CBAM on FPN when T1+). No conditional that swaps in hybrid or temporal for Stage A. Method names may be e.g. `_forward_stage_a` or inline: images → backbone → FPN → Tier 1 heads.
-   - **Why**: ResNet50+FPN is fast (&lt;150ms), predictable, and well-tested. Hybrid backbones are slower and less predictable.
+   - **Why**: ResNet50+FPN is fast (≤ 80 ms target), predictable, and well-tested. Hybrid backbones are slower and less predictable.
 
 2. **Stage B Uses Raw Images**: Hybrid backbone processes raw images, not Stage A features.
    - **Implementation**: When Stage B runs, the hybrid backbone (e.g. `HybridCNNViTBackbone`) is called with the same input `images` tensor `[B,3,224,224]`, not with the FPN or detection feature tensors from Stage A. So `backbone_B(images)` is independent of Stage A features.
@@ -450,7 +518,7 @@ The system supports progressive tier enablement:
    - **Why**: Safety predictions must be available before deciding whether to run Stage B.
 
 6. **Fail-Safe**: High latency or uncertainty → skip Stage B, return Stage A only.
-   - **Implementation**: Conditional in forward: if Stage A latency &gt; 200ms (or configurable threshold) or if uncertainty_score &gt; 0.7 (or configurable), do not run Stage B; return the outputs dict containing only Stage A results (and optionally empty or None for Stage B-only keys). Thresholds can live in TierConfig (e.g. `max_latency_ms`) or in a separate inference config.
+   - **Implementation**: Conditional in forward: if Stage A latency &gt; 80 ms (TierConfig.max_latency_ms) or if uncertainty_score &gt; 0.7, do not run Stage B; return the outputs dict containing only Stage A results (and optionally empty or None for Stage B-only keys). Thresholds can live in TierConfig (e.g. `max_latency_ms`) or in a separate inference config.
    - **Why**: If Stage A is slow or uncertain, Stage B is unlikely to help and wastes resources.
 
 ### Detailed Architecture: ResNet50+FPN (Stage A)
@@ -489,7 +557,7 @@ ConvLSTM consumes Stage A feature sequences [B, T, C, H, W]; input/forget/output
 ┌─────────────────────────────────────────────────────────────────┐
 │                    STAGE A BACKBONE                             │
 │  ResNet50 + FPN → fpn_features, fused_features, scene_context  │
-│  Latency: <150ms target                                         │
+│  Latency: ≤ 80 ms target                                        │
 └────────────────────────────┬────────────────────────────────────┘
                              │
                              ▼
@@ -506,7 +574,7 @@ ConvLSTM consumes Stage A feature sequences [B, T, C, H, W]; input/forget/output
                              ▼
                     ┌────────┴────────┐
                     │  DECISION POINT │
-                    │  latency >200ms │
+                    │  latency >80ms  │
                     │  OR uncertainty │
                     │  >0.7?          │
                     └────────┬────────┘
@@ -610,7 +678,7 @@ ConvLSTM consumes Stage A feature sequences [B, T, C, H, W]; input/forget/output
 ```
 t_A = time(ResNet50 + FPN + Tier1_Heads)
 P(skip_B) = {
-  1  if t_A > 200ms OR uncertainty > 0.7
+  1  if t_A > 80 ms OR uncertainty > 0.7
   0  otherwise
 }
 ```
@@ -885,13 +953,13 @@ Phased unfreeze and loss-unlock schedules are defined in transfer configs and tr
 ┌─────────────────────────────────────────────────────────────────┐
 │                    STAGE A INFERENCE                            │
 │  ResNet50+FPN → Tier 1 Heads                                    │
-│  Target: <150ms                                                 │
+│  Target: ≤ 80 ms                                                │
 └────────────────────────────┬────────────────────────────────────┘
                              │
                              ▼
                     ┌────────┴────────┐
                     │  DECISION POINT │
-                    │  latency >200ms │
+                    │  latency >80ms  │
                     │  OR uncertainty │
                     │  >0.7?          │
                     └────────┬────────┘
@@ -931,7 +999,7 @@ Phased unfreeze and loss-unlock schedules are defined in transfer configs and tr
 
 ### Performance Targets
 
-- **Stage A Latency**: <150ms (target: <100ms)
+- **Stage A Latency**: ≤ 80 ms (target for time-to-alert and Stage A)
 - **Stage B Latency**: <500ms (opportunistic)
 - **Model Size**: <50MB (quantized)
 - **Battery Drain**: <12% per hour normal use
@@ -940,7 +1008,7 @@ Phased unfreeze and loss-unlock schedules are defined in transfer configs and tr
 ### Safety Metrics (More Important Than Accuracy)
 
 - **False Reassurance Rate**: <1% (danger predicted as safe)
-- **Alert Latency**: <200ms (time to first warning)
+- **Alert Latency**: ≤ 80 ms (time to first warning)
 - **Information Overload Events**: <2 per minute
 - **Silence Correctness**: >95% (when staying quiet was right)
 - **Tier 1 Availability**: >99.9% (safety heads never disabled)
@@ -1009,7 +1077,7 @@ Phased unfreeze and loss-unlock schedules are defined in transfer configs and tr
 ### Component Effectiveness
 
 **Backbone Networks**:
--  ResNet50+FPN: Fast, predictable (<150ms)
+-  ResNet50+FPN: Fast, predictable (≤ 80 ms target)
 -  Hybrid CNN-ViT: Rich context features
 -  Temporal Encoder: Motion tracking working
 
@@ -1502,7 +1570,7 @@ python -m ml.training.benchmark
 
 ### Performance Targets
 
-- **Stage A Latency**: <150ms (target: <100ms)
+- **Stage A Latency**: ≤ 80 ms (target for time-to-alert and Stage A)
 - **Stage B Latency**: <500ms (opportunistic)
 - **Model Size**: <50MB (quantized)
 - **Battery Drain**: <12% per hour normal use
@@ -1511,7 +1579,7 @@ python -m ml.training.benchmark
 ### Safety Metrics (More Important Than Accuracy)
 
 - **False Reassurance Rate**: <1% (danger predicted as safe)
-- **Alert Latency**: <200ms (time to first warning)
+- **Alert Latency**: ≤ 80 ms (time to first warning)
 - **Information Overload Events**: <2 per minute
 - **Silence Correctness**: >95% (when staying quiet was right)
 - **Tier 1 Availability**: >99.9% (safety heads never disabled)
@@ -1551,7 +1619,7 @@ python -m ml.training.benchmark
 
 ### Quick Links
 
-- **Export for Xcode**: [EXPORT_FOR_XCODE.md](EXPORT_FOR_XCODE.md) - Complete export guide
+- **Export for Xcode**: [docs/EXPORT_MODELS_TO_XCODE.md](docs/EXPORT_MODELS_TO_XCODE.md) — export and add models to Xcode
 - **Deployment**: Run `scripts/export_top7_to_xcode.py` for iOS bundles; see README deployment section.
 - **Training Runbook**: [TRAINING_RUNBOOK.md](TRAINING_RUNBOOK.md) - Training commands and monitoring
 - **Pre-Train Checklist**: [PRE_TRAIN_CHECKLIST.md](PRE_TRAIN_CHECKLIST.md) - Verification before training
@@ -1579,7 +1647,7 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ex
 python -m ml.training.export --checkpoint checkpoints/final_model.pt --format jit --output exports/maxsight.pt
 ```
 
-**See [EXPORT_FOR_XCODE.md](EXPORT_FOR_XCODE.md) for complete export guide.**
+**See [docs/EXPORT_MODELS_TO_XCODE.md](docs/EXPORT_MODELS_TO_XCODE.md) for export and Xcode integration.**
 
 ### Running the simulator with a trained model
 
@@ -1608,7 +1676,7 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 - **[downloads.md](docs/downloads.md)**: Dataset and asset downloads
 - **[caching.md](docs/caching.md)**: Caching (Redis, usage)
 - **[productization/](docs/productization/README.md)**: Productization docs (scope, safety gates, declutter, runtime boundaries, pilot protocol). **[PRODUCTION_RUNBOOK.md](docs/productization/PRODUCTION_RUNBOOK.md)** for production and real-world runbook; **`scripts/product/run.py`** for canonical train/validate/export/package/smoke.
-- **Export / Xcode**: EXPORT_MODELS_TO_XCODE.md, GET_MODELS_AND_IMPORT_XCODE.md, IMPORT_7_MODELS_TO_XCODE.md, QUICK_GET_7_MODELS.md, COLAB_EXPORT_7_MODELS.txt, xcode_import_models.md, IOS_APP_MODEL_INTEGRATION.swift
+- **Export / Xcode**: [docs/EXPORT_MODELS_TO_XCODE.md](docs/EXPORT_MODELS_TO_XCODE.md) (canonical export and add-to-Xcode guide)
 
 **Warnings & Critical Cautions** (below): Production deployment warnings and fixes (read before deploying).
 
@@ -1642,6 +1710,100 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 - **Configs** (`ml/training/configs/`): tier and condition YAML configs for learning rates, loss weights, data paths, and transfer schedules.
 - **Comment style**: see `.cursor/rules/comment-style.mdc` and `docs/COMMENT_STYLE*.md` (intent-focused, single-line comments).
 
+### Detailed reference (specifications)
+
+#### Latency targets (critical path)
+
+All time-to-alert and Stage A latency targets are **80 ms** (median and p95). Implemented in:
+
+- `ml/runtime_constants.py`: `LATENCY_MEDIAN_MS = 80`, `LATENCY_P95_MS = 80`
+- `ml/models/maxsight_cnn.py`: `TierConfig.max_latency_ms = 80.0`; Stage B is skipped if Stage A exceeds 80 ms
+- Safety gates SG-03 and SG-04: ≤ 80 ms (see [Productization Summary](#productization-summary-from-reports))
+- Simulator and inference engine thresholds: 80 ms
+
+Release is blocked if time-to-alert exceeds 80 ms on the mandatory gate suite.
+
+#### Directory structure (key paths)
+
+```
+ml/
+  models/          maxsight_cnn.py (T5 model, TierConfig), backbone/, temporal/, attention.py
+  data/            dataset.py (MaxSightDataset, COCO/panoptic), data_pipeline.py (collate_fn, create_data_loaders)
+  training/        train_loop.py, losses.py, task_balancing.py, transfer_learning.py, export.py, configs/*.yaml
+  utils/           output_scheduler.py, preprocessing.py, runtime_constants.py
+  retrieval/       stage1_ann, indexing (advisory-only)
+app/               overlays, personal_mode (runtime/UI helpers)
+scripts/
+  product/         run.py (train, validate, export, package, smoke, transfer)
+  ops/             train_maxsight.py, gather_training_data.py, validate_data_pipeline.py, smoke_train.py, export_for_xcode.py, ...
+  pilot_eval/      test_therapy_effectiveness.py
+  research_archive/  legacy/experimental scripts (not production path)
+tests/             test_*.py (phase, model, runtime_safety_gates, data_panoptic_and_video, ...)
+tools/simulation/  web_simulator, config, simulator/ (inference_engine, overlay, scheduler)
+docs/              architecture, status, training_architecture, productization/
+```
+
+#### Canonical CLI (`scripts/product/run.py`)
+
+| Subcommand | Required args | Optional args | Description |
+|------------|----------------|---------------|-------------|
+| **train** | `--data-dir` | `--checkpoint-dir`, `--epochs`, `--batch-size`, `--device`, `--config`, `extra...` | Train model; pass-through to train_maxsight.py |
+| **validate** | — | `--checkpoint`, `--data`, `--skip-export-tests` | Run pytest; optionally validate data pipeline and checkpoint forward |
+| **export** | `--checkpoint`, `--output` | `--format` (jit\|coreml\|onnx\|executorch) | Export checkpoint to format |
+| **package** | — | `--checkpoint`, `--output` | Build Xcode bundle (export_for_xcode) |
+| **transfer** | `--source` (T2 ckpt path) | `--config` (t2_to_t5_transfer.yaml) | T2→T5 weight transfer; writes init checkpoint for fine-tune |
+| **smoke** | — | `--epochs` | Short training + inference sanity |
+
+All commands run from **repo root**. Example: `python scripts/product/run.py train --data-dir ./data --config ml/training/configs/t2_hybrid_vit.yaml --epochs 50`.
+
+#### Training script (`scripts/ops/train_maxsight.py`) — main flags
+
+- **Paths**: `--data-dir` (required), `--checkpoint-dir`, `--train-annotation`, `--val-annotation`, `--image-dir`
+- **Training**: `--epochs`, `--batch-size`, `--learning-rate`, `--weight-decay`, `--grad-clip`, `--grad-accumulation-steps`, `--scheduler-type`, `--warmup-epochs`, `--early-stopping-patience`, `--checkpoint-interval`
+- **Config**: `--config` (YAML path, e.g. `ml/training/configs/t2_hybrid_vit.yaml`) — overrides checkpoint dir and tier flags from `model` and `checkpoint` sections
+- **Hardware**: `--device` (cpu|cuda|mlx|auto), `--compile`, `--use-amp`
+- **Resume**: `--resume`, `--resume-from`, `--resume-model-only`
+- **Model**: `--num-classes`, `--tier` (T5), `--use-audio`, `--condition-mode`
+- **Loss**: `--use-gradnorm`
+- **Backup**: `--backup` (post-training artifact backup)
+
+Run `python scripts/ops/train_maxsight.py --help` for full list.
+
+#### Config YAML (model and checkpoint)
+
+Under `ml/training/configs/` (e.g. `t2_hybrid_vit.yaml`, `t5_temporal_2phase.yaml`, `t2_to_t5_transfer.yaml`):
+
+- **model**: `tier`, `num_classes`, `use_se_attention`, `use_cbam_attention`, `use_hybrid_backbone`, `use_dynamic_conv`, `use_cross_task_attention`, `use_cross_modal_attention`, `use_temporal_modeling`, `use_retrieval` — all booleans or scalars; `TierConfig.from_dict()` reads these.
+- **checkpoint**: `save_dir` — used by train_maxsight when `--config` is set.
+- **data**: `train_annotation_file`, `val_annotation_file`, `image_dir`, `batch_size`, `num_workers`, `max_objects`, `condition_mode`, `apply_lighting_augmentation`.
+- **training**: `num_epochs`, `learning_rate`, `weight_decay`, `optimizer`, `scheduler`, `warmup_epochs`, `gradient_clip_norm`, `mixed_precision`, `accumulate_grad_batches`.
+- **loss**: `use_gradnorm`, `loss_weights` (detection, classification, box_regression, distance, urgency, motion, …).
+
+Transfer configs add **source**/ **target** (checkpoint paths) and **transfer** (validate_source, strict_transfer, freeze schedule).
+
+#### Data formats
+
+- **COCO**: JSON with `images`, `annotations` (bbox in [x, y, w, h]), `categories`. Used by `MaxSightDataset`; annotations grouped by image_id.
+- **Panoptic**: Same as COCO but annotations include `segments_info` (list of `{id, category_id, bbox}`). Dataset derives bounding boxes and labels from segments; single-image and sequence collate supported.
+- **Sequence (video)**: Batch can provide `frames` (T, C, H, W) per sample; `collate_fn` produces `images` [B, T, C, H, W] and `frame_lengths`. Model forward accepts 5D input for temporal mode.
+
+#### Environment variables (common)
+
+- **MAXSIGHT_CHECKPOINT_PATH**: Checkpoint path for simulator/inference.
+- **SPLITS_DIR**: Directory for train/val annotation JSONs (e.g. cleaned_splits).
+- **MAXSIGHT_SESSION_TIMEOUT**: Session TTL (default 3600).
+
+#### Troubleshooting (expanded)
+
+| Issue | What to check | Action |
+|-------|----------------|--------|
+| OOM during training | batch_size, gradient_accumulation_steps, model tier | Reduce batch_size; increase grad accumulation; use lower tier or `--config` with fewer heads |
+| Loss not decreasing | Learning rate, GradNorm weights, data/annotations | Tune LR (e.g. 8e-5 for T2); check loss_weights in config; verify labels/boxes in dataset |
+| Stage B always skipped | Stage A latency, uncertainty threshold | Profile Stage A; ensure latency &lt; 80 ms (reduce input size, FPN levels, or INT8); or raise TierConfig.max_latency_ms only if product accepts it |
+| Export (CoreML/JIT) fails | Traceability, dynamic axes | Use scripted path if trace fails; see ml/training/export.py and docs/status.md |
+| Validation fails (e.g. test_export_validation) | JIT trace on platform | Run `run.py validate --skip-export-tests` for CI |
+| Transfer (T2→T5) validation fails | Source checkpoint keys, NaNs | Ensure source has `model_state_dict`, `epoch`, `val_loss`; check for NaNs in state dict |
+
 ### Additional Documentation
 
 - **[Training Setup Summary](TRAINING_SETUP_SUMMARY.md)**: Training preparation guide.
@@ -1674,7 +1836,7 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 **Solution**: Two-stage pipeline with explicit handoff.
 
 **Benefits**:
-- **Safety First**: Stage A always completes (<150ms)
+- **Safety First**: Stage A always completes (≤ 80 ms target)
 - **Graceful Degradation**: Stage B can be skipped if needed
 - **Predictable Behavior**: Users know safety features always work
 - **Resource Management**: Stage A gets priority, Stage B is opportunistic

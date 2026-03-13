@@ -1257,7 +1257,7 @@ class MaxSightCNN(nn.Module):
         stage_a_latency_ms = None
         if stage_a_start_time is not None:
             stage_a_latency_ms = (time.perf_counter() - stage_a_start_time) * 1000
-            max_latency = self.tier_config.max_latency_ms if hasattr(self, 'tier_config') else 200.0
+            max_latency = self.tier_config.max_latency_ms if hasattr(self, 'tier_config') else 80.0
             if stage_a_latency_ms > max_latency:
                 skip_stage_b = True
                 if hasattr(self, '_timing_warnings'):
@@ -1625,7 +1625,7 @@ class MaxSightCNN(nn.Module):
             outputs['stage_a_completed'] = True
             outputs['stage_b_completed'] = not skip_stage_b
             if skip_stage_b:
-                if stage_a_latency_ms is not None and stage_a_latency_ms > 200.0:
+                if stage_a_latency_ms is not None and stage_a_latency_ms > 80.0:
                     outputs['skip_stage_b_reason'] = 'high_latency'
                 elif uncertainty_score is not None and (uncertainty_score > 0.7).any():
                     outputs['skip_stage_b_reason'] = 'high_uncertainty'
@@ -2032,7 +2032,7 @@ class TierConfig:
     use_cross_modal_attention: bool = True
     use_temporal_modeling: bool = True
     use_retrieval: bool = True
-    max_latency_ms: float = 300.0
+    max_latency_ms: float = 80.0
     min_confidence: float = 0.5
     # When True, runtime paths should restrict themselves to the T5 MVP surface
     # (hazards, urgency, distance, OCR, temporal stability) instead of exposing
@@ -2043,6 +2043,26 @@ class TierConfig:
     def for_tier(cls, tier: CapabilityTier) -> 'TierConfig':
         """Return T5 config (only tier supported)."""
         return cls(tier=CapabilityTier.T5_TEMPORAL)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'TierConfig':
+        """Build config from YAML model section (e.g. T2: use_temporal_modeling=false)."""
+        base = cls.for_tier(CapabilityTier.T5_TEMPORAL)
+        return cls(
+            tier=base.tier,
+            enabled=d.get('enabled', True),
+            use_se_attention=d.get('use_se_attention', base.use_se_attention),
+            use_cbam_attention=d.get('use_cbam_attention', base.use_cbam_attention),
+            use_hybrid_backbone=d.get('use_hybrid_backbone', base.use_hybrid_backbone),
+            use_dynamic_conv=d.get('use_dynamic_conv', base.use_dynamic_conv),
+            use_cross_task_attention=d.get('use_cross_task_attention', base.use_cross_task_attention),
+            use_cross_modal_attention=d.get('use_cross_modal_attention', base.use_cross_modal_attention),
+            use_temporal_modeling=d.get('use_temporal_modeling', base.use_temporal_modeling),
+            use_retrieval=d.get('use_retrieval', base.use_retrieval),
+            max_latency_ms=d.get('max_latency_ms', base.max_latency_ms),
+            min_confidence=d.get('min_confidence', base.min_confidence),
+            mvp_runtime=base.mvp_runtime,
+        )
 
 
 class TierManager:

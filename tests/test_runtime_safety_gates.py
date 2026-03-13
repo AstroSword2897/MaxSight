@@ -17,8 +17,8 @@ class TestRuntimeConstants:
 
     def test_latency_budgets(self):
         from ml.runtime_constants import LATENCY_MEDIAN_MS, LATENCY_P95_MS
-        assert LATENCY_MEDIAN_MS <= 350
-        assert LATENCY_P95_MS <= 600
+        assert LATENCY_MEDIAN_MS <= 80
+        assert LATENCY_P95_MS <= 80
 
     def test_alerts_per_minute_cap(self):
         from ml.runtime_constants import ALERTS_PER_MINUTE_CAP
@@ -87,3 +87,31 @@ class TestSchedulerCriticalPath:
         config = OutputConfig(alert_frequency=AlertFrequency.MEDIUM)
         scheduler = CrossModalScheduler(config)
         assert scheduler.min_channel_interval == MIN_CHANNEL_INTERVAL_S
+
+
+class TestMvpRuntimeContract:
+    """T5 MVP output contract: only allowed keys in runtime surface."""
+
+    def test_filter_mvp_keeps_only_allowed_keys(self):
+        from ml.runtime_constants import filter_mvp_model_outputs, MVP_MODEL_OUTPUT_KEYS
+
+        full_outputs = {
+            "classifications": torch.randn(1, 196, 80),
+            "boxes": torch.randn(1, 196, 4),
+            "scene_embedding": torch.randn(1, 256),
+            "scene_description": "a room",
+        }
+        filtered = filter_mvp_model_outputs(full_outputs, training=False)
+        assert "classifications" in filtered
+        assert "boxes" in filtered
+        assert "scene_embedding" not in filtered
+        assert "scene_description" not in filtered
+        for k in filtered:
+            assert k in MVP_MODEL_OUTPUT_KEYS
+
+    def test_filter_mvp_passes_through_when_training(self):
+        from ml.runtime_constants import filter_mvp_model_outputs
+
+        full_outputs = {"classifications": torch.randn(1, 196, 80), "scene_graph.edge_index": torch.zeros(2, 0)}
+        out = filter_mvp_model_outputs(full_outputs, training=True)
+        assert out == full_outputs

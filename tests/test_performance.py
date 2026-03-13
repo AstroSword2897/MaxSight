@@ -62,7 +62,7 @@ def test_inference_latency():
     
     # Assert latency meets target.
     assert mean_latency < 500, f"Mean latency {mean_latency:.2f}ms exceeds 500ms target"
-    assert p95_latency < 600, f"P95 latency {p95_latency:.2f}ms exceeds 600ms target"
+    assert p95_latency < 80, f"P95 latency {p95_latency:.2f}ms exceeds 80ms target"
     
     print("  PASSED: Latency within target")
 

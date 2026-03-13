@@ -74,8 +74,8 @@ class InferenceMetrics:
 class CircuitBreakerConfig:
     """Configuration for circuit breaker triggers."""
     # Latency thresholds.
-    p95_latency_threshold_ms: float = 200.0
-    max_latency_threshold_ms: float = 500.0
+    p95_latency_threshold_ms: float = 80.0
+    max_latency_threshold_ms: float = 80.0
     
     # Uncertainty thresholds.
     avg_uncertainty_threshold: float = 0.7

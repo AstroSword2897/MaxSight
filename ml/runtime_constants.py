@@ -3,9 +3,9 @@
 # Critical path: urgency level at and above this is always surfaced (SG-07).
 CRITICAL_URGENCY_THRESHOLD = 3  # danger; 0=safe, 1=caution, 2=warning, 3=danger
 
-# Latency budgets (ms) for critical path (SG-03, SG-04).
-LATENCY_MEDIAN_MS = 350
-LATENCY_P95_MS = 600
+# Latency budgets (ms) for critical path (SG-03, SG-04). Target: 80 ms.
+LATENCY_MEDIAN_MS = 80
+LATENCY_P95_MS = 80
 
 # Overload guardrail: max alerts per minute in dense scenes unless emergency (SG-08).
 ALERTS_PER_MINUTE_CAP = 12

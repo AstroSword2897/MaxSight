@@ -641,7 +641,7 @@ class HealthChecker:
     TIER1_MAP_THRESHOLD = 0.80
     TIER1_IOU_THRESHOLD = 0.70
     TIER1_FALSE_REASSURANCE_THRESHOLD = 0.01
-    STAGE_A_LATENCY_THRESHOLD_MS = 150.0
+    STAGE_A_LATENCY_THRESHOLD_MS = 80.0
     STAGE_B_LATENCY_THRESHOLD_MS = 500.0
     
     def __init__(self, model: torch.nn.Module, device: str = "cpu"):

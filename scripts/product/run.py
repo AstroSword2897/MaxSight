@@ -25,6 +25,8 @@ def cmd_train(args) -> int:
         cmd += ["--data-dir", args.data_dir]
     if getattr(args, "checkpoint_dir", None):
         cmd += ["--checkpoint-dir", args.checkpoint_dir]
+    if getattr(args, "config", None):
+        cmd += ["--config", args.config]
     if getattr(args, "epochs", None) is not None:
         cmd += ["--epochs", str(args.epochs)]
     if getattr(args, "batch_size", None) is not None:
@@ -96,6 +98,39 @@ def cmd_package(args) -> int:
     return _run([sys.executable, str(script), ckpt, out])
 
 
+def cmd_transfer(args) -> int:
+    """Transfer T2 (or compatible) checkpoint into T5; save initial T5 checkpoint for fine-tuning."""
+    try:
+        import torch
+        import yaml
+        from ml.models.maxsight_cnn import create_model, TierConfig, CapabilityTier
+        from ml.training.transfer_learning import TierTransferManager
+    except ImportError as e:
+        print(f"Transfer failed: {e}", file=sys.stderr)
+        return 1
+    source = Path(getattr(args, "source", "") or "")
+    if not source.exists():
+        print(f"Source checkpoint not found: {source}", file=sys.stderr)
+        return 1
+    config_path = getattr(args, "config", None) and Path(args.config)
+    transfer_config = {}
+    if config_path and config_path.exists():
+        with open(config_path) as f:
+            transfer_config = yaml.safe_load(f) or {}
+    target_dir = Path(transfer_config.get("target", {}).get("checkpoint_dir", "checkpoints/t5_temporal_transfer"))
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / "t5_from_t2_init.pt"
+    model = create_model(tier_config=TierConfig.for_tier(CapabilityTier.T5_TEMPORAL))
+    manager = TierTransferManager(source, model, transfer_config.get("transfer", {}))
+    if not manager.validate_source_checkpoint():
+        print("Source checkpoint validation failed.", file=sys.stderr)
+        return 1
+    stats = manager.transfer_weights(strict=False)
+    torch.save({"model_state_dict": model.state_dict(), "epoch": 0, "val_loss": float("inf"), "transfer_stats": stats}, target_path)
+    print(f"Transferred T2 -> T5; saved to {target_path}. Fine-tune with: run.py train --resume-from {target_path} ...")
+    return 0
+
+
 def cmd_smoke(args) -> int:
     script = REPO / "scripts" / "ops" / "smoke_train.py"
     if not script.exists():
@@ -131,6 +166,7 @@ def main():
     p_train.add_argument("--epochs", type=int, default=100)
     p_train.add_argument("--batch-size", type=int, default=32)
     p_train.add_argument("--device", default="auto")
+    p_train.add_argument("--config", help="YAML config (e.g. ml/training/configs/t2_hybrid_vit.yaml)")
     p_train.add_argument("extra", nargs="*", help="Extra args for train_maxsight.py")
 
     # validate
@@ -150,6 +186,11 @@ def main():
     p_pkg.add_argument("--checkpoint", default="checkpoints/final_model.pt")
     p_pkg.add_argument("--output", default="maxsight_ios_bundle")
 
+    # transfer
+    p_xfer = sub.add_parser("transfer", help="Transfer T2 checkpoint into T5; save init checkpoint for fine-tuning")
+    p_xfer.add_argument("--source", required=True, help="Path to T2 (or compatible) checkpoint .pth/.pt")
+    p_xfer.add_argument("--config", help="Path to t2_to_t5_transfer.yaml (optional)")
+
     # smoke
     p_smoke = sub.add_parser("smoke", help="Short training + inference sanity")
     p_smoke.add_argument("--epochs", type=int, default=2)
@@ -163,6 +204,8 @@ def main():
         return cmd_export(args)
     if args.command == "package":
         return cmd_package(args)
+    if args.command == "transfer":
+        return cmd_transfer(args)
     if args.command == "smoke":
         return cmd_smoke(args)
     return 1

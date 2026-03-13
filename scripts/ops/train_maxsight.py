@@ -154,6 +154,7 @@ def main():
     parser.add_argument("--backup", action="store_true", help="Backup artifacts after training")
     
     # Model.
+    parser.add_argument("--config", type=Path, default=None, help="YAML config (e.g. ml/training/configs/t2_hybrid_vit.yaml); overrides checkpoint dir and tier flags from config")
     parser.add_argument("--num-classes", type=int, default=None, help="Number of classes (default: len(COCO_CLASSES))")
     parser.add_argument("--tier", choices=["T5"], default="T5", help="Model tier: T5 (temporal + hybrid + cross-task + cross-modal)")
     parser.add_argument("--use-audio", action="store_true")
@@ -202,7 +203,16 @@ def main():
     
     set_seed(args.seed)
     
+    config_data = {}
+    if args.config and args.config.exists():
+        import yaml
+        with open(args.config) as f:
+            config_data = yaml.safe_load(f) or {}
+        logger.info(f"Loaded config: {args.config}")
+    
     ckpt_dir = Path(args.checkpoint_dir)
+    if config_data.get("checkpoint", {}).get("save_dir"):
+        ckpt_dir = Path(config_data["checkpoint"]["save_dir"])
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     
     data_dir = Path(args.data_dir)
@@ -334,9 +344,15 @@ def main():
 
     # Model.
     num_classes = args.num_classes or len(COCO_CLASSES)
+    if config_data.get("model", {}).get("num_classes") is not None:
+        num_classes = config_data["model"]["num_classes"]
     
     tier = CapabilityTier.T5_TEMPORAL
-    tier_config = TierConfig.for_tier(tier)
+    if config_data.get("model"):
+        tier_config = TierConfig.from_dict(config_data["model"])
+        logger.info("Using tier config from YAML (model section)")
+    else:
+        tier_config = TierConfig.for_tier(tier)
     
     logger.info(f"Creating model with tier: {args.tier} ({tier.name})")
     logger.info(f"  SE Attention: {tier_config.use_se_attention}")

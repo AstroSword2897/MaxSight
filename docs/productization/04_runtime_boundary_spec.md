@@ -60,8 +60,8 @@ Secondary path can be:
 
 | Contract | Target |
 |---|---|
-| Critical path median latency | <= 350 ms |
-| Critical path p95 latency | <= 600 ms |
+| Critical path median latency | <= 80 ms |
+| Critical path p95 latency | <= 80 ms |
 | Secondary path hard budget per frame | Opportunistic only; skip if critical budget threatened |
 | Scheduler minimum emergency dispatch interval | Immediate bypass allowed for emergency |
 | Normal cross-channel interval | >= 300 ms (current scheduler baseline) |

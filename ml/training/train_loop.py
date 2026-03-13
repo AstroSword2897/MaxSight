@@ -90,12 +90,11 @@ def parse_batch(batch: Any) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     else:
         raise ValueError(f"Unsupported batch format: {type(batch)}")
     
-    # Validate image tensor shape.
+    # Validate image tensor shape; allow 5D [B, T, C, H, W] for T5 temporal.
     if not torch.is_tensor(images):
         raise ValueError(f"Images must be a tensor, got {type(images)}")
-    if images.dim() != 4:
-        raise ValueError(f"Images must be 4D [B, C, H, W], got shape {images.shape}")
-    
+    if images.dim() not in (4, 5):
+        raise ValueError(f"Images must be 4D [B, C, H, W] or 5D [B, T, C, H, W], got shape {images.shape}")
     return images, targets
 
 

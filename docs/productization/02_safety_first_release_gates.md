@@ -19,8 +19,8 @@ Non-critical features (OCR, rich summaries, retrieval) cannot bypass these gates
 |---|---|---|---|---|
 | SG-01 | Hazard recall (critical hazards) | >= 0.95 | Street + indoor safety scenarios | Yes |
 | SG-02 | False-safe rate (critical hazards incorrectly marked safe or not alerted) | <= 0.01 | Same as SG-01 | Yes |
-| SG-03 | Time-to-alert p95 | <= 600 ms | Target hybrid hardware, live stream | Yes |
-| SG-04 | Time-to-alert median | <= 350 ms | Target hybrid hardware, live stream | Yes |
+| SG-03 | Time-to-alert p95 | <= 80 ms | Target hybrid hardware, live stream | Yes |
+| SG-04 | Time-to-alert median | <= 80 ms | Target hybrid hardware, live stream | Yes |
 | SG-05 | Directional cue correctness | >= 0.90 | Left/center/right lane and obstacle scenarios | Yes |
 | SG-06 | Distance zone accuracy (near/medium/far) | >= 0.85 | Measured-distance route set | Yes |
 | SG-07 | Alert suppression correctness under uncertainty | 100% critical hazards still surfaced | High-uncertainty replay suite | Yes |

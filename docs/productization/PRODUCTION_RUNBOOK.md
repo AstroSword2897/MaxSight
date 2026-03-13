@@ -19,6 +19,7 @@ These are the only commands needed for release and real-world deployment. See `d
 | **export** | Convert checkpoint to CoreML/JIT/etc. | `python scripts/product/run.py export --checkpoint <path> --format coreml --output <path>` |
 | **package** | Build glasses-ready bundle for Xcode | `python scripts/product/run.py package --checkpoint <path> --output <dir>` or `scripts/export_for_xcode.py <ckpt> <out_dir>` |
 | **smoke** | Fast sanity (training + inference + export) | `python scripts/product/run.py smoke [--epochs 2]`. On CPU use `--epochs 2`; smoke may exit early on single epoch due to smoke_train early-stop. |
+| **transfer** | T2 → T5 weight transfer (then fine-tune) | `python scripts/product/run.py transfer --source checkpoints/t2_hybrid_vit/best_model.pth [--config ml/training/configs/t2_to_t5_transfer.yaml]`. Then: `run.py train --resume-from <saved_init> ...`. |
 
 ## Quick production check (run before release)
 
@@ -57,6 +58,16 @@ python scripts/product/run.py export --checkpoint checkpoints/amd/best_model.pt 
 
 - On every PR: `pytest tests/` and `python scripts/product/run.py smoke`.
 - On release branch: add `scripts/product/run.py validate` and gate on safety report.
+
+## T2 → T5 path (T5 MVP)
+
+1. **T2 source**: Train with config that disables temporal/cross-task (e.g. `scripts/ops/train_maxsight.py --config ml/training/configs/t2_hybrid_vit.yaml --data-dir <path> --train-annotation ... --val-annotation ...`). Checkpoint goes to `checkpoints/t2_hybrid_vit/` per config.
+2. **Transfer**: `python scripts/product/run.py transfer --source checkpoints/t2_hybrid_vit/best_model.pth --config ml/training/configs/t2_to_t5_transfer.yaml`. This writes an initial T5 checkpoint (e.g. `checkpoints/t5_temporal_transfer/t5_from_t2_init.pt`).
+3. **T5 fine-tune**: `python scripts/product/run.py train --data-dir <path> --resume-from checkpoints/t5_temporal_transfer/t5_from_t2_init.pt ...` (optionally with video/sequence data and `t5_temporal_2phase.yaml`-style config).
+
+## MVP runtime contract (export / app)
+
+The shipped T5 MVP must only depend on the **MVP output keys** defined in `ml/runtime_constants.MVP_MODEL_OUTPUT_KEYS` (detections, urgency, distance, OCR, temporal consistency). The app/runtime should consume only these keys; use `ml.runtime_constants.filter_mvp_model_outputs(outputs, training=False)` when building the production inference path. Export and package use the full model; filtering is applied at runtime in the app.
 
 ## Where the plans live in the codebase
 
