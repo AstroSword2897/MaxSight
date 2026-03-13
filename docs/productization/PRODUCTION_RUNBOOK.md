@@ -17,7 +17,7 @@ These are the only commands needed for release and real-world deployment. See `d
 | **train** | Train production model | `python scripts/product/run.py train --data-dir <path> [options]` or `scripts/train_maxsight.py --data-dir <path>` |
 | **validate** | Model + data + safety checks | `python scripts/product/run.py validate [--checkpoint <path>] [--data]` |
 | **export** | Convert checkpoint to CoreML/JIT/etc. | `python scripts/product/run.py export --checkpoint <path> --format coreml --output <path>` |
-| **package** | Build glasses-ready bundle for Xcode | `python scripts/product/run.py package --checkpoint <path> --output <dir>` or `scripts/export_for_xcode.py <ckpt> <out_dir>` |
+| **package** | Build glasses-ready deployment bundle | `python scripts/product/run.py package --checkpoint <path> --output <dir>` or `scripts/ops/export_for_xcode.py <ckpt> <out_dir>` |
 | **smoke** | Fast sanity (training + inference + export) | `python scripts/product/run.py smoke [--epochs 2]`. On CPU use `--epochs 2`; smoke may exit early on single epoch due to smoke_train early-stop. |
 | **transfer** | T2 → T5 weight transfer (then fine-tune) | `python scripts/product/run.py transfer --source checkpoints/t2_hybrid_vit/best_model.pth [--config ml/training/configs/t2_to_t5_transfer.yaml]`. Then: `run.py train --resume-from <saved_init> ...`. |
 
@@ -50,8 +50,8 @@ python scripts/product/run.py export --checkpoint checkpoints/amd/best_model.pt 
 
 1. **Train** (or use existing checkpoint) per condition.
 2. **Export** to CoreML: `python scripts/product/run.py export --checkpoint <path> --format coreml --output <path>.mlpackage`.
-3. **Package** for Xcode: `scripts/export_for_xcode.py <checkpoint> <bundle_dir>`.
-4. Integrate `.mlpackage` into the glasses app (see `docs/EXPORT_MODELS_TO_XCODE.md`).
+3. **Package**: `python scripts/product/run.py package --checkpoint <path> --output <bundle_dir>` (or `scripts/ops/export_for_xcode.py <checkpoint> <bundle_dir>`).
+4. Integrate the bundle / `.mlpackage` into the glasses app.
 5. Run pilot per `docs/productization/05_pilot_validation_protocol.md`.
 
 ## CI recommendation

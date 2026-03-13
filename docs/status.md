@@ -6,7 +6,7 @@ This document summarizes the current status of the MaxSight repo: what is implem
 
 - **Model (MaxSightCNN):** Implemented in `ml/models/maxsight_cnn.py` with tiered capabilities (T0–T5). Backbone (ResNet50 + FPN), hybrid ViT, temporal encoder, and 30+ heads are present and gated by tier and condition.
 - **Training:** Training loop, losses, task balancing (e.g. GradNorm), and validation live in `ml/training/`. Ops scripts live under `scripts/ops/` (e.g. `scripts/ops/train_maxsight.py`, `scripts/ops/smoke_train.py`), and the canonical runner is `python scripts/product/run.py`. Data pipeline and dataset are in `ml/data/`.
-- **Export:** JIT, ExecuTorch (.pte), CoreML, and ONNX export are in `ml/training/export.py`. iOS bundle export and top-7 deploy scripts live under `scripts/ops/` and `scripts/research_archive/` (canonical packaging is `scripts/ops/export_for_xcode.py`).
+- **Export:** JIT, ExecuTorch (.pte), CoreML, and ONNX export are in `ml/training/export.py`. Deployment bundle packaging: `scripts/product/run.py package` or `scripts/ops/export_for_xcode.py`.
 - **Therapy:** Session management, task generation, and therapy integration are in `ml/therapy/`. See `docs/therapy_system.md`.
 - **Retrieval:** Encoders, indexing, and two-stage retrieval are in `ml/retrieval/`. Used when the tier enables retrieval.
 - **Simulation and tooling:** Simulation, quantization, and benchmarking live under `tools/` and `ml/training/benchmark.py`.

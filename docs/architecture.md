@@ -68,6 +68,6 @@ The model supports multiple vision conditions (e.g. glaucoma, AMD, cataracts, CV
 ## Export and deployment
 
 - **Export:** `ml/training/export.py` supports JIT, ExecuTorch (.pte), CoreML, ONNX. Dict outputs are flattened or stubbed for trace-friendly formats.
-- **iOS bundle:** `export_ios_bundle()` produces a folder with model, configs, and a processing reference for Xcode integration.
+- **Deployment bundle:** Packaging produces a folder with model, configs, and a processing reference for app integration.
 
 For more on training layout and data flow, see `docs/training_architecture.md` and `docs/training-data-loading.md`.

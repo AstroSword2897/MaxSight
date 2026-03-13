@@ -132,7 +132,7 @@ Use **`python scripts/product/run.py`** for the canonical surface. All paths fro
 | **train** | Train production model | `run.py train --data-dir <path> [--config <yaml>]` |
 | **validate** | Tests + optional checkpoint/data checks | `run.py validate [--checkpoint <path>] [--skip-export-tests]` |
 | **export** | Checkpoint → CoreML/JIT/ONNX | `run.py export --checkpoint <path> --format coreml --output <path>` |
-| **package** | Xcode-ready bundle | `run.py package --checkpoint <path> --output <dir>` |
+| **package** | Deployment bundle (model + config) | `run.py package --checkpoint <path> --output <dir>` |
 | **smoke** | Short training + inference sanity | `run.py smoke [--epochs 2]` |
 | **transfer** | T2 → T5 weight transfer | `run.py transfer --source <T2_ckpt> [--config ml/training/configs/t2_to_t5_transfer.yaml]` |
 
@@ -150,7 +150,7 @@ The shipped T5 MVP must depend only on **MVP output keys** in `ml.runtime_consta
 
 - **Critical path**: hazard detection, urgency, direction, distance, alert scheduling; always runs, never blocked by enhancement features.
 - **Secondary path**: OCR, scene summaries, retrieval; never blocks critical path.
-- **Pilot validation**: real-world scenarios, KPIs, and review loop are in **docs/productization/05_pilot_validation_protocol.md**. Deployment: train → export to CoreML → package for Xcode → integrate into glasses app → run pilot per protocol.
+- **Pilot validation**: real-world scenarios, KPIs, and review loop are in **docs/productization/05_pilot_validation_protocol.md**. Deployment: train → export to CoreML → package bundle → integrate into glasses app → run pilot per protocol.
 
 ### Where the full reports live
 
@@ -1240,7 +1240,6 @@ Phased unfreeze and loss-unlock schedules are defined in transfer configs and tr
   - **Local Development**: Apple Silicon M1+ (MPS) or CPU
   - **Training**: Cloud GPU (CUDA) required for models >10k parameters
 - **macOS**: Apple Silicon M1+ (for iOS development)
-- **Xcode**: 16.1+ (for iOS app)
 
 ### Installation
 
@@ -1489,8 +1488,8 @@ Typical keys: `model` (num_classes, tier, condition_mode), `data` (data_dir, tra
 - **scripts/smoke_train.py**: `--tier` (e.g. T0_BASELINE_CNN, T5_TEMPORAL), `--epochs`, `--batches`, `--force-cpu`.  
 - **scripts/gather_training_data.py**: Creates train/val/test JSONs in e.g. `datasets/cleaned_splits/`; uses `datasets/coco_raw/`; `--skip-download`, `--skip-extract` if COCO already present.  
 - **python -m ml.training.export**: `--checkpoint`, `--format` (jit/coreml/onnx/executorch), `--output`.  
-- **scripts/export_for_xcode.py**: Checkpoint path and output bundle path.  
-- **scripts/deploy_top7.py**, **scripts/export_top7_to_xcode.py**: Top-7 models per condition; checkpoints under `checkpoints_<condition>/best_model.pt`.
+- **run.py package**: `--checkpoint`, `--output` for deployment bundle.  
+- **scripts/ops/export_for_xcode.py**: Same bundle output (checkpoint + output dir). Top-7 condition scripts live under `scripts/research_archive/` if needed.
 
 **Therapy (application layer)**  
 - **SessionManager** (`ml/therapy/session_manager.py`): `start_session(session_config=None)` → session_id; `log_task_attempt(task_type, task_config, result)` (result has success, reaction_time, etc.); `end_session()` → report dict (skill_curve, summary); `save_session(filepath)`.  
@@ -1615,12 +1614,9 @@ python -m ml.training.benchmark
 
 **Under the hood.** One CoreML model per vision condition; condition set once (or per profile). On-device only — works offline, privacy-preserving.
 
-**Pipeline for you (developer):** Train condition-specific models, convert to CoreML (e.g. Colab script or `ml.training.export`), add `.mlpackage` files to the glasses app (e.g. Xcode). The app selects the right model at runtime and runs it on each frame.
+**Pipeline for you (developer):** Train condition-specific models, convert to CoreML via `ml.training.export` or `run.py export`, then package and integrate `.mlpackage` (or other formats) into the glasses app. The app selects the right model at runtime and runs it on each frame.
 
 ### Quick Links
-
-- **Export for Xcode**: [docs/EXPORT_MODELS_TO_XCODE.md](docs/EXPORT_MODELS_TO_XCODE.md) — export and add models to Xcode
-- **Deployment**: Run `scripts/export_top7_to_xcode.py` for iOS bundles; see README deployment section.
 - **Training Runbook**: [TRAINING_RUNBOOK.md](TRAINING_RUNBOOK.md) - Training commands and monitoring
 - **Pre-Train Checklist**: [PRE_TRAIN_CHECKLIST.md](PRE_TRAIN_CHECKLIST.md) - Verification before training
 - **Web Simulator**: [tools/simulation/README.md](tools/simulation/README.md) - Simulator setup and usage
@@ -1632,22 +1628,19 @@ python -m ml.training.benchmark
 - **JIT (.pt)**: PyTorch mobile fallback
 - **ONNX**: Cross-platform deployment
 
-### Quick Export
+### Export and package
 
-**iOS Bundle (recommended - includes everything):**
+**Bundle (model + config for app):**
 ```bash
-python scripts/export_for_xcode.py checkpoints/final_model.pt maxsight_ios_bundle
+python scripts/product/run.py package --checkpoint checkpoints/final_model.pt --output maxsight_bundle
 ```
 
 **Individual formats:**
 ```bash
-# Export to a specific format
 python -m ml.training.export --checkpoint checkpoints/final_model.pt --format coreml --output exports/maxsight.mlpackage
 python -m ml.training.export --checkpoint checkpoints/final_model.pt --format executorch --output exports/maxsight.pte
 python -m ml.training.export --checkpoint checkpoints/final_model.pt --format jit --output exports/maxsight.pt
 ```
-
-**See [docs/EXPORT_MODELS_TO_XCODE.md](docs/EXPORT_MODELS_TO_XCODE.md) for export and Xcode integration.**
 
 ### Running the simulator with a trained model
 
@@ -1676,7 +1669,6 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 - **[downloads.md](docs/downloads.md)**: Dataset and asset downloads
 - **[caching.md](docs/caching.md)**: Caching (Redis, usage)
 - **[productization/](docs/productization/README.md)**: Productization docs (scope, safety gates, declutter, runtime boundaries, pilot protocol). **[PRODUCTION_RUNBOOK.md](docs/productization/PRODUCTION_RUNBOOK.md)** for production and real-world runbook; **`scripts/product/run.py`** for canonical train/validate/export/package/smoke.
-- **Export / Xcode**: [docs/EXPORT_MODELS_TO_XCODE.md](docs/EXPORT_MODELS_TO_XCODE.md) (canonical export and add-to-Xcode guide)
 
 **Warnings & Critical Cautions** (below): Production deployment warnings and fixes (read before deploying).
 
@@ -1735,7 +1727,7 @@ ml/
 app/               overlays, personal_mode (runtime/UI helpers)
 scripts/
   product/         run.py (train, validate, export, package, smoke, transfer)
-  ops/             train_maxsight.py, gather_training_data.py, validate_data_pipeline.py, smoke_train.py, export_for_xcode.py, ...
+  ops/             train_maxsight.py, gather_training_data.py, validate_data_pipeline.py, smoke_train.py, ...
   pilot_eval/      test_therapy_effectiveness.py
   research_archive/  legacy/experimental scripts (not production path)
 tests/             test_*.py (phase, model, runtime_safety_gates, data_panoptic_and_video, ...)
@@ -1750,7 +1742,7 @@ docs/              architecture, status, training_architecture, productization/
 | **train** | `--data-dir` | `--checkpoint-dir`, `--epochs`, `--batch-size`, `--device`, `--config`, `extra...` | Train model; pass-through to train_maxsight.py |
 | **validate** | — | `--checkpoint`, `--data`, `--skip-export-tests` | Run pytest; optionally validate data pipeline and checkpoint forward |
 | **export** | `--checkpoint`, `--output` | `--format` (jit\|coreml\|onnx\|executorch) | Export checkpoint to format |
-| **package** | — | `--checkpoint`, `--output` | Build Xcode bundle (export_for_xcode) |
+| **package** | — | `--checkpoint`, `--output` | Build deployment bundle |
 | **transfer** | `--source` (T2 ckpt path) | `--config` (t2_to_t5_transfer.yaml) | T2→T5 weight transfer; writes init checkpoint for fine-tune |
 | **smoke** | — | `--epochs` | Short training + inference sanity |
 

@@ -21,7 +21,7 @@ All scripts should map to one of:
 | `train` | Train production model/checkpoint | `scripts/train_maxsight.py` |
 | `validate` | Run model quality + safety checks | `scripts/run_checkpoint_inference.py` + test suite wrappers |
 | `export` | Convert checkpoint to deployable formats | `python -m ml.training.export` |
-| `package` | Produce glasses-ready bundle(s) | `scripts/export_for_xcode.py` |
+| `package` | Produce glasses-ready bundle(s) | `run.py package` or `scripts/ops/export_for_xcode.py` |
 | `smoke` | Fast end-to-end sanity and regressions | `scripts/smoke_train.py` + minimal inference/export smoke |
 
 ## Script Consolidation Matrix
@@ -53,9 +53,9 @@ All scripts should map to one of:
 | Current script | Action | Reason |
 |---|---|---|
 | `python -m ml.training.export` | Keep (canonical export core) | Single source of export truth |
-| `scripts/export_for_xcode.py` | Keep (canonical package entrypoint) | Xcode bundle packaging |
+| `scripts/ops/export_for_xcode.py` | Keep (canonical package entrypoint) | Deployment bundle packaging |
 | `scripts/deploy_top7.py` | Merge under `package --top7` | Deployment flavor, not separate pipeline |
-| `scripts/export_top7_to_xcode.py` | Merge into package profiles | Wrapper around deploy logic |
+| `scripts/research_archive/export_top7_to_xcode.py` | Optional / research | Multi-condition export wrapper |
 | `scripts/export_7_coreml_only.py` | Merge into `export --coreml-only --top7` | Duplicate functionality |
 | `scripts/export_one_model.py` | Merge into `export --single` | Duplicate functionality |
 | `scripts/convert_pt_to_coreml.py` | Merge into export module | Duplicate conversion path |
