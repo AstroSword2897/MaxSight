@@ -10,21 +10,22 @@
 ## Table of Contents
 
 1. [Project Overview & Goals](#-project-overview--goals)
-2. [Productization Summary (from reports)](#productization-summary-from-reports)
-3. [Actions Taken - Complete Development History](#-actions-taken---complete-development-history)
-4. [System Architecture - Deep Dive](#-system-architecture---deep-dive)
-5. [Data Flow & Processing Pipeline](#-data-flow--processing-pipeline)
-6. [Training Flow & Hyperparameter Strategy](#-training-flow--hyperparameter-strategy)
-7. [Inference Flow & Real-Time Processing](#-inference-flow--real-time-processing)
-8. [Effectiveness & Results](#-effectiveness--results)
-9. [Repository Stack & Technology](#-repository-stack--technology)
-10. [Current Work & Next Steps](#-current-work--next-steps)
-11. [Quick Start Guide](#-quick-start-guide)
-12. [Main Components](#main-components) (includes [Component reference: what and why](#component-reference-what-each-does-and-why-its-there) and [Concrete reference: outputs, configs, env, CLI](#concrete-reference-outputs-configs-env-cli))
-13. [Testing & Validation](#-testing--validation)
-14. [Performance & Safety](#-performance--safety)
-15. [Deployment & Export](#-deployment--export)
-16. [Documentation](#-documentation)
+2. [Therapy methods: training the senses](#therapy-methods-training-the-senses)
+3. [Productization Summary (from reports)](#productization-summary-from-reports)
+4. [Actions Taken - Complete Development History](#-actions-taken---complete-development-history)
+5. [System Architecture - Deep Dive](#-system-architecture---deep-dive)
+6. [Data Flow & Processing Pipeline](#-data-flow--processing-pipeline)
+7. [Training Flow & Hyperparameter Strategy](#-training-flow--hyperparameter-strategy)
+8. [Inference Flow & Real-Time Processing](#-inference-flow--real-time-processing)
+9. [Effectiveness & Results](#-effectiveness--results)
+10. [Repository Stack & Technology](#-repository-stack--technology)
+11. [Current Work & Next Steps](#-current-work--next-steps)
+12. [Quick Start Guide](#-quick-start-guide)
+13. [Main Components](#main-components) (includes [Component reference: what and why](#component-reference-what-each-does-and-why-its-there) and [Concrete reference: outputs, configs, env, CLI](#concrete-reference-outputs-configs-env-cli))
+14. [Testing & Validation](#-testing--validation)
+15. [Performance & Safety](#-performance--safety)
+16. [Deployment & Export](#-deployment--export)
+17. [Documentation](#-documentation)
 
 ---
 
@@ -95,6 +96,54 @@ MaxSight answers this by implementing four barrier-removal methods from accessib
 - **Vision Conditions**: 13 supported (e.g. refractive errors, cataracts, glaucoma, AMD, diabetic_retinopathy, retinitis_pigmentosa, color_blindness, CVI, amblyopia, strabismus); condition affects `ml/utils/preprocessing.py` and optional dynamic conv.
 - **Task Heads**: 30+ specialized heads; each head is a `nn.Module` with a `forward()` taking shared features (and sometimes dedicated inputs like `eye_features`). Built in `ml/models/maxsight_cnn.py` when tier and `enable_accessibility_features` allow.
 - **Export Formats**: JIT (`.pt`), CoreML (`.mlpackage`), ONNX, ExecuTorch (`.pte`). Export stubs `global_encoder` (CLIP) and can disable scene graph for traceability; see `ml/training/export.py`.
+
+---
+
+## Therapy methods: training the senses
+
+MaxSight includes a **therapy system** that uses structured exercises to train and sharpen the senses users rely on for environmental awareness. It supports one of the four barrier-removal methods from the overview: **skill development across senses**. Sessions are managed so users can practice contrast, motion, depth, gaze, and spatial attention with adaptive difficulty and rest when needed.
+
+### Senses and skills trained
+
+| Sense / skill | What it trains | Model signals used |
+|--------------|----------------|--------------------|
+| **Contrast** | Detecting edges and objects at different contrast levels | Contrast head → `contrast_map`, `edge_map` |
+| **Motion** | Tracking moving objects and flow in the scene | Motion head → `motion_flow`, `motion_magnitude` |
+| **Depth** | Judging near / medium / far and focus shifts | Therapy state head → `depth_map`, `zones`, `uncertainty` |
+| **Gaze / fixation** | Stable focus and reducing drift | Therapy state head → `fixation_stability`, `blink_rate` |
+| **Spatial / ROI** | Finding and prioritizing important regions | ROI priority head → `roi_utility`; scene description for context |
+| **Fatigue awareness** | Pacing and rest so practice stays effective | Therapy state head → `fatigue_score`; triggers **FATIGUE_REST** when high |
+
+Therapy tasks consume these model outputs (e.g. contrast maps, depth, motion) so exercises are driven by the same perception pipeline used for real-world assistance.
+
+### Core therapy task types
+
+**From TaskGenerator** (`ml/therapy/task_generator.py`) — adaptive, sense-focused tasks:
+
+- **CONTRAST_MICRO** — Edge finding and low-contrast object detection.
+- **MOTION_TRACKING** — Following motion and flow in the scene.
+- **DEPTH_SHIFT** — Shifting focus near → far → near; depth zones and uncertainty.
+- **GAZE_STABILIZATION** — Holding stable fixation; uses fixation_stability and gaze-related signals.
+- **ROI_FINDABILITY** — Locating and attending to high-priority regions (roi_utility).
+- **FATIGUE_REST** — Pause when `fatigue_score` &gt; 0.7; no new sense training until rest.
+
+**From TherapyTaskIntegrator** (`ml/therapy/therapy_integration.py`) — scene- and hazard-aware tasks:
+
+- **ATTENTION_TRAINING** — Focus on specific objects in the scene (from detections and scene description).
+- **CONTRAST_RECOGNITION** — Identify objects or regions by contrast level.
+- **EDGE_DETECTION** — Identify edges and boundaries (uses edge_map and contrast).
+- **SPATIAL_AWARENESS** — Understand spatial relationships (left/right, in front, etc.).
+- **WARNING_RECOGNITION** — Learn to associate audio/haptic cues with hazard types so alerts become meaningful over time.
+
+TaskGenerator chooses the next task (including FATIGUE_REST) from recent performance and fatigue; TherapyTaskIntegrator builds concrete task configs from the current scene and detections.
+
+### Sessions and adaptive difficulty
+
+- **SessionManager** (`ml/therapy/session_manager.py`) starts a session, logs each task attempt (task type, config, success/failure, reaction time), and can save/load session state (e.g. to JSON). At session end it can produce a report with a skill curve and summary.
+- **TaskGenerator** adjusts difficulty from user **uncertainty** and **fatigue_score**: higher uncertainty lowers difficulty; fatigue above a threshold forces a rest task. Duration, highlight strength, and target speed are set per task from the chosen difficulty.
+- **TherapyTaskIntegrator** creates tasks from live scene data (detections, scene description, hazard type/urgency) so practice matches real-world cues (e.g. warning recognition for the hazards the user will hear in the app).
+
+Together, these components turn model outputs into **structured, logged therapy sessions** that train contrast, motion, depth, gaze, spatial attention, and hazard-cue recognition. Full module and data-flow detail: **[docs/therapy_system.md](docs/therapy_system.md)**.
 
 ---
 
