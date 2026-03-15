@@ -275,6 +275,83 @@ def test_therapy_state_head_forward_motion_2d(therapy_head):
     assert out["depth_map"].shape == (B, H, W)
 
 
+# Closed-loop therapy engine (decision + adaptation architecture).
+
+def test_therapy_engine_import():
+    """TherapyEngine and related closed-loop components import and construct."""
+    from ml.therapy import (
+        TherapyEngine,
+        TherapyEngineConfig,
+        SituationUnderstandingLayer,
+        TherapyDecisionEngine,
+        InterventionGenerator,
+        TherapySafetyLayer,
+        TherapyMemorySystem,
+        AdaptationEngine,
+        ResponseEvaluationModel,
+    )
+    engine = TherapyEngine()
+    assert engine.situation_layer is not None
+    assert engine.decision_engine is not None
+    assert engine.safety is not None
+    assert engine.memory is not None
+
+
+def test_therapy_engine_update_no_intervention_when_low_stress():
+    """TherapyEngine returns no actions when stress is below threshold."""
+    from ml.therapy import TherapyEngine
+    engine = TherapyEngine()
+    perception = {"detections": [], "uncertainty": 0.1, "navigation_difficulty": 0.2}
+    actions = engine.update(perception)
+    assert len(actions) == 0
+    ctx = engine.get_last_context()
+    assert ctx is not None
+    assert ctx.environment_stress_level < 0.6
+
+
+def test_therapy_engine_update_intervention_when_high_stress():
+    """TherapyEngine returns therapeutic action when stress exceeds threshold."""
+    from ml.therapy import TherapyEngine, TherapyEngineConfig
+    config = TherapyEngineConfig(stress_trigger_threshold=0.0, high_stress_threshold=0.35)
+    engine = TherapyEngine(config=config)
+    perception = {
+        "detections": [{"class_name": "person"}] * 5,
+        "uncertainty": 0.2,
+        "navigation_difficulty": 0.9,
+        "urgency": 2.0,
+    }
+    actions = engine.update(perception)
+    assert len(actions) >= 1, "expected at least one intervention when stress is high"
+    assert actions[0].content
+    assert actions[0].channel in ("audio", "haptic", "visual")
+    assert actions[0].intervention_type
+
+
+def test_therapy_engine_safety_suppresses_on_high_uncertainty():
+    """Therapy safety layer suppresses prompts when uncertainty is high."""
+    from ml.therapy import TherapyEngine, TherapyEngineConfig
+    config = TherapyEngineConfig(stress_trigger_threshold=0.0, high_stress_threshold=0.0)
+    engine = TherapyEngine(config=config)
+    perception = {
+        "detections": [{"class_name": "person"}] * 5,
+        "uncertainty": 0.85,
+        "navigation_difficulty": 0.9,
+    }
+    actions = engine.update(perception)
+    assert len(actions) == 0
+
+
+def test_therapy_engine_on_user_response_updates_adaptation():
+    """on_user_response runs evaluation and updates adaptation/memory."""
+    from ml.therapy import TherapyEngine, TherapyEngineConfig
+    config = TherapyEngineConfig(stress_trigger_threshold=0.2)
+    engine = TherapyEngine(config=config)
+    perception_before = {"detections": [], "uncertainty": 0.2, "navigation_difficulty": 0.8, "urgency": 1.0}
+    engine.update(perception_before)
+    perception_after = {"detections": [], "uncertainty": 0.2, "navigation_difficulty": 0.4, "urgency": 0}
+    engine.on_user_response(perception_after)
+    assert engine.get_memory() is not None
+
 
 
 

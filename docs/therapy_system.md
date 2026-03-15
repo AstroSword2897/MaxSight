@@ -2,6 +2,8 @@
 
 This document describes the therapy-related components: session management, task generation, and how they integrate with the rest of MaxSight.
 
+**Closed-loop architecture:** For the **decision + adaptation** therapy engine (situation understanding → decision → intervention → response evaluation → adaptation), see **[therapy_architecture.md](therapy_architecture.md)**.
+
 ## Purpose
 
 The therapy system supports structured activities (e.g. contrast sensitivity, depth perception, motion tracking) with session tracking, task configuration, and result logging. It is used to run and evaluate therapy tasks that may depend on model outputs (e.g. contrast maps, depth, motion).

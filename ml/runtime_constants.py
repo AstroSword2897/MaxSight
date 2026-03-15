@@ -13,6 +13,13 @@ ALERTS_PER_MINUTE_CAP = 12
 # Minimum interval (s) between non-emergency outputs; emergency can bypass.
 MIN_CHANNEL_INTERVAL_S = 0.3
 
+# Therapy subsystem: do not prompt when perception uncertainty is above this (fail-safe).
+THERAPY_UNCERTAINTY_SUPPRESS_THRESHOLD = 0.7
+# Max therapy prompts per minute to avoid overload (separate from hazard alerts).
+THERAPY_MAX_PROMPTS_PER_MINUTE = 2
+# Min gap (s) between therapy prompts.
+THERAPY_MIN_GAP_BETWEEN_PROMPTS_S = 10.0
+
 # Safety gate thresholds for release validation (SG-01, SG-02, SG-05, SG-06).
 HAZARD_RECALL_MIN = 0.95
 FALSE_SAFE_RATE_MAX = 0.01

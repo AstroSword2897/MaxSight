@@ -66,6 +66,7 @@ docs/*.md
 !docs/downloads.md
 !docs/status.md
 !docs/therapy_system.md
+!docs/therapy_architecture.md
 !docs/training_architecture.md
 !docs/training-data-loading.md
 !docs/transferlearning.md

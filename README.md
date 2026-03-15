@@ -145,6 +145,8 @@ TaskGenerator chooses the next task (including FATIGUE_REST) from recent perform
 
 Together, these components turn model outputs into **structured, logged therapy sessions** that train contrast, motion, depth, gaze, spatial attention, and hazard-cue recognition. Full module and data-flow detail: **[docs/therapy_system.md](docs/therapy_system.md)**.
 
+**Closed-loop therapy engine:** MaxSight also implements a **decision + adaptation** therapy subsystem (not just another neural network): **Situation Understanding** → **Therapy Decision Engine** → **Intervention Generator** → **Output Scheduler** → **User Response** → **Response Evaluation** → **Adaptation Engine** → **Therapy Memory**. Entry point: **`ml.therapy.TherapyEngine`** (`update(perception)` returns therapeutic actions; `on_user_response(perception_after)` closes the loop). Safety: max prompts/min, min gap, suppress when uncertainty &gt; 0.7, no medical language. See **[docs/therapy_architecture.md](docs/therapy_architecture.md)**.
+
 ---
 
 ## Productization Summary (from reports)
@@ -581,6 +583,114 @@ The system supports progressive tier enablement:
 ### Detailed Architecture: Temporal Processing (T5 Only)
 
 ConvLSTM consumes Stage A feature sequences [B, T, C, H, W]; input/forget/output gates and cell update use convs. TimeSformer: patches over time, temporal then spatial attention, residual. Motion head outputs optical flow (u, v) and magnitude/direction. See **ml/models/temporal/temporal_encoder.py** and **ml/models/temporal/conv_lstm.py**.
+
+### System architecture: every feature
+
+Below is a feature-by-feature reference: module location, purpose, and main inputs/outputs. Use this to trace data flow and to run or write tests for each component.
+
+#### Input and preprocessing
+
+| Feature | Module | Purpose | Key I/O |
+|--------|--------|---------|---------|
+| **Image preprocessing** | `ml/utils/preprocessing.py` | Condition-specific normalization, resize (e.g. 224×224), RGB↔LAB, blur/contrast/mask per condition | In: image tensor; Out: normalized tensor, condition transforms |
+| **Condition modes** | Same | Cataracts (blur, contrast), glaucoma (central mask), AMD (central darken), retinitis_pigmentosa (brighten, edge) | Condition name → transform pipeline |
+| **Data loading** | `ml/data/dataset.py` | COCO/panoptic annotations, box normalization, distance/urgency from annotations | In: annotation JSON, image dir; Out: batch dict (images, labels, boxes, distance, urgency) |
+| **Data augmentation** | `ml/data/advanced_augmentation.py` | Geometric/photometric augments, mixup, mosaic, condition-specific simulation | In: image + bbox; Out: augmented image + transformed bbox |
+| **Data pipeline** | `ml/data/data_pipeline.py` | Collate, sequence-aware batching (video), create_data_loaders | In: train/val paths; Out: DataLoader(s) |
+
+#### Backbone and FPN
+
+| Feature | Module | Purpose | Key I/O |
+|--------|--------|---------|---------|
+| **ResNet50** | `torchvision.models.resnet50` (Stage A) | Multi-scale CNN features C2–C5 | In: [B,3,H,W]; Out: C2–C5 feature maps |
+| **FPN** | `ml/models/maxsight_cnn.py` | Top-down pyramid P2–P5, 256 ch | In: C2–C5; Out: P2–P5, 256 ch |
+| **Detection fusion** | Same | P3,P4,P5 → 14×14 concat [B,768,14,14] | Feeds detection and many Tier 2 heads |
+| **Hybrid CNN-ViT** | `ml/models/backbone/hybrid_backbone.py` | Stage B: CNN + ViT, AdaptiveFeatureFusion, CrossModalAttention | In: images; Out: F_cnn, Z_cls, fused features |
+| **Dynamic convolution** | `ml/models/backbone/dynamic_conv.py` | Condition-adaptive convs (optional) | Condition → kernel modulation |
+| **ViT backbone** | `ml/models/backbone/vit_backbone.py` | Patch embed, transformer blocks, CLS token | In: [B,3,224,224]; Out: [B,768] or patch tokens |
+
+#### Tier 1 (safety-critical) heads
+
+| Feature | Module | Purpose | Key I/O |
+|--------|--------|---------|---------|
+| **Detection head** | `ml/models/maxsight_cnn.py` (detection_head) | Shared conv for detection features | Fused → det_feats |
+| **Objectness** | Same (obj_head) | Is there an object per location? | det_feats → [B, H*W] |
+| **Classification** | Same (cls_head) | Class logits per location | det_feats → [B, H*W, num_classes] |
+| **Box regression** | Same (box_head) | Bounding box coordinates per location | det_feats → [B, H*W, 4] |
+| **Text/OCR regions** | Same (text_head) | Text probability per location | det_feats → text logits |
+| **Urgency** | Same (urgency_head) | Safe/caution/warning/danger | Context → [B, 4] |
+| **Distance zones** | Same (distance_head) | Near/medium/far per location | Context → [B, H*W, 3] |
+| **Uncertainty** | `ml/models/heads/uncertainty_head.py` (GlobalConfidenceAggregator) | Model confidence | shared_scene_emb → uncertainty_score |
+
+#### Tier 2 (navigation and therapy-related) heads
+
+| Feature | Module | Purpose | Key I/O |
+|--------|--------|---------|---------|
+| **Contrast** | `ml/models/heads/contrast_head.py` (ContrastMapHead) | Contrast map and edges for contrast-sensitivity therapy | Features → contrast_map, edge_map |
+| **Motion** | `ml/models/heads/motion_head.py` (MotionHead) | Optical flow and magnitude for motion-tracking therapy | Feature map → flow [B,2,H,W], magnitude |
+| **Depth** | `ml/models/heads/depth_head.py` (DepthHead) | Depth map and uncertainty | Features → depth_map, uncertainty |
+| **Fatigue** | `ml/models/heads/fatigue_head.py` (FatigueHead) | Fatigue score, blink rate, fixation stability | Eye/motion/depth/contrast features → fatigue_score, blink_rate, fixation_stability |
+| **Therapy state** | `ml/models/heads/therapy_state_head.py` (TherapyStateHead) | Single head: fatigue branch, depth branch (zones, uncertainty), contrast branch | eye, motion, depth, contrast features → fatigue, depth_map, zones, contrast_map, edge_map |
+| **ROI priority** | `ml/models/heads/roi_priority_head.py` (ROIPriorityHead) | Per-region importance for findability therapy | Scene + region features → roi_utility |
+| **Predictive alert** | `ml/models/heads/predictive_alert_head.py` (PredictiveAlertHead) | Hazard anticipation, time-to-hazard | Features → hazard_probs, time_to_hazard, recommended_action |
+| **Glare** | `ml/models/maxsight_cnn.py` (glare_head) | Glare risk level (e.g. 4 classes) | Features → glare_probs |
+| **Findability** | Same (findability_head) | Object findability per location | Features → object_findability |
+| **Navigation difficulty** | Same (navigation_difficulty_head) | Scene complexity scalar | Features → navigation_difficulty |
+
+#### Tier 3 (enhancement) and optional heads
+
+| Feature | Module | Purpose | Key I/O |
+|--------|--------|---------|---------|
+| **Scene description** | `ml/models/heads/scene_description_head.py` (SceneDescriptionHead) | Natural language scene summary | Embedding + optional retrieval → scene_description |
+| **Scene graph** | `ml/models/scene_graph/scene_graph_encoder.py` (SceneGraphEncoder) | Object relations, edge_index, edge_attr | Top-K boxes + embeddings → scene_graph outputs, relations |
+| **Sound events** | `ml/models/heads/sound_event_head.py` (SoundEventHead) | Audio event classification (when audio provided) | audio_emb → sound event logits |
+| **Personalization** | `ml/models/heads/personalization_head.py` (PersonalizationHead) | User-specific adaptations | Features → personalization outputs |
+| **Color** (optional) | `ml/models/maxsight_cnn.py` (color_head) | Color-condition head when enabled | Features → color-related outputs |
+
+#### Fusion and temporal
+
+| Feature | Module | Purpose | Key I/O |
+|--------|--------|---------|---------|
+| **Multimodal fusion** | `ml/models/fusion/multimodal_fusion.py` | Combine visual and audio features (T4+) | Visual + audio → fused embedding |
+| **Temporal encoder** | `ml/models/temporal/temporal_encoder.py` (TemporalEncoder) | ConvLSTM + TimeSformer over Stage A feature sequences | feature_frames [B,T,C,H,W] → motion features, consistency, flicker |
+| **ConvLSTM** | `ml/models/temporal/conv_lstm.py` | Recurrent temporal modeling on feature maps | Sequence → hidden state, output |
+
+#### Retrieval (async, advisory)
+
+| Feature | Module | Purpose | Key I/O |
+|--------|--------|---------|---------|
+| **Global encoder** | `ml/retrieval/encoders/global_encoder.py` | Scene embedding for retrieval | Features → query embedding |
+| **Stage1 ANN** | `ml/retrieval/retrieval/stage1_ann.py` | Approximate nearest neighbor search | Query → candidate IDs |
+| **Stage2 rerank** | `ml/retrieval/retrieval/stage2_rerank.py` | Rerank candidates | Candidates → ranked list |
+| **Async retrieval** | `ml/retrieval/retrieval/async_retrieval.py` (AsyncRetrievalSystem) | Non-blocking retrieval for scene enhancement | Query → retrieval_results (advisory) |
+
+#### Therapy system (sense training and sessions)
+
+| Feature | Module | Purpose | Key I/O |
+|--------|--------|---------|---------|
+| **SessionManager** | `ml/therapy/session_manager.py` | Start/end session, log task attempts, metrics, skill curve, save/load JSON | start_session(), log_task_attempt(), end_session(), save_session() |
+| **TaskGenerator** | `ml/therapy/task_generator.py` | Adaptive task type and difficulty from fatigue/uncertainty/history; FATIGUE_REST when fatigue &gt; 0.7 | generate_task(uncertainty, fatigue_score, recent_performance) → task_type, difficulty, duration, highlight_strength, target_speed |
+| **TherapyTaskIntegrator** | `ml/therapy/therapy_integration.py` | Build task configs from scene/detections: attention, contrast, edge, spatial, warning recognition | create_attention_task(), create_contrast_task(), create_edge_task(), create_spatial_task(), create_warning_recognition_task(), generate_task_from_scene() |
+| **Task types (generator)** | Same (TaskType) | CONTRAST_MICRO, MOTION_TRACKING, DEPTH_SHIFT, GAZE_STABILIZATION, ROI_FINDABILITY, FATIGUE_REST | Used by SessionManager and runners |
+| **Task types (integrator)** | Same (TherapyTaskType) | ATTENTION_TRAINING, CONTRAST_RECOGNITION, EDGE_DETECTION, SPATIAL_AWARENESS, WARNING_RECOGNITION | Scene- and hazard-aware tasks |
+
+Therapy components consume model outputs (contrast_map, motion_flow, depth_map, fatigue_score, roi_utility, etc.) so exercises train the same senses used for real-world assistance. See **[Therapy methods: training the senses](#therapy-methods-training-the-senses)** and **docs/therapy_system.md**.
+
+#### Output scheduling and runtime
+
+| Feature | Module | Purpose | Key I/O |
+|--------|--------|---------|---------|
+| **CrossModalScheduler** | `ml/utils/output_scheduler.py` | Rate-limit and prioritize audio/haptic/visual outputs; critical urgency threshold; alerts/min cap | Model outputs + OutputConfig → ScheduledOutput list |
+| **Runtime constants** | `ml/runtime_constants.py` | LATENCY_MEDIAN_MS (80), LATENCY_P95_MS (80), CRITICAL_URGENCY_THRESHOLD, MVP output keys, filter_mvp_model_outputs() | Used by scheduler and app |
+
+#### Export and packaging
+
+| Feature | Module | Purpose | Key I/O |
+|--------|--------|---------|---------|
+| **Export (JIT/CoreML/ONNX/ExecuTorch)** | `ml/training/export.py` | Checkpoint → trace-friendly format; flatten/stub dict outputs | --checkpoint, --format, --output |
+| **Package (bundle)** | `scripts/ops/export_for_xcode.py` or `run.py package` | Checkpoint + configs → deployment bundle | --checkpoint, --output dir |
+
+All of the above can be tested in isolation (per-head, per-module) or via the full model and pipeline. Therapy tests: **pytest tests/test_therapy.py**. Full suite: **pytest tests/ -v**.
 
 ---
 
@@ -1711,6 +1821,7 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 - **[SYSTEMS.md](docs/SYSTEMS.md)**: All systems in one detailed reference (tiers, backbone, heads, fusion, temporal, therapy, retrieval, preprocessing, training, export, scene graph)
 - **[architecture.md](docs/architecture.md)**: Model and system architecture overview
 - **[therapy_system.md](docs/therapy_system.md)**: Therapy sessions, task generator, integration
+- **[therapy_architecture.md](docs/therapy_architecture.md)**: Closed-loop therapy engine (decision + adaptation, safety, memory)
 - **[training_architecture.md](docs/training_architecture.md)**: Training loop, losses, balancing, config
 - **[training-data-loading.md](docs/training-data-loading.md)**: Data pipeline and dataset
 - **[transferlearning.md](docs/transferlearning.md)**: Tier transfer and checkpoint loading

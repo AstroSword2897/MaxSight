@@ -90,10 +90,11 @@ class TherapyTaskIntegrator:
         hazard_type: str,
         urgency_level: int,
         cue_description: str,
-        difficulty: float = 0.5
+        difficulty: float = 0.5,
+        scene_description: Optional[str] = None,
     ) -> Dict:
         """Create warning recognition task so the user learns to associate cues with hazards."""
-        return {
+        out: Dict = {
             'task_type': TherapyTaskType.WARNING_RECOGNITION,
             'hazard_type': hazard_type,
             'urgency_level': urgency_level,
@@ -106,6 +107,9 @@ class TherapyTaskIntegrator:
             ),
             'duration': int(20 + (1.0 - difficulty) * 25)
         }
+        if scene_description is not None:
+            out['scene_description'] = scene_description
+        return out
     
     def generate_task_from_scene(
         self,
@@ -146,7 +150,8 @@ class TherapyTaskIntegrator:
                 hazard_type=hazard_type,
                 urgency_level=urgency_level,
                 cue_description=f"Alert for {hazard_type} (urgency {urgency_level})",
-                difficulty=difficulty
+                difficulty=difficulty,
+                scene_description=scene_description,
             )
         
         else:
