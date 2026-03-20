@@ -70,6 +70,8 @@ docs/*.md
 !docs/training_architecture.md
 !docs/training-data-loading.md
 !docs/transferlearning.md
+!docs/git_workflow.md
+!docs/ml_lifecycle_s3.md
 
 # Logs
 logs/
