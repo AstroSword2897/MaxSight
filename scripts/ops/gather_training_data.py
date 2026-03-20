@@ -6,8 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Project root.
-ROOT = Path(__file__).resolve().parent.parent
+# Repository root (parent of scripts/).
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 
@@ -202,6 +202,9 @@ def main() -> int:
     print()
     print("arm64 (Apple Silicon): use --device mps for inference/benchmarks;")
     print("  use --device cpu for training if MPS has unsupported ops.")
+    print()
+    print("Medallion layout (optional): docs/medallion_data.md")
+    print(f"  python scripts/ops/medallion_build.py all --bronze-coco {data_dir}")
     return 0
 
 

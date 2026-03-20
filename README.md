@@ -2,30 +2,35 @@
 
 **Production-Grade Accessibility System** | **Multi-Task Deep Learning for Environmental Understanding**
 
-**Last Updated**: 2026-02  
-**Status**: Production-ready training and data pipeline. Use `python scripts/product/run.py` for canonical `train/validate/export/package/smoke` (or call ops scripts directly under `scripts/ops/`). See **docs/status.md** for current status.
+**Last Updated**: 2026-03  
+**Status**: Production-ready training and data pipeline. Use `python scripts/product/run.py` for canonical `train/validate/export/package/smoke` (or call ops scripts directly under `scripts/ops/`). See **docs/status.md** for current status.  
+**Setup:** **[docs/DOWNLOAD_AND_START.md](docs/DOWNLOAD_AND_START.md)** (clone, install, data, simulator, train).
 
 ---
 
 ## Table of Contents
 
+**Quick links:** [Feature inventory](#complete-feature-inventory-at-a-glance) · [RAG mediation model](#rag-mediation-model-user-and-therapy-boundary) · [Roadmap & backlog](#roadmap-backlog--next-steps) · [Download & start](docs/DOWNLOAD_AND_START.md)
+
 1. [Project Overview & Goals](#-project-overview--goals)
-2. [Therapy methods: training the senses](#therapy-methods-training-the-senses)
-3. [Productization Summary (from reports)](#productization-summary-from-reports)
-4. [Actions Taken - Complete Development History](#-actions-taken---complete-development-history)
-5. [System Architecture - Deep Dive](#-system-architecture---deep-dive)
-6. [Data Flow & Processing Pipeline](#-data-flow--processing-pipeline)
-7. [Training Flow & Hyperparameter Strategy](#-training-flow--hyperparameter-strategy)
-8. [Inference Flow & Real-Time Processing](#-inference-flow--real-time-processing)
-9. [Effectiveness & Results](#-effectiveness--results)
-10. [Repository Stack & Technology](#-repository-stack--technology)
-11. [Current Work & Next Steps](#-current-work--next-steps)
-12. [Quick Start Guide](#-quick-start-guide)
-13. [Main Components](#main-components) (includes [Component reference: what and why](#component-reference-what-each-does-and-why-its-there) and [Concrete reference: outputs, configs, env, CLI](#concrete-reference-outputs-configs-env-cli))
-14. [Testing & Validation](#-testing--validation)
-15. [Performance & Safety](#-performance--safety)
-16. [Deployment & Export](#-deployment--export)
-17. [Documentation](#-documentation)
+2. [Complete feature inventory (at a glance)](#complete-feature-inventory-at-a-glance)
+3. [Therapy methods: training the senses](#therapy-methods-training-the-senses)
+4. [RAG mediation model (user and therapy boundary)](#rag-mediation-model-user-and-therapy-boundary)
+5. [Productization Summary (from reports)](#productization-summary-from-reports)
+6. [Actions Taken - Complete Development History](#-actions-taken---complete-development-history)
+7. [System Architecture - Deep Dive](#-system-architecture---deep-dive)
+8. [Data Flow & Processing Pipeline](#-data-flow--processing-pipeline)
+9. [Training Flow & Hyperparameter Strategy](#-training-flow--hyperparameter-strategy)
+10. [Inference Flow & Real-Time Processing](#-inference-flow--real-time-processing)
+11. [Effectiveness & Results](#-effectiveness--results)
+12. [Repository Stack & Technology](#-repository-stack--technology)
+13. [Roadmap, backlog & next steps](#roadmap-backlog--next-steps)
+14. [Quick Start Guide](#-quick-start-guide)
+15. [Main Components](#main-components) (includes [Component reference: what and why](#component-reference-what-each-does-and-why-its-there) and [Concrete reference: outputs, configs, env, CLI](#concrete-reference-outputs-configs-env-cli))
+16. [Testing & Validation](#-testing--validation)
+17. [Performance & Safety](#-performance--safety)
+18. [Deployment & Export](#-deployment--export)
+19. [Documentation](#-documentation)
 
 ---
 
@@ -66,7 +71,7 @@ MaxSight answers this by implementing four barrier-removal methods from accessib
 
 #### Short-Term Goals (Completed)
 -  Complete architecture implementation (Phases 0-9)
--  All tests passing (163/163)
+-  Full test suite green (250+ collected tests; run `pytest tests/` for the current count)
 -  Training infrastructure ready
 -  Data pipeline established
 -  Hyperparameter configurations for all tiers
@@ -96,6 +101,68 @@ MaxSight answers this by implementing four barrier-removal methods from accessib
 - **Vision Conditions**: 13 supported (e.g. refractive errors, cataracts, glaucoma, AMD, diabetic_retinopathy, retinitis_pigmentosa, color_blindness, CVI, amblyopia, strabismus); condition affects `ml/utils/preprocessing.py` and optional dynamic conv.
 - **Task Heads**: 30+ specialized heads; each head is a `nn.Module` with a `forward()` taking shared features (and sometimes dedicated inputs like `eye_features`). Built in `ml/models/maxsight_cnn.py` when tier and `enable_accessibility_features` allow.
 - **Export Formats**: JIT (`.pt`), CoreML (`.mlpackage`), ONNX, ExecuTorch (`.pte`). Export stubs `global_encoder` (CLIP) and can disable scene graph for traceability; see `ml/training/export.py`.
+
+---
+
+## Complete feature inventory (at a glance)
+
+This is the **master checklist** of what the repo implements today. Deep module tables live under [System architecture: every feature](#system-architecture-every-feature); therapy stack detail is in [Therapy methods](#therapy-methods-training-the-senses) and **docs/therapy_system.md** / **docs/therapy_architecture.md**.
+
+### Perception, safety, and outputs
+
+- **Two-stage inference**: Stage A (ResNet50+FPN, ≤80 ms target) for objectness, class, boxes, distance zones, urgency, uncertainty; optional Stage B skip on latency/uncertainty (`ml/models/maxsight_cnn.py`, `ml/runtime_constants.py`).
+- **Progressive tiers T0–T5**: Baseline → attention → hybrid ViT → cross-task → cross-modal (audio) → temporal (ConvLSTM / TimeSformer on Stage A feature sequences).
+- **30+ task heads**: Detection stack, contrast/edge, motion, depth, fatigue & therapy state, ROI/findability, navigation difficulty, glare, predictive alerts, OCR/text, scene description, scene graph, sound events, personalization, color when enabled.
+- **Thirteen vision condition modes**: Simulated preprocessing per condition (`ml/utils/preprocessing.py`); optional dynamic conv and condition strings on forward.
+- **MVP runtime contract**: `MVP_MODEL_OUTPUT_KEYS` and `filter_mvp_model_outputs()` so shipped apps depend on a stable output surface.
+- **Output scheduling**: `CrossModalScheduler` merges voice/haptic/visual with caps, cooldowns, and critical-urgency priority (`ml/utils/output_scheduler.py`).
+
+### Temporal, video, and data production
+
+- **Sequence batches**: `collate_fn` can emit `images` `[B, T, C, H, W]` and `frame_lengths` for variable-length clips (`ml/data/data_pipeline.py`).
+- **Video / pseudo-panoptic utilities**: Fixed-stride windows, **adaptive temporal windows** from motion scores (`AdaptiveTemporalConfig`, `build_adaptive_windows`, `motion_to_temporal_window`), segment pruning, multi-frame IoU association (`ml/data/video_panoptic.py`).
+- **Chunked video preprocessor**: `VideoPanopticPreprocessor` + `PanopticSegmenter` + `PreprocessingConfig` for offline or pipeline-style segmentation hooks (`ml/data/video_preprocessing.py`).
+- **Panoptic COCO path**: `segments_info` → boxes, distance zones, urgency from semantic fields (`ml/data/dataset.py`).
+- **Augmentation & splits**: Advanced augments, COCO split helpers, optional accessibility-oriented dataset modules (see `ml/data/`).
+
+### Training, balancing, and export
+
+- **Training loop**: Resume, EMA, AMP, checkpointing, validation metrics (`ml/training/train_loop.py`).
+- **Multi-task losses**: `MultiHeadLoss` with configurable weights; **temporal weight schedules** (`ml/training/loss_weighting.py`, `ml/training/losses.py`).
+- **GradNorm** and task balancing (`ml/training/task_balancing.py`).
+- **Transfer T2 → T5**: `TierTransferManager`, configs under `ml/training/configs/t2_to_t5_transfer.yaml`; product command `run.py transfer`.
+- **Self-supervised & continual hooks**: MAE/SimCLR-style paths, distillation, EWC (see training package and phase docs).
+- **Quantization & mobile optimizations**: INT8 path, pruning helpers (`ml/training/quantization.py`, `ml/optimization/`).
+- **Export**: JIT, CoreML, ONNX, ExecuTorch; packaging via `run.py package` / ops scripts (`ml/training/export.py`).
+
+### Retrieval (RAG-style), advisory-only
+
+- **Encoders + two-stage retrieval**: ANN then rerank; async worker so the critical path never waits (`ml/retrieval/`).
+- **Contract**: Retrieval does **not** change hazard/urgency/distance; scene-description conditioning on retrieval chunks is plumbing-first (decoder may not yet consume retrieval memory—treat as enrichment path only).
+
+### Therapy (two complementary layers)
+
+- **Session-based sense training**: `SessionManager`, `TaskGenerator`, `TherapyTaskIntegrator`—logged tasks driven by contrast, motion, depth, gaze, ROI, fatigue rest, hazard-cue recognition (`ml/therapy/`).
+- **Closed-loop behavioral layer**: `TherapyEngine`—situation understanding → decision → intervention → scheduler → inferred user response → evaluation → adaptation → memory (see expanded section below and **docs/therapy_architecture.md**).
+
+### Simulation, validation, and cloud entrypoints
+
+- **Web simulator (Flask)**: Multi-user sessions, rolling **temporal window** for T5 (`temporal_window_frames`, stride, max window in `tools/simulation/config.py`), inference engine, overlays, Patient/Clinician/Dev modes.
+- **Input hardening**: `validate_frames_data`—frame count cap, aggregate base64 payload cap, strict decoding (`tools/simulation/validators.py`); config keys `max_frames_data_count`, `max_frames_payload_mb`.
+- **Therapy perception enrichment in sim**: Rolling `temporal_consistency` history → `flicker_risk`, `temporal_reliability`; low reliability can suppress **low-priority** therapy prompts (`therapy_temporal_reliability_floor`, `therapy_temporal_history`); `therapy_feedback` exposes `temporal_support_signals` for debugging/contracts (`tools/simulation/web_simulator.py`).
+- **SageMaker-oriented pipeline modules**: Hyperparameter/env-aware config, advisory RAG helper, training-style entrypoint surface (`ml/pipeline/sagemaker_config.py`, `rag_advisory.py`, `sagemaker_entrypoint.py`)—for packaging jobs consistently with the rest of `ml/`.
+
+### Product, safety, and governance
+
+- **Canonical CLI**: `python scripts/product/run.py` → `train`, `validate`, `export`, `package`, `smoke`, `transfer`.
+- **Productization docs**: Scope/claims, mandatory safety gates (recall, false-safe, latency, directional/distance accuracy), runtime boundary spec, pilot protocol, production runbook (`docs/productization/`).
+- **Benchmarks**: `python -m ml.training.benchmark` for inference timing experiments.
+
+### What is explicitly out of scope or incomplete (still “features we want”—see roadmap)
+
+- End-to-end **video dataset loader** emitting temporal supervision targets (IoU track proxy, flicker/consistency labels) wired into the main training entrypoint is **in progress**; utilities exist ahead of full wiring.
+- **SageMaker Training** beyond config/entrypoint packaging may need your AWS job definitions and data channels.
+- On-device **CoreML** may not expose every modality (e.g. audio/temporal)—see **docs/status.md**.
 
 ---
 
@@ -146,6 +213,122 @@ TaskGenerator chooses the next task (including FATIGUE_REST) from recent perform
 Together, these components turn model outputs into **structured, logged therapy sessions** that train contrast, motion, depth, gaze, spatial attention, and hazard-cue recognition. Full module and data-flow detail: **[docs/therapy_system.md](docs/therapy_system.md)**.
 
 **Closed-loop therapy engine:** MaxSight also implements a **decision + adaptation** therapy subsystem (not just another neural network): **Situation Understanding** → **Therapy Decision Engine** → **Intervention Generator** → **Output Scheduler** → **User Response** → **Response Evaluation** → **Adaptation Engine** → **Therapy Memory**. Entry point: **`ml.therapy.TherapyEngine`** (`update(perception)` returns therapeutic actions; `on_user_response(perception_after)` closes the loop). Safety: max prompts/min, min gap, suppress when uncertainty &gt; 0.7, no medical language. See **[docs/therapy_architecture.md](docs/therapy_architecture.md)**.
+
+### Therapy methods in depth (how the two layers fit together)
+
+**Layer A — Structured skill training (exercise sessions).** Goal: repeatable drills that use the **same tensors** the user relies on outdoors. `TaskGenerator` picks the next exercise from **uncertainty**, **fatigue_score**, and recent performance; it emits difficulty knobs (duration, highlight strength, target speed). `TherapyTaskIntegrator` binds drills to **live scene structure**: detections, scene text, hazard type/urgency so drills like **WARNING_RECOGNITION** match real alert patterns. `SessionManager` records attempts, reaction time, and outcomes so difficulty and reporting stay evidence-based. This layer is ideal for **clinician-led or self-paced practice** with clear start/stop and exportable session JSON.
+
+**Layer B — Closed-loop support (in-the-moment coaching).** Goal: **low-frequency**, **non-intrusive** prompts when the situation model says they help. `SituationUnderstanding` maps perception (objects, motion, crowd/noise proxies, navigation complexity, uncertainty) into **stress / cognitive load / task difficulty** estimates—deterministic rules, no extra NN required. `TherapyDecisionEngine` asks: intervene now? which family? how strong? Rules enforce **never competing with hazard alerts** and respect rate limits. `InterventionGenerator` turns a decision into a `TherapeuticAction`: channel (audio/haptic/visual placeholder), text, intensity, duration, priority—**supportive wording only** (no diagnosis or treatment claims). The user’s “response” is **inferred** from the next perception snapshot (e.g. stress proxy down, movement stabilized) via `ResponseEvaluation`; `AdaptationEngine` and **therapy memory** bias future decisions toward interventions that worked. **`TherapyEngine`** is the façade: call `update(perception)` each tick; after a short delay, `on_user_response(perception_after)` closes the loop.
+
+**Delivery and safety (shared).** All spoken/haptic therapy competes with navigation and hazard output through **`CrossModalScheduler`**. Constants in **`ml/runtime_constants.py`** cap therapy prompts per minute, enforce minimum gaps, and **suppress therapy when perception uncertainty is high** so we do not coach confidently on garbage inputs. The **web simulator** adds **temporal reliability**: it tracks `temporal_consistency` over a short history, derives **flicker_risk** and **temporal_reliability**, and can hold back **low-priority** therapy when the stream is unstable—mirroring how a wearable should behave when the model’s temporal branch is inconsistent frame-to-frame.
+
+**When to use which layer in product.** Use **Layer A** for scheduled training, onboarding, and measurable skill progress. Use **Layer B** for ambient reassurance and attention regulation when the situation engine fires sparingly. Both remain **assistive**; neither replaces orientation & mobility training or clinical care.
+
+---
+
+## RAG mediation model (user and therapy boundary)
+
+Retrieval-augmented generation here means **retrieval + advisory policy**, not a second safety brain. RAG is the **mediation layer between stable perception signals and therapy wording/intensity**: it adds *external and historical context* so therapy and scene language feel grounded, while **hazards stay on the Tier-1 path** that never waits on retrieval.
+
+### Data flow (strict roles)
+
+```mermaid
+flowchart LR
+  U[User / sensors]
+  P[Perception stack / MaxSightCNN]
+  T1[Tier-1 hazards and distances]
+  RAG[RAG: encoders, ANN, rerank, async worker]
+  TH[Therapy: SituationUnderstanding, TherapyEngine, sessions]
+  OUT[Voice / haptic / UI]
+  U --> P
+  P --> T1
+  T1 --> OUT
+  P --> RAG
+  RAG -->|advisory text and tags only| TH
+  P -->|tensors + uncertainty| TH
+  TH --> OUT
+```
+
+- **Tier-1 path:** `P → T1 → OUT` is **not** gated on RAG completion. Retrieval may lag or fail; alerts still fire.
+- **Therapy path:** `P` supplies fatigue, motion, uncertainty, scene structure. **RAG** supplies optional **similar-scene notes, playbook snippets, or policy hints** that only affect *how* supportive copy is framed or *which* low-priority drill is suggested—bounded by `CrossModalScheduler` and `ml/runtime_constants.py` therapy caps.
+- **Stability coupling:** Low **temporal reliability** (simulator and video pipeline) downgrades advisory confidence; **`ml/pipeline/rag_advisory.py`** exposes `generate_therapy_advisory(...)` so jobs and services map **clip manifest + temporal_reliability + optional retriever** to an **advisory guidance label** (`advisory_only_unstable_perception`, `therapy_prompt_high_confidence`, etc.) without touching hazard logits.
+
+### Hard invariants (non-negotiable)
+
+1. RAG **must not** change objectness, classification, boxes, urgency, or distance used for safety.
+2. RAG **must not** override `TherapyEngine` rules that suppress therapy under high uncertainty or rate limits.
+3. Therapy **must not** treat retrieval hits as ground truth for obstacles; they are **hints** for language and coaching only.
+4. Production retrieval stays **async** (`ml/retrieval/retrieval/async_retrieval.py`); the user-facing thread never blocks on index I/O.
+
+### Code map
+
+| Piece | Location | Role |
+|-------|-----------|------|
+| Advisory therapy helper | `ml/pipeline/rag_advisory.py` | `generate_therapy_advisory`, `AdvisoryRetriever` protocol |
+| Full retrieval stack | `ml/retrieval/` | Encoders, stage1 ANN, stage2 rerank, async worker |
+| Simulator hook (optional index) | `tools/simulation/retrieval_integration.py` | FAISS-backed similar-scene path for dev |
+| Scene description (future RAG memory) | `ml/models/heads/scene_description_head.py` | Decoder conditioning on retrieval is planned; tensor path remains authoritative today |
+
+For install and data before you run any of this, use **[docs/DOWNLOAD_AND_START.md](docs/DOWNLOAD_AND_START.md)**.
+
+---
+
+## Production runtime contracts (what runs, what can’t block, and why therapy/RAG stay safe)
+
+MaxSight is designed around a strict **authority model**:
+
+1. **Safety-critical path (never blocked)**: hazard-aware outputs (hazard/urgency/direction/distance) must always be produced within the critical latency budget, even when enhancement systems degrade.
+2. **Secondary path (opportunistic)**: OCR, scene summaries, and other context can be reduced or skipped under load.
+3. **Advisory-only enhancement (RAG-style retrieval)**: retrieval never drives safety decisions and never replaces hazard logic.
+4. **Therapy as a behavioral controller**: therapy is layered on top of perception and context, with explicit guardrails so it remains supportive and non-intrusive.
+
+### Feature-by-feature runtime authority (production contract)
+
+| Feature / output | Primary module(s) | Purpose | Authority | Can retrieval (RAG) change it? | Therapy usage |
+|---|---|---|---|---|---|
+| Hazard detection + urgency | `ml/models/maxsight_cnn.py` (Stage A core heads) | Safety-critical awareness | Critical | No | Therapy only as context (never as safety logic) |
+| Distance zones / precise distances | Stage A heads | Near / medium / far + distance cues | Critical | No | Therapy context (e.g., “near focus” drills) |
+| Directional cues | Postprocess + scheduler inputs | Left/center/right guidance | Critical | No | Context only |
+| Objectness + class logits + boxes | Stage A heads | “What is it?” + where | Critical for hazards, Secondary otherwise | No | Optional for therapy drills (findability/attention) |
+| OCR/text regions | OCR head + postprocess | Read signs/labels on demand | Secondary | Indirect only | Therapy can use OCR content for attention drills |
+| Scene description | `SceneDescriptionHead` | Natural language scene summary | Secondary | Advisory context only | Context only |
+| Scene graph (relations) | `SceneGraphEncoder` | Spatial/semantic relation structure | Secondary | Advisory only | Context only |
+| Motion (flow + magnitude) | Motion head + temporal encoder (T5) | Temporal awareness & stability | Secondary | Advisory only | Direct therapy signal for motion/focus tasks |
+| Therapy state (fatigue + depth/contrast zones) | `TherapyStateHead` | User sensory/cognitive state proxies | Secondary (controller input) | No | Direct therapy input (closed-loop controller) |
+| Contrast map + edge map | `ContrastMapHead` / therapy branches | Contrast sensitivity training | Secondary | No | Direct therapy input (contrast drills) |
+| Gaze/fixation proxies | `FatigueHead` / therapy state head | Fixation stability and fatigue | Secondary | No | Direct therapy input |
+| ROI utility + navigation difficulty | `ROIPriorityHead` / heads | Prioritize regions and estimate complexity | Secondary | Advisory only | Direct context for attention/finding drills |
+| Predictive alerts | Predictive head | Advisory hazard anticipation | Secondary | No | Context only |
+| Retrieval outputs (ANN → rerank → async results) | `ml/retrieval/*` | Similar-scene knowledge augmentation | Advisory-only | Self-contained | Not allowed to change therapy safety decisions; used for context enrichment only |
+
+### RAG-style retrieval (async, advisory, non-blocking)
+
+MaxSight implements a **retrieval subsystem** that follows a RAG-style architecture, optimized for wearable constraints:
+
+- **Encoding**: embeddings from `ml/retrieval/encoders/` (global/patch/region + optional OCR/depth/audio encoders).
+- **Stage 1 (ANN)**: fast approximate search (`ml/retrieval/retrieval/stage1_ann.py`) to get candidates.
+- **Stage 2 (rerank)**: candidate reranking (`ml/retrieval/retrieval/stage2_rerank.py`).
+- **Async execution**: non-blocking worker (`ml/retrieval/retrieval/async_retrieval.py`) so retrieval never delays safety-critical outputs.
+- **Knowledge augmentation**: optional GNN-based augmentation (`ml/retrieval/retrieval/knowledge_augment.py`).
+
+**Non-blocking guarantee**: retrieval runs on a secondary path and is skipped under critical budget pressure.  
+**Advisory-only guarantee**: retrieval is forbidden from changing hazard detection/urgency/distance correctness.  
+**Current wiring note**: the model requests `retrieval_results` asynchronously during scene-description generation, but the current `SceneDescriptionHead` builds its decoder inputs from `global_embedding` + `region_embeddings` (and OCR embeddings if enabled); it does not currently consume retrieval results as conditioned decoder memory. Treat retrieval outputs as context enrichment plumbing until direct decoder conditioning is wired.
+
+### Panoptic + video meaning contract (data → model → therapy)
+
+Quantization, temporal training, and therapy effectiveness all depend on training/inference seeing the **same semantic meaning** as the real world:
+
+- **Panoptic meaning (objects + supervision)**: `ml/data/dataset.py` parses COCO-style panoptic annotations via `segments_info`, converts each segment bbox into normalized boxes, and derives **distance zones** and **urgency** labels from semantic/category fields.
+- **Video/sequence meaning (temporal stability)**: `ml/data/data_pipeline.py` supports sequence-aware batching by padding variable-length `frames` into `[B, T, C, H, W]` (with `frame_lengths`). This is the tensor contract expected by T5 temporal reasoning.
+
+For wearable deployment, calibration batches for INT8 must be drawn from the same panoptic/video distributions (and the same `condition_mode`) so activation ranges reflect real meaning rather than synthetic noise.
+
+### Production video utilities and SageMaker-facing modules
+
+- **`ml/data/video_panoptic.py`**: Builds **fixed-stride** or **motion-adaptive** clip windows, prunes low-quality pseudo-panoptic segments, and associates segment tracks across frames with **multi-frame IoU** (proxy tracks for temporal consistency work).
+- **`ml/data/video_preprocessing.py`**: `VideoPanopticPreprocessor` runs segmentation (pluggable) over chunks of frames for **pseudo-panoptic** generation or QA—not a replacement for ground-truth panoptic labels, but a production-shaped hook for scaling video pipelines.
+- **`ml/pipeline/`**: **`sagemaker_config.py`** reads SageMaker-style environment/hyperparameters into a single config object; **`rag_advisory.py`** keeps retrieval as **advisory** context for jobs that bundle documentation or scene hints; **`sagemaker_entrypoint.py`** provides a **consistent import path** for container training or preprocessing steps. Wire these to your actual SageMaker Training/Processing job definitions and data channels.
 
 ---
 
@@ -260,7 +443,7 @@ The shipped T5 MVP must depend only on **MVP output keys** in `ml.runtime_consta
 - Implemented condition-specific adaptations for 13 vision conditions
 
 **Results**:
-- **163 tests passing** across all head implementations
+- **250+ tests** in the suite covering heads, pipeline, therapy, and safety paths (run `pytest tests/` for the exact count)
 - All heads validated with forward pass tests
 - Tier-based execution model ensures safety-first approach
 
@@ -430,6 +613,18 @@ The shipped T5 MVP must depend only on **MVP output keys** in `ml.runtime_consta
 
 ## ️ System Architecture - Deep Dive
 
+### End-to-end system map (depth)
+
+**Training time.** Raw images (and optional audio) plus COCO or panoptic JSON flow into **`MaxSightDataset`** (`ml/data/dataset.py`), which normalizes boxes, attaches distance/urgency semantics from segments, and can expose single frames or sequences. **`create_data_loaders`** / **`collate_fn`** (`ml/data/data_pipeline.py`) batch tensors; video paths produce `[B, T, C, H, W]` and `frame_lengths`. Augmentation and condition simulation run in **`advanced_augmentation`** and **`preprocessing`**. **`MaxSightCNN`** (`ml/models/maxsight_cnn.py`) runs the forward described below; **`MultiHeadLoss`** + optional **GradNorm** (`ml/training/losses.py`, `task_balancing.py`) combine task losses, with optional **temporal weight schedules** (`loss_weighting.py`). Checkpoints, EMA, and validation metrics are handled by **`train_loop`**. **`scripts/product/run.py train`** (→ `scripts/ops/train_maxsight.py`) is the usual operator entry.
+
+**Inference time (device or simulator).** A frame or short buffer is preprocessed to **224×224** RGB with the same condition policy as training. **Stage A** always runs: ResNet50+FPN → Tier 1 heads → a dict containing at least detections, urgency, distance, uncertainty. If latency and uncertainty allow, **Stage B** runs hybrid ViT (+ **temporal** encoder on feature sequences for T5) and Tier 2/3 heads. **Retrieval** may start asynchronously; results must not alter Tier 1/2 decisions. **Outputs** are filtered for MVP apps (`filter_mvp_model_outputs`), then **scheduled** (`output_scheduler`) into voice/haptic/visual queues with rate limits.
+
+**Therapy time (parallel paths).** **Session-based** flows pull the same forwarded tensors into **`TaskGenerator` / `TherapyTaskIntegrator`** for drills. **Closed-loop** flows call **`TherapyEngine.update`**, which uses **`situation_understanding`** → **`therapy_decision_engine`** → **`intervention_generator`**; actions merge only through the scheduler and **therapy safety constants**. The **web simulator** adds **temporal_reliability** gating so low-stability streams do not spam low-priority therapy prompts.
+
+**Ship time.** **`ml/training/export`** produces JIT/CoreML/ONNX/ExecuTorch artifacts; **`run.py package`** bundles configs for the glasses app. INT8 calibration should match real **panoptic/video/condition** distributions so quantized activations preserve semantic range.
+
+**Authority summary (non-negotiable).** **Tier 1** (hazard, distance, direction cues) owns safety truth. **Tier 2/3** and **RAG** enrich; **therapy** supports—they never override hazard logic. Any new feature must declare which path it belongs to (see **Production runtime contracts** earlier in this README).
+
 ### Two-Stage Inference Pipeline
 
 The main architectural decision is the **two-stage inference pipeline** that separates safety-critical predictions from enhancement features.
@@ -597,6 +792,11 @@ Below is a feature-by-feature reference: module location, purpose, and main inpu
 | **Data loading** | `ml/data/dataset.py` | COCO/panoptic annotations, box normalization, distance/urgency from annotations | In: annotation JSON, image dir; Out: batch dict (images, labels, boxes, distance, urgency) |
 | **Data augmentation** | `ml/data/advanced_augmentation.py` | Geometric/photometric augments, mixup, mosaic, condition-specific simulation | In: image + bbox; Out: augmented image + transformed bbox |
 | **Data pipeline** | `ml/data/data_pipeline.py` | Collate, sequence-aware batching (video), create_data_loaders | In: train/val paths; Out: DataLoader(s) |
+| **Video panoptic / adaptive T** | `ml/data/video_panoptic.py` | Windows, motion→T, IoU tracks, pseudo-panoptic QA | Config + frames/segments → windows, associations |
+| **Video preprocessor** | `ml/data/video_preprocessing.py` | Chunked pseudo-panoptic / segmentation pipeline | Video path → segmenter outputs |
+| **Temporal loss schedules** | `ml/training/loss_weighting.py` | Time-varying multi-task weights | Epoch/step → weight dict consumed by `MultiHeadLoss` |
+| **SageMaker config / entry** | `ml/pipeline/sagemaker_config.py`, `sagemaker_entrypoint.py` | Env/hparams → config; job entry surface | Hyperparameters → Python config; training script imports |
+| **Simulator frame validation** | `tools/simulation/validators.py` | Caps on `frames_data` count and payload size | Request body → validated frames or error |
 
 #### Backbone and FPN
 
@@ -673,6 +873,12 @@ Below is a feature-by-feature reference: module location, purpose, and main inpu
 | **TherapyTaskIntegrator** | `ml/therapy/therapy_integration.py` | Build task configs from scene/detections: attention, contrast, edge, spatial, warning recognition | create_attention_task(), create_contrast_task(), create_edge_task(), create_spatial_task(), create_warning_recognition_task(), generate_task_from_scene() |
 | **Task types (generator)** | Same (TaskType) | CONTRAST_MICRO, MOTION_TRACKING, DEPTH_SHIFT, GAZE_STABILIZATION, ROI_FINDABILITY, FATIGUE_REST | Used by SessionManager and runners |
 | **Task types (integrator)** | Same (TherapyTaskType) | ATTENTION_TRAINING, CONTRAST_RECOGNITION, EDGE_DETECTION, SPATIAL_AWARENESS, WARNING_RECOGNITION | Scene- and hazard-aware tasks |
+| **TherapyEngine (closed loop)** | `ml/therapy/` (`therapy_engine.py` and linked modules) | `update(perception)` → actions; `on_user_response(...)` closes loop | Perception dict → list of `TherapeuticAction` |
+| **Situation understanding** | `ml/therapy/situation_understanding.py` | Stress/cognitive load/navigation complexity from perception | Deterministic features → therapy decision input |
+| **Therapy decision** | `ml/therapy/therapy_decision_engine.py` | Should intervene, type, strength | Rules + policy hooks → `TherapyDecision` |
+| **Intervention generator** | `ml/therapy/intervention_generator.py` | Map decision to audio/haptic/visual action specs | Decision → `TherapeuticAction` |
+| **Response evaluation** | `ml/therapy/response_evaluation.py` | Effectiveness vs before/after perception | Before/after context → effectiveness score |
+| **Adaptation + memory** | `ml/therapy/adaptation_engine.py`, memory helpers | Prefer interventions that worked; persist preferences | Feeds next `TherapyDecision` |
 
 Therapy components consume model outputs (contrast_map, motion_flow, depth_map, fatigue_score, roi_utility, etc.) so exercises train the same senses used for real-world assistance. See **[Therapy methods: training the senses](#therapy-methods-training-the-senses)** and **docs/therapy_system.md**.
 
@@ -1181,7 +1387,7 @@ Phased unfreeze and loss-unlock schedules are defined in transfer configs and tr
 
 ### Test Results
 
-**Test Suite Status**:  **163 tests passing** | 8 skipped (expected, environment-specific) | 0 failing
+**Test Suite Status**: **250+ tests collected** | some skipped (environment/export-specific) | run `pytest tests/ -v` for current counts
 
 **Test Coverage**:
 - Phase 0 (Backbone): All tests passing
@@ -1312,80 +1518,53 @@ Phased unfreeze and loss-unlock schedules are defined in transfer configs and tr
 
 ---
 
-## Current Work & Next Steps
+## Roadmap, backlog & next steps
 
-### Immediate next steps
+This section merges **what to do next operationally** with the **engineering backlog** (features we want to add or finish). Items marked **done in repo** are implemented in code; **in progress** means utilities or partial wiring exist; **planned** means agreed direction but not landed.
 
-1. **Data**: Run `python scripts/ops/gather_training_data.py` if you haven’t (creates `datasets/cleaned_splits/` and uses `datasets/coco_raw/`). Use `--skip-download` / `--skip-extract` if COCO is already present.
-2. **Smoke check**: `python scripts/product/run.py smoke --epochs 2` (or `python scripts/ops/smoke_train.py --epochs 2 --force-cpu`)
-3. **Full training**: Use the training command from [Full Training](#full-training-annotation-based-cloud-gpu-recommended) with your `--data-dir`, `--train-annotation`, `--val-annotation`, `--image-dir` (cloud GPU recommended for full runs).
-4. **Export**: After a checkpoint exists, `python -m ml.training.export --checkpoint <path> --format <jit|coreml|onnx|executorch> --output <path>`.
-5. **Simulator with trained model**: Set `model_checkpoint_path` in `tools/simulation/config.py` or use `ComprehensiveSimulator(model_path=...)`. See **docs/architecture.md** (export section) and **README** for deployment.
+### Immediate next steps (today / this week)
 
-### Short-term goals (next 2–4 weeks)
+1. **Data**: Run `python scripts/ops/gather_training_data.py` if you haven’t (creates `datasets/cleaned_splits/` and uses `datasets/coco_raw/`). Use `--skip-download` / `--skip-extract` if COCO is already present. For **bronze → silver → gold** splits and a single training index, see **[docs/medallion_data.md](docs/medallion_data.md)** (`medallion_build.py`, `train_from_gold_index.py`, `train_medallion_models.py`).
+2. **Smoke check**: `python scripts/product/run.py smoke --epochs 2` (or `python scripts/ops/smoke_train.py --epochs 2 --force-cpu`).
+3. **Full training**: Use the command from [Full Training](#full-training-annotation-based-cloud-gpu-recommended) with `--data-dir`, `--train-annotation`, `--val-annotation`, `--image-dir` (cloud GPU recommended).
+4. **Export**: `python -m ml.training.export --checkpoint <path> --format <jit|coreml|onnx|executorch> --output <path>`.
+5. **Simulator**: Set `MAXSIGHT_CHECKPOINT_PATH` or `model_checkpoint_path` in `tools/simulation/config.py`. See **tools/simulation/README.md**.
 
-1. **COCO and splits**
-   - Ensure COCO is downloaded and extracted (or use existing data).
-   - Splits are created by `scripts/gather_training_data.py` (train/val/test JSONs in `datasets/cleaned_splits/`).
+### Engineering backlog (features to add or complete)
 
-2. **Training Pipeline Validation**
-   - Test data loaders
-   - Test training loop
-   - Verify checkpointing/resume
-   - Validate metrics computation
+| Theme | Item | Status | Notes |
+|--------|------|--------|--------|
+| **Video contract** | Document and freeze **fixed-stride** (e.g. T=8) video-panoptic **manifest schema** (paths, metadata, quality flags) | **Done (v1)** | **docs/video_panoptic_manifest.md**, **docs/schemas/video_panoptic_manifest_v1.schema.json**, `validate_manifest_v1()`. |
+| **Offline tooling** | Scripts for **clip sampling**, **pseudo-panoptic** generation/conversion from video | **Done** | **`scripts/ops/sample_video_clips.py`**, **`scripts/ops/build_pseudo_panoptic_manifest.py`** (`--use-stub-segmenter`). |
+| **Dataset** | **Sequence-native** `Dataset` emitting `frames`, `frame_lengths`, and **temporal supervision targets** | **Done** | **`VideoClipManifestDataset`** + **`collate_fn`** stacks **`temporal_consistency`** / **`flicker`** (targets for **`ScalarMSELoss`**). |
+| **Labels** | **IoU track proxy** targets, **consistency / flicker** supervision derived from multi-frame association | **Done** | **`derive_temporal_clip_targets`**, dataset targets **`temporal_consistency`** / **`flicker`**; optional **`TemporalWeightSchedule`** for other heads. |
+| **Training** | Wire **temporal losses** into **train_maxsight** + GradNorm | **Done** | **`ScalarMSELoss`**, **`--temporal-supervision`**, **`flicker`** on model outputs; GradNorm **`OUTPUT_KEY_MAP`** updated. |
+| **Testing** | Contract tests for **T=8 (or adaptive T) data**, label integrity, **therapy + safety gates** under video input | Planned | Extend `tests/test_video_*`, `tests/test_frames_data_validation.py`, runtime safety tests. |
+| **Retrieval** | Optional **decoder conditioning** on retrieval memory in `SceneDescriptionHead` (still advisory) | Planned | Must preserve non-blocking and non-safety authority. |
+| **SageMaker** | Full **Training Job** definitions (channels, metrics, debugger), not only `ml/pipeline` config/entry | Planned | Pair `sagemaker_entrypoint.py` with your AWS templates. |
+| **Export** | **CoreML + advisory bundle** (model + manifest of what RAG may attach) for app store review clarity | Planned | Keep tensor path independent of retrieval. |
+| **Tracking** | **Appearance-assisted** association beyond IoU for crowded scenes | Planned | Research; may feed therapy temporal signals. |
+| **Product** | **Pilot / beta** per **docs/productization/05_pilot_validation_protocol.md** | Planned | Gates in **02_safety_first_release_gates.md** stay mandatory. |
 
-3. **Initial Training Runs**
-   - T0 baseline training (proof of concept)
-   - T1 attention training
-   - Performance benchmarking
+### Short-term goals (2–4 weeks)
 
-4. **Model Export Testing**
-   - CoreML export validation
-   - ONNX export validation
-   - ExecuTorch export validation
-   - Mobile inference testing
+- **COCO and splits**: Confirmed download/extract; train/val/test JSONs in `datasets/cleaned_splits/`.
+- **Loader + loop validation**: DataLoader stress tests, resume/metrics checks (`pytest tests/`).
+- **Training runs**: T0/T1 smoke → T2 runs → benchmark (`ml/training/benchmark.py`).
+- **Export matrix**: CoreML / ONNX / ExecuTorch on representative checkpoints; document failures in **docs/status.md**.
 
-### Medium-Term Goals (Next 1-3 Months)
+### Medium-term goals (1–3 months)
 
-1. **Full Training Pipeline**
-   - T2 hybrid ViT training
-   - T3 cross-modal training
-   - T4 cross-modal + audio training
-   - T5 temporal training
+- **Tier ladder**: T2 hybrid ViT → T3 → T4 (audio) → T5 temporal with real sequence data.
+- **Transfer**: T2 → T5 init + fine-tune; tune freeze/unfreeze from configs.
+- **Optimization**: Stage A latency, model size, battery-focused profiling on target silicon.
+- **Real-world validation**: Internal dogfood + pilot cohort; accessibility review.
 
-2. **Transfer Learning**
-   - T2 → T5 transfer implementation
-   - Validate transfer effectiveness
-   - Optimize transfer schedule
+### Long-term goals (3–6 months)
 
-3. **Performance Optimization**
-   - Latency optimization
-   - Model size optimization
-   - Battery usage optimization
-
-4. **Real-World Testing**
-   - User testing
-   - Accessibility validation
-   - Performance benchmarking in real environments
-
-### Long-Term Goals (3-6 Months)
-
-1. **Production Deployment**
-   - iOS app integration
-   - CoreML deployment
-   - Performance monitoring
-   - User feedback integration
-
-2. **Accessibility Certification**
-   - WCAG compliance
-   - Accessibility testing
-   - Certification process
-
-3. **Continuous Improvement**
-   - Model updates
-   - Feature additions
-   - Performance improvements
-   - User experience enhancements
+- **Production deployment**: iOS / glasses app integration, CoreML on-device, telemetry (privacy-preserving).
+- **Certification & governance**: WCAG-oriented UX, safety gate sign-off process, incident taxonomy from pilot doc.
+- **Continuous improvement**: Model refresh cadence, user preference learning (within privacy bounds), therapy outcome analytics.
 
 ---
 
@@ -1720,7 +1899,7 @@ python -m ml.training.benchmark
  **Function flow verified**  
  **MPS-stable mode implemented**  
  **Device selection policy implemented**  
- **163 tests passing** | 8 skipped | 0 failing
+ **250+ tests collected** | skips depend on environment | run `pytest tests/` locally
 
 ---
 
@@ -1819,14 +1998,21 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 ### Documentation (docs/)
 
 - **[SYSTEMS.md](docs/SYSTEMS.md)**: All systems in one detailed reference (tiers, backbone, heads, fusion, temporal, therapy, retrieval, preprocessing, training, export, scene graph)
+- **`ml/pipeline/`**: SageMaker-style config, advisory RAG helper, entrypoint imports for cloud jobs (see [Complete feature inventory](#complete-feature-inventory-at-a-glance))
 - **[architecture.md](docs/architecture.md)**: Model and system architecture overview
 - **[therapy_system.md](docs/therapy_system.md)**: Therapy sessions, task generator, integration
 - **[therapy_architecture.md](docs/therapy_architecture.md)**: Closed-loop therapy engine (decision + adaptation, safety, memory)
 - **[training_architecture.md](docs/training_architecture.md)**: Training loop, losses, balancing, config
 - **[training-data-loading.md](docs/training-data-loading.md)**: Data pipeline and dataset
+- **[algorithmic_efficiency.md](docs/algorithmic_efficiency.md)**: Signal-per-compute tactics mapped to this repo (freeze backbone, tiers, video stride, KD/SSL hooks)
+- **[medallion_data.md](docs/medallion_data.md)**: Bronze/silver/gold layout, gold `training_index.json`, multi-config training
+- **[ml_lifecycle_s3.md](docs/ml_lifecycle_s3.md)**: S3 client validation, structured event logs, retries, partial sync results (large-scale buckets)
+- **[git_workflow.md](docs/git_workflow.md)**: Feature branches, merges to `main`, staging discipline
 - **[transferlearning.md](docs/transferlearning.md)**: Tier transfer and checkpoint loading
 - **[status.md](docs/status.md)**: Project status, health, device policy, limitations
 - **[downloads.md](docs/downloads.md)**: Dataset and asset downloads
+- **[video_and_navigation_datasets.md](docs/video_and_navigation_datasets.md)**: COCO plus Kinetics-700, YouTube-8M, HowTo100M, WebVid-10M, BDD100K, Epic-Kitchens-100, MOSE, YouTube-VOS (roles and integration notes)
+- **[DOWNLOAD_AND_START.md](docs/DOWNLOAD_AND_START.md)**: Clone → install → download data → simulator → train (canonical first-run path)
 - **[caching.md](docs/caching.md)**: Caching (Redis, usage)
 - **[productization/](docs/productization/README.md)**: Productization docs (scope, safety gates, declutter, runtime boundaries, pilot protocol). **[PRODUCTION_RUNBOOK.md](docs/productization/PRODUCTION_RUNBOOK.md)** for production and real-world runbook; **`scripts/product/run.py`** for canonical train/validate/export/package/smoke.
 
@@ -1887,7 +2073,7 @@ ml/
 app/               overlays, personal_mode (runtime/UI helpers)
 scripts/
   product/         run.py (train, validate, export, package, smoke, transfer)
-  ops/             train_maxsight.py, gather_training_data.py, validate_data_pipeline.py, smoke_train.py, ...
+  ops/             train_maxsight.py, gather_training_data.py, medallion_build.py, train_from_gold_index.py, train_medallion_models.py, validate_data_pipeline.py, smoke_train.py, ...
   pilot_eval/      test_therapy_effectiveness.py
   research_archive/  legacy/experimental scripts (not production path)
 tests/             test_*.py (phase, model, runtime_safety_gates, data_panoptic_and_video, ...)

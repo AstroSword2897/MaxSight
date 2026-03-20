@@ -89,7 +89,7 @@ class DistanceZoneLoss(nn.Module):
         ce_loss = F.cross_entropy(
             pred_flat[valid],
             tgt_flat[valid],
-            weight=self.class_weights,
+            weight=self.class_weights if isinstance(self.class_weights, torch.Tensor) else None,
             reduction='mean'
         )
         if torch.isnan(ce_loss).any() or torch.isinf(ce_loss).any():
@@ -119,7 +119,7 @@ class UrgencyLoss(nn.Module):
         ce_loss = F.cross_entropy(
             pred_valid,
             tgt_valid,
-            weight=self.class_weights,
+            weight=self.class_weights if isinstance(self.class_weights, torch.Tensor) else None,
             reduction='none'
         )
         p = F.softmax(pred_valid, dim=-1)
@@ -223,6 +223,19 @@ class OCRLoss(nn.Module):
         }
 
 
+class ScalarMSELoss(nn.Module):
+    """MSE on scalar head outputs [B, 1] vs targets [B, 1] (temporal consistency, flicker proxies)."""
+
+    def __init__(self):
+        super().__init__()
+        self.mse = nn.MSELoss()
+
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        p = predictions.reshape(predictions.shape[0], -1).mean(dim=-1)
+        t = targets.reshape(targets.shape[0], -1).mean(dim=-1).to(dtype=p.dtype, device=p.device)
+        return self.mse(p, t)
+
+
 class FatigueLoss(nn.Module):
     """Fatigue head loss (Tier 5+). Ground Truth: Binary fatigue labels (0=not fatigued, 1=fatigued) Loss: Binary cross-entropy."""
     
@@ -259,11 +272,39 @@ class MultiHeadLoss(nn.Module):
                 'motion': 0.3,
                 'scene_description': 0.2,
                 'ocr': 0.2,
-                'fatigue': 0.1
+                'fatigue': 0.1,
+                'temporal_consistency': 0.2,
+                'flicker': 0.15,
             }
         self.register_buffer('loss_weights', torch.tensor([
             loss_weights.get(name, 1.0) for name in loss_functions.keys()
         ]))
+        self._head_names = list(loss_functions.keys())
+
+    def get_loss_weights(self) -> Dict[str, float]:
+        """Return the current per-head weights for logging/experiments."""
+        weights = self.loss_weights
+        if not isinstance(weights, torch.Tensor):
+            return {name: 1.0 for name in self._head_names}
+        return {
+            name: float(weights[i].item())
+            for i, name in enumerate(self._head_names)
+        }
+
+    def set_loss_weights(self, updates: Dict[str, float]) -> None:
+        """Update per-head weights safely at runtime."""
+        if not isinstance(updates, dict):
+            raise ValueError("updates must be a dictionary")
+        weights = self.loss_weights
+        if not isinstance(weights, torch.Tensor):
+            raise ValueError("loss_weights buffer is not a tensor")
+        with torch.no_grad():
+            for i, name in enumerate(self._head_names):
+                if name in updates:
+                    v = float(updates[name])
+                    if v < 0.0:
+                        raise ValueError(f"loss weight for {name} must be >= 0")
+                    weights[i] = v
     
     def forward(
         self,
@@ -277,7 +318,9 @@ class MultiHeadLoss(nn.Module):
         for i, (head_name, loss_fn) in enumerate(self.loss_functions.items()):
             if head_name in predictions and head_name in targets:
                 loss = loss_fn(predictions[head_name], targets[head_name])
-                weighted_loss = self.loss_weights[i] * loss
+                weights = self.loss_weights
+                w = weights[i] if isinstance(weights, torch.Tensor) else 1.0
+                weighted_loss = w * loss
                 losses[head_name] = loss
                 total_loss += weighted_loss
         

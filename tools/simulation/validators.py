@@ -167,6 +167,69 @@ def validate_image_data(image_data: str) -> Image.Image:
         raise InvalidImageError(f"Failed to decode image data: {str(e)}") from e
 
 
+def validate_frames_data(
+    frames_data: Any,
+    max_frames: Optional[int] = None,
+    max_payload_mb: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Validate JSON `frames_data` and decode frames safely.
+
+    Returns dict with:
+    - frames: List[PIL.Image]
+    - total_decoded_bytes: int
+    - count: int
+    """
+    if max_frames is None:
+        max_frames = int(getattr(config, "max_frames_data_count", 16))
+    if max_payload_mb is None:
+        max_payload_mb = float(getattr(config, "max_frames_payload_mb", 40))
+
+    if not isinstance(frames_data, list) or len(frames_data) < 1:
+        raise ValidationError("frames_data must be a non-empty list")
+    if len(frames_data) > max_frames:
+        raise ValidationError(f"frames_data exceeds maximum length {max_frames}")
+
+    total_decoded_bytes = 0
+    max_payload_bytes = int(max_payload_mb * 1024 * 1024)
+    frames = []
+
+    for i, frame_data in enumerate(frames_data):
+        if not isinstance(frame_data, str):
+            raise ValidationError(f"frames_data[{i}] must be a base64 string")
+
+        # Light validation first so we can bound payload before PIL decode.
+        raw = frame_data.split(",")[-1]
+        try:
+            frame_bytes = base64.b64decode(raw, validate=True)
+        except Exception as e:
+            raise InvalidImageError(f"Failed to decode frames_data[{i}]: {str(e)}") from e
+
+        total_decoded_bytes += len(frame_bytes)
+        if total_decoded_bytes > max_payload_bytes:
+            raise ImageTooLargeError(
+                f"frames_data payload too large: {total_decoded_bytes / (1024 * 1024):.2f}MB "
+                f"exceeds maximum {max_payload_mb:.2f}MB"
+            )
+
+        frame = validate_image_file(frame_bytes)
+        if frame.mode != "RGB":
+            rgb_image = Image.new("RGB", frame.size, (255, 255, 255))
+            if frame.mode == "RGBA":
+                rgb_image.paste(frame, mask=frame.split()[3])
+            else:
+                rgb_image.paste(frame)
+            frame = rgb_image
+        else:
+            frame = frame.convert("RGB")
+        frames.append(frame)
+
+    return {
+        "frames": frames,
+        "total_decoded_bytes": total_decoded_bytes,
+        "count": len(frames),
+    }
+
+
 def validate_init_request(data: Dict[str, Any]) -> Dict[str, Any]:
     """Validate /api/init request data. Args: data: Request JSON data Returns: Validated and normalized data Raises: ValidationError: If validation fails."""
     if not isinstance(data, dict):
@@ -194,6 +257,25 @@ def validate_init_request(data: Dict[str, Any]) -> Dict[str, Any]:
     
     # Start session (optional boolean)
     validated['start_session'] = bool(data.get('start_session', False))
+
+    # Therapy output preferences (per-user).
+    # WHY: Allows users to disable voice or haptics while still running the therapy controller.
+    validated['therapy_voice_enabled'] = bool(data.get('therapy_voice_enabled', True))
+    validated['therapy_haptic_enabled'] = bool(data.get('therapy_haptic_enabled', True))
+
+    preferred = data.get('therapy_preferred_channel', 'audio')
+    if preferred is None:
+        preferred = 'audio'
+    if not isinstance(preferred, str):
+        raise ValidationError("therapy_preferred_channel must be a string")
+
+    preferred = preferred.lower().strip()
+    allowed = ('audio', 'haptic', 'both')
+    if preferred not in allowed:
+        raise ValidationError(
+            f"Invalid therapy_preferred_channel: {preferred}. Must be one of {allowed}"
+        )
+    validated['therapy_preferred_channel'] = preferred
     
     return validated
 

@@ -5,7 +5,9 @@ This document describes how training data is loaded, batched, and fed to the mod
 ## Dataset
 
 - **`ml/data/dataset.py`:** Defines **MaxSightDataset**, the main dataset used for training. It loads images and annotations (COCO-format JSON), applies preprocessing, and returns items with keys such as `images`, `labels`, `boxes`, `distance`, `urgency`, `num_objects`, and optionally `audio` and `condition_mode`.
-- **Annotations:** Expected format is COCO-style: images with `file_name`, `id`; annotations with `image_id`, `category_id`, `bbox` (e.g. x, y, w, h), and any extra fields (e.g. distance, urgency). Paths in annotations are resolved relative to a root image directory.
+- **Annotations:** Expected format is COCO-style for boxes/labels, but the dataset layer also supports COCO panoptic-style supervision.
+  - Panoptic meaning: panoptic annotations provide `segments_info` (segment ids + categories). `ml/data/dataset.py` derives per-segment bounding boxes and uses segment category/metadata to derive training targets like distance zones and urgency labels.
+  - Any extra fields (e.g. `distance`, `urgency`) are consumed when present; otherwise derived from annotation metadata where supported.
 - **Condition mode:** The dataset can be built with a `condition_mode` (e.g. glaucoma, AMD) so that preprocessing and augmentation match that condition.
 
 ## Preprocessing
@@ -29,6 +31,7 @@ This document describes how training data is loaded, batched, and fed to the mod
 ## Splits and annotation generation
 
 - **Splits:** Train/val (and optionally test) splits are defined by separate annotation JSON files. They can be produced by `scripts/gather_training_data.py` or by splitting a single COCO JSON (e.g. `ml/data/coco_dataset_splitter.py`).
+- **Medallion (bronze/silver/gold):** Optional layout under `datasets/medallion/` with `gold/training_index.json` for reproducible paths; see **[medallion_data.md](medallion_data.md)**.
 - **Inference datasets:** For evaluation (e.g. mAP), inference datasets and annotations may be prepared by `scripts/download_inference_datasets.py` or similar; those are separate from the training data pipeline but follow similar path and annotation conventions.
 
 ## Best practices
@@ -37,6 +40,36 @@ This document describes how training data is loaded, batched, and fed to the mod
 - Use enough workers for DataLoader to avoid CPU bottleneck, but not so many that memory is exhausted.
 - Keep validation preprocessing consistent with training (same resize, normalization), but usually without heavy augmentation.
 - If you add new keys to the dataset (e.g. new targets), update the collate_fn and the model/loss to consume them.
+
+## Video / sequence tensor contract
+
+For T5 temporal training, the data pipeline supports sequence batches:
+
+- `ml/data/data_pipeline.py` collate function detects sequence mode via a `frames` key.
+- It pads variable-length frame sequences into a single tensor shaped `[B, T, C, H, W]`.
+- It also returns `frame_lengths` so the temporal encoder can ignore padded time steps safely.
+- Optional keys from **video clip manifests** are stacked when every item in the batch has them: `temporal_consistency`, `flicker` (supervision targets aligned with model output names), and string `clip_ids`.
+
+### Clip manifest (v1) and offline scripts
+
+- **Spec:** **[video_panoptic_manifest.md](video_panoptic_manifest.md)** — fixed-stride **T = 8** MVP contract, segment fields, validation rules.
+- **Schema:** `docs/schemas/video_panoptic_manifest_v1.schema.json`.
+- **Validation:** `ml.data.video_manifest.validate_manifest_v1`.
+- **Dataset:** `ml.data.video_clip_dataset.VideoClipManifestDataset` — one sample per manifest clip; detection targets from the **last** frame; temporal proxies via `ml.data.temporal_clip_targets.derive_temporal_clip_targets`.
+- **Scripts:** `scripts/ops/sample_video_clips.py` (video or frame dir → paths-only manifest), `scripts/ops/build_pseudo_panoptic_manifest.py` (`--use-stub-segmenter` for smoke runs).
+- **Training:** `python scripts/ops/train_maxsight.py ... --temporal-supervision` adds **`ScalarMSELoss`** on **`temporal_consistency`** and **`flicker`** when those keys exist in the batch (use **`VideoClipManifestDataset`** + **`collate_fn`**). The model exposes **`flicker`** and **`temporal_consistency`** tensors for T5 temporal paths.
+- **Simulator QA:** `GET /api/dev/sprint-self-tests` and `POST /api/dev/validate-manifest` (enable with **`enable_dev_sprint_tests`** in `tools/simulation/config.py`); the web UI includes a **Sprint self-tests** panel on the main page.
+
+### Dataset performance (no model)
+
+Track I/O and loader throughput on **your** manifest before training or CoreML work:
+
+- **`ml.data.video_dataset_perf`:** `summarize_manifest_frame_files` (how many `frame_paths` exist on disk), `time_manifest_parse_and_validate_ms`, and `profile_video_clip_dataset` (init, sequential `__getitem__`, `DataLoader` + `collate_fn`).
+- **CLI:** `python scripts/ops/profile_video_dataset.py --manifest /path/to/manifest.json [--manifest-root DIR] [--summary-only] [--num-workers N] [--json-out report.json]`
+
+Use this to find missing frames, JSON/validation cost, and clips/sec for decode + batching—without adding training fields that only matter once a model consumes them.
+
+If your model/head expects temporal signals (motion stability, flicker suppression, predictive alerts), ensure your training annotations and batching are producing `frames` and `frame_lengths`, not only single-frame `images`.
 
 ## Summary
 

@@ -277,6 +277,8 @@ class GradNormMultiHeadLoss(nn.Module):
         'box': 'boxes',
         'distance': 'distance_zones',
         'urgency': 'urgency_scores',
+        'temporal_consistency': 'temporal_consistency',
+        'flicker': 'flicker',
     }
     TARGET_KEY_MAP = {
         'objectness': 'objectness',  # Batch may not have; build from labels or skip.
@@ -284,6 +286,8 @@ class GradNormMultiHeadLoss(nn.Module):
         'box': 'boxes',
         'distance': 'distance',
         'urgency': 'urgency',
+        'temporal_consistency': 'temporal_consistency',
+        'flicker': 'flicker',
     }
 
     def compute_head_losses(
