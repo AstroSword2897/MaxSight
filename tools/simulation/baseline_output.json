@@ -3,12 +3,12 @@
   "num_detections": 5,
   "num_text_regions": 0,
   "processing_time_ms": 0,
-  "inference_time_ms": 164.0414590074215,
-  "scene_description": "No objects detected Text detected: [Text detected - install pytesseract for extraction], [Text detected - install pytesseract for extraction], [Text detected - install pytesseract for extraction].",
+  "inference_time_ms": 138.33483296912163,
+  "scene_description": "No objects detected.",
   "urgency_scores": [],
   "stats": {
     "frames_processed": 1,
-    "avg_latency_ms": 164.0414590074215,
+    "avg_latency_ms": 138.33483296912163,
     "total_detections": 5
   }
 }

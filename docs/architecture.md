@@ -47,7 +47,15 @@ Heads are gated by tier and condition mode so only the relevant subset runs per 
 
 - **Encoders:** Patch, region, global, OCR, depth, audio in `ml/retrieval/encoders/`.
 - **Indexing:** `ml/retrieval/indexing/` builds and manages neural indexes.
-- **Retrieval:** Two-stage (e.g. ANN then rerank) in `ml/retrieval/retrieval/`.
+- **Retrieval execution:** Two-stage (ANN candidates then rerank) in `ml/retrieval/retrieval/`.
+
+### Production contract (async, advisory-only)
+
+Retrieval is implemented as a **non-blocking enhancement**:
+
+- it runs on a secondary path and must never delay safety-critical hazard outputs.
+- retrieval results are treated as **advisory context** (never authority for hazard/urgency/distance correctness).
+- current wiring note: the `SceneDescriptionHead` does not yet consume `retrieval_results` as conditioned decoder memory, so retrieval does not currently “change” scene-description decoding semantics.
 
 ## Condition-specific behavior
 

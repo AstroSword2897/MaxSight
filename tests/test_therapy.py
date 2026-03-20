@@ -327,6 +327,23 @@ def test_therapy_engine_update_intervention_when_high_stress():
     assert actions[0].intervention_type
 
 
+def test_therapy_engine_respects_preferred_channel_haptic():
+    """TherapyEngineConfig.preferred_channel must control output channel selection."""
+    from ml.therapy import TherapyEngine, TherapyEngineConfig
+
+    config = TherapyEngineConfig(stress_trigger_threshold=0.0, high_stress_threshold=0.35, preferred_channel="haptic")
+    engine = TherapyEngine(config=config)
+    perception = {
+        "detections": [{"class_name": "person"}] * 5,
+        "uncertainty": 0.2,
+        "navigation_difficulty": 0.9,
+        "urgency": 2.0,
+    }
+    actions = engine.update(perception)
+    assert len(actions) >= 1
+    assert actions[0].channel == "haptic"
+
+
 def test_therapy_engine_safety_suppresses_on_high_uncertainty():
     """Therapy safety layer suppresses prompts when uncertainty is high."""
     from ml.therapy import TherapyEngine, TherapyEngineConfig

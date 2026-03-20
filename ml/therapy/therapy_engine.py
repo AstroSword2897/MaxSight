@@ -47,6 +47,9 @@ class TherapyEngine:
         self.safety = TherapySafetyLayer()
         self.memory = TherapyMemorySystem()
         self.adaptation = AdaptationEngine(memory=self.memory)
+        # Initialize adaptation memory from config so the controller's channel
+        # selection respects user preference from the first update.
+        self.adaptation.set_preferred_channel(self.config.preferred_channel)
         self.response_evaluation = ResponseEvaluationModel()
         self._last_context: Optional[SituationContext] = None
         self._last_decision: Optional[TherapyDecision] = None

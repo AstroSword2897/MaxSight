@@ -89,7 +89,18 @@ def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
     
     if 'condition_mode' in batch[0]:
         result['condition_mode'] = batch[0]['condition_mode']
-    
+
+    if has_frames and all('temporal_consistency' in item for item in batch):
+        result['temporal_consistency'] = torch.stack(
+            [item['temporal_consistency'].reshape(-1)[0] for item in batch]
+        )
+    if has_frames and all('flicker' in item for item in batch):
+        result['flicker'] = torch.stack(
+            [item['flicker'].reshape(-1)[0] for item in batch]
+        )
+    if all('clip_id' in item for item in batch):
+        result['clip_ids'] = [str(item['clip_id']) for item in batch]
+
     return result
 
 

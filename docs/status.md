@@ -8,7 +8,7 @@ This document summarizes the current status of the MaxSight repo: what is implem
 - **Training:** Training loop, losses, task balancing (e.g. GradNorm), and validation live in `ml/training/`. Ops scripts live under `scripts/ops/` (e.g. `scripts/ops/train_maxsight.py`, `scripts/ops/smoke_train.py`), and the canonical runner is `python scripts/product/run.py`. Data pipeline and dataset are in `ml/data/`.
 - **Export:** JIT, ExecuTorch (.pte), CoreML, and ONNX export are in `ml/training/export.py`. Deployment bundle packaging: `scripts/product/run.py package` or `scripts/ops/export_for_xcode.py`.
 - **Therapy:** Session management, task generation, and therapy integration are in `ml/therapy/`. See `docs/therapy_system.md`.
-- **Retrieval:** Encoders, indexing, and two-stage retrieval are in `ml/retrieval/`. Used when the tier enables retrieval.
+- **Retrieval:** Encoders, indexing, and two-stage retrieval are in `ml/retrieval/`. Retrieval is an **async, advisory-only enhancement** (non-blocking) and does not override hazard-critical outputs.
 - **Simulation and tooling:** Simulation, quantization, and benchmarking live under `tools/` and `ml/training/benchmark.py`.
 
 ## Tests

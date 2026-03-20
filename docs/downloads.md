@@ -6,6 +6,10 @@ This document covers how to obtain and verify datasets and other assets used for
 
 MaxSight training and evaluation rely on annotated vision (and optionally audio) datasets. Scripts and helpers support COCO, Open Images, and other public datasets, plus project-specific splits and annotations.
 
+### COCO plus recommended video / navigation corpora
+
+For a **curated list** that includes **COCO** and public sets such as **Kinetics-700**, **YouTube-8M**, **HowTo100M**, **WebVid-10M**, **BDD100K**, **Epic-Kitchens-100**, **MOSE**, and **YouTube-VOS** (relevance to assistive perception, integration level, links), see **[video_and_navigation_datasets.md](video_and_navigation_datasets.md)**.
+
 ## Primary scripts and modules
 
 - **`ml/data/download_datasets.py`:** Helpers to verify and download COCO (and related) data. Defines `verify_coco_dataset()` and download/extract logic. Uses paths such as `datasets/coco` or `datasets/coco_raw` (train2017, val2017, annotations).
@@ -36,4 +40,4 @@ MaxSight training and evaluation rely on annotated vision (and optionally audio)
 
 ## Summary
 
-Use `ml/data/download_datasets.py` and `scripts/gather_training_data.py` as the main entry points for dataset download and layout. Verify COCO (or your chosen dataset) with the provided verification helpers, then point training and inference scripts at the correct annotation and image paths. For Open Images or other sources, use the matching download script and the required credentials or env vars.
+Use `ml/data/download_datasets.py` and `scripts/gather_training_data.py` as the main entry points for dataset download and layout. Verify COCO (or your chosen dataset) with the provided verification helpers, then point training and inference scripts at the correct annotation and image paths. For Open Images or other sources, use the matching download script and the required credentials or env vars. For **COCO + Kinetics-700, YouTube-8M, HowTo100M, WebVid-10M, BDD100K, Epic-Kitchens-100, MOSE, YouTube-VOS**, see **[video_and_navigation_datasets.md](video_and_navigation_datasets.md)**.

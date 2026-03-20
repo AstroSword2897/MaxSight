@@ -18,7 +18,7 @@ The main cache implementation is Redis-based in `ml/cache/redis_cache.py`.
 ## When to use cache
 
 - **Inference:** Caching full model outputs for repeated (e.g. identical) inputs can cut latency and load. Key design: key must reflect all inputs that affect the output (image, condition, model version, etc.).
-- **Retrieval:** Index lookups or embedding computations can be cached by query or image ID when the index and model are fixed.
+- **Retrieval:** Index lookups or embedding computations can be cached by query or image ID when the index and model are fixed. Retrieval cache reuse is safe only because retrieval outputs are advisory-only (non-critical-path).
 - **External APIs:** Any call to an external service (e.g. scene description, OCR) is a good candidate if responses are deterministic for the same input and you set a reasonable TTL.
 
 ## When not to cache

@@ -378,6 +378,42 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        .sprint-tests-panel {
+            background: #1e1e2e;
+            color: #e0e0e0;
+            border-radius: 10px;
+            padding: 12px;
+            margin-top: 12px;
+            font-size: 0.85em;
+        }
+        .sprint-tests-panel h3 {
+            color: #a78bfa;
+            margin-bottom: 8px;
+            font-size: 1em;
+        }
+        .sprint-test-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 4px 0;
+            border-bottom: 1px solid #333;
+        }
+        .sprint-test-row:last-child { border-bottom: none; }
+        .sprint-pass { color: #4ade80; }
+        .sprint-fail { color: #f87171; }
+        #sprintManifestInput {
+            width: 100%;
+            min-height: 72px;
+            font-family: ui-monospace, monospace;
+            font-size: 11px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background: #111;
+            color: #ddd;
+            padding: 8px;
+            margin-top: 6px;
+        }
     </style>
 </head>
 <body>
@@ -420,6 +456,23 @@
                         <span id="sessionStatusText">Session Inactive</span>
                     </div>
                 </div>
+
+                <div class="control-group">
+                    <h3>Therapy Output</h3>
+                    <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <input type="checkbox" id="therapyVoiceEnabled" checked />
+                        <span>Voice prompts</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <input type="checkbox" id="therapyHapticEnabled" checked />
+                        <span>Haptic prompts</span>
+                    </label>
+                    <select id="therapyPreferredChannel">
+                        <option value="both" selected>Preferred: Both (use voice if enabled)</option>
+                        <option value="audio">Preferred: Voice</option>
+                        <option value="haptic">Preferred: Haptic</option>
+                    </select>
+                </div>
                 
                 <div class="control-group">
                     <h3>Upload Image</h3>
@@ -446,6 +499,18 @@
                         <div class="stat-value" id="statDetections">0</div>
                         <div class="stat-label">Detections</div>
                     </div>
+                </div>
+
+                <div class="control-group sprint-tests-panel" id="sprintTestsPanel">
+                    <h3>🧩 Sprint self-tests (API)</h3>
+                    <p style="opacity:0.85;margin-bottom:8px;">Runs the same checks as unit tests: manifest validation, temporal targets, collate + temporal loss, frame validators.</p>
+                    <button type="button" id="runSprintTestsBtn" style="width:100%;padding:10px;border-radius:8px;border:none;background:#7c3aed;color:white;font-weight:600;cursor:pointer;">Run sprint self-tests</button>
+                    <div id="sprintTestsSummary" style="margin-top:8px;font-weight:600;"></div>
+                    <div id="sprintTestsList" style="max-height:220px;overflow-y:auto;margin-top:6px;"></div>
+                    <label style="display:block;margin-top:12px;opacity:0.9;">Validate v1 manifest JSON (optional)</label>
+                    <textarea id="sprintManifestInput" placeholder='{"schema_version":"1.0","clips":[...]}'></textarea>
+                    <button type="button" id="validateManifestBtn" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;border:none;background:#475569;color:white;cursor:pointer;">Validate manifest</button>
+                    <pre id="sprintManifestResult" style="margin-top:6px;white-space:pre-wrap;font-size:11px;max-height:120px;overflow:auto;"></pre>
                 </div>
             </div>
             
@@ -517,6 +582,20 @@
         let currentScenario = 'general';
         let sessionActive = false;
         let sessionId = null;  // Multi-user session ID
+
+        // Therapy output preferences (sent to backend via /api/init).
+        let therapyVoiceEnabled = true;
+        let therapyHapticEnabled = true;
+        let therapyPreferredChannel = 'both';  // 'audio' | 'haptic' | 'both'
+
+        function escapeHtmlText(unsafe) {
+            return String(unsafe)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
         
         // Initialize
         document.getElementById('fileInput').addEventListener('change', handleFileSelect);
@@ -535,6 +614,31 @@
         });
         document.getElementById('startSessionBtn').addEventListener('click', startSession);
         document.getElementById('stopSessionBtn').addEventListener('click', stopSession);
+
+        // Therapy preference controls.
+        document.getElementById('therapyVoiceEnabled').addEventListener('change', (e) => {
+            therapyVoiceEnabled = !!e.target.checked;
+            if (!therapyVoiceEnabled && !therapyHapticEnabled) {
+                // Keep at least one channel enabled (fallback to voice).
+                therapyVoiceEnabled = true;
+                document.getElementById('therapyVoiceEnabled').checked = true;
+            }
+        });
+        document.getElementById('therapyHapticEnabled').addEventListener('change', (e) => {
+            therapyHapticEnabled = !!e.target.checked;
+            if (!therapyVoiceEnabled && !therapyHapticEnabled) {
+                therapyHapticEnabled = true;
+                document.getElementById('therapyHapticEnabled').checked = true;
+            }
+        });
+        document.getElementById('therapyPreferredChannel').addEventListener('change', (e) => {
+            therapyPreferredChannel = e.target.value || 'both';
+        });
+
+        const runSprintBtn = document.getElementById('runSprintTestsBtn');
+        if (runSprintBtn) runSprintBtn.addEventListener('click', runSprintSelfTestsUi);
+        const validateManifestBtn = document.getElementById('validateManifestBtn');
+        if (validateManifestBtn) validateManifestBtn.addEventListener('click', validateManifestUi);
         
         // Helper to add session ID to requests
         function getRequestOptions(method = 'GET', body = null) {
@@ -556,6 +660,51 @@
             return options;
         }
         
+        async function runSprintSelfTestsUi() {
+            const summary = document.getElementById('sprintTestsSummary');
+            const list = document.getElementById('sprintTestsList');
+            summary.textContent = 'Running…';
+            list.innerHTML = '';
+            try {
+                const res = await fetch('/api/dev/sprint-self-tests');
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                summary.textContent = `${data.passed}/${data.total} passed` + (data.ok ? ' ✓' : ' ✗');
+                summary.style.color = data.ok ? '#4ade80' : '#f87171';
+                (data.results || []).forEach(r => {
+                    const row = document.createElement('div');
+                    row.className = 'sprint-test-row';
+                    const mark = r.ok ? '<span class="sprint-pass">PASS</span>' : '<span class="sprint-fail">FAIL</span>';
+                    row.innerHTML = `${mark}<span style="flex:1">${escapeHtmlText(r.name)}${r.detail ? ' — ' + escapeHtmlText(r.detail) : ''}</span><span style="opacity:0.7">${r.ms}ms</span>`;
+                    list.appendChild(row);
+                });
+            } catch (e) {
+                summary.textContent = 'Error: ' + e.message;
+                summary.style.color = '#f87171';
+            }
+        }
+
+        async function validateManifestUi() {
+            const raw = document.getElementById('sprintManifestInput').value.trim();
+            const out = document.getElementById('sprintManifestResult');
+            out.textContent = '';
+            if (!raw) {
+                out.textContent = 'Paste JSON above.';
+                return;
+            }
+            try {
+                const res = await fetch('/api/dev/validate-manifest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ manifest_json: raw })
+                });
+                const data = await res.json();
+                out.textContent = JSON.stringify(data, null, 2);
+            } catch (e) {
+                out.textContent = 'Error: ' + e.message;
+            }
+        }
+
         async function initializeSimulator() {
             try {
                 const response = await fetch('/api/init', {
@@ -564,7 +713,10 @@
                     body: JSON.stringify({
                         condition: currentCondition,
                         scenario: currentScenario,
-                        start_session: sessionActive
+                        start_session: sessionActive,
+                        therapy_voice_enabled: therapyVoiceEnabled,
+                        therapy_haptic_enabled: therapyHapticEnabled,
+                        therapy_preferred_channel: therapyPreferredChannel,
                     })
                 });
                 const data = await response.json();
@@ -839,6 +991,15 @@
         }
         
         function displayResults(result, originalImage) {
+            function escapeHtml(unsafe) {
+                return String(unsafe)
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#039;');
+            }
+
             // Hide initial upload
             document.getElementById('initialUpload').style.display = 'none';
             document.getElementById('initialViewer').style.display = 'none';
@@ -907,29 +1068,57 @@
             // 4. Therapy Methods
             const therapyContent = document.getElementById('therapyContent');
             const therapyInfo = result.therapy_feedback || result.therapy_task || {};
+            const primaryAction = therapyInfo.primary_action || null;
+            const therapyActions = therapyInfo.actions || [];
+
             therapyContent.innerHTML = `
-                <p><strong>Vision Therapy Exercise:</strong></p>
-                ${therapyInfo.task_description ? `
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
-                        <p><strong>Task:</strong> ${therapyInfo.task_description}</p>
-                        ${therapyInfo.target_objects ? `
-                            <p><strong>Focus on:</strong> ${therapyInfo.target_objects.join(', ')}</p>
-                        ` : ''}
-                        ${therapyInfo.difficulty ? `
-                            <p><strong>Difficulty:</strong> ${therapyInfo.difficulty}</p>
-                        ` : ''}
-                    </div>
-                ` : `
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
-                        <p><strong>Attention Training:</strong></p>
-                        <p>Focus on identifying objects in the scene. The model will guide you through recognizing:</p>
-                        <ul>
-                            ${result.detections && result.detections.length > 0 ? 
-                                result.detections.slice(0, 5).map(d => `<li>${d.class_name} - ${((d.confidence || 0) * 100).toFixed(0)}% confidence</li>`).join('') 
-                                : '<li>Objects in the scene</li>'}
-                        </ul>
-                    </div>
-                `}
+                <p><strong>Therapy Controller:</strong></p>
+                ${
+                    primaryAction && primaryAction.content ? `
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                            <p><strong>Intervention:</strong> ${primaryAction.intervention_type || 'action'} (${primaryAction.channel || 'channel'})</p>
+                            <p style="margin-top: 8px;">${primaryAction.content}</p>
+                            ${
+                                primaryAction.intensity !== null && primaryAction.intensity !== undefined ? `
+                                    <p><strong>Intensity:</strong> ${primaryAction.intensity}</p>
+                                ` : ''
+                            }
+                        </div>
+                    ` : therapyInfo.task_description ? `
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                            <p><strong>Task:</strong> ${therapyInfo.task_description}</p>
+                            ${therapyInfo.target_objects ? `<p><strong>Focus on:</strong> ${therapyInfo.target_objects.join(', ')}</p>` : ''}
+                            ${therapyInfo.difficulty ? `<p><strong>Difficulty:</strong> ${therapyInfo.difficulty}</p>` : ''}
+                        </div>
+                    ` : `
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                            <p><strong>Attention Training:</strong></p>
+                            <p>Focus on identifying objects in the scene. The controller will guide you through recognizing:</p>
+                            <ul>
+                                ${result.detections && result.detections.length > 0 ? 
+                                    result.detections.slice(0, 5).map(d => `<li>${d.class_name} - ${((d.confidence || 0) * 100).toFixed(0)}% confidence</li>`).join('') 
+                                    : '<li>Objects in the scene</li>'}
+                            </ul>
+                        </div>
+                    `
+                }
+
+                ${
+                    therapyActions && therapyActions.length > 0 ? `
+                        <div style="background: #f0f4ff; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                            <p><strong>Generated actions:</strong></p>
+                            <ul>
+                                ${therapyActions.map(a => `
+                                    <li>
+                                        <strong>${a.intervention_type || 'action'}</strong>
+                                        (${a.channel || 'channel'}) - ${a.content || ''}
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    ` : ''
+                }
+
                 ${result.haptic_patterns && result.haptic_patterns.length > 0 ? `
                     <p><strong>Haptic Feedback:</strong></p>
                     <ul>
@@ -961,6 +1150,13 @@
                     ${result.text_regions.map(t => `
                         <div class="detection-item">${t.text || 'Text'}</div>
                     `).join('')}
+                </div>
+                ` : ''}
+
+                ${result.contract_debug ? `
+                <div class="result-item">
+                    <h4>Production Contracts / Test Signals</h4>
+                    <pre style="white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; background: #f8f9fa; padding: 12px; border-radius: 8px;">${escapeHtml(JSON.stringify(result.contract_debug, null, 2))}</pre>
                 </div>
                 ` : ''}
                 

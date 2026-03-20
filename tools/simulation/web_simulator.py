@@ -11,12 +11,13 @@ from io import BytesIO
 import asyncio
 from queue import Queue
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from PIL import Image
 import sys
 import os
 import logging
 import uuid
-from collections import defaultdict
+from collections import defaultdict, deque
 
 # Add parent directory to path.
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -36,6 +37,7 @@ from ml.utils.path_planning import PathPlanner
 from ml.therapy.session_manager import SessionManager
 from ml.therapy.task_generator import TaskGenerator
 from ml.therapy.therapy_integration import TherapyTaskIntegrator
+from ml.therapy import TherapyEngine, TherapyEngineConfig
 from app.overlays.overlay_engine import OverlayEngine
 from app.ui.voice_feedback import VoiceFeedback
 from app.ui.haptic_feedback import HapticFeedback, HapticPattern
@@ -56,7 +58,7 @@ from .rate_limiter import RateLimiter, GlobalRateLimiter
 from .validators import (
     validate_session_id, validate_condition, validate_scenario,
     validate_output_mode, validate_image_file, validate_image_data,
-    validate_init_request
+    validate_init_request, validate_frames_data
 )
 from .structured_logging import setup_structured_logging, get_component_logger
 
@@ -202,7 +204,12 @@ class MaxSightSession:
         self.path_planner = PathPlanner()
         self.session_manager = SessionManager()
         self.task_generator = TaskGenerator()
-        self.therapy = TherapyTaskIntegrator()
+        # Therapy: use closed-loop controller for production behavior.
+        self.therapy_task_integrator = TherapyTaskIntegrator()
+        self.therapy_engine = TherapyEngine(config=TherapyEngineConfig())
+        self._last_therapy_perception: Optional[Dict[str, Any]] = None
+        self.therapy_voice_enabled = True
+        self.therapy_haptic_enabled = True
         self.voice_feedback = VoiceFeedback()
         self.haptic_feedback = HapticFeedback()
         self.current_condition: Optional[str] = None
@@ -228,6 +235,19 @@ class MaxSightSession:
         self._spatial_memory_count = 0
         self.created_at = time.time()
         self.last_activity = time.time()
+
+        # Temporal buffer for real-time video sequencing.
+        self.temporal_enabled = bool(getattr(config, "temporal_enabled", True))
+        self.temporal_window_frames = int(getattr(config, "temporal_window_frames", 8))
+        self.temporal_stride = int(getattr(config, "temporal_stride", 1))
+        self._temporal_frame_buffer = deque(maxlen=max(1, self.temporal_window_frames))
+        self._therapy_temporal_history = deque(
+            maxlen=max(2, int(getattr(config, "therapy_temporal_history", 8)))
+        )
+        
+        # Parallelize non-critical CPU work (OCR / therapy context) without
+        # violating inference serialization (INFERENCE_SEMAPHORE).
+        self._pipeline_executor = ThreadPoolExecutor(max_workers=2)
         
         session_logger.info("Session initialized", session_id=session_id)
         self._start_async_workers()
@@ -237,6 +257,57 @@ class MaxSightSession:
             self.current_condition = condition
             self.preprocessor = ImagePreprocessor(condition_mode=condition)
             logger.info(f"Session {self.session_id}: Condition set to {condition}")
+
+    def set_therapy_output_preferences(
+        self,
+        voice_enabled: bool = True,
+        haptic_enabled: bool = True,
+        preferred_channel: str = "audio",
+    ) -> None:
+        """
+        Configure which therapy channels are allowed for this user/session.
+
+        This does not change the therapy safety logic; it only gates delivery
+        of generated TherapeuticActions to voice/haptic workers.
+        """
+        with self.lock:
+            self.therapy_voice_enabled = bool(voice_enabled)
+            self.therapy_haptic_enabled = bool(haptic_enabled)
+
+            preferred = (preferred_channel or "audio").lower().strip()
+            if preferred not in ("audio", "haptic", "both"):
+                preferred = "audio"
+
+            if preferred == "both":
+                # Prefer the first enabled channel.
+                if self.therapy_voice_enabled:
+                    preferred = "audio"
+                elif self.therapy_haptic_enabled:
+                    preferred = "haptic"
+                else:
+                    preferred = "audio"
+
+            # If the preferred channel is disabled, fall back to the other if enabled.
+            if preferred == "audio" and not self.therapy_voice_enabled and self.therapy_haptic_enabled:
+                preferred = "haptic"
+            if preferred == "haptic" and not self.therapy_haptic_enabled and self.therapy_voice_enabled:
+                preferred = "audio"
+
+            # Re-create the therapy engine so InterventionGenerator respects the channel preference.
+            self.therapy_engine = TherapyEngine(config=TherapyEngineConfig(preferred_channel=preferred))
+            # Ensure adaptation memory starts with the same preference so
+            # channel selection remains consistent in closed-loop decisions.
+            try:
+                self.therapy_engine.adaptation.set_preferred_channel(preferred)
+            except Exception:
+                pass
+            logger.info(
+                "Session %s: therapy outputs configured voice_enabled=%s haptic_enabled=%s preferred=%s",
+                self.session_id,
+                self.therapy_voice_enabled,
+                self.therapy_haptic_enabled,
+                preferred,
+            )
     
     def update_activity(self):
         """Update last activity timestamp."""
@@ -284,6 +355,11 @@ class MaxSightSession:
         session_logger.info("Shutting down session", session_id=self.session_id)
         self._voice_worker_running = False
         self._haptic_worker_running = False
+        try:
+            if hasattr(self, '_pipeline_executor') and self._pipeline_executor is not None:
+                self._pipeline_executor.shutdown(wait=False)
+        except Exception:
+            pass
         try:
             self.voice_queue.put((None, MessagePriority.LOW), block=False)
         except Exception:
@@ -426,6 +502,168 @@ class MaxSightSession:
                     outputs = self.core.model(image_tensor)
             inference_time = time.perf_counter() - inference_start
         return outputs, inference_time
+
+    def _slice_outputs_for_last_frame(
+        self,
+        outputs: Dict[str, Any],
+        temporal_len: int,
+    ) -> Dict[str, Any]:
+        """
+        Temporal safety: downstream pipeline assumes batch size 1.
+        When inference runs on `[B,T,...]` and gets flattened to `[B*T,...]`,
+        we slice tensors so downstream sees only the newest frame.
+        """
+        if temporal_len <= 1:
+            return outputs
+
+        last_idx = temporal_len - 1
+        sliced: Dict[str, Any] = {}
+        for k, v in outputs.items():
+            if isinstance(v, torch.Tensor) and v.numel() > 0 and v.shape[0] == temporal_len:
+                sliced[k] = v[last_idx : last_idx + 1]
+            else:
+                sliced[k] = v
+        return sliced
+
+    def _extract_float(self, v: Any, default: float = 0.0) -> float:
+        """Extract a stable scalar from tensors/number-like values."""
+        if v is None:
+            return default
+        if isinstance(v, torch.Tensor):
+            if v.numel() == 0:
+                return default
+            return float(v.flatten()[0].item())
+        if isinstance(v, (int, float)):
+            return float(v)
+        return default
+
+    def _build_perception_for_therapy(
+        self,
+        detections_list: List[Dict[str, Any]],
+        outputs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Build the closed-loop therapy perception dict from perception outputs."""
+        urgency_scores = outputs.get("urgency_scores", torch.zeros(1, 4))
+        urgency_level = int(urgency_scores.argmax(dim=1).item()) if isinstance(urgency_scores, torch.Tensor) else 0
+        uncertainty = self._extract_float(outputs.get("uncertainty"), default=0.0)
+        temporal_consistency = self._extract_float(outputs.get("temporal_consistency"), default=0.5)
+
+        # Navigation difficulty is a proxy for "how hard it feels" based on uncertainty and scene complexity.
+        scene_complexity = min(1.0, float(len(detections_list)) / 10.0) if detections_list else 0.0
+        navigation_difficulty = min(1.0, 0.6 * uncertainty + 0.3 * scene_complexity + 0.1 * (1.0 - temporal_consistency))
+
+        self._therapy_temporal_history.append(temporal_consistency)
+        flicker_delta = 0.0
+        if len(self._therapy_temporal_history) >= 2:
+            flicker_delta = abs(
+                self._therapy_temporal_history[-1] - self._therapy_temporal_history[-2]
+            )
+        flicker_risk = max(0.0, min(1.0, flicker_delta))
+        reliability = max(
+            0.0,
+            min(1.0, temporal_consistency - 0.5 * flicker_risk),
+        )
+
+        return {
+            "detections": detections_list,
+            "uncertainty": uncertainty,
+            "navigation_difficulty": navigation_difficulty,
+            "urgency": float(urgency_level),
+            "temporal_consistency": temporal_consistency,
+            "flicker_risk": flicker_risk,
+            "temporal_reliability": reliability,
+        }
+
+    def _therapy_actions_to_feedback(self, therapy_actions: List[Any]) -> Optional[Dict[str, Any]]:
+        if not therapy_actions:
+            return None
+        primary = therapy_actions[0]
+        feedback = {
+            "primary_action": {
+                "intervention_type": getattr(primary, "intervention_type", None),
+                "channel": getattr(primary, "channel", None),
+                "content": getattr(primary, "content", None),
+                "intensity": getattr(primary, "intensity", None),
+                "duration_s": getattr(primary, "duration_s", None),
+                "priority": getattr(primary, "priority", None),
+            },
+            "actions": [
+                {
+                    "intervention_type": getattr(a, "intervention_type", None),
+                    "channel": getattr(a, "channel", None),
+                    "content": getattr(a, "content", None),
+                    "intensity": getattr(a, "intensity", None),
+                    "duration_s": getattr(a, "duration_s", None),
+                    "priority": getattr(a, "priority", None),
+                }
+                for a in therapy_actions
+            ],
+        }
+        if self._last_therapy_perception is not None:
+            feedback["temporal_support_signals"] = {
+                "temporal_consistency": self._last_therapy_perception.get("temporal_consistency"),
+                "flicker_risk": self._last_therapy_perception.get("flicker_risk"),
+                "temporal_reliability": self._last_therapy_perception.get("temporal_reliability"),
+            }
+        return feedback
+
+    def _queue_therapy_actions(self, therapy_actions: List[Any]) -> None:
+        """Queue therapy prompts to voice/haptic workers (non-blocking)."""
+        if not therapy_actions:
+            return
+        if not self.therapy_voice_enabled and not self.therapy_haptic_enabled:
+            return
+        reliability_floor = float(getattr(config, "therapy_temporal_reliability_floor", 0.45))
+        temporal_reliability = 1.0
+        if self._last_therapy_perception is not None:
+            temporal_reliability = float(self._last_therapy_perception.get("temporal_reliability", 1.0))
+
+        # Minimal mapping from therapy category to haptic pattern.
+        long_interventions = {
+            "grounding",
+            "breathing",
+            "calming",
+            "rest_suggestion",
+            "navigation_reassurance",
+        }
+
+        for action in therapy_actions:
+            channel = getattr(action, "channel", None)
+            content = getattr(action, "content", "")
+            intensity = float(getattr(action, "intensity", 0.5))
+            priority_val = int(getattr(action, "priority", 60))
+            intervention_type = str(getattr(action, "intervention_type", ""))
+            if temporal_reliability < reliability_floor and priority_val < 70:
+                # Skip low-priority therapy prompts when temporal perception is unstable.
+                continue
+
+            if channel == "audio":
+                if not self.therapy_voice_enabled:
+                    continue
+                if priority_val >= 70:
+                    pr = MessagePriority.HIGH
+                elif priority_val >= 60:
+                    pr = MessagePriority.NORMAL
+                else:
+                    pr = MessagePriority.LOW
+                try:
+                    self.voice_queue.put((content, pr), block=False)
+                except Exception:
+                    pass
+            elif channel == "haptic":
+                if not self.therapy_haptic_enabled:
+                    continue
+                pattern = HapticPattern.LONG_PULSE if intervention_type in long_interventions else HapticPattern.MICRO_PULSE
+                if priority_val >= 70:
+                    pr = MessagePriority.HIGH
+                elif priority_val >= 60:
+                    pr = MessagePriority.NORMAL
+                else:
+                    pr = MessagePriority.LOW
+                try:
+                    self.haptic_queue.put(((pattern, intensity), pr), block=False)
+                except Exception:
+                    pass
     
     def _run_ocr(self, image: Image.Image, outputs: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Run OCR text detection."""
@@ -676,11 +914,50 @@ class MaxSightSession:
             
             # Pipeline latency tracker (per-stage timing)
             tracker = PipelineLatencyTracker()
+
+            # Runtime contract visibility for frontend/test-signal debugging.
+            # These checks mirror unit-testable contracts (RAG surface, temporal slicing, stage gates).
+            contract_debug: Dict[str, Any] = {
+                "temporal": {
+                    "enabled": self.temporal_enabled,
+                    "window_frames": self.temporal_window_frames,
+                    "stride": self.temporal_stride,
+                    "used_sequence": False,
+                    "sliced_to_batch1": False,
+                },
+                "forward_surface_contract": {},
+                "stage_gates": {},
+                "therapy_delivery": {
+                    "voice_enabled": getattr(self, "therapy_voice_enabled", True),
+                    "haptic_enabled": getattr(self, "therapy_haptic_enabled", True),
+                    "preferred_channel": getattr(self, "therapy_preferred_channel", "audio"),
+                },
+            }
             
             # 1. Preprocessing.
             tracker.start_stage('preprocess')
+            temporal_input_len = 1
+            using_temporal_sequence = False
             try:
                 image_tensor = self._preprocess_image(image)
+                if self.temporal_enabled:
+                    # Buffer last preprocessed frames for rolling `[B,T,...]` inference.
+                    # Store `[C,H,W]` (no batch dim) to keep buffer compact.
+                    frame_3d = image_tensor.squeeze(0)
+                    self._temporal_frame_buffer.append(frame_3d)
+                    if len(self._temporal_frame_buffer) >= self.temporal_window_frames:
+                        should_use_temporal = (
+                            self.temporal_stride <= 1
+                            or (self.stats.get("frames_processed", 0) % self.temporal_stride == 0)
+                        )
+                        if should_use_temporal:
+                            frames_stack = torch.stack(
+                                list(self._temporal_frame_buffer)[-self.temporal_window_frames:],
+                                dim=0,
+                            )
+                            image_tensor = frames_stack.unsqueeze(0).contiguous()  # [1, T, 3, H, W]
+                            temporal_input_len = int(self.temporal_window_frames)
+                            using_temporal_sequence = True
             except Exception as e:
                 tracker.end_stage()
                 session_logger.error(f"Image preprocessing failed: {str(e)}", 
@@ -704,6 +981,42 @@ class MaxSightSession:
                 self.degraded_state.set_degraded(DegradedMode.VISION_UNSTABLE, str(e))
                 return {'error': 'Model inference failed', 'degraded_mode': 'vision_unstable'}
             tracker.end_stage()
+
+            # Temporal contract: downstream stages assume batch size 1 outputs.
+            if using_temporal_sequence and temporal_input_len > 1:
+                outputs = self._slice_outputs_for_last_frame(outputs, temporal_input_len)
+                contract_debug["temporal"]["used_sequence"] = True
+                contract_debug["temporal"]["sliced_to_batch1"] = True
+
+            # Contract visibility: RAG surface should not leak into runtime output dict.
+            contract_debug["forward_surface_contract"] = {
+                "has_retrieval_artifacts": any(k in outputs for k in ("retrieval_results", "distances", "indices", "retrieval")),
+                "has_scene_description_in_model_outputs": "scene_description" in outputs,
+                "output_batch_for_classifications": int(outputs["classifications"].shape[0])
+                if isinstance(outputs.get("classifications"), torch.Tensor) and outputs["classifications"].numel() > 0
+                else None,
+            }
+
+            # Readable pass/fail checks for frontend.
+            rag_surface_ok = (
+                not contract_debug["forward_surface_contract"]["has_retrieval_artifacts"]
+                and not contract_debug["forward_surface_contract"]["has_scene_description_in_model_outputs"]
+            )
+            temporal_ok = (
+                (not contract_debug["temporal"]["used_sequence"])
+                or contract_debug["temporal"]["sliced_to_batch1"]
+            )
+            contract_debug["checks"] = {
+                "rag_surface_contract_ok": rag_surface_ok,
+                "temporal_surface_contract_ok": temporal_ok,
+            }
+
+            # Stage gates (only present when the model stage graph path enabled).
+            contract_debug["stage_gates"] = {
+                "stage_a_completed": outputs.get("stage_a_completed"),
+                "stage_b_completed": outputs.get("stage_b_completed"),
+                "skip_stage_b_reason": outputs.get("skip_stage_b_reason"),
+            }
             
             # Check abort after inference.
             if self._aborted:
@@ -718,6 +1031,16 @@ class MaxSightSession:
             detections_list = self.priority_filter.filter_alerts(detections_list)
             detections_list = self.alert_cooldown.filter_alerts(detections_list, frame_id=frame_id)
             tracker.end_stage()
+
+            # 4b. Therapy (closed-loop) in parallel with OCR.
+            therapy_future = None
+            therapy_actions: List[Any] = []
+            therapy_feedback: Optional[Dict[str, Any]] = None
+            if self.session_active and detections_list and not self._aborted:
+                # Feed the closed-loop controller only perception-derived signals.
+                perception_for_therapy = self._build_perception_for_therapy(detections_list, outputs)
+                self._last_therapy_perception = perception_for_therapy
+                therapy_future = self._pipeline_executor.submit(self.therapy_engine.update, perception_for_therapy)
             
             # 4. OCR text detection.
             ocr_results = self._run_ocr(image, outputs)
@@ -735,13 +1058,34 @@ class MaxSightSession:
             scheduled_outputs = self._schedule_outputs(detections_list, outputs)
             
             # 9. Therapy integration.
-            therapy_feedback = None
-            if self.session_active and detections_list and not self._aborted:
-                target_objects = [det.get('class_name', 'object') for det in detections_list[:3]]
-                therapy_feedback = self.therapy.create_attention_task(
-                    scene_description=scene_description or "Scene with objects",
-                    target_objects=target_objects,
-                    difficulty=config.therapy_difficulty
+            if therapy_future is not None:
+                try:
+                    therapy_actions = therapy_future.result(timeout=0.1)
+                except Exception:
+                    therapy_actions = []
+                therapy_feedback = self._therapy_actions_to_feedback(therapy_actions)
+                # Frontend/test-signal: show which channels were generated.
+                contract_debug["therapy_delivery"]["generated_channels"] = [
+                    getattr(a, "channel", None) for a in therapy_actions if getattr(a, "channel", None) is not None
+                ]
+                contract_debug["therapy_delivery"]["generated_action_types"] = [
+                    getattr(a, "intervention_type", None)
+                    for a in therapy_actions
+                    if getattr(a, "intervention_type", None)
+                ]
+                if self._last_therapy_perception is not None:
+                    contract_debug["therapy_delivery"]["temporal_reliability"] = self._last_therapy_perception.get("temporal_reliability")
+                    contract_debug["therapy_delivery"]["flicker_risk"] = self._last_therapy_perception.get("flicker_risk")
+                if "checks" not in contract_debug:
+                    contract_debug["checks"] = {}
+                allowed_channels = set()
+                if contract_debug["therapy_delivery"].get("voice_enabled", True):
+                    allowed_channels.add("audio")
+                if contract_debug["therapy_delivery"].get("haptic_enabled", True):
+                    allowed_channels.add("haptic")
+                contract_debug["checks"]["therapy_channel_policy_ok"] = all(
+                    (ch in allowed_channels) for ch in contract_debug["therapy_delivery"].get("generated_channels", [])
+                    if ch in ("audio", "haptic")
                 )
             
             # Check abort before generating outputs.
@@ -765,18 +1109,25 @@ class MaxSightSession:
                     session_id=self.session_id,
                 )
             
-            # 10. Generate overlays (skip if adaptive skip)
-            if not skip_non_critical:
-                tracker.start_stage('overlay')
+            # 10. Generate overlays (always; adaptive skip should not remove dev/test visibility)
+            tracker.start_stage('overlay')
+            try:
                 overlay_image_b64 = self._render_overlay(image, detections_list, ocr_results, path_info)
-                tracker.end_stage()
-            else:
+            except Exception as exc:
+                session_logger.warning(
+                    "Overlay render failed: %s",
+                    exc,
+                    session_id=self.session_id,
+                )
                 overlay_image_b64 = None
+            tracker.end_stage()
             
             # 11. Queue outputs (voice and haptic) - only if not aborted and not skipped.
             if not self._aborted and not skip_non_critical:
                 tracker.start_stage('audio')
                 voice_announcements, haptic_patterns = self._queue_outputs(scene_description, outputs, detections_list)
+                # Therapy prompts are non-critical, so we only queue when we are not skipping.
+                self._queue_therapy_actions(therapy_actions)
                 tracker.end_stage()
             else:
                 voice_announcements, haptic_patterns = [], []
@@ -821,6 +1172,7 @@ class MaxSightSession:
                 scheduled_outputs=scheduled_outputs
             )
             result['pipeline_breakdown'] = pipeline_breakdown
+            result['contract_debug'] = contract_debug
             
             # Save baseline output for regression testing (first frame only)
             self._save_baseline_output(result)
@@ -1616,21 +1968,28 @@ class MaxSightSimulator:
         
         breakdown_so_far = tracker.get_breakdown()
         total_so_far_ms = float(breakdown_so_far.get('total_ms', 0.0))
-        skip_non_critical = total_so_far_ms > 200.0
+        # DEV mode always produces full output (overlay, voice, haptic) regardless of latency.
+        is_dev_mode = getattr(self, 'output_mode', None) == OutputMode.DEV
+        skip_non_critical = (not is_dev_mode) and (total_so_far_ms > 200.0)
+        if not is_dev_mode:
+            try:
+                import psutil
+                if psutil.cpu_percent(interval=None) > 80.0:
+                    skip_non_critical = True
+            except Exception:
+                pass
+
+        # 10. Generate overlays (always; adaptive skip should not remove dev/test visibility)
+        tracker.start_stage('overlay')
         try:
-            import psutil
-            if psutil.cpu_percent(interval=None) > 80.0:
-                skip_non_critical = True
-        except Exception:
-            pass
-        
-        # 10. Generate overlays.
-        if not skip_non_critical:
-            tracker.start_stage('overlay')
             overlay_image_b64 = self._render_overlay(image, detections_list, ocr_results, path_info)
-            tracker.end_stage()
-        else:
+        except Exception as exc:
+            logger.warning(
+                "Overlay render failed: %s",
+                exc,
+            )
             overlay_image_b64 = None
+        tracker.end_stage()
         
         # 11. Queue outputs (voice and haptic)
         if not skip_non_critical:
@@ -2000,6 +2359,11 @@ def api_init():
         
         # Configure session.
         session.set_user_condition(condition)
+        session.set_therapy_output_preferences(
+            voice_enabled=validated_data.get("therapy_voice_enabled", True),
+            haptic_enabled=validated_data.get("therapy_haptic_enabled", True),
+            preferred_channel=validated_data.get("therapy_preferred_channel", "audio"),
+        )
         session.current_scenario = scenario
         session.session_active = validated_data.get('start_session', False)
         
@@ -2041,9 +2405,31 @@ def api_process():
         # Apply per-session rate limiting.
         session_rate_limiter.check_rate_limit(session.session_id, client_ip)
         
-        # Get and validate image from request.
+        # Get and validate image(s) from request.
         image = None
-        if 'image' in request.files:
+        frames = None
+        frames_mode = False
+        image_for_response = None
+
+        # Video/sequence input contract: `frames_data` is a list of base64 frames.
+        # WHY: Lets the real-time pipeline be driven by sequence data without changing the
+        # tensor-only forward surface contract.
+        if request.is_json and 'frames_data' in request.json:
+            frames_data = request.json['frames_data']
+            try:
+                validated_frames = validate_frames_data(
+                    frames_data,
+                    max_frames=getattr(config, 'max_frames_data_count', 16),
+                    max_payload_mb=float(getattr(config, 'max_frames_payload_mb', 40)),
+                )
+            except (ValidationError, InvalidImageError, ImageTooLargeError) as e:
+                return jsonify({'error': str(e)}), 400
+
+            frames = validated_frames['frames']
+            frames_mode = True
+            image_for_response = frames[-1]
+
+        elif 'image' in request.files:
             image_file = request.files['image']
             
             # Check filename for format hints.
@@ -2095,9 +2481,13 @@ def api_process():
                 image = rgb_image
             else:
                 image = image.convert('RGB')
+            image_for_response = image
         elif request.is_json and 'image_data' in request.json:
             image_data = request.json['image_data']
-            image = validate_image_data(image_data)
+            try:
+                image = validate_image_data(image_data)
+            except InvalidImageError as e:
+                return jsonify({'error': str(e)}), 400
             # Convert to RGB if necessary.
             if image.mode != 'RGB':
                 rgb_image = Image.new('RGB', image.size, (255, 255, 255))
@@ -2108,8 +2498,11 @@ def api_process():
                 image = rgb_image
             else:
                 image = image.convert('RGB')
+            image_for_response = image
         else:
-            return jsonify({'error': 'No image provided. Send image file or image_data in JSON.'}), 400
+            return jsonify({
+                'error': 'No image provided. Send image file, image_data in JSON, or frames_data in JSON.'
+            }), 400
         
         # Get audio features if provided.
         audio_features = None
@@ -2132,9 +2525,20 @@ def api_process():
             except (ValueError, TypeError):
                 pass
         
-        # Process frame (session.process_frame handles locking internally)
+        # Process frame(s) (session.process_frame handles locking internally)
         try:
-            result = session.process_frame(image, audio_features, frame_id=frame_id)
+            if frames_mode and frames is not None:
+                last_result = None
+                seq_start_id = frame_id
+                for i, frame_image in enumerate(frames):
+                    seq_frame_id = (seq_start_id + i) if seq_start_id is not None else None
+                    last_result = session.process_frame(frame_image, audio_features, frame_id=seq_frame_id)
+                result = last_result or {}
+                result['temporal_input_frames'] = len(frames)
+            else:
+                if image is None:
+                    raise ValueError("image is None in non-frames mode")
+                result = session.process_frame(image, audio_features, frame_id=frame_id)
             
             # Add degraded mode status to response.
             degraded_status = session.degraded_state.get_status()
@@ -2162,7 +2566,9 @@ def api_process():
         if not result.get('overlay_image'):
             try:
                 image_buffer = BytesIO()
-                image.save(image_buffer, format='PNG')
+                if image_for_response is None:
+                    raise ValueError("image_for_response is None")
+                image_for_response.save(image_buffer, format='PNG')
                 image_base64 = base64.b64encode(image_buffer.getvalue()).decode('utf-8')
                 result['overlay_image'] = f"data:image/png;base64,{image_base64}"
             except Exception as e:
@@ -2171,7 +2577,9 @@ def api_process():
         # Add original image for comparison.
         try:
             original_buffer = BytesIO()
-            image.save(original_buffer, format='PNG')
+            if image_for_response is None:
+                raise ValueError("image_for_response is None")
+            image_for_response.save(original_buffer, format='PNG')
             original_base64 = base64.b64encode(original_buffer.getvalue()).decode('utf-8')
             result['original_image'] = f"data:image/png;base64,{original_base64}"
         except Exception as e:
@@ -2399,6 +2807,40 @@ def api_health():
             'error': str(e),
             'timestamp': time.time()
         }), 500
+
+
+@app.route('/api/dev/sprint-self-tests', methods=['GET'])
+def api_dev_sprint_self_tests():
+    """Run in-process sprint checks (manifest, temporal targets, collate, validators); for simulator UI QA."""
+
+    if not getattr(config, 'enable_dev_sprint_tests', False):
+        return jsonify({'error': 'disabled'}), 404
+    try:
+        from .sprint_self_tests import run_sprint_self_tests
+
+        return jsonify(run_sprint_self_tests())
+    except Exception as e:
+        api_logger.error(f'sprint-self-tests: {e}', exc_info=True)
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dev/validate-manifest', methods=['POST'])
+def api_dev_validate_manifest():
+    """POST JSON { \"manifest_json\": \"...\" } — validate v1 clip manifest."""
+
+    if not getattr(config, 'enable_dev_sprint_tests', False):
+        return jsonify({'error': 'disabled'}), 404
+    try:
+        from .sprint_self_tests import run_manifest_json_check
+
+        body = request.get_json(silent=True) or {}
+        raw = body.get('manifest_json', '')
+        if not raw:
+            return jsonify({'ok': False, 'errors': ['manifest_json required']}), 400
+        return jsonify(run_manifest_json_check(raw))
+    except Exception as e:
+        api_logger.error(f'validate-manifest: {e}', exc_info=True)
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/sample', methods=['POST', 'GET'])

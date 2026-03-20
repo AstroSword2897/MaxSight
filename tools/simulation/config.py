@@ -26,6 +26,8 @@ class SimulatorConfig:
     urgency_warning_threshold: int = 2
     max_alerts_per_frame: int = 5
     alert_cooldown_frames: int = 5
+    therapy_temporal_reliability_floor: float = 0.45
+    therapy_temporal_history: int = 8
     
     # Haptic/voice settings.
     haptic_intensity_high: float = 0.7
@@ -33,6 +35,14 @@ class SimulatorConfig:
     
     # Baseline output.
     baseline_save_frame: int = 1
+
+    # Temporal/video sequencing (real-time pipeline).
+    # WHY: T5 temporal branch expects `[B, T, 3, H, W]` so we maintain a rolling window
+    # of preprocessed frames per session and run inference on the newest window.
+    temporal_enabled: bool = True
+    temporal_window_frames: int = 8
+    temporal_stride: int = 1
+    temporal_max_window_frames: int = 16
     
     # Rate limiting (requests per minute)
     rate_limit_per_session: int = 60  # 60 requests/minute per session.
@@ -41,6 +51,8 @@ class SimulatorConfig:
     # Input validation.
     max_image_size_mb: int = 10  # 10MB max.
     allowed_image_formats: tuple = ('JPEG', 'PNG', 'GIF', 'BMP', 'WEBP', 'TIFF')
+    max_frames_data_count: int = 16  # Max frames accepted per /api/process request.
+    max_frames_payload_mb: int = 40  # Aggregate base64 payload cap for frames_data.
     
     # Logging.
     log_level: str = 'INFO'
@@ -52,6 +64,9 @@ class SimulatorConfig:
     
     # Default output mode.
     default_output_mode: OutputMode = OutputMode.PATIENT
+
+    # Expose /api/dev/sprint-self-tests and manifest validator in the UI (local dev only).
+    enable_dev_sprint_tests: bool = True
 
     model_checkpoint_path: Optional[str] = None  # Default: use glaucoma model if available.
     

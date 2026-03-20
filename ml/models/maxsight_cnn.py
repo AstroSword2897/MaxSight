@@ -993,7 +993,20 @@ class MaxSightCNN(nn.Module):
                         "motion_features detached - gradient flow broken in temporal branch. "
                         "TemporalEncoder must not detach motion_features when training."
                     )
-                motion_features = motion_features.contiguous().reshape(B_orig * T, -1, H_temp, W_temp)
+                # TemporalEncoder returns motion_features as last-frame features [B, C, H, W].
+                # Stage B feature tensor lives in flattened form [B*T, C, H, W], so we expand
+                # the last-frame motion features across the temporal dimension before reshaping.
+                if motion_features.dim() == 4:  # [B, C, H, W]
+                    motion_features = motion_features.contiguous()
+                    motion_features = (
+                        motion_features.unsqueeze(1)
+                        .expand(-1, T, -1, H_temp, W_temp)
+                        .contiguous()
+                        .reshape(B_orig * T, motion_features.shape[1], H_temp, W_temp)
+                    )
+                else:
+                    # Future-proof: handle potential time-aware outputs [B, T, C, H, W].
+                    motion_features = motion_features.contiguous().reshape(B_orig * T, -1, H_temp, W_temp)
                 if motion_features.shape[1] != stage_b_features.shape[1]:
                     if self.temporal_feature_proj is not None:
                         motion_features = self.temporal_feature_proj(motion_features)
@@ -1291,7 +1304,18 @@ class MaxSightCNN(nn.Module):
         outputs['motion'] = motion_features if motion_features is not None else torch.zeros(batch_size, 2, 1, 1, device=dev, dtype=fused_features.dtype)
         if c is not None:
             outputs['temporal_consistency'] = c
-        
+        else:
+            outputs['temporal_consistency'] = torch.full(
+                (batch_size, 1), 0.5, device=dev, dtype=fused_features.dtype
+            )
+        fk = temporal_outputs.get('flicker') if temporal_outputs is not None else None
+        if fk is not None:
+            outputs['flicker'] = fk
+        else:
+            outputs['flicker'] = torch.full(
+                (batch_size, 1), 0.5, device=dev, dtype=fused_features.dtype
+            )
+
         # Audio outputs (Tier 2)
         if sound_outputs is not None:
             outputs['sound_classifications'] = sound_outputs['sound_probs']
@@ -1502,62 +1526,80 @@ class MaxSightCNN(nn.Module):
                     })
                 outputs['scene_graphs'] = scene_graphs
         
-        enable_global_encoder = False
+        # RAG advisory-only retrieval:
+        # - retrieval must never block inference (critical-path safety gate)
+        # - retrieval results must never be inserted into the tensor-only runtime surface
+        # - keep scene description head disabled here to preserve JIT trace/export safety
+        #   (it introduces non-tensor string outputs into the forward dict) and to avoid
+        #   temporal shape mismatches during [B,T,C,H,W] inference.
+        do_retrieval = (
+            self.enable_retrieval
+            and self.retrieval_system is not None
+            and not skip_stage_b
+        )
+        do_scene_description = False
         
-        # Only generate if Stage B ran (not skipped)
-        if (self.training or self.generate_description) and not skip_stage_b and enable_global_encoder:
-            # Sample 1 frame for CLIP (if video)
+        if do_retrieval or do_scene_description:
+            # Sample 1 frame for the global encoder (if video, use first frame).
             if temporal_mode and B_orig is not None and T is not None:
-                clip_images = images.contiguous().reshape(B_orig, T, 3, H_img, W_img)[:, 0]  # Use first frame.
+                clip_images = images.contiguous().reshape(B_orig, T, 3, H_img, W_img)[:, 0]
             else:
                 clip_images = images if images.dim() == 4 else images[:, 0]
             
-            # Get CLIP global embedding.
             global_emb = self.global_encoder(clip_images)  # [B, 512].
             
-            batch_size_for_regions = B_orig if temporal_mode and B_orig is not None else batch_size
-            num_regions = min(5, top_k_scene)
-            top_region_indices = top_k_indices_scene[:, :num_regions]
-            y_indices_regions = top_region_indices // W
-            x_indices_regions = top_region_indices % W
-            batch_indices_regions = torch.arange(batch_size_for_regions, device=det_feats.device).unsqueeze(1).expand(-1, num_regions)
-            region_embs_tensor = det_feats[batch_indices_regions, :, y_indices_regions, x_indices_regions]
-            
-            region_embs_tensor = F.adaptive_avg_pool2d(
-                region_embs_tensor.unsqueeze(-1).unsqueeze(-1).contiguous().reshape(batch_size_for_regions * num_regions, region_embs_tensor.shape[2], 1, 1),
-                1
-            ).squeeze(-1).squeeze(-1).contiguous().reshape(batch_size_for_regions, num_regions, region_embs_tensor.shape[2])  # [B, num_regions, C].
-            
-            # ASYNC RETRIEVAL: Non-blocking retrieval for scene description enhancement.
-            # Retrieval is advisory only and never blocks inference.
-            retrieval_results = None
-            if self.enable_retrieval and self.retrieval_system is not None:
-                # Prepare query embeddings for retrieval.
+            # ASYNC RETRIEVAL (non-blocking).
+            if do_retrieval:
                 query_embeddings = {
                     'global': global_emb.detach().cpu().numpy() if isinstance(global_emb, torch.Tensor) else global_emb,
                 }
-                
-                # Submit async retrieval request (non-blocking)
+                retrieval_system = self.retrieval_system
                 try:
-                    retrieval_results = self.retrieval_system.retrieve(
+                    # `do_retrieval` guarantees retrieval_system is non-None, but we
+                    # keep a local variable for static type checking.
+                    if retrieval_system is not None:
+                        _ = retrieval_system.retrieve(
                         query_embeddings=query_embeddings,
                         request_id=f"frame_{frame_id}" if frame_id is not None else None,
                         blocking=False
-                    )
+                        )
                 except Exception:
-                    retrieval_results = None
+                    # Retrieval is advisory-only; failures must not affect outputs.
+                    pass
             
-            # Generate description (with optional retrieval enhancement)
-            description_outputs = self.scene_description_head(
-                global_embedding=global_emb,
-                region_embeddings=region_embs_tensor,
-                ocr_embeddings=None,  # Optional.
-                condition_mode=self.condition_mode or 'normal'
-            )
-            
-            outputs['scene_description'] = description_outputs['description']
-            outputs['description_logits'] = description_outputs['description_logits']
-        # Else: do not add None (JIT trace requires tensor-only dict)
+            if do_scene_description:
+                batch_size_for_regions = B_orig if temporal_mode and B_orig is not None else batch_size
+                num_regions = min(5, top_k_scene)
+                top_region_indices = top_k_indices_scene[:, :num_regions]
+                y_indices_regions = top_region_indices // W
+                x_indices_regions = top_region_indices % W
+                batch_indices_regions = torch.arange(batch_size_for_regions, device=det_feats.device).unsqueeze(1).expand(-1, num_regions)
+                region_embs_tensor = det_feats[batch_indices_regions, :, y_indices_regions, x_indices_regions]
+                
+                region_embs_tensor = F.adaptive_avg_pool2d(
+                    region_embs_tensor.unsqueeze(-1).unsqueeze(-1).contiguous().reshape(
+                        batch_size_for_regions * num_regions,
+                        region_embs_tensor.shape[2],
+                        1,
+                        1,
+                    ),
+                    1
+                ).squeeze(-1).squeeze(-1).contiguous().reshape(
+                    batch_size_for_regions,
+                    num_regions,
+                    region_embs_tensor.shape[2]
+                )
+                
+                description_outputs = self.scene_description_head(
+                    global_embedding=global_emb,
+                    region_embeddings=region_embs_tensor,
+                    ocr_embeddings=None,
+                    condition_mode=self.condition_mode or 'normal'
+                )
+                
+                outputs['scene_description'] = description_outputs['description']
+                outputs['description_logits'] = description_outputs['description_logits']
+        # Else: keep forward dict tensor-only for trace/export.
         
         # Personalization (if user_id provided)
         if user_id is not None:

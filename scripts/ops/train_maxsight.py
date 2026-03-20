@@ -19,7 +19,15 @@ from torch.utils.data import DataLoader
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model, TierConfig, CapabilityTier
-from ml.training.losses import MultiHeadLoss, ObjectnessLoss, ClassificationLoss, BoxRegressionLoss, DistanceZoneLoss, UrgencyLoss
+from ml.training.losses import (
+    MultiHeadLoss,
+    ObjectnessLoss,
+    ClassificationLoss,
+    BoxRegressionLoss,
+    DistanceZoneLoss,
+    UrgencyLoss,
+    ScalarMSELoss,
+)
 from ml.training.task_balancing import GradNormMultiHeadLoss
 from ml.training.train_loop import ProductionTrainLoop
 from ml.data.dataset import MaxSightDataset
@@ -93,7 +101,12 @@ def backup_training_artifacts(best_ckpt: Path, data_dir: Path):
     logger.info(f"Backup completed: {backup_dir}")
 
 
-def create_loss_fn(num_classes: int, use_gradnorm: bool = False):
+def create_loss_fn(
+    num_classes: int,
+    use_gradnorm: bool = False,
+    *,
+    temporal_supervision: bool = False,
+):
     """Create loss function compatible with ProductionTrainLoop."""
     loss_functions = {
         'objectness': ObjectnessLoss(),
@@ -102,7 +115,10 @@ def create_loss_fn(num_classes: int, use_gradnorm: bool = False):
         'distance': DistanceZoneLoss(),
         'urgency': UrgencyLoss(),
     }
-    
+    if temporal_supervision:
+        loss_functions['temporal_consistency'] = ScalarMSELoss()
+        loss_functions['flicker'] = ScalarMSELoss()
+
     if use_gradnorm:
         return GradNormMultiHeadLoss(loss_functions)
     else:
@@ -175,7 +191,23 @@ def main():
     
     # Loss.
     parser.add_argument("--use-gradnorm", action="store_true", help="Use GradNorm for task balancing")
-    
+    parser.add_argument(
+        "--temporal-supervision",
+        action="store_true",
+        help="Add MSE losses for temporal_consistency and flicker when batch includes those targets (video clip manifests)",
+    )
+    parser.add_argument(
+        "--freeze-backbone",
+        action="store_true",
+        help="Freeze backbone for the first N epochs, then unfreeze (head-first training; saves early compute)",
+    )
+    parser.add_argument(
+        "--freeze-backbone-epochs",
+        type=int,
+        default=5,
+        help="With --freeze-backbone: epochs to keep backbone frozen (default: 5)",
+    )
+
     args = parser.parse_args()
 
     # Apply AutoML best hyperparameters if provided.
@@ -377,7 +409,11 @@ def main():
         logger.info("Compiling model with torch.compile...")
         model = torch.compile(model)
     
-    loss_fn = create_loss_fn(num_classes, use_gradnorm=args.use_gradnorm)
+    loss_fn = create_loss_fn(
+        num_classes,
+        use_gradnorm=args.use_gradnorm,
+        temporal_supervision=args.temporal_supervision,
+    )
     
     # Find checkpoint to resume from (same machine or after copy to another GPU)
     resume_from = None
@@ -406,6 +442,7 @@ def main():
     # Type narrow for trainer (model may be compiled callable)
     from torch.nn import Module
     assert isinstance(model, Module), "model must be nn.Module"
+    freeze_epochs = args.freeze_backbone_epochs if args.freeze_backbone else 0
     trainer = ProductionTrainLoop(
         model=model,
         train_loader=train_loader,
@@ -429,6 +466,8 @@ def main():
         resume_from=resume_from,
         resume_model_only=args.resume_model_only,
         use_gradnorm=args.use_gradnorm,
+        freeze_backbone=args.freeze_backbone,
+        freeze_backbone_epochs=freeze_epochs,
     )
     
     try:

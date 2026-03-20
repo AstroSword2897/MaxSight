@@ -10,6 +10,7 @@ import json
 from PIL import Image
 import cv2
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 # Add parent directory to path.
 import sys
@@ -108,10 +109,10 @@ class ComprehensiveSimulator:
         
         # Preprocess.
         start_time = time.perf_counter()
-        preprocessed = self.preprocessor.preprocess(image)
+        preprocessed = self.preprocessor(image)
         preprocess_time = time.perf_counter() - start_time
         
-        # Convert to tensor.
+        # ImagePreprocessor is tensor-first; keep a defensive fallback.
         if isinstance(preprocessed, Image.Image):
             import torchvision.transforms as T
             to_tensor = T.ToTensor()
@@ -189,9 +190,17 @@ class ComprehensiveSimulator:
         video_path: str,
         output_path: Optional[str] = None,
         max_frames: Optional[int] = None,
-        save_frames: bool = False
+        save_frames: bool = False,
+        temporal_window_frames: int = 1,
+        temporal_stride: int = 1,
+        preprocess_workers: int = 4,
     ) -> Dict[str, Any]:
-        """Process a video file frame by frame."""
+        """Process a video file, optionally using temporal sequences.
+
+        If `temporal_window_frames > 1`, the simulator runs the model on stacked frames
+        with shape `[1, T, 3, H, W]` and outputs only the most recent frame in each window
+        (rolling window with `temporal_stride`).
+        """
         if self.verbose:
             print(f"\nProcessing video: {video_path}")
         
@@ -213,51 +222,181 @@ class ComprehensiveSimulator:
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             out_writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
         
-        frame_results = []
+        frame_results: List[Dict[str, Any]] = []
         frame_count = 0
         
         self.is_running = True
         
-        while self.is_running and cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            if max_frames and frame_count >= max_frames:
-                break
-            
-            # Convert BGR to RGB.
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame_pil = Image.fromarray(frame_rgb)
-            
-            # Process frame.
-            result = self.process_image_frame(frame_pil, frame_number=frame_count)
-            frame_results.append(result)
-            
-            # Create visualization.
-            vis_frame = self._create_visualization(
-                frame_pil,
-                result['detections'],
-                result['outputs']
-            )
-            
-            # Convert back to BGR for OpenCV.
-            vis_frame_bgr = cv2.cvtColor(np.array(vis_frame), cv2.COLOR_RGB2BGR)
-            
-            # Write to output video.
-            if out_writer:
-                out_writer.write(vis_frame_bgr)
-            
-            # Save individual frames if requested.
-            if save_frames:
-                frame_output_path = Path(output_path).parent / f"frame_{frame_count:06d}.jpg"
-                vis_frame.save(str(frame_output_path))
-            
-            frame_count += 1
-            
-            if self.verbose and frame_count % 30 == 0:
-                print(f"  Processed {frame_count}/{total_frames} frames "
-                      f"({self.stats['avg_latency_ms']:.1f}ms avg latency)")
+        if temporal_window_frames <= 1:
+            while self.is_running and cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                
+                if max_frames and frame_count >= max_frames:
+                    break
+                
+                # Convert BGR to RGB.
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame_pil = Image.fromarray(frame_rgb)
+                
+                # Process frame.
+                result = self.process_image_frame(frame_pil, frame_number=frame_count)
+                frame_results.append(result)
+                
+                # Create visualization.
+                vis_frame = self._create_visualization(
+                    frame_pil,
+                    result['detections'],
+                    result['outputs']
+                )
+                
+                # Convert back to BGR for OpenCV.
+                vis_frame_bgr = cv2.cvtColor(np.array(vis_frame), cv2.COLOR_RGB2BGR)
+                
+                # Write to output video.
+                if out_writer:
+                    out_writer.write(vis_frame_bgr)
+                
+                # Save individual frames if requested.
+                if save_frames and output_path:
+                    frame_output_path = Path(output_path).parent / f"frame_{frame_count:06d}.jpg"
+                    vis_frame.save(str(frame_output_path))
+                
+                frame_count += 1
+                
+                if self.verbose and frame_count % 30 == 0:
+                    print(f"  Processed {frame_count}/{total_frames} frames "
+                          f"({self.stats['avg_latency_ms']:.1f}ms avg latency)")
+        else:
+            if temporal_stride < 1:
+                raise ValueError("temporal_stride must be >= 1")
+            if preprocess_workers < 1:
+                raise ValueError("preprocess_workers must be >= 1")
+
+            from collections import deque
+
+            window = deque(maxlen=temporal_window_frames)
+            processed_end_frame_count = 0
+
+            executor = ThreadPoolExecutor(max_workers=preprocess_workers)
+            try:
+                while self.is_running and cap.isOpened():
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    
+                    if max_frames and frame_count >= max_frames:
+                        break
+                    
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frame_pil = Image.fromarray(frame_rgb)
+                    window.append((frame_count, frame_pil))
+                    
+                    # Wait until the rolling window is full.
+                    if len(window) < temporal_window_frames:
+                        frame_count += 1
+                        continue
+                    
+                    # Preprocess frames in parallel (CPU).
+                    window_indices = [idx for idx, _ in window]
+                    window_images = [img for _, img in window]
+                    
+                    preprocess_start = time.perf_counter()
+                    frame_tensors = list(executor.map(self.preprocessor, window_images))
+                    preprocess_time = time.perf_counter() - preprocess_start
+                    
+                    # Shape contract: [B, T, 3, H, W].
+                    image_tensor = torch.stack(frame_tensors, dim=0).unsqueeze(0).to(self.device)
+                    assert image_tensor.dim() == 5, "Expected [1, T, C, H, W] for temporal inference."
+                    assert image_tensor.shape[1] == temporal_window_frames, "Temporal window length mismatch."
+                    
+                    # Inference on stacked frames (Stage A+Stage B).
+                    inference_start = time.perf_counter()
+                    with torch.no_grad():
+                        outputs = self.model(image_tensor)
+                    inference_time = time.perf_counter() - inference_start
+                    
+                    # Contract checks before integrating outputs.
+                    if 'classifications' not in outputs or 'objectness' not in outputs:
+                        raise RuntimeError("Model outputs missing required detection tensors.")
+                    if 'stage_a_completed' in outputs:
+                        assert outputs['stage_a_completed'] is True, "Stage A did not complete successfully."
+                    if 'stage_b_completed' in outputs and outputs.get('skip_stage_b_reason') is None:
+                        # When Stage B isn't skipped, stage_b_completed must be True.
+                        assert outputs['stage_b_completed'] is True, "Stage B did not complete successfully."
+                    batch_elems = outputs['classifications'].shape[0]
+                    # Model returns per-frame outputs in temporal mode; batch_elems should equal T.
+                    assert batch_elems == temporal_window_frames, (
+                        f"Temporal outputs batch mismatch: expected {temporal_window_frames}, got {batch_elems}"
+                    )
+                    
+                    detections_per_frame = self.model.get_detections(outputs, confidence_threshold=0.3)
+                    assert len(detections_per_frame) == temporal_window_frames, "Detection list length mismatch."
+                    
+                    # Emit only the newest frame in the window.
+                    end_frame_idx = temporal_window_frames - 1
+                    end_frame_number = window_indices[end_frame_idx]
+                    detections_last = detections_per_frame[end_frame_idx]
+                    
+                    # Update statistics for the emitted frame.
+                    self.stats['frames_processed'] += 1
+                    self.stats['total_inference_time'] += inference_time
+                    self.stats['total_detections'] += len(detections_last)
+                    self.stats['avg_latency_ms'] = (
+                        self.stats['total_inference_time'] / max(self.stats['frames_processed'], 1) * 1000
+                    )
+                    self.stats['fps'] = 1.0 / (inference_time + 1e-6)
+                    
+                    # Slice outputs for the emitted frame.
+                    outputs_last = {
+                        'classifications': outputs['classifications'][end_frame_idx].detach().cpu().numpy(),
+                        'boxes': outputs['boxes'][end_frame_idx].detach().cpu().numpy(),
+                        'objectness': outputs['objectness'][end_frame_idx].detach().cpu().numpy(),
+                        'urgency_scores': outputs['urgency_scores'][end_frame_idx].detach().cpu().numpy()
+                        if isinstance(outputs.get('urgency_scores'), torch.Tensor) else None,
+                        'distance_zones': outputs['distance_zones'][end_frame_idx].detach().cpu().numpy(),
+                        'scene_embedding': outputs['scene_embedding'][end_frame_idx].detach().cpu().numpy()
+                        if isinstance(outputs.get('scene_embedding'), torch.Tensor) else None,
+                    }
+                    
+                    result = {
+                        'frame_number': end_frame_number,
+                        'preprocess_time_ms': preprocess_time * 1000,
+                        'inference_time_ms': inference_time * 1000,
+                        'total_time_ms': (preprocess_time + inference_time) * 1000,
+                        'num_detections': len(detections_last),
+                        'detections': detections_last,
+                        'outputs': outputs_last,
+                    }
+                    frame_results.append(result)
+                    
+                    # Visualization for the emitted frame.
+                    end_image = window_images[end_frame_idx]
+                    vis_frame = self._create_visualization(end_image, detections_last, outputs_last)
+                    vis_frame_bgr = cv2.cvtColor(np.array(vis_frame), cv2.COLOR_RGB2BGR)
+                    if out_writer:
+                        out_writer.write(vis_frame_bgr)
+                    if save_frames and output_path:
+                        frame_output_path = Path(output_path).parent / f"frame_{end_frame_number:06d}.jpg"
+                        vis_frame.save(str(frame_output_path))
+                    
+                    processed_end_frame_count += 1
+                    
+                    if self.verbose and processed_end_frame_count % 10 == 0:
+                        print(
+                            f"  Temporal: emitted {processed_end_frame_count} windows "
+                            f"(~{end_frame_number}/{total_frames} frames) "
+                            f"({self.stats['avg_latency_ms']:.1f}ms avg latency)"
+                        )
+                    
+                    # Roll the window forward by stride.
+                    for _ in range(min(temporal_stride, len(window))):
+                        window.popleft()
+                    
+                    frame_count += 1
+            finally:
+                executor.shutdown(wait=False)
         
         cap.release()
         if out_writer:
@@ -297,9 +436,9 @@ class ComprehensiveSimulator:
     ) -> Dict[str, Any]:
         """Process a single image frame (internal method)."""
         # Preprocess.
-        preprocessed = self.preprocessor.preprocess(image)
+        preprocessed = self.preprocessor(image)
         
-        # Convert to tensor.
+        # ImagePreprocessor is tensor-first; keep a defensive fallback.
         if isinstance(preprocessed, Image.Image):
             import torchvision.transforms as T
             to_tensor = T.ToTensor()
@@ -489,6 +628,9 @@ def main():
     parser.add_argument('--device', type=str, choices=['cpu', 'cuda', 'mps'], help='Device')
     parser.add_argument('--max-frames', type=int, help='Max frames for video')
     parser.add_argument('--max-images', type=int, help='Max images for directory')
+    parser.add_argument('--temporal-window', type=int, default=1, help='Temporal window size T for video sequencing')
+    parser.add_argument('--temporal-stride', type=int, default=1, help='Emit stride for temporal windows')
+    parser.add_argument('--preprocess-workers', type=int, default=4, help='CPU workers for preprocessing temporal windows')
     parser.add_argument('--save-session', type=str, help='Save session logs to file')
     parser.add_argument('--quiet', action='store_true', help='Quiet mode')
     
@@ -517,7 +659,10 @@ def main():
             result = simulator.process_video(
                 str(input_path),
                 output_path=args.output,
-                max_frames=args.max_frames
+                max_frames=args.max_frames,
+                temporal_window_frames=args.temporal_window,
+                temporal_stride=args.temporal_stride,
+                preprocess_workers=args.preprocess_workers,
             )
         else:
             print(f"Unsupported file type: {input_path.suffix}")

@@ -56,7 +56,7 @@ class ModelConfig:
 class RuntimeConfig:
     """Runtime configuration for inference and deployment."""
     # Performance constraints.
-    max_latency_ms: float = 500.0  # Target: <500ms for mobile.
+    max_latency_ms: float = 200.0  # Target: <200ms for mobile.
     max_memory_mb: float = 50.0    # Target: <50MB quantized.
     
     # Head execution.
