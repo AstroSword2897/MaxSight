@@ -4,6 +4,9 @@
 This script does NOT move or copy data — it records where the raw data lives
 so the cleaning pipeline knows where to find it.
 
+Prefer canonical roots from ``ml.data.medallion_layout.default_raw_dataset_dir``
+(``datasets/coco_raw``, ``datasets/raw/<key>/``); see ``docs/medallion_data.md``.
+
 Usage
 -----
 # Register COCO

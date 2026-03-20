@@ -46,6 +46,31 @@ def default_medallion_root(repo_root: Path) -> Path:
     return Path(repo_root).resolve() / "datasets" / "medallion"
 
 
+# Stable roots for vendor drops; scripts and ingest should prefer these over ad-hoc paths.
+RAW_DATASETS_DIRNAME = "raw"
+
+
+def default_raw_dataset_dir(repo_root: Path, dataset_key: str) -> Path:
+    """Return the canonical directory for raw dataset files.
+
+    COCO stays under ``datasets/coco_raw`` to match existing download and gather scripts.
+    All other keys use ``datasets/raw/<dataset_key>/``.
+    """
+
+    rr = Path(repo_root).resolve()
+    if dataset_key not in DATASET_KEYS:
+        raise ValueError(f"Unknown dataset key {dataset_key!r}. Valid: {DATASET_KEYS}")
+    if dataset_key == "coco":
+        return rr / "datasets" / "coco_raw"
+    return rr / "datasets" / RAW_DATASETS_DIRNAME / dataset_key
+
+
+def all_default_raw_dataset_dirs(repo_root: Path) -> Dict[str, Path]:
+    """Map every ``DATASET_KEYS`` entry to its canonical raw path."""
+
+    return {k: default_raw_dataset_dir(repo_root, k) for k in DATASET_KEYS}
+
+
 # ── Bronze paths ───────────────────────────────────────────────────────────────
 
 def bronze_coco_dir(root: Path) -> Path:

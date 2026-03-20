@@ -7,7 +7,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from ml.data.medallion_layout import (  # noqa: E402
+    DATASET_KEYS,
+    all_default_raw_dataset_dirs,
     build_coco_training_index,
+    default_raw_dataset_dir,
     load_training_index,
     merge_video_into_index,
     path_relative_to_repo,
@@ -15,6 +18,17 @@ from ml.data.medallion_layout import (  # noqa: E402
     resolve_repo_path,
     write_training_index,
 )
+
+
+def test_default_raw_dataset_dir(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    coco = default_raw_dataset_dir(repo, "coco")
+    assert coco == repo.resolve() / "datasets" / "coco_raw"
+    kin = default_raw_dataset_dir(repo, "kinetics700")
+    assert kin == repo.resolve() / "datasets" / "raw" / "kinetics700"
+    m = all_default_raw_dataset_dirs(repo)
+    assert set(m) == set(DATASET_KEYS)
 
 
 def test_path_relative_to_repo(tmp_path: Path) -> None:
