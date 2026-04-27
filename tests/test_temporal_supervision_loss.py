@@ -1,6 +1,11 @@
-"""Temporal scalar supervision wired through MultiHeadLoss (matches train_maxsight --temporal-supervision)."""
+"""Temporal scalar supervision wired through MultiHeadLoss + run_training builder.
 
-import importlib.util
+The train_maxsight CLI now resolves config into ResolvedTrainingConfig and
+delegates loss construction to ml.training.runner._build_loss, so this
+file checks that builder honours `loss.temporal_supervision` instead of
+the removed train_maxsight.create_loss_fn helper.
+"""
+
 import sys
 from pathlib import Path
 
@@ -12,6 +17,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from ml.training.losses import MultiHeadLoss, ScalarMSELoss  # noqa: E402
+from ml.training.run_config import ResolvedTrainingConfig  # noqa: E402
+from ml.training.runner import _build_loss  # noqa: E402
 
 
 def test_scalar_mse_loss_exact_value_and_gradient() -> None:
@@ -72,16 +79,29 @@ def test_multihead_temporal_numeric_total() -> None:
     assert out["total_loss"].item() == pytest.approx(0.0, abs=1e-5)
 
 
-def test_create_loss_fn_train_maxsight_module() -> None:
-    p = PROJECT_ROOT / "scripts" / "ops" / "train_maxsight.py"
-    spec = importlib.util.spec_from_file_location("train_maxsight_sprint", p)
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    fn = mod.create_loss_fn(10, False, temporal_supervision=True)
-    assert hasattr(fn, "loss_functions")
-    assert "temporal_consistency" in fn.loss_functions
-    assert "flicker" in fn.loss_functions
-    fn_off = mod.create_loss_fn(10, False, temporal_supervision=False)
-    assert "temporal_consistency" not in fn_off.loss_functions
-    assert "flicker" not in fn_off.loss_functions
+def _resolve(stem: str) -> ResolvedTrainingConfig:
+    cfg_path = PROJECT_ROOT / "ml" / "training" / "configs" / f"{stem}.yaml"
+    return ResolvedTrainingConfig.from_sources(
+        cfg_path, cli_overrides={"run_id": "test", "experiment": "ci"},
+    )
+
+
+def _heads(fn) -> set:
+    """MultiHeadLoss / GradNormMultiHeadLoss expose head_losses (ModuleDict)."""
+    container = getattr(fn, "head_losses", None) or getattr(fn, "loss_functions", None)
+    assert container is not None, "loss object must expose head_losses or loss_functions"
+    return set(container.keys())
+
+
+def test_runner_build_loss_with_temporal_supervision() -> None:
+    cfg = _resolve("t5_temporal")
+    heads = _heads(_build_loss(cfg))
+    assert "temporal_consistency" in heads
+    assert "flicker" in heads
+
+
+def test_runner_build_loss_without_temporal_supervision() -> None:
+    cfg = _resolve("t2_hybrid_vit")
+    heads = _heads(_build_loss(cfg))
+    assert "temporal_consistency" not in heads
+    assert "flicker" not in heads

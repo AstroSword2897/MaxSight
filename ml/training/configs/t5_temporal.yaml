@@ -2,10 +2,12 @@
 # Temporal modeling (video), All features enabled
 # Target: Cloud GPU training, ~320M parameters
 
+schema_version: "1.0.0"
+
 # Model Configuration
 model:
   tier: "T5_TEMPORAL"
-  num_classes: 80
+  num_classes: 622  # Full COCO_BASE + ACCESSIBILITY vocabulary
   use_se_attention: true
   use_cbam_attention: true
   use_hybrid_backbone: true
@@ -17,9 +19,9 @@ model:
 
 # Data Configuration
 data:
-  train_annotation_file: "datasets/cleaned_splits/train.json"
-  val_annotation_file: "datasets/cleaned_splits/val.json"
-  test_annotation_file: "datasets/cleaned_splits/test.json"
+  train_annotation_file: "datasets/cleaned_splits/maxsight_train.json"
+  val_annotation_file: "datasets/cleaned_splits/maxsight_val.json"
+  test_annotation_file: "datasets/cleaned_splits/maxsight_test.json"
   image_dir: "datasets/coco_raw"
   audio_dir: null
   batch_size: 4  # Very small batch for largest model
@@ -27,7 +29,8 @@ data:
   pin_memory: true
   max_objects: 10
   condition_mode: null
-  apply_lighting_augmentation: true
+  tag_lighting_metadata: true
+  lighting_pixel_augmentation: false
   use_weighted_sampling: false
 
 # Training Configuration
@@ -35,36 +38,37 @@ training:
   num_epochs: 150
   learning_rate: 7.5e-5  # Sweet spot for 300-400M params at batch 32
   weight_decay: 0.05  # Higher to prevent overfitting in expressive model
-  # Note: momentum removed - AdamW doesn't use it
   optimizer: "AdamW"
-  scheduler: "cosine"
+  scheduler_type: "cosine"
   min_lr: 1e-6  # Prevent late-stage collapse when temporal heads overfit
   warmup_epochs: 20  # Give GradNorm time to stabilize
   gradient_clip_norm: 1.0  # Lower to 0.8 if seeing loss spikes after warmup
   mixed_precision: false  # FP32 only
-  accumulate_grad_batches: 8  # Effective batch size 32
+  gradient_accumulation_steps: 8  # Effective batch size 32
+  freeze_backbone: false
+  freeze_backbone_epochs: 0
+  early_stopping_patience: 12
+  early_stopping_metric: "val_loss"
 
 # Loss Configuration
-# Rebalanced: box_regression no longer tyrannical, accessibility tasks get real signal
-# Semantic heads cross 0.3 activation threshold where they actually learn
+# Trimmed to active heads in create_loss_fn: detection -> objectness,
+# box_regression -> box, plus the two temporal heads required when
+# temporal_supervision=true. Inactive semantic heads (motion, therapy_state,
+# roi_priority, scene_description, ocr, scene_graph, sound_events,
+# personalization, predictive_alerts) come back when create_loss_fn wires them.
 loss:
   use_gradnorm: true
+  gradnorm_alpha: 1.5
+  gradnorm_update_interval: 100
+  temporal_supervision: true
   loss_weights:
-    detection: 1.0
+    objectness: 1.0
     classification: 1.2
-    box_regression: 3.0  # Reduced from 5.0 - still important but not dominant
+    box: 3.0  # Reduced from 5.0 - still important but not dominant
     distance: 0.7  # Accessibility-critical
     urgency: 1.5  # Accessibility-critical
-    motion: 0.6
-    therapy_state: 0.8
-    roi_priority: 0.4
-    navigation_difficulty: 0.5  # Accessibility-critical
-    scene_description: 0.3  # Above activation threshold
-    ocr: 0.4  # Above activation threshold
-    scene_graph: 0.3  # Above activation threshold
-    sound_events: 0.4  # Above activation threshold
-    personalization: 0.3  # Above activation threshold
-    predictive_alerts: 0.6
+    temporal_consistency: 0.4
+    flicker: 0.3
 
 # Validation Configuration
 validation:
@@ -72,8 +76,6 @@ validation:
   save_top_k: 3
   monitor: "val_loss"
   mode: "min"
-  # Note: Ignore validation loss for first 25 epochs
-  # Watch loss smoothness, not absolute value - temporal models lie early
 
 # Checkpointing
 checkpoint:
@@ -91,7 +93,11 @@ logging:
 target_metrics:
   mAP_50: 0.5
 
+dataset:
+  dataset_id: "maxsight-coco-cleaned"
+  dataset_version: "v1"
+  require_match: false
+
 # Device
 device: "auto"
 seed: 42
-

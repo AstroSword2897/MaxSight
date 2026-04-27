@@ -1,4 +1,4 @@
-"""MaxSight web simulator - local web server for end-to-end testing. Run: python tools/simulation/web_simulator.py Access: http://localhost:8002 Note: Development mode only - not production-hardened."""
+"""MaxSight web simulator — HTTP API and UI on the configured port (see ``tools/simulation/config.py``)."""
 
 import torch
 import numpy as np
@@ -47,6 +47,8 @@ from ml.utils.output_scheduler import (
     create_patient_output, create_clinician_output, create_dev_output
 )
 
+from ml.runtime.mode import get_runtime_mode
+
 from .config import config
 from .exceptions import (
     MaxSightSimulatorError, SessionError, SessionNotFoundError,
@@ -84,8 +86,24 @@ app = Flask(__name__,
             template_folder=Path(__file__).parent / 'templates',
             static_folder=Path(__file__).parent / 'static')
 
-cors_origins = os.getenv('MAXSIGHT_CORS_ORIGINS', 'http://localhost:8002,http://127.0.0.1:8002').split(',')
-CORS(app, origins=cors_origins, supports_credentials=True)
+# Bound request bodies so oversized uploads fail fast (Werkzeug-level guard).
+_max_upload_mb = max(config.max_frames_payload_mb, config.max_image_size_mb)
+app.config["MAX_CONTENT_LENGTH"] = _max_upload_mb * 1024 * 1024
+app.config["JSONIFY_PRETTYPRINT_REGULAR"] = bool(config.debug)
+
+_cors_env = os.getenv("MAXSIGHT_CORS_ORIGINS", "").strip()
+if _cors_env:
+    _cors_list = [x.strip() for x in _cors_env.split(",") if x.strip()]
+    CORS(app, origins=_cors_list, supports_credentials=True)
+else:
+    # Default allows any port on localhost so fetch() works after auto bind (see port_binding.resolve_listen_port).
+    CORS(app, origins="*", supports_credentials=False)
+
+# Honor X-Forwarded-* when behind a reverse proxy so request.host / url_root match the public URL.
+if os.getenv("MAXSIGHT_BEHIND_PROXY", "").strip().lower() in ("1", "true", "yes"):
+    from werkzeug.middleware.proxy_fix import ProxyFix  # type: ignore
+
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)  # type: ignore[assignment]
 
 # Add security headers to all responses.
 @app.after_request
@@ -2320,10 +2338,36 @@ class MaxSightSimulator:
 
 # Web Routes.
 
+
+def _request_routing_display() -> tuple[str, str]:
+    """Labels derived from the inbound HTTP Host (and WSGI port) so the UI matches the client route."""
+
+    host_header = request.host
+    port_digits: Optional[str] = None
+    if host_header:
+        if host_header.startswith("["):
+            if "]:" in host_header:
+                port_digits = host_header.split("]:", 1)[-1]
+        elif ":" in host_header:
+            tail = host_header.rsplit(":", 1)[-1]
+            if tail.isdigit():
+                port_digits = tail
+    if port_digits is None:
+        port_digits = str(request.environ.get("SERVER_PORT") or config.port)
+    display_host = host_header or f"127.0.0.1:{port_digits}"
+    return display_host, port_digits
+
+
 @app.route('/')
 def index():
     """Main simulator interface."""
-    return render_template('simulator.html')
+    rh, bp = _request_routing_display()
+    return render_template(
+        'simulator.html',
+        runtime_mode=get_runtime_mode().value,
+        request_host=rh,
+        bind_port=bp,
+    )
 
 
 @app.route('/api/init', methods=['POST'])
@@ -2795,7 +2839,11 @@ def api_health():
             overall_status = 'unhealthy'
         
         health_status['status'] = overall_status
-        
+        health_status['runtime_mode'] = get_runtime_mode().value
+        health_status['listen_port'] = config.port
+        health_status['request_host'] = request.host or ''
+        health_status['url_prefix'] = request.url_root.rstrip('/')
+
         status_code = 200 if overall_status == 'healthy' else (503 if overall_status == 'unhealthy' else 200)
         
         return jsonify(health_status), status_code
@@ -3074,13 +3122,28 @@ def session_not_found_error(error):
 
 
 if __name__ == '__main__':
+    from tools.simulation.port_binding import resolve_listen_port
+
     logger.info("MaxSight Product Simulator")
+    logger.info("Runtime mode: %s (set MAXSIGHT_RUNTIME=production for hardened defaults)", get_runtime_mode().value)
     logger.info(f"Multi-user mode: {'ENABLED' if config.multi_user_enabled else 'DISABLED (single-user demo)'}")
     logger.info(f"Session timeout: {config.session_timeout_seconds // 60} minutes")
-    logger.info("Starting web server...")
-    logger.info("Access the simulator at: http://localhost:8002")
+
+    _strict = os.getenv("MAXSIGHT_STRICT_PORT", "").strip().lower() in ("1", "true", "yes")
+    _preferred = config.port
+    try:
+        actual_port, _port_fallback = resolve_listen_port(config.host, _preferred, strict=_strict)
+    except OSError as e:
+        logger.error("%s", e)
+        raise SystemExit(1) from e
+    if actual_port != _preferred:
+        logger.warning("Port %s is in use; bound to %s instead (set MAXSIGHT_PORT or MAXSIGHT_STRICT_PORT=1).", _preferred, actual_port)
+    config.port = actual_port
+
+    logger.info("Starting web server on %s:%s ...", config.host, config.port)
+    logger.info("Open: http://127.0.0.1:%s", config.port)
     logger.info("Press Ctrl+C to stop")
-    
+
     # WARNING: Flask dev server is NOT production-safe for multi-user scenarios.
     # For production, use Gunicorn with 1 worker and proper WSGI configuration.
     if config.multi_user_enabled:
@@ -3088,7 +3151,7 @@ if __name__ == '__main__':
             "WARNING: Running multi-user mode with Flask dev server is unsafe. "
             "Use Gunicorn for production: gunicorn -w 1 -t 120 tools.simulation.web_simulator:app"
         )
-    
+
     try:
         app.run(host=config.host, port=config.port, debug=config.debug, threaded=True)
     except KeyboardInterrupt:

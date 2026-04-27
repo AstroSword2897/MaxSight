@@ -2,9 +2,11 @@
 # Same T5 architecture as t5_temporal; loss weights tuned for safety-critical detection.
 # Target: mAP@0.5 >= 0.5 via inference sweep only.
 
+schema_version: "1.0.0"
+
 model:
   tier: "T5_TEMPORAL"
-  num_classes: 80
+  num_classes: 622  # Full COCO_BASE + ACCESSIBILITY vocabulary
   use_se_attention: true
   use_cbam_attention: true
   use_hybrid_backbone: true
@@ -15,9 +17,9 @@ model:
   use_retrieval: true
 
 data:
-  train_annotation_file: "datasets/cleaned_splits/train.json"
-  val_annotation_file: "datasets/cleaned_splits/val.json"
-  test_annotation_file: "datasets/cleaned_splits/test.json"
+  train_annotation_file: "datasets/cleaned_splits/maxsight_train.json"
+  val_annotation_file: "datasets/cleaned_splits/maxsight_val.json"
+  test_annotation_file: "datasets/cleaned_splits/maxsight_test.json"
   image_dir: "datasets/coco_raw"
   audio_dir: null
   batch_size: 4
@@ -25,7 +27,8 @@ data:
   pin_memory: true
   max_objects: 10
   condition_mode: null
-  apply_lighting_augmentation: true
+  tag_lighting_metadata: true
+  lighting_pixel_augmentation: false
   use_weighted_sampling: false
 
 training:
@@ -33,31 +36,31 @@ training:
   learning_rate: 7.5e-5
   weight_decay: 0.05
   optimizer: "AdamW"
-  scheduler: "cosine"
+  scheduler_type: "cosine"
   min_lr: 1e-6
   warmup_epochs: 20
   gradient_clip_norm: 1.0
   mixed_precision: false
-  accumulate_grad_batches: 8
+  gradient_accumulation_steps: 8
+  freeze_backbone: false
+  freeze_backbone_epochs: 0
+  early_stopping_patience: 12
+  early_stopping_metric: "val_loss"
 
+# Trimmed to active heads. Safety-tuned weights: heavier urgency/distance.
 loss:
   use_gradnorm: true
+  gradnorm_alpha: 1.5
+  gradnorm_update_interval: 100
+  temporal_supervision: true
   loss_weights:
-    detection: 1.0
+    objectness: 1.0
     classification: 1.2
-    box_regression: 3.0
+    box: 3.0
     distance: 0.8
     urgency: 1.8
-    motion: 0.6
-    therapy_state: 0.8
-    roi_priority: 0.5
-    navigation_difficulty: 0.6
-    scene_description: 0.3
-    ocr: 0.4
-    scene_graph: 0.3
-    sound_events: 0.4
-    personalization: 0.3
-    predictive_alerts: 0.7
+    temporal_consistency: 0.5
+    flicker: 0.4
 
 validation:
   val_check_interval: 0.5
@@ -77,6 +80,11 @@ logging:
 
 target_metrics:
   mAP_50: 0.5
+
+dataset:
+  dataset_id: "maxsight-coco-cleaned"
+  dataset_version: "v1"
+  require_match: false
 
 device: "auto"
 seed: 42

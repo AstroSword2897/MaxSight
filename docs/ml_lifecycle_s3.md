@@ -35,4 +35,5 @@ See `scripts/ops/sync_medallion_s3.py` — use `--max-list-keys` on `status` or 
 ## Related
 
 - `docs/git_workflow.md` — branching and merging expectations
-- `scripts/ops/sagemaker_train.py` — uploads gold index via `S3Client`
+- `scripts/ops/sagemaker_train.py` — uploads gold index via `S3Client`, submits PyTorch training (`ml/training/sagemaker_entry.py`) with repo `source_dir` and log-derived metrics
+- `scripts/ops/sagemaker_processing_submit.py` — SageMaker Processing for `ml/pipeline/sagemaker_entrypoint.py` (manifest + advisory pipeline)

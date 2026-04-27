@@ -1,4 +1,4 @@
-"""Metrics and monitoring for MaxSight Web Simulator. Tracks performance, errors, and system health."""
+"""Metrics and monitoring for the web simulator (used by /api/health and /api/metrics)."""
 import time
 from typing import Dict, Any, Optional
 from collections import defaultdict

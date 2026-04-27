@@ -1,5 +1,6 @@
 """Comprehensive MaxSight Simulator."""
 
+import os
 import torch
 import torch.cuda  # For torch.cuda.synchronize()
 import numpy as np
@@ -26,6 +27,22 @@ from ml.utils.logging_config import setup_logging
 # Setup logging.
 logger = setup_logging(log_level="INFO")
 logger = logging.getLogger(__name__)
+
+
+def _load_checkpoint_file(path: Path, map_location: torch.device):
+    """Prefer ``weights_only`` checkpoints; optional legacy full pickle for trusted files only."""
+
+    try:
+        return torch.load(path, map_location=map_location, weights_only=True)
+    except Exception as e:
+        if os.getenv("MAXSIGHT_ALLOW_LEGACY_PICKLE") == "1":
+            logger.warning("Using legacy pickle load for %s (MAXSIGHT_ALLOW_LEGACY_PICKLE=1): %s", path, e)
+            return torch.load(path, map_location=map_location, weights_only=False)
+        logger.error(
+            "Checkpoint load failed (%s). Export state_dict checkpoints or set MAXSIGHT_ALLOW_LEGACY_PICKLE=1 for trusted files only.",
+            e,
+        )
+        raise
 
 
 class ComprehensiveSimulator:
@@ -56,11 +73,19 @@ class ComprehensiveSimulator:
         if self.verbose:
             logger.info(f"Initializing simulator on device: {self.device}")
         
-        # Load model.
+        # Load model (state dict or full module; avoid arbitrary pickle unless legacy env is set).
         if model_path and Path(model_path).exists():
             if self.verbose:
                 logger.info(f"Loading model from: {model_path}")
-            self.model = torch.load(model_path, map_location=self.device)
+            raw = _load_checkpoint_file(Path(model_path), self.device)
+            if isinstance(raw, torch.nn.Module):
+                self.model = raw
+            elif isinstance(raw, dict):
+                self.model = create_model(condition_mode=condition_mode)
+                state = raw.get("model_state_dict", raw)
+                self.model.load_state_dict(state, strict=False)
+            else:
+                raise TypeError(f"Unsupported checkpoint contents: {type(raw)}")
         else:
             if self.verbose:
                 logger.info("Creating new model...")

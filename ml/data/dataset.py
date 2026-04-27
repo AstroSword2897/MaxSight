@@ -1,5 +1,6 @@
 """Dataset loader with environmental context, audio, and condition-specific augmentations."""
 
+import logging
 import torch
 from torch.utils.data import Dataset
 from pathlib import Path
@@ -12,6 +13,8 @@ import torchaudio
 from ml.models.maxsight_cnn import COCO_CLASSES
 from ml.utils.preprocessing import ImagePreprocessor
 
+logger = logging.getLogger(__name__)
+
 
 class MaxSightDataset(Dataset):
     """Dataset for MaxSight: images, audio, annotations with condition-specific augmentations."""
@@ -23,8 +26,11 @@ class MaxSightDataset(Dataset):
         image_dir: Optional[Path] = None,
         audio_dir: Optional[Path] = None,
         condition_mode: Optional[str] = None,
-        apply_lighting_augmentation: bool = True,
-        max_objects: int = 10
+        tag_lighting_metadata: bool = True,
+        lighting_pixel_augmentation: bool = False,
+        max_objects: int = 10,
+        strict_images: bool = False,
+        dataset_source_key: Optional[str] = None,
     ):
 
         self.data_dir = Path(data_dir)
@@ -32,8 +38,22 @@ class MaxSightDataset(Dataset):
         self.image_dir = Path(image_dir) if image_dir else self.data_dir / 'images'
         self.audio_dir = Path(audio_dir) if audio_dir else (self.data_dir / 'audio' if (self.data_dir / 'audio').exists() else None)
         self.condition_mode = condition_mode
-        self.apply_lighting_augmentation = apply_lighting_augmentation
+        # tag_lighting_metadata: infer and attach lighting tag to sample dict
+        # (dim / normal) without touching pixels. Renamed from the previous
+        # apply_lighting_augmentation which implied pixel changes that never happened.
+        self.tag_lighting_metadata = tag_lighting_metadata
+        # lighting_pixel_augmentation: actually modify luminance/gamma to simulate
+        # dim / overexposed conditions. Distinct from tagging so each knob is honest.
+        # TODO: implement pixel-level transforms in ml/utils/preprocessing.py.
+        self.lighting_pixel_augmentation = lighting_pixel_augmentation
         self.max_objects = max_objects
+        # strict_images=True refuses to substitute random noise for a missing
+        # file; production training should set it True so a path typo fails
+        # fast instead of feeding the model pure noise that looks plausible.
+        self.strict_images = strict_images
+        self._missing_warned = False
+        # Provenance tag for multi-source training; copied into each sample dict.
+        self.dataset_source_key = dataset_source_key or ""
         
         # Initialize preprocessor with condition-specific transforms.
         self.preprocessor = ImagePreprocessor(condition_mode=condition_mode)
@@ -170,12 +190,25 @@ class MaxSightDataset(Dataset):
                     })
                     annotations[image_id]['urgency'] = max(annotations[image_id]['urgency'], urgency)
         else:
-            # Custom format: assume list of annotations.
             for ann in data:
                 image_id = ann.get('image_id', ann.get('id', len(annotations)))
+                resolved_objects: List[Dict[str, Any]] = []
+                for obj in ann.get('objects', []):
+                    # Custom format carries 'category' as the canonical label; map it
+                    # into the 622-way COCO_CLASSES index here so __getitem__ does
+                    # not fall back to obj.get('class', 0) and silently zero the
+                    # entire batch into class 'person'.
+                    resolved = dict(obj)
+                    if 'class' not in resolved:
+                        category = resolved.get('category')
+                        if isinstance(category, str):
+                            resolved['class'] = self.class_to_idx.get(category, 0)
+                        else:
+                            resolved['class'] = 0
+                    resolved_objects.append(resolved)
                 annotations[image_id] = {
                     'image_path': self.image_dir / ann.get('image_path', f'{image_id}.jpg'),
-                    'objects': ann.get('objects', []),
+                    'objects': resolved_objects,
                     'urgency': ann.get('urgency', 0),
                     'lighting': ann.get('lighting', 'normal'),
                     'audio_path': ann.get('audio_path')
@@ -196,25 +229,54 @@ class MaxSightDataset(Dataset):
         if isinstance(image_path, str):
             image_path = Path(image_path)
         
-        # Handle missing/corrupted files with fallback.
         if not image_path.exists():
+            if self.strict_images:
+                raise FileNotFoundError(
+                    f"MaxSightDataset strict_images=True: image_id={image_id} "
+                    f"references {image_path} which does not exist."
+                )
+            if not self._missing_warned:
+                logger.warning(
+                    "MaxSightDataset: image file missing, substituting random pixels. "
+                    "This is silent data corruption if it happens during training. "
+                    "First offender: image_id=%s path=%s (further misses suppressed).",
+                    image_id, image_path,
+                )
+                self._missing_warned = True
             image = Image.fromarray(np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8))
         else:
             try:
                 image = Image.open(image_path).convert('RGB')
-            except Exception:
+            except Exception as exc:
+                if self.strict_images:
+                    raise RuntimeError(
+                        f"MaxSightDataset strict_images=True: image_id={image_id} "
+                        f"at {image_path} failed to decode: {exc}"
+                    ) from exc
+                if not self._missing_warned:
+                    logger.warning(
+                        "MaxSightDataset: image failed to decode, substituting random pixels. "
+                        "First offender: image_id=%s path=%s err=%s",
+                        image_id, image_path, exc,
+                    )
+                    self._missing_warned = True
                 image = Image.fromarray(np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8))
         
-        # Apply preprocessing with optional lighting augmentation.
-        if self.apply_lighting_augmentation:
-            # Use preprocessing with lighting detection.
+        # Preprocess image; optionally tag lighting metadata.
+        if self.tag_lighting_metadata:
+            # Detect and attach a lighting tag without modifying pixels.
             preprocessed = self.preprocessor.preprocess_with_lighting(image)
             image_tensor = preprocessed['image']
             lighting = preprocessed.get('lighting', ann.get('lighting', 'normal'))
         else:
-            # Standard preprocessing without lighting augmentation.
             image_tensor = self.preprocessor(image)
             lighting = ann.get('lighting', 'normal')
+
+        # Apply actual pixel-level lighting augmentation when opted in.
+        # TODO: implement luminance/gamma distortion transforms in
+        # ml/utils/preprocessing.py and call them here.
+        if self.lighting_pixel_augmentation:
+            pass  # placeholder; no-op until pixel transforms are implemented
         
         # Load audio if available.
         audio_tensor = None
@@ -285,7 +347,8 @@ class MaxSightDataset(Dataset):
             'urgency': torch.tensor(urgency, dtype=torch.long),  # Scene urgency (0-3)
             'distance': distance, 
             'num_objects': torch.tensor(num_objs, dtype=torch.long),  # Valid object count.
-            'lighting': lighting  # Lighting condition string.
+            'lighting': lighting,  # Lighting condition string.
+            'dataset_source': self.dataset_source_key,
         }
         
         # Add optional fields.

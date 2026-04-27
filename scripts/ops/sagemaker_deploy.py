@@ -49,7 +49,21 @@ from ml.infra.sagemaker_utils import (  # noqa: E402
     get_session,
     get_execution_role,
 )
-from ml.infra.model_registry import ModelRegistry  # noqa: E402
+from ml.infra.model_registry import ModelRegistry, ModelEntry  # noqa: E402
+
+
+def _normalize_s3(uri: str) -> str:
+    """Normalise S3 URIs so trailing slashes and case don't cause false negatives."""
+    return uri.rstrip("/").lower()
+
+
+def _lookup_by_s3(reg: ModelRegistry, s3_uri: str) -> "ModelEntry | None":
+    """Return the registry entry whose checkpoint_path matches s3_uri, or None."""
+    target = _normalize_s3(s3_uri)
+    for entry in reg.list_models():
+        if _normalize_s3(str(entry.checkpoint_path)) == target:
+            return entry
+    return None
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,6 +84,12 @@ def parse_args() -> argparse.Namespace:
     p_dep.add_argument("--workers", type=int, default=2)
     p_dep.add_argument("--register", action="store_true", help="Register deployed model in local registry")
     p_dep.add_argument("--tier", default="", help="Tier label for registry")
+    p_dep.add_argument(
+        "--skip-registry-check",
+        action="store_true",
+        help="Bypass the model registry gate. USE FOR EMERGENCIES ONLY — emits a loud warning.",
+    )
+    p_dep.add_argument("--dry-run", action="store_true", help="Print deploy config without submitting")
     p_dep.set_defaults(func=cmd_deploy)
 
     # invoke
@@ -125,6 +145,30 @@ def cmd_deploy(args: argparse.Namespace) -> int:
     if not model_data:
         print("Error: --model-data or --job-name required", file=sys.stderr)
         return 1
+
+    # Registry gate: every artifact must be registered before it can be deployed.
+    # --skip-registry-check exists only for emergency hotfixes — it always prints a warning.
+    if args.skip_registry_check:
+        print(
+            "WARNING: --skip-registry-check bypasses the registry gate. "
+            "Ensure this artifact has been validated before deploying to production.",
+            file=sys.stderr,
+        )
+    else:
+        reg = ModelRegistry()
+        if _lookup_by_s3(reg, model_data) is None:
+            print(
+                f"ERROR: artifact not in registry: {model_data}\n"
+                "Register it first with --register on a previous deploy, or promote via ModelRegistry.\n"
+                "Use --skip-registry-check only for emergency deploys.",
+                file=sys.stderr,
+            )
+            return 1
+
+    if getattr(args, "dry_run", False):
+        print(json.dumps({"action": "deploy", "model_data": model_data, "endpoint": args.endpoint,
+                          "instance": args.instance, "workers": args.workers}, indent=2))
+        return 0
 
     cfg.instance_type_infer = args.instance
     predictor = deploy_model(cfg, model_data, args.endpoint, model_server_workers=args.workers)

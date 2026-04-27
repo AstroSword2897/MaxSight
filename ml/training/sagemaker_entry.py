@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """SageMaker training container entry point for MaxSight.
 
-SageMaker injects:
-  SM_MODEL_DIR         → where to write model.tar.gz artefacts
-  SM_OUTPUT_DATA_DIR   → where to write output (logs, reports)
-  SM_CHANNEL_TRAIN     → path to training data (gold index or COCO)
-  SM_CHANNEL_VAL       → path to validation data
-  SM_CHANNEL_GOLD      → path to gold index JSON (if provided)
-  SM_HP_*              → hyperparameters passed via --hyperparameters
+Single execution path with the local CLI (scripts/ops/train_maxsight.py):
+both call ml.training.runner.run_training(resolved). This module just
+gathers --config + SM hyperparameter overrides into ResolvedTrainingConfig,
+mirrors checkpoints to SM_MODEL_DIR, and writes the metadata SageMaker
+expects (model_meta.json, RunTracker artefacts).
 
-All hyperparameters are also accepted as CLI args so the script can be
-run locally with `python ml/training/sagemaker_entry.py --epochs 30 ...`.
+SageMaker injects:
+  SM_MODEL_DIR         - where to write packaged artefacts
+  SM_OUTPUT_DATA_DIR   - where to write logs/reports
+  SM_CHANNEL_TRAIN     - training data channel
+  SM_CHANNEL_VAL       - validation data channel
+  SM_CHANNEL_GOLD      - gold index channel (optional)
+  SM_HP_*              - hyperparameter env vars from estimator.fit()
 """
 
 from __future__ import annotations
@@ -23,13 +26,20 @@ import shutil
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict
 
-# Ensure repo root is on the path whether run via SageMaker or directly.
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from ml.infra.experiment_tracker import RunTracker  # noqa: E402
+from ml.training.run_config import (  # noqa: E402
+    ConfigValidationError,
+    ResolvedTrainingConfig,
+    _UNSET,
+    cli_overrides_from_namespace,
+)
+from ml.training.runner import run_training  # noqa: E402
 from ml.utils.logging_config import setup_logging  # noqa: E402
 
 setup_logging(log_level="INFO")
@@ -57,178 +67,176 @@ def channel_dir(name: str, fallback: str = "") -> Path:
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 
+# Same dotted override map as the local CLI; keeps both entrypoints honest.
+_OVERRIDE_MAP = {
+    "epochs": "training.num_epochs",
+    "lr": "training.learning_rate",
+    "weight_decay": "training.weight_decay",
+    "warmup_epochs": "training.warmup_epochs",
+    "gradient_clip": "training.gradient_clip_norm",
+    "fp16": "training.mixed_precision",
+    "freeze_backbone": "training.freeze_backbone",
+    "freeze_backbone_epochs": "training.freeze_backbone_epochs",
+    "batch_size": "data.batch_size",
+    "num_workers": "data.num_workers",
+    "device": "device",
+    "seed": "seed",
+    "checkpoint_dir": "checkpoint.save_dir",
+    "train_annotation": "data.train_annotation_file",
+    "val_annotation": "data.val_annotation_file",
+    "image_dir": "data.image_dir",
+    "run_id": "run_id",
+    "experiment": "experiment",
+}
+
+
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser("MaxSight SageMaker entry point")
+    p = argparse.ArgumentParser("MaxSight SageMaker entry point")
 
-    # Data
-    parser.add_argument("--data-dir", type=Path, default=None)
-    parser.add_argument("--train-annotation", type=Path, default=None)
-    parser.add_argument("--val-annotation", type=Path, default=None)
-    parser.add_argument("--image-dir", type=Path, default=None)
-    parser.add_argument("--gold-index", type=Path, default=None,
-                        help="Path to training_index.json (overrides --data-dir etc.)")
+    p.add_argument("--config", type=Path, required=True,
+                   help="Tier YAML config (mirrored from the launching client)")
+    p.add_argument("--gold-index", type=Path, default=None,
+                   help="training_index.json; logged for provenance only")
 
-    # Model
-    parser.add_argument("--tier", type=str, default="T2_DETECTOR",
-                        choices=["T0_BASELINE_CNN", "T1_LIGHTWEIGHT", "T2_DETECTOR",
-                                 "T3_MULTI_TASK", "T4_ADVANCED", "T5_TEMPORAL"])
-    parser.add_argument("--backbone", type=str, default="resnet50",
-                        choices=["resnet50", "resnet34", "hybrid_vit"])
-    parser.add_argument("--freeze-backbone", action="store_true")
-    parser.add_argument("--freeze-backbone-epochs", type=int, default=5)
-    parser.add_argument("--config", type=Path, default=None,
-                        help="Path to a tier YAML config file")
+    # Explicit overrides; missing flags = YAML wins.
+    p.add_argument("--epochs", type=int, default=_UNSET)
+    p.add_argument("--batch-size", type=int, default=_UNSET)
+    p.add_argument("--lr", type=float, default=_UNSET)
+    p.add_argument("--weight-decay", type=float, default=_UNSET)
+    p.add_argument("--warmup-epochs", type=int, default=_UNSET)
+    p.add_argument("--seed", type=int, default=_UNSET)
+    p.add_argument("--num-workers", type=int, default=_UNSET)
+    p.add_argument("--device", choices=["auto", "cuda", "cpu"], default=_UNSET)
+    p.add_argument("--fp16", dest="fp16", action="store_const", const=True, default=_UNSET)
+    p.add_argument("--gradient-clip", type=float, default=_UNSET)
+    p.add_argument("--freeze-backbone", dest="freeze_backbone", action="store_const", const=True, default=_UNSET)
+    p.add_argument("--freeze-backbone-epochs", type=int, default=_UNSET)
+    p.add_argument("--checkpoint-dir", type=Path, default=_UNSET)
+    p.add_argument("--train-annotation", type=Path, default=_UNSET)
+    p.add_argument("--val-annotation", type=Path, default=_UNSET)
+    p.add_argument("--image-dir", type=Path, default=_UNSET)
 
-    # Training
-    parser.add_argument("--epochs", type=int, default=30)
-    parser.add_argument("--batch-size", type=int, default=16)
-    parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--weight-decay", type=float, default=1e-4)
-    parser.add_argument("--warmup-epochs", type=int, default=3)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--num-workers", type=int, default=4)
-    parser.add_argument("--device", type=str, default="auto",
-                        choices=["auto", "cuda", "cpu"])
-    parser.add_argument("--fp16", action="store_true", help="Mixed-precision training")
-    parser.add_argument("--gradient-clip", type=float, default=1.0)
+    p.add_argument("--run-id", default=_UNSET)
+    p.add_argument("--experiment", default=_UNSET)
 
-    # Curriculum
-    parser.add_argument("--curriculum", action="store_true",
-                        help="Enable phased loss unlocking (curriculum training)")
-
-    # Output
-    parser.add_argument("--checkpoint-dir", type=Path,
-                        default=Path(sm_env("SM_MODEL_DIR", str(REPO / "model_output"))))
-    parser.add_argument("--run-id", type=str, default="")
-    parser.add_argument("--experiment", type=str, default="maxsight")
-
-    return parser.parse_args()
+    return p.parse_args()
 
 
-# ── Data path resolution ──────────────────────────────────────────────────────
+def _hp_overrides_from_env() -> Dict[str, Any]:
+    """Pull SM_HP_* env vars and route them through the override map.
 
-def resolve_data_paths(args: argparse.Namespace):
-    """Resolve COCO data paths from gold index or explicit args or SM channels."""
-    gold_path = args.gold_index or (channel_dir("gold") / "training_index.json")
-    if gold_path.exists():
-        logger.info("Loading data paths from gold index: %s", gold_path)
-        from ml.data.medallion_layout import load_training_index, resolve_coco_for_train
-        index = load_training_index(gold_path)
-        data_dir, train_ann, val_ann, image_dir = resolve_coco_for_train(index, REPO)
-        return data_dir, train_ann, val_ann, image_dir
+    SageMaker exposes hyperparameters as both CLI args and SM_HP_* env vars;
+    we accept both, dropping any key not in the override map so the schema
+    layer enforces a single shape.
+    """
+    out: Dict[str, Any] = {}
+    for env_key, raw in os.environ.items():
+        if not env_key.startswith("SM_HP_"):
+            continue
+        attr = env_key[len("SM_HP_"):].lower().replace("-", "_")
+        dotted = _OVERRIDE_MAP.get(attr)
+        if dotted is None:
+            continue
+        out[dotted] = _coerce_hp(raw)
+    return out
 
-    # Fall back to explicit args or SM channel dirs.
-    data_dir = args.data_dir or channel_dir("train", str(REPO / "datasets"))
-    train_ann = args.train_annotation or (data_dir / "annotations" / "instances_train2017.json")
-    val_ann = args.val_annotation or (data_dir / "annotations" / "instances_val2017.json")
-    image_dir = args.image_dir or data_dir
-    return data_dir, train_ann, val_ann, image_dir
+
+def _coerce_hp(value: str) -> Any:
+    if value.lower() in {"true", "false"}:
+        return value.lower() == "true"
+    try:
+        if "." in value or "e" in value.lower():
+            return float(value)
+        return int(value)
+    except ValueError:
+        return value
 
 
 # ── Training ──────────────────────────────────────────────────────────────────
 
-def run_training(args: argparse.Namespace) -> None:
-    import torch
-    from ml.training.train_loop import ProductionTrainLoop
-    from ml.data.data_pipeline import create_data_loaders
-    from ml.models.maxsight_cnn import create_model, TierConfig, CapabilityTier
+def run(args: argparse.Namespace) -> None:
+    cli_overrides = cli_overrides_from_namespace(args, _OVERRIDE_MAP)
+    sm_overrides = _hp_overrides_from_env()
+    if "run_id" not in cli_overrides:
+        cli_overrides["run_id"] = sm_env("TRAINING_JOB_NAME") or f"sm_{time.strftime('%Y%m%d_%H%M%S')}"
+    if "experiment" not in cli_overrides:
+        cli_overrides["experiment"] = "maxsight"
 
-    run_id = args.run_id or f"sm_{time.strftime('%Y%m%d_%H%M%S')}"
-    ckpt_dir = args.checkpoint_dir
-    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        resolved = ResolvedTrainingConfig.from_sources(
+            args.config,
+            cli_overrides=cli_overrides,
+            sm_hyperparameters=sm_overrides,
+        )
+    except ConfigValidationError as exc:
+        logger.error("config_invalid: %s", exc)
+        raise SystemExit(2)
+
     out_dir = output_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Device
-    device_str = args.device
-    if device_str == "auto":
-        device_str = "cuda" if torch.cuda.is_available() else "cpu"
-
-    data_dir, train_ann, val_ann, image_dir = resolve_data_paths(args)
-    logger.info("Training data: %s", data_dir)
-    logger.info("Train ann:     %s", train_ann)
-    logger.info("Val ann:       %s", val_ann)
-
-    with RunTracker(run_id=run_id, experiment=args.experiment) as run:
-        run.log_params({
-            "tier": args.tier,
-            "backbone": args.backbone,
-            "epochs": args.epochs,
-            "batch_size": args.batch_size,
-            "lr": args.lr,
-            "weight_decay": args.weight_decay,
-            "device": device_str,
-            "fp16": args.fp16,
-            "freeze_backbone": args.freeze_backbone,
-            "freeze_backbone_epochs": args.freeze_backbone_epochs,
-            "curriculum": args.curriculum,
+    with RunTracker(run_id=resolved.run_id, experiment=resolved.experiment) as tracker:
+        tracker.log_params({
+            "tier": resolved.model.tier,
+            "epochs": resolved.training.num_epochs,
+            "batch_size": resolved.data.batch_size,
+            "lr": resolved.training.learning_rate,
+            "weight_decay": resolved.training.weight_decay,
+            "device": resolved.device,
+            "fp16": resolved.training.mixed_precision,
+            "freeze_backbone": resolved.training.freeze_backbone,
+            "freeze_backbone_epochs": resolved.training.freeze_backbone_epochs,
+            "config_hash": resolved.provenance.config_hash,
+            "dataset_id": resolved.dataset.dataset_id,
+            "dataset_version": resolved.dataset.dataset_version,
         })
 
         gold_idx = args.gold_index or (channel_dir("gold") / "training_index.json")
         if gold_idx.exists():
-            run.log_dataset_provenance(gold_idx)
+            tracker.log_dataset_provenance(gold_idx)
 
-        # Build loaders via existing pipeline.
-        train_loader, val_loader = create_data_loaders(
-            data_dir=data_dir,
-            train_annotation=train_ann,
-            val_annotation=val_ann,
-            image_dir=image_dir,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
+        results = run_training(
+            resolved,
+            resume_from=None,
+            resume_model_only=False,
+            use_compile=False,
+            use_audio=False,
+            backup=False,
         )
 
-        # Model
-        tier_enum = CapabilityTier[args.tier]
-        tier_cfg = TierConfig.for_tier(tier_enum)
-        model = create_model(tier=tier_enum, config=tier_cfg)
-
-        # Training loop (reuse existing ProductionTrainLoop)
-        train_loop = ProductionTrainLoop(
-            model=model,
-            train_loader=train_loader,
-            val_loader=val_loader,
-            device=device_str,
-            epochs=args.epochs,
-            lr=args.lr,
-            weight_decay=args.weight_decay,
-            warmup_epochs=args.warmup_epochs,
-            gradient_clip=args.gradient_clip,
-            checkpoint_dir=ckpt_dir,
-            use_amp=args.fp16,
-            freeze_backbone=args.freeze_backbone,
-            freeze_backbone_epochs=args.freeze_backbone_epochs,
-            metric_callback=lambda name, val, step: run.log_metric(name, val, step=step),
-        )
-        train_loop.run()
-
+        ckpt_dir = Path(resolved.checkpoint.save_dir)
         best_ckpt = ckpt_dir / "best.pt"
+        if not best_ckpt.exists():
+            best_path = results.get("best_model_path")
+            if best_path:
+                best_ckpt = Path(best_path)
         if best_ckpt.exists():
-            run.log_artefact(best_ckpt, tag="best_checkpoint")
+            tracker.log_artefact(best_ckpt, tag="best_checkpoint")
+            dest = model_dir() / best_ckpt.name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if best_ckpt != dest:
+                shutil.copy2(best_ckpt, dest)
+                sidecar = best_ckpt.with_suffix(best_ckpt.suffix + ".provenance.json")
+                if sidecar.exists():
+                    shutil.copy2(sidecar, dest.with_suffix(dest.suffix + ".provenance.json"))
 
-        # Copy best checkpoint to SM_MODEL_DIR so SageMaker packages it.
-        dest = model_dir() / "best.pt"
-        if best_ckpt.exists() and best_ckpt != dest:
-            shutil.copy2(best_ckpt, dest)
-
-        # Write a model metadata file.
         meta = {
-            "run_id": run_id,
-            "tier": args.tier,
-            "backbone": args.backbone,
-            "epochs_trained": args.epochs,
-            "best_val_map": run.best_metric("val_map", mode="max"),
-            "best_val_loss": run.best_metric("val_loss", mode="min"),
+            "run_id": resolved.run_id,
+            "experiment": resolved.experiment,
+            "tier": resolved.model.tier,
+            "epochs_trained": resolved.training.num_epochs,
+            "config_hash": resolved.provenance.config_hash,
+            "dataset_id": resolved.dataset.dataset_id,
+            "dataset_version": resolved.dataset.dataset_version,
+            "best_val_map": tracker.best_metric("val_map", mode="max"),
+            "best_val_loss": tracker.best_metric("val_loss", mode="min"),
         }
         (model_dir() / "model_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-        logger.info("Training complete. Artefacts in: %s", model_dir())
+        logger.info("training_complete artifacts=%s", model_dir())
 
-
-# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    args = parse_args()
-    run_training(args)
+    run(parse_args())
 
 
 if __name__ == "__main__":

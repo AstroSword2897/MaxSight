@@ -2057,13 +2057,31 @@ from dataclasses import dataclass
 
 
 class CapabilityTier(Enum):
-    """T5 only: temporal + hybrid + cross-task + cross-modal."""
+    """All tiers used across configs and ops scripts.
+
+    Active production model is T5_TEMPORAL; lower tiers exist so YAMLs and
+    SageMaker entrypoints under ml/training/configs/* and scripts/ops/* can
+    name the intended feature set without silent coercion. TierConfig.for_tier
+    exposes the per-tier flag intent; YAML model.* values still override per
+    flag via TierConfig.from_dict.
+    """
+    T0_BASELINE_CNN = 0
+    T1_LIGHTWEIGHT = 1
+    T2_DETECTOR = 2
+    T2_HYBRID_VIT = 22
+    T3_MULTI_TASK = 3
+    T4_ADVANCED = 4
     T5_TEMPORAL = 5
 
 
 @dataclass
 class TierConfig:
-    """T5 configuration: Stage A ResNet50+FPN; Stage B hybrid, temporal, cross-task, cross-modal."""
+    """Tier configuration: feature flags + latency/confidence ceilings.
+
+    T5_TEMPORAL is the active production target. Lower-tier presets in
+    for_tier() encode the intent of the corresponding YAMLs so the schema
+    layer in ml/training/run_config.py can validate without silent coercion.
+    """
     tier: CapabilityTier
     enabled: bool = True
     use_se_attention: bool = True
@@ -2083,13 +2101,101 @@ class TierConfig:
 
     @classmethod
     def for_tier(cls, tier: CapabilityTier) -> 'TierConfig':
-        """Return T5 config (only tier supported)."""
+        """Return per-tier feature flag intent; mirror what each YAML declares.
+
+        Active model code only consumes these flags via the runtime model;
+        the lower tiers exist for schema/config validation and to keep ops
+        scripts honest about which feature set a YAML targets.
+        """
+        if tier == CapabilityTier.T0_BASELINE_CNN:
+            return cls(
+                tier=tier,
+                use_se_attention=False,
+                use_cbam_attention=False,
+                use_hybrid_backbone=False,
+                use_dynamic_conv=False,
+                use_cross_task_attention=False,
+                use_cross_modal_attention=False,
+                use_temporal_modeling=False,
+                use_retrieval=False,
+            )
+        if tier == CapabilityTier.T1_LIGHTWEIGHT:
+            return cls(
+                tier=tier,
+                use_se_attention=True,
+                use_cbam_attention=True,
+                use_hybrid_backbone=False,
+                use_dynamic_conv=False,
+                use_cross_task_attention=False,
+                use_cross_modal_attention=False,
+                use_temporal_modeling=False,
+                use_retrieval=False,
+            )
+        if tier == CapabilityTier.T2_DETECTOR:
+            return cls(
+                tier=tier,
+                use_se_attention=True,
+                use_cbam_attention=True,
+                use_hybrid_backbone=False,
+                use_dynamic_conv=True,
+                use_cross_task_attention=False,
+                use_cross_modal_attention=False,
+                use_temporal_modeling=False,
+                use_retrieval=False,
+            )
+        if tier == CapabilityTier.T2_HYBRID_VIT:
+            return cls(
+                tier=tier,
+                use_se_attention=True,
+                use_cbam_attention=True,
+                use_hybrid_backbone=True,
+                use_dynamic_conv=True,
+                use_cross_task_attention=False,
+                use_cross_modal_attention=False,
+                use_temporal_modeling=False,
+                use_retrieval=False,
+            )
+        if tier == CapabilityTier.T3_MULTI_TASK:
+            return cls(
+                tier=tier,
+                use_se_attention=True,
+                use_cbam_attention=True,
+                use_hybrid_backbone=True,
+                use_dynamic_conv=True,
+                use_cross_task_attention=True,
+                use_cross_modal_attention=False,
+                use_temporal_modeling=False,
+                use_retrieval=False,
+            )
+        if tier == CapabilityTier.T4_ADVANCED:
+            return cls(
+                tier=tier,
+                use_se_attention=True,
+                use_cbam_attention=True,
+                use_hybrid_backbone=True,
+                use_dynamic_conv=True,
+                use_cross_task_attention=True,
+                use_cross_modal_attention=True,
+                use_temporal_modeling=False,
+                use_retrieval=False,
+            )
         return cls(tier=CapabilityTier.T5_TEMPORAL)
 
     @classmethod
     def from_dict(cls, d: dict) -> 'TierConfig':
-        """Build config from YAML model section (e.g. T2: use_temporal_modeling=false)."""
-        base = cls.for_tier(CapabilityTier.T5_TEMPORAL)
+        """Build config from a YAML model section.
+
+        Resolves the named tier first so the YAML overrides land on top of
+        the correct preset (e.g. T2_HYBRID_VIT starts with temporal=False).
+        Unknown tier names fall back to T5_TEMPORAL to preserve current
+        behavior; the strict tier validator lives in ml/training/run_config.py.
+        """
+        tier_name = d.get('tier', 'T5_TEMPORAL')
+        try:
+            tier_enum = CapabilityTier[tier_name] if isinstance(tier_name, str) else CapabilityTier.T5_TEMPORAL
+        except KeyError:
+            tier_enum = CapabilityTier.T5_TEMPORAL
+        base = cls.for_tier(tier_enum)
         return cls(
             tier=base.tier,
             enabled=d.get('enabled', True),

@@ -25,6 +25,37 @@ class SageMakerPipelineConfig:
     advisory_retrieval_top_k: int = 5
 
     @staticmethod
+    def _resolve_input_dir() -> Path:
+        # Training uses SM_CHANNEL_TRAIN; Processing mounts the same logical channel under /opt/ml/processing/.
+        env = os.environ.get("SM_CHANNEL_TRAIN", "")
+        if env:
+            return Path(env)
+        proc = Path("/opt/ml/processing/input/train")
+        if proc.is_dir():
+            return proc
+        return Path("/opt/ml/input/data/train")
+
+    @staticmethod
+    def _resolve_output_dir() -> Path:
+        # SM_OUTPUT_DATA_DIR for training; Processing writes to /opt/ml/processing/output/<channel>.
+        env = os.environ.get("SM_OUTPUT_DATA_DIR", "")
+        if env:
+            return Path(env)
+        if Path("/opt/ml/processing").is_dir():
+            return Path("/opt/ml/processing/output/train")
+        return Path("/opt/ml/output/data")
+
+    @staticmethod
+    def _resolve_model_dir() -> Path:
+        # Artefact dir for training; optional extra channel on Processing jobs.
+        env = os.environ.get("SM_MODEL_DIR", "")
+        if env:
+            return Path(env)
+        if Path("/opt/ml/processing").is_dir():
+            return Path("/opt/ml/processing/output/model")
+        return Path("/opt/ml/model")
+
+    @staticmethod
     def _read_hyperparameters() -> Dict[str, Any]:
         hp_path = Path("/opt/ml/input/config/hyperparameters.json")
         if not hp_path.exists():
@@ -37,9 +68,9 @@ class SageMakerPipelineConfig:
     @classmethod
     def from_env(cls) -> "SageMakerPipelineConfig":
         hp = cls._read_hyperparameters()
-        input_dir = Path(os.environ.get("SM_CHANNEL_TRAIN", "/opt/ml/input/data/train"))
-        output_dir = Path(os.environ.get("SM_OUTPUT_DATA_DIR", "/opt/ml/output/data"))
-        model_dir = Path(os.environ.get("SM_MODEL_DIR", "/opt/ml/model"))
+        input_dir = cls._resolve_input_dir()
+        output_dir = cls._resolve_output_dir()
+        model_dir = cls._resolve_model_dir()
 
         sampling = VideoSamplingConfig(
             temporal_window=int(hp.get("temporal_window", 8)),

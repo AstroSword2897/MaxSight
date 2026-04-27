@@ -6,7 +6,7 @@ from ml.pipeline.rag_advisory import (
     AdvisoryRetriever,
     generate_therapy_advisory,
 )
-from ml.pipeline.sagemaker_entrypoint import run_sagemaker_pipeline
+from ml.pipeline.pipeline_runner import run_sagemaker_pipeline
 
 __all__ = [
     "SageMakerPipelineConfig",

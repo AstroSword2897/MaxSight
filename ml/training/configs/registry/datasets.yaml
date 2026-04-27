@@ -1,0 +1,307 @@
+# MaxSight dataset registry: the only place a dataset becomes "recognized".
+#
+# schema_version: 1.2.0 — annotation_format explicit; label_space nullable for raw;
+#   canonical vocabularies live in label_spaces.yaml.
+
+schema_version: "1.2.0"
+
+datasets:
+
+  - id: "maxsight-coco-cleaned"
+    version: "v1"
+    kind: "image"
+    status: "active"
+    source: "silver"
+    dataset_type: "real_world"
+    annotation_format: "maxsight_list"
+    label_space: "accessibility_622"
+    medallion_key: "coco"
+    splits:
+      train: "datasets/cleaned_splits/maxsight_train.json"
+      val: "datasets/cleaned_splits/maxsight_val.json"
+      test: "datasets/cleaned_splits/maxsight_test.json"
+    image_dir: "datasets/coco_raw"
+    audio_dir: null
+    manifest: null
+    num_classes: 622
+    condition_modes_supported: null
+    tier_compatibility:
+      - "T0_BASELINE_CNN"
+      - "T1_LIGHTWEIGHT"
+      - "T2_DETECTOR"
+      - "T2_HYBRID_VIT"
+      - "T3_MULTI_TASK"
+      - "T4_ADVANCED"
+      - "T5_TEMPORAL"
+    content_hash: null
+    notes: |
+      MaxSight custom list-format (per-sample image_id, absolute image_path,
+      objects[], urgency, lighting, description, audio_path). Splits are 10000
+      / 2000 / 1000 over real COCO 2017 pixels in datasets/coco_raw/train2017
+      and val2017. Vocabulary is the full 622-class COCO_BASE + ACCESSIBILITY
+      set defined in ml/models/maxsight_cnn.COCO_CLASSES.
+
+  - id: "coco-bronze"
+    version: "2017"
+    kind: "image"
+    status: "active"
+    source: "bronze"
+    dataset_type: "real_world"
+    annotation_format: "coco_dict"
+    label_space: "coco_80"
+    medallion_key: "coco"
+    splits:
+      train: "datasets/coco_raw/annotations/instances_train2017.json"
+      val: "datasets/coco_raw/annotations/instances_val2017.json"
+    image_dir: "datasets/coco_raw"
+    audio_dir: null
+    manifest: null
+    num_classes: 80
+    condition_modes_supported: null
+    tier_compatibility:
+      - "T0_BASELINE_CNN"
+      - "T1_LIGHTWEIGHT"
+      - "T2_DETECTOR"
+    content_hash: null
+    notes: |
+      Raw COCO 2017 vendor drop (80 canonical classes). Safe only for shape
+      and sanity baselines; full-vocabulary MaxSight training must use
+      maxsight-coco-cleaned@v1 because that set carries accessibility labels.
+
+  - id: "maxsight-accessibility-coco"
+    version: "v1"
+    kind: "image"
+    status: "active"
+    source: "silver"
+    dataset_type: "synthetic"
+    annotation_format: "coco_dict"
+    label_space: "accessibility_622"
+    medallion_key: "coco"
+    splits:
+      train:
+        annotations: "datasets/cleaned_splits/train_annotations.json"
+        image_dir: "datasets/train/images"
+      val:
+        annotations: "datasets/cleaned_splits/val_annotations.json"
+        image_dir: "datasets/val/images"
+      test:
+        annotations: "datasets/cleaned_splits/test_annotations.json"
+        image_dir: "datasets/test/images"
+    image_dir: null
+    audio_dir: null
+    manifest: null
+    num_classes: 622
+    condition_modes_supported: null
+    tier_compatibility:
+      - "T0_BASELINE_CNN"
+      - "T1_LIGHTWEIGHT"
+      - "T2_DETECTOR"
+      - "T2_HYBRID_VIT"
+      - "T3_MULTI_TASK"
+      - "T4_ADVANCED"
+    content_hash: null
+    notes: |
+      Synthetic COCO-format accessibility dataset (1400 / 300 / 300 images at
+      224x224 with 622 categories). Per-split image layout: datasets/train/images,
+      datasets/val/images, datasets/test/images.
+
+  - id: "maxsight-synthetic-224"
+    version: "v1"
+    kind: "image"
+    status: "active"
+    source: "silver"
+    dataset_type: "synthetic"
+    annotation_format: "coco_dict"
+    label_space: "accessibility_622"
+    medallion_key: "coco"
+    splits:
+      train:
+        annotations: "datasets/train/annotations.json"
+        image_dir: "datasets/train/images"
+      val:
+        annotations: "datasets/val/annotations.json"
+        image_dir: "datasets/val/images"
+      test:
+        annotations: "datasets/test/annotations.json"
+        image_dir: "datasets/test/images"
+    image_dir: null
+    audio_dir: null
+    manifest: null
+    num_classes: 622
+    condition_modes_supported: null
+    tier_compatibility:
+      - "T0_BASELINE_CNN"
+      - "T1_LIGHTWEIGHT"
+      - "T2_DETECTOR"
+    content_hash: null
+    notes: |
+      Larger synthetic run (2000 + 300 + 300 at 224x224 from
+      synthetic_scene_generator.py; generation_stats.json records the scenario
+      mix). Same per-split image layout as maxsight-accessibility-coco.
+
+  # ── Raw sources (manifest placeholders; not training units until ingested) ─
+
+  - id: "kinetics700"
+    version: "v0"
+    kind: "video"
+    status: "raw"
+    source: "external"
+    dataset_type: "real_world"
+    annotation_format: "video_manifest"
+    label_space: null
+    medallion_key: "kinetics700"
+    splits: null
+    image_dir: null
+    audio_dir: null
+    manifest: "datasets/medallion/silver/kinetics700/manifests/clips.jsonl"
+    num_classes: 700
+    condition_modes_supported: null
+    tier_compatibility:
+      - "T5_TEMPORAL"
+    content_hash: null
+    notes: "Kinetics-700 action clips. Reserved for T5 temporal training."
+
+  - id: "youtube8m"
+    version: "v0"
+    kind: "video"
+    status: "raw"
+    source: "external"
+    dataset_type: "real_world"
+    annotation_format: "video_manifest"
+    label_space: null
+    medallion_key: "youtube8m"
+    splits: null
+    image_dir: null
+    audio_dir: null
+    manifest: "datasets/medallion/silver/youtube8m/manifests/clips.jsonl"
+    num_classes: 0
+    condition_modes_supported: null
+    tier_compatibility:
+      - "T5_TEMPORAL"
+    content_hash: null
+    notes: "YouTube-8M weak-label segments. Pretraining pool only."
+
+  - id: "howto100m"
+    version: "v0"
+    kind: "multimodal"
+    status: "raw"
+    source: "external"
+    dataset_type: "real_world"
+    annotation_format: "multimodal_manifest"
+    label_space: null
+    medallion_key: "howto100m"
+    splits: null
+    image_dir: null
+    audio_dir: null
+    manifest: "datasets/medallion/silver/howto100m/manifests/clips.jsonl"
+    num_classes: 0
+    condition_modes_supported: null
+    tier_compatibility:
+      - "T4_ADVANCED"
+      - "T5_TEMPORAL"
+    content_hash: null
+    notes: "HowTo100M instructional video+ASR. Cross-modal training only."
+
+  - id: "webvid10m"
+    version: "v0"
+    kind: "multimodal"
+    status: "raw"
+    source: "external"
+    dataset_type: "real_world"
+    annotation_format: "multimodal_manifest"
+    label_space: null
+    medallion_key: "webvid10m"
+    splits: null
+    image_dir: null
+    audio_dir: null
+    manifest: "datasets/medallion/silver/webvid10m/manifests/clips.jsonl"
+    num_classes: 0
+    condition_modes_supported: null
+    tier_compatibility:
+      - "T4_ADVANCED"
+      - "T5_TEMPORAL"
+    content_hash: null
+    notes: "WebVid-10M video-text pairs. Retrieval pretraining."
+
+  - id: "bdd100k"
+    version: "v0"
+    kind: "video"
+    status: "raw"
+    source: "external"
+    dataset_type: "real_world"
+    annotation_format: "video_manifest"
+    label_space: null
+    medallion_key: "bdd100k"
+    splits: null
+    image_dir: null
+    audio_dir: null
+    manifest: "datasets/medallion/silver/bdd100k/manifests/clips.jsonl"
+    num_classes: 10
+    condition_modes_supported: null
+    tier_compatibility:
+      - "T2_DETECTOR"
+      - "T2_HYBRID_VIT"
+      - "T3_MULTI_TASK"
+      - "T5_TEMPORAL"
+    content_hash: null
+    notes: "BDD100K driving (det/track/seg). Domain-specific, not a default."
+
+  - id: "epic_kitchens"
+    version: "v0"
+    kind: "video"
+    status: "raw"
+    source: "external"
+    dataset_type: "real_world"
+    annotation_format: "video_manifest"
+    label_space: null
+    medallion_key: "epic_kitchens"
+    splits: null
+    image_dir: null
+    audio_dir: null
+    manifest: "datasets/medallion/silver/epic_kitchens/manifests/clips.jsonl"
+    num_classes: 0
+    condition_modes_supported: null
+    tier_compatibility:
+      - "T5_TEMPORAL"
+    content_hash: null
+    notes: "Epic-Kitchens-100 egocentric. Reserved for action-grounded T5 work."
+
+  - id: "mose"
+    version: "v0"
+    kind: "video"
+    status: "raw"
+    source: "external"
+    dataset_type: "real_world"
+    annotation_format: "video_manifest"
+    label_space: null
+    medallion_key: "mose"
+    splits: null
+    image_dir: null
+    audio_dir: null
+    manifest: "datasets/medallion/silver/mose/manifests/clips.jsonl"
+    num_classes: 0
+    condition_modes_supported: null
+    tier_compatibility:
+      - "T5_TEMPORAL"
+    content_hash: null
+    notes: "MOSE video object segmentation. VOS supervision only."
+
+  - id: "youtube_vos"
+    version: "v0"
+    kind: "video"
+    status: "raw"
+    source: "external"
+    dataset_type: "real_world"
+    annotation_format: "video_manifest"
+    label_space: null
+    medallion_key: "youtube_vos"
+    splits: null
+    image_dir: null
+    audio_dir: null
+    manifest: "datasets/medallion/silver/youtube_vos/manifests/clips.jsonl"
+    num_classes: 0
+    condition_modes_supported: null
+    tier_compatibility:
+      - "T5_TEMPORAL"
+    content_hash: null
+    notes: "YouTube-VOS segmentation. Reserved alongside MOSE."

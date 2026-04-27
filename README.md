@@ -161,7 +161,7 @@ This is the **master checklist** of what the repo implements today. Deep module 
 ### What is explicitly out of scope or incomplete (still “features we want”—see roadmap)
 
 - End-to-end **video dataset loader** emitting temporal supervision targets (IoU track proxy, flicker/consistency labels) wired into the main training entrypoint is **in progress**; utilities exist ahead of full wiring.
-- **SageMaker Training** beyond config/entrypoint packaging may need your AWS job definitions and data channels.
+- **SageMaker**: use `scripts/ops/sagemaker_train.py` and `scripts/ops/sagemaker_processing_submit.py` with your bucket, role, and data channels (`ml/infra/sagemaker_utils.py`).
 - On-device **CoreML** may not expose every modality (e.g. audio/temporal)—see **docs/status.md**.
 
 ---
@@ -328,7 +328,7 @@ For wearable deployment, calibration batches for INT8 must be drawn from the sam
 
 - **`ml/data/video_panoptic.py`**: Builds **fixed-stride** or **motion-adaptive** clip windows, prunes low-quality pseudo-panoptic segments, and associates segment tracks across frames with **multi-frame IoU** (proxy tracks for temporal consistency work).
 - **`ml/data/video_preprocessing.py`**: `VideoPanopticPreprocessor` runs segmentation (pluggable) over chunks of frames for **pseudo-panoptic** generation or QA—not a replacement for ground-truth panoptic labels, but a production-shaped hook for scaling video pipelines.
-- **`ml/pipeline/`**: **`sagemaker_config.py`** reads SageMaker-style environment/hyperparameters into a single config object; **`rag_advisory.py`** keeps retrieval as **advisory** context for jobs that bundle documentation or scene hints; **`sagemaker_entrypoint.py`** provides a **consistent import path** for container training or preprocessing steps. Wire these to your actual SageMaker Training/Processing job definitions and data channels.
+- **`ml/pipeline/`**: **`sagemaker_config.py`** reads SageMaker-style environment/hyperparameters; **`rag_advisory.py`** keeps retrieval **advisory**; **`sagemaker_entrypoint.py`** runs the processing pipeline. Submit jobs with **`scripts/ops/sagemaker_processing_submit.py`** (Processing) or train via **`scripts/ops/sagemaker_train.py`** (Training).
 
 ---
 
@@ -1541,7 +1541,7 @@ This section merges **what to do next operationally** with the **engineering bac
 | **Training** | Wire **temporal losses** into **train_maxsight** + GradNorm | **Done** | **`ScalarMSELoss`**, **`--temporal-supervision`**, **`flicker`** on model outputs; GradNorm **`OUTPUT_KEY_MAP`** updated. |
 | **Testing** | Contract tests for **T=8 (or adaptive T) data**, label integrity, **therapy + safety gates** under video input | Planned | Extend `tests/test_video_*`, `tests/test_frames_data_validation.py`, runtime safety tests. |
 | **Retrieval** | Optional **decoder conditioning** on retrieval memory in `SceneDescriptionHead` (still advisory) | Planned | Must preserve non-blocking and non-safety authority. |
-| **SageMaker** | Full **Training Job** definitions (channels, metrics, debugger), not only `ml/pipeline` config/entry | Planned | Pair `sagemaker_entrypoint.py` with your AWS templates. |
+| **SageMaker** | Training: `scripts/ops/sagemaker_train.py` (channels, `source_dir`, CloudWatch **metric_definitions**, optional Debugger); Processing: `scripts/ops/sagemaker_processing_submit.py` + `ml/pipeline/sagemaker_entrypoint.py` | **Done** | Set bucket/role; gold index upload unchanged. |
 | **Export** | **CoreML + advisory bundle** (model + manifest of what RAG may attach) for app store review clarity | Planned | Keep tensor path independent of retrieval. |
 | **Tracking** | **Appearance-assisted** association beyond IoU for crowded scenes | Planned | Research; may feed therapy temporal signals. |
 | **Product** | **Pilot / beta** per **docs/productization/05_pilot_validation_protocol.md** | Planned | Gates in **02_safety_first_release_gates.md** stay mandatory. |
@@ -1597,6 +1597,24 @@ pip install -r requirements.txt
 # Verify installation
 python -c "import torch; print(f'PyTorch {torch.__version__}, MPS: {torch.backends.mps.is_available()}')"
 ```
+
+### AWS / SageMaker integration (setup checklist)
+
+- **Dependencies**: `pip install -r requirements.txt` (includes `boto3` + `sagemaker` for `scripts/ops/*`).
+- **AWS credentials**: Configure via AWS SSO/profile or env vars so `aws sts get-caller-identity` works.
+- **IAM + policies**:
+  - **Start here**: `infra/README.md`
+  - **Templates**: `infra/iam/sagemaker_execution_role.json`, `infra/iam/s3_bucket_policy.json`, `infra/iam/ecr_policy.json`
+  - **Note**: Replace placeholders (`{{ACCOUNT_ID}}`, `{{BUCKET}}`, `{{REGION}}`, `{{SAGEMAKER_ROLE_NAME}}`) before applying.
+- **Required env vars**:
+  - `AWS_DEFAULT_REGION` (defaults to `us-east-1`)
+  - `MAXSIGHT_S3_BUCKET` (training artefacts + checkpoints + medallion layers)
+  - `MAXSIGHT_S3_PREFIX` (defaults to `maxsight`)
+  - `SAGEMAKER_ROLE_ARN` (required for real job submission; can be omitted for `--dry-run`)
+- **Safety check**: `ml/infra/sagemaker_utils.py` rejects wrong-account role ARNs by default. Set `MAXSIGHT_SKIP_ROLE_ASSERT=1` only for intentional cross-account use.
+- **Dry runs**:
+  - Training: `python scripts/ops/sagemaker_train.py --bucket "$MAXSIGHT_S3_BUCKET" --role "$SAGEMAKER_ROLE_ARN" --dry-run`
+  - Processing: `python scripts/ops/sagemaker_processing_submit.py --bucket "$MAXSIGHT_S3_BUCKET" --role "$SAGEMAKER_ROLE_ARN" --input-s3 s3://... --output-s3 s3://... --dry-run`
 
 ### Device Selection Policy
 

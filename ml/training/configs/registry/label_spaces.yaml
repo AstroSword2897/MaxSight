@@ -1,0 +1,18 @@
+# Canonical label-space definitions for MaxSight training.
+#
+# Dataset registry entries reference label_space by id; num_classes on each
+# dataset row must match the definition here so model heads and loss stay
+# aligned without duplicating magic numbers in YAML.
+#
+# parent is informational only (not used for automatic remapping yet).
+
+schema_version: "1.0.0"
+
+label_spaces:
+  - id: "coco_80"
+    num_classes: 80
+    parent: null
+
+  - id: "accessibility_622"
+    num_classes: 622
+    parent: "coco_80"

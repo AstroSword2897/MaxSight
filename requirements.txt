@@ -45,3 +45,7 @@ tqdm>=4.66.0  # Progress bars
 flask>=3.0.0
 flask-cors>=4.0.0
 
+# AWS / SageMaker ops + integration (required for scripts/ops/* and optional registry sync)
+boto3
+sagemaker
+

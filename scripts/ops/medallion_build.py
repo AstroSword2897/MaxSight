@@ -187,6 +187,11 @@ def main() -> int:
     p_coco.add_argument("--val-samples", type=int, default=2000)
     p_coco.add_argument("--test-samples", type=int, default=1000)
     p_coco.add_argument("--seed", type=int, default=42)
+    p_coco.add_argument(
+        "--publish-cleaned-splits",
+        action="store_true",
+        help="Copy split JSONs to datasets/cleaned_splits/maxsight_*.json (dataset registry paths)",
+    )
     p_coco.set_defaults(func=cmd_promote_coco)
 
     p_vid = sub.add_parser("promote-video", help="Validate and copy v1 manifests into silver/video; update gold index")
@@ -227,8 +232,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-</think>
-I introduced a bug: duplicate merge and wrong variable. Fixing `medallion_build.py`.
-
-<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
-Read

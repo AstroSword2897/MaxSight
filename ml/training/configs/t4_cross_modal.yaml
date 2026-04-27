@@ -1,11 +1,13 @@
-# MaxSight Training Configuration: T4_CROSS_MODAL
+# MaxSight Training Configuration: T4_ADVANCED (cross-modal)
 # Cross-modal attention (audio-visual), Tier 1 + Tier 2 + Tier 3 heads, Retrieval
 # Target: Cloud GPU training, ~280M parameters
 
+schema_version: "1.0.0"
+
 # Model Configuration
 model:
-  tier: "T4_CROSS_MODAL"
-  num_classes: 80
+  tier: "T4_ADVANCED"
+  num_classes: 622  # Full COCO_BASE + ACCESSIBILITY vocabulary
   use_se_attention: true
   use_cbam_attention: true
   use_hybrid_backbone: true
@@ -17,9 +19,9 @@ model:
 
 # Data Configuration
 data:
-  train_annotation_file: "datasets/cleaned_splits/train.json"
-  val_annotation_file: "datasets/cleaned_splits/val.json"
-  test_annotation_file: "datasets/cleaned_splits/test.json"
+  train_annotation_file: "datasets/cleaned_splits/maxsight_train.json"
+  val_annotation_file: "datasets/cleaned_splits/maxsight_val.json"
+  test_annotation_file: "datasets/cleaned_splits/maxsight_test.json"
   image_dir: "datasets/coco_raw"
   audio_dir: null  # Audio optional, will be generated if available
   batch_size: 8  # Smaller batch for largest model
@@ -27,7 +29,8 @@ data:
   pin_memory: true
   max_objects: 10
   condition_mode: null
-  apply_lighting_augmentation: true
+  tag_lighting_metadata: true
+  lighting_pixel_augmentation: false
   use_weighted_sampling: false
 
 # Training Configuration
@@ -35,34 +38,32 @@ training:
   num_epochs: 150
   learning_rate: 8.0e-5  # Slightly higher than T5 (280M vs 320M params)
   weight_decay: 0.05
-  # Note: momentum removed - AdamW doesn't use it
   optimizer: "AdamW"
-  scheduler: "cosine"
+  scheduler_type: "cosine"
   min_lr: 1e-6
   warmup_epochs: 15
   gradient_clip_norm: 1.0
   mixed_precision: false  # FP32 only
-  accumulate_grad_batches: 4  # Effective batch size 32
+  gradient_accumulation_steps: 4  # Effective batch size 32
+  freeze_backbone: false
+  freeze_backbone_epochs: 0
+  early_stopping_patience: 10
+  early_stopping_metric: "val_loss"
 
 # Loss Configuration
-# Rebalanced for multi-task learning
+# Trimmed to active heads. Multi-modal heads return when their losses are
+# instantiated by create_loss_fn.
 loss:
   use_gradnorm: true
+  gradnorm_alpha: 1.5
+  gradnorm_update_interval: 100
+  temporal_supervision: false
   loss_weights:
-    detection: 1.0
+    objectness: 1.0
     classification: 1.2
-    box_regression: 3.0
+    box: 3.0
     distance: 0.7
     urgency: 1.5
-    motion: 0.6
-    therapy_state: 0.8
-    roi_priority: 0.4
-    navigation_difficulty: 0.5
-    scene_description: 0.3
-    ocr: 0.4
-    scene_graph: 0.3
-    sound_events: 0.4
-    personalization: 0.3
 
 # Validation Configuration
 validation:
@@ -83,7 +84,11 @@ logging:
   log_every_n_steps: 50
   tensorboard: true
 
+dataset:
+  dataset_id: "maxsight-coco-cleaned"
+  dataset_version: "v1"
+  require_match: false
+
 # Device
 device: "auto"
 seed: 42
-

@@ -231,22 +231,21 @@ class ModelRegistry:
     # ── SageMaker Model Package integration ───────────────────────────────────
 
     def _register_sm_package(self, entry: ModelEntry, model_data_s3: str) -> None:
-        try:
-            import boto3
-            sm = boto3.client("sagemaker", region_name=getattr(self._sm_cfg, "region", "us-east-1"))
-            sm.create_model_package(
-                ModelPackageGroupName=self._sm_group,
-                ModelPackageDescription=f"MaxSight {entry.tier} {entry.run_id}",
-                InferenceSpecification={
-                    "Containers": [{
-                        "Image": getattr(self._sm_cfg, "inference_image", ""),
-                        "ModelDataUrl": model_data_s3,
-                    }],
-                    "SupportedContentTypes": ["application/json"],
-                    "SupportedResponseMIMETypes": ["application/json"],
-                },
-                ModelApprovalStatus="PendingManualApproval",
-            )
-            logger.info("Registered SageMaker Model Package: %s / %s", self._sm_group, entry.run_id)
-        except Exception as exc:
-            logger.warning("SageMaker Model Package registration failed: %s", exc)
+        # Propagate exceptions when a package group is configured — callers depend on
+        # the SageMaker ARN being present for the registry gate to work correctly.
+        import boto3
+        sm = boto3.client("sagemaker", region_name=getattr(self._sm_cfg, "region", "us-east-1"))
+        sm.create_model_package(
+            ModelPackageGroupName=self._sm_group,
+            ModelPackageDescription=f"MaxSight {entry.tier} {entry.run_id}",
+            InferenceSpecification={
+                "Containers": [{
+                    "Image": getattr(self._sm_cfg, "inference_image", ""),
+                    "ModelDataUrl": model_data_s3,
+                }],
+                "SupportedContentTypes": ["application/json"],
+                "SupportedResponseMIMETypes": ["application/json"],
+            },
+            ModelApprovalStatus="PendingManualApproval",
+        )
+        logger.info("Registered SageMaker Model Package: %s / %s", self._sm_group, entry.run_id)

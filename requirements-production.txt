@@ -1,0 +1,2 @@
+# Optional WSGI for web_simulator (pip install -r requirements-production.txt)
+gunicorn>=22.0.0

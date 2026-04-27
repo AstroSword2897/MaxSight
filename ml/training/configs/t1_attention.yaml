@@ -1,11 +1,13 @@
-# MaxSight Training Configuration: T1_ATTENTION
+# MaxSight Training Configuration: T1_LIGHTWEIGHT (attention-augmented)
 # ResNet50 + FPN + SE/CBAM attention, Tier 1 + Tier 2 heads
 # Target: Cloud GPU training, ~50M parameters
 
+schema_version: "1.0.0"
+
 # Model Configuration
 model:
-  tier: "T1_ATTENTION"
-  num_classes: 80
+  tier: "T1_LIGHTWEIGHT"
+  num_classes: 622  # Full COCO_BASE + ACCESSIBILITY vocabulary
   use_se_attention: true
   use_cbam_attention: true
   use_hybrid_backbone: false
@@ -17,9 +19,9 @@ model:
 
 # Data Configuration
 data:
-  train_annotation_file: "datasets/cleaned_splits/train.json"
-  val_annotation_file: "datasets/cleaned_splits/val.json"
-  test_annotation_file: "datasets/cleaned_splits/test.json"
+  train_annotation_file: "datasets/cleaned_splits/maxsight_train.json"
+  val_annotation_file: "datasets/cleaned_splits/maxsight_val.json"
+  test_annotation_file: "datasets/cleaned_splits/maxsight_test.json"
   image_dir: "datasets/coco_raw"
   audio_dir: null
   batch_size: 24  # Slightly smaller due to attention overhead
@@ -27,35 +29,42 @@ data:
   pin_memory: true
   max_objects: 10
   condition_mode: null
-  apply_lighting_augmentation: true
+  tag_lighting_metadata: true
+  lighting_pixel_augmentation: false
   use_weighted_sampling: false
 
 # Training Configuration
+# AdamW only - schema rejects SGD/momentum which ProductionTrainLoop ignores.
 training:
   num_epochs: 120
-  learning_rate: 1.2e-4  # Adjusted for 50M params, can use slightly higher LR
+  learning_rate: 1.2e-4  # Adjusted for 50M params
   weight_decay: 0.05
-  momentum: 0.9  # SGD uses momentum
-  optimizer: "SGD"  # SGD still fine for smaller model
-  scheduler: "cosine"
+  optimizer: "AdamW"
+  scheduler_type: "cosine"
   min_lr: 1e-6
   warmup_epochs: 5
   gradient_clip_norm: 1.0
   mixed_precision: false  # FP32 only
-  accumulate_grad_batches: 1
+  gradient_accumulation_steps: 1
+  freeze_backbone: false
+  freeze_backbone_epochs: 0
+  early_stopping_patience: 10
+  early_stopping_metric: "val_loss"
 
 # Loss Configuration
-# Rebalanced for attention-based multi-task learning
+# Trimmed to heads create_loss_fn actually instantiates. motion/therapy_state
+# come back when those losses are wired into create_loss_fn.
 loss:
   use_gradnorm: true
+  gradnorm_alpha: 1.5
+  gradnorm_update_interval: 100
+  temporal_supervision: false
   loss_weights:
-    detection: 1.0
+    objectness: 1.0
     classification: 1.2
-    box_regression: 3.0
+    box: 3.0
     distance: 0.7
     urgency: 1.5
-    motion: 0.6
-    therapy_state: 0.8
 
 # Validation Configuration
 validation:
@@ -76,7 +85,11 @@ logging:
   log_every_n_steps: 50
   tensorboard: true
 
+dataset:
+  dataset_id: "maxsight-coco-cleaned"
+  dataset_version: "v1"
+  require_match: false
+
 # Device
 device: "auto"
 seed: 42
-

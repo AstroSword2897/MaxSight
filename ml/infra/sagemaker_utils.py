@@ -3,6 +3,10 @@
 Abstracts the SageMaker SDK so the rest of the codebase can reference
 ``get_session()`` / ``get_execution_role()`` without touching boto3 directly.
 
+IAM reference: see ``infra/iam/sagemaker_execution_role.json`` for the trust
+policy and permission boundaries required by this role. Set SAGEMAKER_ROLE_ARN
+to the resolved ARN before running any ``scripts/ops/`` launcher.
+
 Usage
 -----
 from ml.infra.sagemaker_utils import get_session, get_execution_role, SMConfig
@@ -16,11 +20,24 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# CloudWatch metrics parsed from ProductionTrainLoop logs (train_loop.py).
+TRAINING_METRIC_DEFINITIONS = [
+    {"Name": "train:loss", "Regex": r"Train Loss: ([0-9.eE+-]+)"},
+    {"Name": "val:loss", "Regex": r"Val Loss: ([0-9.eE+-]+)"},
+    {"Name": "val:mAP", "Regex": r"Val mAP: ([0-9.eE+-]+)"},
+    {"Name": "val:mAP50", "Regex": r"Val mAP@0.5: ([0-9.eE+-]+)"},
+    {"Name": "val:mAP75", "Regex": r"Val mAP@0.75: ([0-9.eE+-]+)"},
+    {"Name": "val:precision", "Regex": r"Precision: ([0-9.eE+-]+)"},
+    {"Name": "val:recall", "Regex": r"Recall: ([0-9.eE+-]+)"},
+    {"Name": "val:f1", "Regex": r"F1: ([0-9.eE+-]+)"},
+]
 
 # Default container images (AWS-managed PyTorch DLC).
 # Update the patch version when AWS releases new ones.
@@ -93,27 +110,85 @@ def get_session(region: Optional[str] = None):
     return sagemaker.Session(boto_session=boto_session)
 
 
+def _assert_role_matches_caller(role_arn: str) -> None:
+    """Raise RuntimeError if the role ARN account differs from the caller's AWS account.
+
+    Catches wrong-account deploys before anything is submitted. Skip by setting
+    MAXSIGHT_SKIP_ROLE_ASSERT=1 (e.g. intentional cross-account scenarios).
+    See infra/iam/sagemaker_execution_role.json for the expected trust policy.
+    """
+    if os.environ.get("MAXSIGHT_SKIP_ROLE_ASSERT", "").strip() == "1":
+        return
+    match = re.match(r"arn:aws(?:-[a-z]+)*:iam::(\d+):", role_arn)
+    if not match:
+        # Non-standard ARN (e.g. GovCloud partition); skip rather than false-positive.
+        return
+    role_account = match.group(1)
+    try:
+        import boto3
+        caller = boto3.client("sts").get_caller_identity()
+        caller_account = caller["Account"]
+    except Exception:
+        # No credentials available (local dev without AWS config); skip assertion.
+        return
+    if role_account != caller_account:
+        raise RuntimeError(
+            f"Role ARN account {role_account} does not match caller account {caller_account}. "
+            "Check SAGEMAKER_ROLE_ARN. See infra/iam/sagemaker_execution_role.json. "
+            "Set MAXSIGHT_SKIP_ROLE_ASSERT=1 to disable this check for cross-account use."
+        )
+
+
 def get_execution_role(role_arn: str = "") -> str:
     """Return a SageMaker execution role ARN.
 
     Falls back to the attached IAM role when running inside SageMaker.
+    Validates that the resolved ARN belongs to the caller's AWS account unless
+    MAXSIGHT_SKIP_ROLE_ASSERT=1. See infra/iam/sagemaker_execution_role.json.
     """
+    resolved: str
     if role_arn:
-        return role_arn
-    role_env = os.environ.get("SAGEMAKER_ROLE_ARN", "")
-    if role_env:
-        return role_env
-    try:
-        import sagemaker  # type: ignore
-        return sagemaker.get_execution_role()
-    except Exception:
-        raise RuntimeError(
-            "Cannot determine SageMaker execution role. "
-            "Set SAGEMAKER_ROLE_ARN env var or run inside a SageMaker context."
-        )
+        resolved = role_arn
+    else:
+        role_env = os.environ.get("SAGEMAKER_ROLE_ARN", "")
+        if role_env:
+            resolved = role_env
+        else:
+            try:
+                import sagemaker  # type: ignore
+                resolved = sagemaker.get_execution_role()
+            except Exception:
+                raise RuntimeError(
+                    "Cannot determine SageMaker execution role. "
+                    "Set SAGEMAKER_ROLE_ARN env var or run inside a SageMaker context."
+                )
+    _assert_role_matches_caller(resolved)
+    return resolved
 
 
 # ── Training job config builder ───────────────────────────────────────────────
+
+def _default_source_dir() -> str:
+    # ml/infra/sagemaker_utils.py -> repo root
+    return str(Path(__file__).resolve().parents[2])
+
+
+def _optional_debugger_hook(enable: bool):
+    if not enable:
+        return None
+    try:
+        from sagemaker.debugger import CollectionConfig, DebuggerHookConfig  # type: ignore
+
+        return DebuggerHookConfig(
+            collection_configs=[
+                CollectionConfig(name="losses", parameters={"save_interval": "10"}),
+                CollectionConfig(name="weights", parameters={"save_interval": "500"}),
+            ]
+        )
+    except Exception as e:
+        logger.warning("SageMaker Debugger not configured (%s); continuing without debugger.", e)
+        return None
+
 
 def build_estimator(
     cfg: SMConfig,
@@ -123,9 +198,15 @@ def build_estimator(
     source_dir: Optional[str] = None,
     dependencies: Optional[List[str]] = None,
     use_spot: bool = False,
+    metric_definitions: Optional[List[Dict[str, str]]] = None,
+    emit_cloudwatch_metrics: bool = True,
+    enable_debugger: bool = False,
 ):
-    """Build a SageMaker PyTorch Estimator from SMConfig."""
-    import sagemaker  # type: ignore
+    """Build a SageMaker PyTorch Estimator from SMConfig.
+
+    Pass ``source_dir`` as the repository root so ``entry_point`` (e.g. ``ml/training/sagemaker_entry.py``)
+    resolves inside the uploaded tarball. Defaults to this repo root.
+    """
     from sagemaker.pytorch import PyTorch  # type: ignore
 
     session = get_session(cfg.region)
@@ -138,9 +219,21 @@ def build_estimator(
             "max_wait": cfg.max_run_hours * 3600,
         }
 
-    estimator = PyTorch(
+    dbg = _optional_debugger_hook(enable_debugger)
+    extra_estimator_kwargs: Dict[str, Any] = {}
+    if dbg is not None:
+        extra_estimator_kwargs["debugger_hook_config"] = dbg
+
+    if metric_definitions is not None:
+        metrics: Optional[List[Dict[str, str]]] = metric_definitions
+    elif emit_cloudwatch_metrics:
+        metrics = TRAINING_METRIC_DEFINITIONS
+    else:
+        metrics = None
+
+    pytorch_kwargs: Dict[str, Any] = dict(
         entry_point=entry_point,
-        source_dir=source_dir,
+        source_dir=source_dir or _default_source_dir(),
         role=role,
         instance_type=cfg.instance_type_train,
         instance_count=cfg.instance_count,
@@ -155,7 +248,12 @@ def build_estimator(
         tags=cfg.tags,
         dependencies=dependencies or [],
         **spot_kwargs,
+        **extra_estimator_kwargs,
     )
+    if metrics:
+        pytorch_kwargs["metric_definitions"] = metrics
+
+    estimator = PyTorch(**pytorch_kwargs)
     return estimator
 
 

@@ -57,22 +57,37 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--upload-silver", action="store_true",
                         help="Upload silver data to S3 before submitting the job")
 
-    # Model / training HPs
-    parser.add_argument("--tier", default="T2_DETECTOR",
-                        choices=["T0_BASELINE_CNN", "T1_LIGHTWEIGHT", "T2_DETECTOR",
-                                 "T3_MULTI_TASK", "T4_ADVANCED", "T5_TEMPORAL"])
-    parser.add_argument("--backbone", default="resnet50", choices=["resnet50", "resnet34", "hybrid_vit"])
-    parser.add_argument("--epochs", type=int, default=30)
-    parser.add_argument("--batch-size", type=int, default=16)
-    parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--freeze-backbone", action="store_true")
-    parser.add_argument("--freeze-backbone-epochs", type=int, default=5)
-    parser.add_argument("--fp16", action="store_true")
-    parser.add_argument("--curriculum", action="store_true")
+    # Tier YAML config drives all training-affecting fields; --epochs etc.
+    # are explicit overrides only and feed through SM_HP_* on the container.
+    parser.add_argument("--config", required=True,
+                        help="Path to tier YAML (e.g. ml/training/configs/t5_temporal.yaml); "
+                             "the file is shipped via source_dir and read inside the container")
+    parser.add_argument("--epochs", type=int, default=None,
+                        help="Override training.num_epochs (otherwise YAML wins)")
+    parser.add_argument("--batch-size", type=int, default=None,
+                        help="Override data.batch_size")
+    parser.add_argument("--lr", type=float, default=None,
+                        help="Override training.learning_rate")
+    parser.add_argument("--freeze-backbone", action="store_true",
+                        help="Override training.freeze_backbone=true")
+    parser.add_argument("--freeze-backbone-epochs", type=int, default=None,
+                        help="Override training.freeze_backbone_epochs")
+    parser.add_argument("--fp16", action="store_true",
+                        help="Override training.mixed_precision=true")
 
     parser.add_argument("--experiment", default="maxsight")
     parser.add_argument("--job-name", default="", help="Override auto-generated job name")
     parser.add_argument("--dry-run", action="store_true", help="Print config; do not submit")
+    parser.add_argument(
+        "--no-metrics",
+        action="store_true",
+        help="Disable CloudWatch metric_definitions (regex on training logs)",
+    )
+    parser.add_argument(
+        "--debugger",
+        action="store_true",
+        help="Enable SageMaker Debugger hook (loss/weights collections) if SDK supports it",
+    )
 
     return parser.parse_args()
 
@@ -113,21 +128,42 @@ def main() -> int:
         result = s3.upload_medallion_layer("silver", mroot)
         print(f"Silver uploaded: {result['files_uploaded']} files")
 
-    # Hyperparameters passed to entry point.
-    hyperparameters = {
-        "tier": args.tier,
-        "backbone": args.backbone,
-        "epochs": str(args.epochs),
-        "batch-size": str(args.batch_size),
-        "lr": str(args.lr),
-        "freeze-backbone": str(args.freeze_backbone).lower(),
-        "freeze-backbone-epochs": str(args.freeze_backbone_epochs),
-        "fp16": str(args.fp16).lower(),
-        "curriculum": str(args.curriculum).lower(),
+    # SageMaker passes both --<arg> CLI flags and SM_HP_<ARG> env vars to
+    # the entrypoint; we only forward fields the operator explicitly set so
+    # the YAML referenced by --config remains the source of truth.
+    config_path = Path(args.config).resolve()
+    if not config_path.exists():
+        print(f"Error: --config not found: {config_path}", file=sys.stderr)
+        return 1
+    try:
+        rel_config = config_path.relative_to(REPO)
+    except ValueError:
+        print(
+            f"Error: --config {config_path} must live inside the repo "
+            "({REPO}) so it ships in source_dir.",
+            file=sys.stderr,
+        )
+        return 1
+
+    hyperparameters: dict[str, str] = {
+        "config": str(rel_config),
         "experiment": args.experiment,
     }
+    if args.epochs is not None:
+        hyperparameters["epochs"] = str(args.epochs)
+    if args.batch_size is not None:
+        hyperparameters["batch-size"] = str(args.batch_size)
+    if args.lr is not None:
+        hyperparameters["lr"] = str(args.lr)
+    if args.freeze_backbone:
+        hyperparameters["freeze-backbone"] = "true"
+    if args.freeze_backbone_epochs is not None:
+        hyperparameters["freeze-backbone-epochs"] = str(args.freeze_backbone_epochs)
+    if args.fp16:
+        hyperparameters["fp16"] = "true"
 
-    job_name = args.job_name or f"maxsight-{args.tier.lower().replace('_', '-')}-{time.strftime('%Y%m%d-%H%M%S')}"
+    tier_slug = config_path.stem.replace("_", "-")
+    job_name = args.job_name or f"maxsight-{tier_slug}-{time.strftime('%Y%m%d-%H%M%S')}"
 
     job_config = {
         "job_name": job_name,
@@ -141,6 +177,9 @@ def main() -> int:
 
     if args.dry_run:
         print("\n[dry-run] Would submit SageMaker training job:")
+        job_config["source_dir"] = str(REPO)
+        job_config["metric_definitions"] = "default" if not args.no_metrics else "disabled"
+        job_config["debugger"] = bool(args.debugger)
         print(json.dumps(job_config, indent=2))
         return 0
 
@@ -157,6 +196,9 @@ def main() -> int:
         entry_point="ml/training/sagemaker_entry.py",
         hyperparameters=hyperparameters,
         use_spot=args.use_spot,
+        source_dir=str(REPO),
+        emit_cloudwatch_metrics=not args.no_metrics,
+        enable_debugger=args.debugger,
     )
 
     print(f"\nSubmitting training job: {job_name}")

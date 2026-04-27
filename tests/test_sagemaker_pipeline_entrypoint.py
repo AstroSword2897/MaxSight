@@ -9,7 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from ml.pipeline.rag_advisory import RetrievalResult  # noqa: E402
 from ml.pipeline.sagemaker_config import SageMakerPipelineConfig  # noqa: E402
-from ml.pipeline.sagemaker_entrypoint import run_sagemaker_pipeline  # noqa: E402
+from ml.pipeline.pipeline_runner import run_sagemaker_pipeline  # noqa: E402
 from ml.training.loss_weighting import TemporalWeightSchedule  # noqa: E402
 from ml.data.video_preprocessing import PreprocessingConfig  # noqa: E402
 from ml.data.video_panoptic import (  # noqa: E402
