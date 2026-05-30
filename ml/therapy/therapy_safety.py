@@ -9,10 +9,7 @@ from ml.runtime_constants import (
 
 
 class TherapySafetyLayer:
-    """
-    Enforces: max intervention rate, suppress when uncertainty high, no medical claims,
-    fail-safe silence when in doubt. Therapy must not overload or mislead the user.
-    """
+    """Enforce therapy rate limits, uncertainty gating, and content sanitization."""
 
     def __init__(
         self,
@@ -20,6 +17,13 @@ class TherapySafetyLayer:
         max_prompts_per_minute: float = THERAPY_MAX_PROMPTS_PER_MINUTE,
         min_gap_s: float = THERAPY_MIN_GAP_BETWEEN_PROMPTS_S,
     ):
+        """Configure safety thresholds and initialize prompt timing state.
+
+        Parameters:
+            uncertainty_suppress_threshold: Suppress therapy above this uncertainty.
+            max_prompts_per_minute: Rolling one-minute prompt cap.
+            min_gap_s: Minimum seconds between consecutive prompts.
+        """
         self.uncertainty_suppress_threshold = uncertainty_suppress_threshold
         self.max_prompts_per_minute = max_prompts_per_minute
         self.min_gap_s = min_gap_s
@@ -31,8 +35,14 @@ class TherapySafetyLayer:
         context: Dict[str, Any],
         current_time: float,
     ) -> tuple[bool, str]:
-        """
-        Returns (suppress: bool, reason: str). If suppress is True, do not deliver therapy prompt.
+        """Decide whether to suppress therapy delivery for the current context.
+
+        Parameters:
+            context: Situation dict; reads ``uncertainty`` when present.
+            current_time: Monotonic or wall-clock seconds for rate limiting.
+
+        Returns:
+            Tuple of ``(suppress, reason)``. ``reason`` is empty when not suppressed.
         """
         uncertainty = context.get("uncertainty", 0.0)
         if uncertainty > self.uncertainty_suppress_threshold:
@@ -48,6 +58,7 @@ class TherapySafetyLayer:
         return False, ""
 
     def record_prompt_delivered(self, current_time: float) -> None:
+        """Record a delivered prompt for rate-limit accounting."""
         self._last_prompt_time = current_time
         self._prompts_this_minute.append(current_time)
         self._prune_old_prompts(current_time)
@@ -57,8 +68,10 @@ class TherapySafetyLayer:
         self._prompts_this_minute = [t for t in self._prompts_this_minute if t > cutoff]
 
     def sanitize_content(self, content: str) -> str:
-        """
-        Avoid medical or diagnostic language. Therapy prompts are supportive only, not treatment.
+        """Strip disallowed medical or diagnostic phrasing from prompt text.
+
+        Returns:
+            Sanitized content, or empty string when disallowed phrases are found.
         """
         content = content.strip()
         disallowed = (

@@ -1,4 +1,4 @@
-"""Intervention Generator: therapy decisions → concrete therapeutic actions (audio/haptic/visual)."""
+"""Map therapy decisions to concrete audio, haptic, or visual therapeutic actions."""
 
 from dataclasses import dataclass
 from enum import Enum
@@ -18,7 +18,17 @@ class InterventionType(Enum):
 
 @dataclass
 class TherapeuticAction:
-    """Single intervention to be delivered via output scheduler."""
+    """Deliverable therapeutic intervention for the output scheduler.
+
+    Attributes:
+        intervention_type: Intervention category string.
+        channel: Delivery channel (audio, haptic, visual).
+        content: Sanitized prompt text or pattern label.
+        intensity: Normalized intensity in ``[0, 1]``.
+        duration_s: Suggested delivery duration in seconds.
+        priority: Priority rank ``0-100`` for scheduling.
+        metadata: Additional structured fields for telemetry.
+    """
     intervention_type: str
     channel: str  # audio, haptic, visual
     content: str
@@ -29,13 +39,14 @@ class TherapeuticAction:
 
 
 class InterventionGenerator:
-    """
-    Converts decision engine output (should_intervene, intervention_type, strength)
-    into specific prompts and patterns for the output manager. No ML here; content is rule-based.
-    """
+    """Convert decision-engine output into rule-based ``TherapeuticAction`` payloads."""
 
     def __init__(self, preferred_channel: str = "audio"):
-        self.preferred_channel = preferred_channel
+        """Initialize generator with a default delivery channel.
+
+        Parameters:
+            preferred_channel: Default channel when no override is supplied.
+        """
 
     def generate(
         self,
@@ -44,8 +55,16 @@ class InterventionGenerator:
         context: Dict[str, Any],
         channel_override: Optional[str] = None,
     ) -> Optional[TherapeuticAction]:
-        """
-        Produce one therapeutic action. Returns None if type is unknown or content would be empty.
+        """Build one therapeutic action from a decision.
+
+        Parameters:
+            intervention_type: Requested intervention category.
+            strength: Decision strength in ``[0, 1]``.
+            context: Situation context dict (reserved for future templating).
+            channel_override: Optional delivery channel override.
+
+        Returns:
+            ``TherapeuticAction`` or ``None`` for unknown intervention types.
         """
         channel = channel_override or self.preferred_channel
         strength = max(0.0, min(1.0, strength))
@@ -82,6 +101,17 @@ class InterventionGenerator:
                 duration_s=6.0,
                 priority=65,
                 metadata={"category": "breathing"},
+            )
+        if intervention_type == InterventionType.COGNITIVE_REFRAMING.value or intervention_type == "cognitive_reframing":
+            content = "This moment is difficult, but temporary. Focus on the next safe step."
+            return TherapeuticAction(
+                intervention_type=InterventionType.COGNITIVE_REFRAMING.value,
+                channel=channel,
+                content=content,
+                intensity=0.4 + strength * 0.3,
+                duration_s=6.0,
+                priority=66,
+                metadata={"category": "reframing"},
             )
         if intervention_type == InterventionType.CALMING_PROMPT.value or intervention_type == "calming":
             content = "Pause for a moment. You are doing fine."

@@ -4,24 +4,27 @@ This document summarizes the current status of the MaxSight repo: what is implem
 
 ## Implementation status
 
-- **Model (MaxSightCNN):** Implemented in `ml/models/maxsight_cnn.py` with tiered capabilities (T0–T5). Backbone (ResNet50 + FPN), hybrid ViT, temporal encoder, and 30+ heads are present and gated by tier and condition.
-- **Training:** Training loop, losses, task balancing (e.g. GradNorm), and validation live in `ml/training/`. Ops scripts live under `scripts/ops/` (e.g. `scripts/ops/train_maxsight.py`, `scripts/ops/smoke_train.py`), and the canonical runner is `python scripts/product/run.py`. Data pipeline and dataset are in `ml/data/`.
-- **Export:** JIT, ExecuTorch (.pte), CoreML, and ONNX export are in `ml/training/export.py`. Deployment bundle packaging: `scripts/product/run.py package` or `scripts/ops/export_for_xcode.py`.
-- **Therapy:** Session management, task generation, and therapy integration are in `ml/therapy/`. See `docs/therapy_system.md`.
-- **Retrieval:** Encoders, indexing, and two-stage retrieval are in `ml/retrieval/`. Retrieval is an **async, advisory-only enhancement** (non-blocking) and does not override hazard-critical outputs.
-- **Simulation and tooling:** Simulation, quantization, and benchmarking live under `tools/` and `ml/training/benchmark.py`.
+- **Model (MaxSightCNN):** Implemented in `ml/models/maxsight_cnn.py` with tiered capabilities (T0–T5). Full wiring is ~393M parameters; CI size bounds are in `ml/runtime_constants.py`.
+- **Training:** Production loop with checkpoint resume, skipped-batch guards, and `health_summary` logs in `ml/training/train_loop.py`. Observability contracts in `ml/training/observability.py`. Ops scripts under `scripts/ops/`.
+- **Export:** JIT, ExecuTorch (.pte), CoreML, and ONNX export in `ml/training/export.py`.
+- **Therapy:** Closed-loop engine with `update()` + `on_user_response()` in `ml/therapy/`. Simulator integration in `tools/simulation/web_simulator.py`. See `docs/therapy_system.md` and `docs/ops/production_remediation.md`.
+- **Haptics:** Platform backends in `app/ui/haptic_backends.py`; facade in `app/ui/haptic_feedback.py`.
+- **Retrieval:** Async, advisory-only enhancement in `ml/retrieval/`.
+- **Simulation:** Web simulator under `tools/simulation/`.
 
 ## Tests
 
-- **Phase tests:** `tests/test_phase0_backbone.py` through `test_phase5_training.py` cover backbone, fusion, heads, retrieval, knowledge, and training wiring.
-- **Integration and other:** `tests/test_model.py`, `tests/test_comprehensive_system.py`, and related files cover model creation, forward passes, and integration. Run with `pytest tests/`.
-- **Benchmark:** `python -m ml.training.benchmark` runs inference benchmarks.
+- **Production remediation:** `tests/test_production_remediation.py` — checkpoint resume, therapy closed loop, SageMaker channels, haptics.
+- **CI contracts:** `python scripts/infra/validate_train_loop_contracts.py` (also in `.github/workflows/ci.yml`).
+- **Phase and integration:** `pytest tests/` — model, data, therapy, SageMaker, ops launchers.
+- **Benchmark:** `python -m ml.training.benchmark`
 
 ## Known limitations and risks
 
-- **JIT / ExecuTorch export:** Tracing can hit unsupported ops or segfaults (e.g. with CLIP or scene graph). The export pipeline stubs `global_encoder` (CLIP) when needed; if export still exits (e.g. 139), the failure may be in another submodule or the environment. Using CPU and JIT-only (`--device cpu`, `--quick`) often improves stability.
-- **Checkpoints and conditions:** Top-7 export expects checkpoints under `checkpoints_<condition>/best_model.pt`. If a condition is missing, that condition is skipped. Use `scripts/ops/find_trained_checkpoints.py` to discover paths.
-- **Data:** Training and evaluation assume COCO (or compatible) annotations and image layout. Incorrect paths or missing annotations will cause failures; verify with the data pipeline or download docs (`docs/downloads.md`).
+- **Model size:** Full MaxSightCNN is ~375 MB INT8 (~393M params). Tiered or quantized deployment may use smaller checkpoints.
+- **Haptics:** macOS requires PyObjC or Swift; Linux requires `evdev` and FF-capable hardware. Use `log` backend for dev/CI.
+- **JIT / ExecuTorch export:** Tracing can hit unsupported ops; use CPU + JIT-only for stability.
+- **Dataset lighting flags:** Use `tag_lighting_metadata` and `lighting_pixel_augmentation` (not legacy `apply_lighting_augmentation`).
 
 ## Branch and deployment
 

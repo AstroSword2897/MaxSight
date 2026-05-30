@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""Validate ProductionTrainLoop observability contracts used by CI and CloudWatch."""
+
+from __future__ import annotations
+
+import inspect
+import re
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from ml.infra.sagemaker_utils import TRAINING_METRIC_DEFINITIONS  # noqa: E402
+from ml.training.observability import (  # noqa: E402
+    DEFAULT_MAX_SKIPPED_BATCH_RATIO,
+    HEALTH_SUMMARY_LOG_PREFIX,
+    HEALTH_SUMMARY_REQUIRED_FIELDS,
+    parse_health_summary_line,
+)
+from ml.training.train_loop import ProductionTrainLoop  # noqa: E402
+
+
+def _errors() -> list[str]:
+    errors: list[str] = []
+    source = Path(REPO_ROOT / "ml/training/train_loop.py").read_text(encoding="utf-8")
+
+    if "skipped_batches" not in source:
+        errors.append("train_loop.py must track skipped_batches per epoch.")
+    if HEALTH_SUMMARY_LOG_PREFIX not in source:
+        errors.append(f"train_loop.py must emit '{HEALTH_SUMMARY_LOG_PREFIX}' logs.")
+    if "max_skipped_batch_ratio" not in source:
+        errors.append("train_loop.py must define/use max_skipped_batch_ratio.")
+
+    init_sig = inspect.signature(ProductionTrainLoop.__init__)
+    if "max_skipped_batch_ratio" not in init_sig.parameters:
+        errors.append("ProductionTrainLoop.__init__ missing max_skipped_batch_ratio parameter.")
+
+    default_ratio = init_sig.parameters["max_skipped_batch_ratio"].default
+    if default_ratio != DEFAULT_MAX_SKIPPED_BATCH_RATIO:
+        errors.append(
+            "ProductionTrainLoop max_skipped_batch_ratio default must match observability constant."
+        )
+
+    sample_with_val = (
+        "health_summary epoch=1 processed_batches=10 skipped_batches=1 skip_ratio=9.09% "
+        "train_loss=1.2345 val_loss=2.3456 val_map=0.4567 new_best=True lr=1.000000e-03"
+    )
+    sample_no_val = (
+        "health_summary epoch=2 processed_batches=8 skipped_batches=0 skip_ratio=0.00% "
+        "train_loss=0.5000 new_best=False lr=5.000000e-04"
+    )
+    for sample in (sample_with_val, sample_no_val):
+        try:
+            parsed = parse_health_summary_line(sample)
+        except ValueError as exc:
+            errors.append(f"health_summary parser failed: {exc}")
+            continue
+        for field in HEALTH_SUMMARY_REQUIRED_FIELDS:
+            if not hasattr(parsed, field.replace("-", "_")) and field not in {
+                "epoch",
+                "processed_batches",
+                "skipped_batches",
+                "skip_ratio",
+                "train_loss",
+                "new_best",
+                "lr",
+            }:
+                continue
+
+    health_metric_names = {m["Name"] for m in TRAINING_METRIC_DEFINITIONS if m["Name"].startswith("train:")}
+    expected = {"train:loss", "train:processed_batches", "train:skipped_batches", "train:skip_ratio_pct"}
+    missing = expected - health_metric_names
+    if missing:
+        errors.append(f"TRAINING_METRIC_DEFINITIONS missing health metrics: {sorted(missing)}")
+
+    for mdef in TRAINING_METRIC_DEFINITIONS:
+        if not mdef["Name"].startswith("train:") and "health_summary" in mdef["Regex"]:
+            continue
+        if mdef["Name"].startswith("train:") and "health_summary" in mdef.get("Regex", ""):
+            if not re.search(mdef["Regex"], sample_with_val):
+                errors.append(f"Regex does not match health_summary sample for {mdef['Name']}")
+
+    return errors
+
+
+def main() -> int:
+    errors = _errors()
+    if errors:
+        for line in errors:
+            print(line, file=sys.stderr)
+        return 1
+    print("OK: train loop observability contracts validated.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

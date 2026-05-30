@@ -11,6 +11,7 @@ from ml.models.maxsight_cnn import (
     COCO_CLASSES, COCO_BASE_CLASSES, ACCESSIBILITY_CLASSES,
     create_model, MaxSightCNN
 )
+from ml.runtime_constants import DEFAULT_MODEL_INT8_MAX_MB
 from ml.utils.preprocessing import ImagePreprocessor
 from collections import Counter
 
@@ -40,7 +41,9 @@ def test_model_creation():
     total_params = sum(p.numel() for p in model.parameters())
     int8_size_mb = total_params / 1024 / 1024
     
-    assert int8_size_mb < 300, f"Model size {int8_size_mb:.1f} MB exceeds target of 300 MB"
+    assert int8_size_mb < DEFAULT_MODEL_INT8_MAX_MB, (
+        f"Model size {int8_size_mb:.1f} MB exceeds target of {DEFAULT_MODEL_INT8_MAX_MB} MB"
+    )
 
 
 def test_forward_pass():

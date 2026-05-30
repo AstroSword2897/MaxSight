@@ -2,6 +2,8 @@
 
 MaxSight S3 helpers live in `ml/infra/s3_client.py` and `ml/infra/s3_validation.py`. They target **large medallion syncs**, **checkpoint storage**, and **run artefact upload** with explicit validation, **structured JSON event logs**, and **retries** on transient AWS errors.
 
+**Gold artefacts (canonical D2 path):** store `meta.json` and JSONL shards under a stable prefix such as `s3://{bucket}/{prefix}/gold/<dataset>/<version>/` and point tier YAML `gold_*_meta` URIs there. See **[infra/README.md](../infra/README.md)** for the full bucket layout (outputs, checkpoints, gold, medallion). TB diagram for D2 lives in the root **[README.md](../README.md#training-data-plane-gold-jsonl--meta-vs-medallion-index-d2)**.
+
 ## Design principles
 
 1. **Validate before I/O** — Bucket names, object keys (≤ 1024 UTF-8 bytes), and local paths are checked so failures are immediate and loggable (`S3ValidationError`).

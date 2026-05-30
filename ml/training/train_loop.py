@@ -39,6 +39,8 @@ except ImportError:
     GradScaler = None
     AMP_AVAILABLE = False
 
+from ml.training.observability import DEFAULT_MAX_SKIPPED_BATCH_RATIO
+from ml.training.assistive_metrics import AssistiveEvalAccumulator
 from ml.training.metrics import DetectionMetrics
 
 # GradNorm integration (optional)
@@ -117,10 +119,7 @@ class EMA:
     def update(self, model: nn.Module) -> None:
         """Update shadow parameters with bias correction."""
         self.global_step += 1
-        
-        # Bias correction: adjust decay for early steps.
-        bias_correction = 1 - (self.decay ** self.global_step)
-        effective_decay = self.decay / bias_correction if bias_correction > 0 else self.decay
+        effective_decay = min(self.decay, (1 + self.global_step) / (10 + self.global_step))
         
         for name, param in model.named_parameters():
             if param.requires_grad and name in self.shadow:
@@ -193,8 +192,12 @@ def _validate_training_config(
 
 
 class ProductionTrainLoop:
-    """Production-grade training loop with all improvements."""
-    
+    """Production training loop with checkpointing, EMA, and health observability.
+
+    Tracks skipped batches per epoch, enforces ``max_skipped_batch_ratio``, emits
+    structured ``health_summary`` logs, and aligns best checkpoints to ``best_model.pt``.
+    """
+
     def __init__(
         self,
         model: nn.Module,
@@ -230,9 +233,52 @@ class ProductionTrainLoop:
         early_stopping_metric: str = 'val_loss',  # 'val_loss' or 'val_map'
         use_gradnorm: bool = False,  # Enable GradNorm task balancing.
         gradnorm_alpha: float = 1.5,  # GradNorm restoring force.
-        gradnorm_update_interval: int = 100  # Update task weights every N iterations.
+        gradnorm_update_interval: int = 100,  # Update task weights every N iterations.
+        max_skipped_batch_ratio: float = DEFAULT_MAX_SKIPPED_BATCH_RATIO,
     ):
-        """Initialize production training loop."""
+        """Configure the production training loop.
+
+        Parameters:
+            model: Trainable PyTorch module.
+            train_loader: Training ``DataLoader``.
+            val_loader: Optional validation loader for metrics and early stopping.
+            loss_fn: Loss module; moved to ``device`` when supported.
+            device: Torch device string (``cuda`` or ``cpu``).
+            learning_rate: Base optimizer learning rate.
+            weight_decay: Optimizer weight decay.
+            num_epochs: Maximum training epochs.
+            use_mixed_precision: Enable AMP when CUDA is available.
+            gradient_clip_norm: Max gradient norm for clipping (0 disables).
+            gradient_accumulation_steps: Steps between optimizer updates.
+            log_interval: Batch interval for progress logging.
+            checkpoint_dir: Directory for ``best_model.pt`` and epoch snapshots.
+            save_best_only: When True, retain only best and last checkpoints.
+            freeze_backbone: Freeze backbone parameters for all epochs.
+            freeze_backbone_epochs: Freeze backbone for the first N epochs only.
+            freeze_bn_stats: Keep BatchNorm in eval mode during backbone freeze.
+            ema_decay: Exponential moving average decay for shadow weights.
+            scheduler_type: LR schedule name (``cosine``, ``onecycle``, ``cosine_restarts``).
+            warmup_epochs: Linear warmup length before main schedule.
+            learning_rate_backbone: Optional separate LR for backbone param group.
+            learning_rate_head: Optional separate LR for head param group.
+            num_classes: Class count for detection metrics.
+            checkpoint_interval: Save extra snapshot every N epochs (0 disables).
+            resume_from: Checkpoint path; corrupt files raise from ``_load_checkpoint``.
+            resume_model_only: Load weights only, not optimizer/scheduler state.
+            seed: RNG seed for reproducibility.
+            logger: Optional logger; defaults to module logger.
+            early_stopping_patience: Epochs without improvement before stop.
+            early_stopping_min_delta: Minimum metric delta to count as improvement.
+            early_stopping_metric: ``val_loss`` or ``val_map`` for early stopping.
+            use_gradnorm: Enable GradNorm multi-task balancing.
+            gradnorm_alpha: GradNorm restoring force hyperparameter.
+            gradnorm_update_interval: Iterations between GradNorm weight updates.
+            max_skipped_batch_ratio: Abort epoch when skip ratio exceeds this threshold.
+
+        Side effects:
+            Creates ``checkpoint_dir``, partitions backbone/head params, and may
+            load a checkpoint when ``resume_from`` is set.
+        """
         self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -264,6 +310,9 @@ class ProductionTrainLoop:
         self.early_stopping_metric = early_stopping_metric
         self.early_stopping_counter = 0
         self.early_stopping_best_metric = None  # Set on first validation (Fix #4)
+        self.max_skipped_batch_ratio = max_skipped_batch_ratio
+        self.best_composite_score = float("-inf")
+        self.checkpoint_resume_status = "not_attempted"
         
         # Config validation (Fix #7)
         _validate_training_config(
@@ -290,53 +339,12 @@ class ProductionTrainLoop:
         # Set seed.
         set_seed(seed)
         
-        # GradNorm integration (CRITICAL: Prevents gradient warfare with 20 heads)
+        # GradNorm integration state (initialized after parameter partitioning).
         self.use_gradnorm = use_gradnorm and GRADNORM_AVAILABLE
         self.gradnorm_loss = None
-        self.original_loss_fn = loss_fn  # Store for fallback.
-        
-        if self.use_gradnorm:
-            if not GRADNORM_AVAILABLE:
-                self.logger.warning("GradNorm requested but not available, disabling")
-                self.use_gradnorm = False
-            elif loss_fn is None:
-                self.logger.warning("GradNorm requires loss_fn to be provided, disabling GradNorm")
-                self.use_gradnorm = False
-            else:
-                # Check if loss_fn is already a GradNormMultiHeadLoss or MultiHeadLoss.
-                if GRADNORM_AVAILABLE and GradNormMultiHeadLoss is not None and isinstance(loss_fn, GradNormMultiHeadLoss):
-                    # Already a GradNorm loss, use directly.
-                    self.gradnorm_loss = loss_fn
-                    self.logger.info("Using provided GradNormMultiHeadLoss")
-                elif isinstance(loss_fn, nn.Module) and hasattr(loss_fn, 'loss_functions'):
-                    # MultiHeadLoss with dict of head losses - wrap with GradNorm.
-                    head_losses = getattr(loss_fn, 'loss_functions', {})
-                    if isinstance(head_losses, dict) and len(head_losses) > 0:
-                        # Get shared parameters (backbone) for GradNorm.
-                        shared_params = list(self.backbone_params) if self.backbone_params else None
-                        
-                        if GRADNORM_AVAILABLE and GradNormMultiHeadLoss is not None:
-                            self.gradnorm_loss = GradNormMultiHeadLoss(
-                                head_losses=head_losses,
-                                shared_params=shared_params,
-                                alpha=gradnorm_alpha,
-                                update_interval=gradnorm_update_interval
-                            )
-                            self.logger.info(f"GradNorm enabled with {len(head_losses)} head losses")
-                        else:
-                            self.logger.warning("GradNorm not available, using standard loss")
-                            self.use_gradnorm = False
-                    else:
-                        self.logger.warning("Loss function doesn't have valid head losses dict, disabling GradNorm")
-                        self.use_gradnorm = False
-                else:
-                    # Single loss function - cannot use GradNorm directly. Log warning but don't fail - will use standard loss.
-                    self.logger.warning(
-                        "GradNorm requires MultiHeadLoss with dict of head losses. "
-                        "Using standard loss computation. To enable GradNorm, provide a "
-                        "MultiHeadLoss or GradNormMultiHeadLoss instance."
-                    )
-                    self.use_gradnorm = False
+        self.original_loss_fn = loss_fn
+        self._gradnorm_alpha = gradnorm_alpha
+        self._gradnorm_update_interval = gradnorm_update_interval
         
         # Mixed precision.
         self.use_mixed_precision = use_mixed_precision and AMP_AVAILABLE and (
@@ -366,6 +374,7 @@ class ProductionTrainLoop:
                 self.backbone_params.append(param)
             else:
                 self.head_params.append(param)
+        self._initialize_gradnorm()
         
         lr_backbone = learning_rate_backbone if learning_rate_backbone is not None else learning_rate * 0.1
         lr_head = learning_rate_head if learning_rate_head is not None else learning_rate
@@ -450,6 +459,7 @@ class ProductionTrainLoop:
             iou_thresholds=[0.5, 0.75],
             device=torch.device(device)
         )
+        self.assistive_eval = AssistiveEvalAccumulator()
         
         # Stability manager - auto-adjusts hyperparameters during training.
         self.stability_manager = StabilityManager(
@@ -506,6 +516,50 @@ class ProductionTrainLoop:
         
         if frozen_count > 0:
             self.logger.info(f"Backbone frozen ({frozen_count} parameters, BN stats frozen: {self.freeze_bn_stats})")
+
+    def _initialize_gradnorm(self) -> None:
+        """Initialize GradNorm after backbone/head parameter partitioning."""
+        if not self.use_gradnorm:
+            return
+        if not GRADNORM_AVAILABLE or GradNormMultiHeadLoss is None:
+            self.logger.warning("GradNorm requested but unavailable; disabling.")
+            self.use_gradnorm = False
+            return
+        if self.loss_fn is None:
+            self.logger.warning("GradNorm requires a configured loss_fn; disabling.")
+            self.use_gradnorm = False
+            return
+        if isinstance(self.loss_fn, GradNormMultiHeadLoss):
+            self.gradnorm_loss = self.loss_fn
+            self.logger.info("Using provided GradNormMultiHeadLoss.")
+            return
+        if isinstance(self.loss_fn, nn.Module) and hasattr(self.loss_fn, "loss_functions"):
+            head_losses = getattr(self.loss_fn, "loss_functions", {})
+            if isinstance(head_losses, dict) and head_losses:
+                self.gradnorm_loss = GradNormMultiHeadLoss(
+                    head_losses=head_losses,
+                    shared_params=list(self.backbone_params) if self.backbone_params else None,
+                    alpha=self._gradnorm_alpha,
+                    update_interval=self._gradnorm_update_interval,
+                )
+                self.logger.info("GradNorm enabled with %d head losses.", len(head_losses))
+                return
+        self.logger.warning(
+            "GradNorm requires MultiHeadLoss with dict head losses; using standard loss computation."
+        )
+        self.use_gradnorm = False
+
+    def _require_training_loss(self) -> None:
+        """Require an explicit loss function before training starts."""
+        if self.loss_fn is None and self.gradnorm_loss is None:
+            raise RuntimeError(
+                "No loss function configured for training. Provide MultiHeadLoss or GradNormMultiHeadLoss."
+            )
+
+    def _is_better_checkpoint_candidate(self, val_loss: float, val_map: float) -> bool:
+        """Use a composite score so best-model updates stay internally consistent."""
+        candidate_score = float(val_map) - 0.01 * float(val_loss)
+        return candidate_score > self.best_composite_score
     
     def _unfreeze_backbone(self) -> None:
         """Unfreeze backbone parameters."""
@@ -704,6 +758,7 @@ class ProductionTrainLoop:
         self.model.train()
         total_loss = 0.0
         num_batches = 0
+        skipped_batches = 0
         accum_steps = 0  # Track accumulation steps.
         epoch_losses = []  # Fix #1: track all batch losses for stability manager.
         
@@ -722,9 +777,11 @@ class ProductionTrainLoop:
                 images, targets = parse_batch(batch)
             except (ValueError, KeyError) as e:
                 self.logger.warning(f"Skipping invalid batch {batch_idx}: {e}")
+                skipped_batches += 1
                 continue
             
             if not self._validate_t5_batch(images, targets):  # Fix #6.
+                skipped_batches += 1
                 continue
             
             # Quick NaN/Inf check (silent - dimensions sanitized in collate_fn)
@@ -740,6 +797,7 @@ class ProductionTrainLoop:
                             batch_valid = False
                             break
                 if not batch_valid:
+                    skipped_batches += 1
                     continue  # Skip silently - data already sanitized in collate.
             
             # Move to device.
@@ -748,6 +806,7 @@ class ProductionTrainLoop:
                 targets = move_targets_to_device(targets, self.device)
             except Exception as e:
                 self.logger.error(f"Failed to move batch to device: {e}")
+                skipped_batches += 1
                 continue
             
             # Forward pass with mixed precision - SAFE handling (Fix #3: device type)
@@ -771,6 +830,7 @@ class ProductionTrainLoop:
                     loss = loss / self.gradient_accumulation_steps
             except Exception as e:
                 self.logger.error(f"Forward pass failed at batch {batch_idx}: {e}")
+                skipped_batches += 1
                 continue
             
             # Backward pass - SAFE scaler handling.
@@ -782,6 +842,7 @@ class ProductionTrainLoop:
             except Exception as e:
                 self.logger.error(f"Backward pass failed at batch {batch_idx}: {e}")
                 self.optimizer.zero_grad()
+                skipped_batches += 1
                 continue
             
             accum_steps += 1
@@ -795,6 +856,7 @@ class ProductionTrainLoop:
                 except Exception as e:
                     self.logger.error(f"Optimizer step failed at batch {batch_idx}: {e}")
                     self.optimizer.zero_grad()
+                    skipped_batches += 1
                     continue
                 
                 # Step scheduler if per-step.
@@ -823,8 +885,19 @@ class ProductionTrainLoop:
             if (batch_idx + 1) % self.log_interval == 0:
                 self._log_training_progress(epoch, batch_idx, batch_loss)
         
+        total_batches = max(1, len(self.train_loader))
+        skipped_ratio = skipped_batches / total_batches
+        if skipped_ratio > self.max_skipped_batch_ratio:
+            raise RuntimeError(
+                f"Skipped batch ratio {skipped_ratio:.2%} exceeded threshold {self.max_skipped_batch_ratio:.2%} in epoch {epoch + 1}."
+            )
         avg_loss = total_loss / num_batches if num_batches > 0 else float('inf')
-        return {'loss': avg_loss, 'all_losses': epoch_losses}
+        return {
+            'loss': avg_loss,
+            'all_losses': epoch_losses,
+            'processed_batches': num_batches,
+            'skipped_batches': skipped_batches,
+        }
     
     def validate(self, epoch: int, use_ema: bool = True) -> Dict[str, float]:
         """Validate model with DetectionMetrics integration."""
@@ -838,6 +911,7 @@ class ProductionTrainLoop:
         
         # Reset metrics.
         self.detection_metrics.reset()
+        self.assistive_eval.reset()
         
         with torch.no_grad():
             if self.val_loader is None:
@@ -863,6 +937,19 @@ class ProductionTrainLoop:
                             f"Validation batch {batch_idx} produced invalid loss: {loss_value}, skipping"
                         )
                         continue
+
+                    try:
+                        us = outputs.get("urgency_scores") if isinstance(outputs, dict) else None
+                        gt_u = targets.get("urgency") if isinstance(targets, dict) else None
+                        if (
+                            torch.is_tensor(us)
+                            and torch.is_tensor(gt_u)
+                            and us.dim() == 2
+                            and gt_u.dim() == 1
+                        ):
+                            self.assistive_eval.update(us.detach(), gt_u.detach())
+                    except Exception:
+                        pass
                     
                     # Update DetectionMetrics using post-processed detections. Optimized: Process batch detections once instead of per-image.
                     if 'boxes' in outputs and 'classifications' in outputs and 'boxes' in targets:
@@ -967,6 +1054,7 @@ class ProductionTrainLoop:
             recall = 0.0
             f1 = 0.0
         
+        assistive = self.assistive_eval.compute()
         return {
             'loss': avg_loss,
             'map': overall_map,
@@ -974,7 +1062,10 @@ class ProductionTrainLoop:
             'map_75': map_75,
             'precision': precision,
             'recall': recall,
-            'f1': f1
+            'f1': f1,
+            'assistive_hazard_recall_proxy': assistive['hazard_recall_proxy'],
+            'assistive_false_alert_rate_proxy': assistive['false_alert_rate_proxy'],
+            'assistive_urgency_level_accuracy': assistive['urgency_level_accuracy'],
         }
     
     def _save_checkpoint(self, epoch: int, is_best: bool = False, extra_path: Optional[Path] = None) -> None:
@@ -1076,6 +1167,7 @@ class ProductionTrainLoop:
         # Save best model.
         if is_best:
             best_checkpoint_path = self.checkpoint_dir / 'best_model.pt'
+            assert best_checkpoint_path.name == "best_model.pt", "Best checkpoint name must remain stable for deployment."
             try:
                 torch.save(checkpoint, best_checkpoint_path)
                 self.logger.info(
@@ -1101,10 +1193,15 @@ class ProductionTrainLoop:
             except Exception as e:
                 self.logger.error(f"Failed to save snapshot to {extra_path}: {e}")
     
-    def _load_checkpoint(self, checkpoint_path: str, model_only: bool = False) -> None:
+    def _load_checkpoint(self, checkpoint_path: str, model_only: bool = False) -> bool:
         """Load checkpoint and resume training. If model_only=True, load only model + epoch (and best/history); use current optimizer/scheduler (e.g. new LRs)."""
+        checkpoint_path_obj = Path(checkpoint_path)
+        if not checkpoint_path_obj.exists():
+            self.checkpoint_resume_status = "missing"
+            self.logger.warning("Checkpoint not found: %s", checkpoint_path)
+            return False
         try:
-            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
+            checkpoint = torch.load(str(checkpoint_path_obj), map_location=self.device, weights_only=True)
             state = checkpoint['model_state_dict']
             result = self.model.load_state_dict(state, strict=False)
             if result.missing_keys or result.unexpected_keys:
@@ -1119,6 +1216,8 @@ class ProductionTrainLoop:
             self.current_epoch = checkpoint.get('epoch', 0)
             self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
             self.best_val_map = checkpoint.get('best_val_map', 0.0)
+            if math.isfinite(self.best_val_loss):
+                self.best_composite_score = float(self.best_val_map) - 0.01 * float(self.best_val_loss)
             self.history = checkpoint.get('history', self.history)
             if not model_only:
                 self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -1138,21 +1237,16 @@ class ProductionTrainLoop:
                     f"Resumed model only from checkpoint: epoch {self.current_epoch}. "
                     "Optimizer/scheduler use current config (new LRs, schedule)."
                 )
+            self.checkpoint_resume_status = "loaded"
+            return True
         except EOFError as e:
-            # Corrupted checkpoint (incomplete file write) - start fresh instead of crashing.
-            self.logger.error(f"Checkpoint {checkpoint_path} is corrupted (EOFError). Starting training from scratch.")
-            self.current_epoch = 0
-            self.best_val_loss = float('inf')
-            self.best_val_map = 0.0
-            return
+            self.checkpoint_resume_status = "corrupt"
+            self.logger.error("Checkpoint %s is corrupted (EOFError): %s", checkpoint_path, e)
+            raise
         except Exception as e:
-            # Other errors (missing keys, device mismatch, etc.) - start fresh.
-            self.logger.error(f"Failed to load checkpoint {checkpoint_path}: {e}")
-            self.logger.warning("Starting training from scratch due to checkpoint load failure.")
-            self.current_epoch = 0
-            self.best_val_loss = float('inf')
-            self.best_val_map = 0.0
-            return
+            self.checkpoint_resume_status = "failed"
+            self.logger.error("Failed to load checkpoint %s: %s", checkpoint_path, e)
+            raise
     
     def _run_sanity_check(self) -> None:
         """Run 1 train step + 1 val batch to fail fast on data/loss/backward issues (~30–60s)."""
@@ -1218,6 +1312,7 @@ class ProductionTrainLoop:
 
     def train(self) -> Dict[str, Any]:
         """Run full training loop."""
+        self._require_training_loss()
         self.logger.info("Starting Production Training Loop")
         self.logger.info(f"Device: {self.device}")
         self.logger.info(f"Mixed Precision: {self.use_mixed_precision}")
@@ -1225,11 +1320,21 @@ class ProductionTrainLoop:
         self.logger.info(f"EMA: {self.ema is not None}")
         self.logger.info(f"Scheduler: {self.scheduler_type}")
         self.logger.info(f"Epochs: {self.num_epochs}")
-        n_train = len(self.train_loader.dataset) if hasattr(self.train_loader, 'dataset') and hasattr(self.train_loader.dataset, '__len__') else 0
+        n_train = 0
+        if hasattr(self.train_loader, 'dataset') and hasattr(self.train_loader.dataset, '__len__'):
+            try:
+                n_train = int(len(self.train_loader.dataset))  # type: ignore[arg-type]
+            except TypeError:
+                n_train = 0
         bs = getattr(self.train_loader, 'batch_size', None)
         self.logger.info(f"Train samples: {n_train}, Batch size: {bs}, Train batches: {len(self.train_loader)}")
         if self.val_loader:
-            n_val = len(self.val_loader.dataset) if hasattr(self.val_loader, 'dataset') and hasattr(self.val_loader.dataset, '__len__') else 0
+            n_val = 0
+            if hasattr(self.val_loader, 'dataset') and hasattr(self.val_loader.dataset, '__len__'):
+                try:
+                    n_val = int(len(self.val_loader.dataset))  # type: ignore[arg-type]
+                except TypeError:
+                    n_val = 0
             self.logger.info(f"Val samples: {n_val}, Val batches: {len(self.val_loader)}")
         
         self._run_sanity_check()
@@ -1237,6 +1342,7 @@ class ProductionTrainLoop:
         
         try:
             for epoch in range(self.current_epoch, self.num_epochs):
+                self.current_epoch = epoch
                 self.logger.info(f"\nEpoch {epoch+1}/{self.num_epochs}")
                 
                 # Unfreeze backbone after freeze_backbone_epochs.
@@ -1304,6 +1410,8 @@ class ProductionTrainLoop:
                 train_metrics = self.train_epoch(epoch)
                 train_loss = train_metrics['loss']
                 epoch_losses: List[float] = train_metrics.get('all_losses', [])
+                processed_batches = int(train_metrics.get('processed_batches', 0))
+                skipped_batches = int(train_metrics.get('skipped_batches', 0))
                 self.history['train_loss'].append(train_loss)
                 
                 # OneCycleLR and SequentialLR step per-batch in train_epoch(); others step here.
@@ -1350,11 +1458,11 @@ class ProductionTrainLoop:
                             )
                     
                     # Check if best model.
-                    is_best = val_loss < self.best_val_loss or val_map > self.best_val_map
-                    if val_loss < self.best_val_loss:
+                    is_best = self._is_better_checkpoint_candidate(val_loss, val_map)
+                    if is_best:
                         self.best_val_loss = val_loss
-                    if val_map > self.best_val_map:
                         self.best_val_map = val_map
+                        self.best_composite_score = float(val_map) - 0.01 * float(val_loss)
                     
                     if self._check_early_stopping(epoch, val_loss, val_map):
                         break
@@ -1365,11 +1473,28 @@ class ProductionTrainLoop:
                     if self.checkpoint_interval > 0 and (epoch + 1) % self.checkpoint_interval == 0:
                         self._save_checkpoint(epoch, is_best=False, extra_path=self.checkpoint_dir / f"checkpoint_epoch_{epoch+1}.pt")
                     
+                    ar = val_metrics.get('assistive_hazard_recall_proxy', 0.0)
+                    fa = val_metrics.get('assistive_false_alert_rate_proxy', 0.0)
+                    ua = val_metrics.get('assistive_urgency_level_accuracy', 0.0)
                     self.logger.info(
                         f"Train Loss: {train_metrics['loss']:.4f}, "
                         f"Val Loss: {val_loss:.4f}, Val mAP: {val_map:.4f}, "
                         f"Val mAP@0.5: {val_map_50:.4f}, Val mAP@0.75: {val_map_75:.4f}, "
-                        f"Precision: {val_precision:.4f}, Recall: {val_recall:.4f}, F1: {val_f1:.4f}"
+                        f"Precision: {val_precision:.4f}, Recall: {val_recall:.4f}, F1: {val_f1:.4f}, "
+                        f"HazardRecall~: {ar:.3f}, FalseAlert~: {fa:.3f}, UrgAcc: {ua:.3f}"
+                    )
+                    self.logger.info(
+                        "health_summary epoch=%d processed_batches=%d skipped_batches=%d skip_ratio=%.2f%% "
+                        "train_loss=%.4f val_loss=%.4f val_map=%.4f new_best=%s lr=%.6e",
+                        epoch + 1,
+                        processed_batches,
+                        skipped_batches,
+                        (100.0 * skipped_batches / max(1, processed_batches + skipped_batches)),
+                        train_loss,
+                        val_loss,
+                        val_map,
+                        is_best,
+                        current_lr,
                     )
                 else:
                     # No validation, just save checkpoint.
@@ -1377,6 +1502,17 @@ class ProductionTrainLoop:
                     if self.checkpoint_interval > 0 and (epoch + 1) % self.checkpoint_interval == 0:
                         self._save_checkpoint(epoch, is_best=False, extra_path=self.checkpoint_dir / f"checkpoint_epoch_{epoch+1}.pt")
                     self.logger.info(f"Train Loss: {train_metrics['loss']:.4f}")
+                    self.logger.info(
+                        "health_summary epoch=%d processed_batches=%d skipped_batches=%d skip_ratio=%.2f%% "
+                        "train_loss=%.4f new_best=%s lr=%.6e",
+                        epoch + 1,
+                        processed_batches,
+                        skipped_batches,
+                        (100.0 * skipped_batches / max(1, processed_batches + skipped_batches)),
+                        train_loss,
+                        False,
+                        current_lr,
+                    )
         except KeyboardInterrupt:
             self.logger.warning("Training interrupted by user")
             self._save_checkpoint(self.current_epoch, is_best=False)

@@ -8,6 +8,7 @@ Pipeline:
 """
 
 import time
+import logging
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
@@ -19,22 +20,39 @@ from ml.therapy.therapy_memory import TherapyMemorySystem
 from ml.therapy.response_evaluation import ResponseEvaluationModel
 from ml.therapy.adaptation_engine import AdaptationEngine
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class TherapyEngineConfig:
-    """Configuration for the therapy engine."""
+    """Therapy engine thresholds and delivery preferences.
+
+    Attributes:
+        stress_trigger_threshold: Minimum stress before moderate interventions.
+        high_stress_threshold: Stress level triggering stronger interventions.
+        preferred_channel: Default output channel (audio, haptic, visual).
+    """
     stress_trigger_threshold: float = 0.6
     high_stress_threshold: float = 0.75
     preferred_channel: str = "audio"
 
 
 class TherapyEngine:
-    """
-    Single entry point for the therapy subsystem. Consumes perception outputs,
-    runs the closed loop, and produces therapeutic actions for the output manager.
+    """Closed-loop therapy controller from perception to adaptive interventions.
+
+    Call ``update()`` each perception tick to obtain deliverable actions.
+    Call ``on_user_response()`` on a subsequent tick so adaptation/memory learn
+    from intervention effectiveness.
     """
 
     def __init__(self, config: Optional[TherapyEngineConfig] = None):
+        """Build therapy subsystems and wire preferred delivery channel.
+
+        Parameters:
+            config: Optional engine configuration; defaults are safe for production.
+
+        Side effects:
+            Initializes memory, safety, and adaptation state.
+        """
         self.config = config or TherapyEngineConfig()
         self.situation_layer = SituationUnderstandingLayer()
         self.decision_engine = TherapyDecisionEngine(
@@ -54,12 +72,24 @@ class TherapyEngine:
         self._last_context: Optional[SituationContext] = None
         self._last_decision: Optional[TherapyDecision] = None
         self._last_action: Optional[TherapeuticAction] = None
+        self.suppression_counts: Dict[str, int] = {}
+        self.drop_counts: Dict[str, int] = {}
 
     def update(self, perception: Dict[str, Any], current_time: Optional[float] = None) -> List[TherapeuticAction]:
-        """
-        One step of the closed loop: perception in → situation context → decision
-        → safety check → intervention generation. Returns list of actions to deliver
-        (caller sends them to output scheduler). Does not deliver prompts itself.
+        """Run one closed-loop step and return deliverable therapeutic actions.
+
+        Parameters:
+            perception: Perception stack outputs (detections, uncertainty, etc.).
+            current_time: Optional unix timestamp for rate limiting.
+
+        Returns:
+            List of ``TherapeuticAction`` objects (empty when suppressed or no intervention).
+
+        Side effects:
+            Updates stress memory, suppression/drop counters, and last action context.
+
+        Failure modes:
+            Never raises; suppression and drops are logged and counted.
         """
         t = current_time if current_time is not None else time.time()
         context = self.situation_layer.compute(perception)
@@ -79,6 +109,12 @@ class TherapyEngine:
 
         suppress, reason = self.safety.should_suppress(context_dict, t)
         if suppress:
+            self.suppression_counts[reason] = self.suppression_counts.get(reason, 0) + 1
+            logger.info(
+                "therapy_suppressed module=therapy_engine function=update reason=%s count=%d",
+                reason,
+                self.suppression_counts[reason],
+            )
             return []
 
         action = self.intervention_generator.generate(
@@ -88,9 +124,21 @@ class TherapyEngine:
             channel_override=self.adaptation.get_preferred_channel(),
         )
         if action is None:
+            self.drop_counts["generator_none"] = self.drop_counts.get("generator_none", 0) + 1
+            logger.warning(
+                "therapy_drop module=therapy_engine function=update reason=generator_none intervention=%s count=%d",
+                decision.intervention_type,
+                self.drop_counts["generator_none"],
+            )
             return []
         sanitized = self.safety.sanitize_content(action.content)
         if not sanitized:
+            self.drop_counts["sanitized_empty"] = self.drop_counts.get("sanitized_empty", 0) + 1
+            logger.warning(
+                "therapy_drop module=therapy_engine function=update reason=sanitized_empty intervention=%s count=%d",
+                decision.intervention_type,
+                self.drop_counts["sanitized_empty"],
+            )
             return []
         action = TherapeuticAction(
             intervention_type=action.intervention_type,
@@ -110,11 +158,22 @@ class TherapyEngine:
         perception_after: Dict[str, Any],
         current_time: Optional[float] = None,
     ) -> None:
-        """
-        Call after user has had time to respond (e.g. next frame or after delay).
-        Evaluates effectiveness and updates adaptation/memory.
+        """Evaluate prior intervention effectiveness and update adaptation memory.
+
+        Parameters:
+            perception_after: Perception state after the user had time to respond.
+            current_time: Optional timestamp (reserved for future temporal logic).
+
+        Side effects:
+            Updates adaptation engine and long-term intervention success rates.
+
+        Failure modes:
+            Logs and returns when no prior action/context exists.
         """
         if self._last_context is None or self._last_action is None:
+            logger.warning(
+                "therapy_response_skipped module=therapy_engine function=on_user_response reason=missing_last_state"
+            )
             return
         after_context = self.situation_layer.compute(perception_after)
         before_dict = {
@@ -138,7 +197,9 @@ class TherapyEngine:
         )
 
     def get_last_context(self) -> Optional[SituationContext]:
+        """Return the situation context from the most recent ``update()`` call."""
         return self._last_context
 
     def get_memory(self) -> TherapyMemorySystem:
+        """Return the therapy memory system for inspection or persistence."""
         return self.memory

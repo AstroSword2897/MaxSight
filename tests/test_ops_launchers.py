@@ -124,6 +124,22 @@ def test_deploy_skip_registry_check_emits_warning(capsys):
     )
 
 
+def test_deploy_skip_registry_check_rejected_in_production(monkeypatch):
+    """Production profile must not allow --skip-registry-check."""
+    monkeypatch.setenv("MAXSIGHT_ENV", "production")
+    sys.argv = [
+        "sagemaker_deploy.py",
+        "--bucket", "b",
+        "deploy",
+        "--model-data", "s3://b/m.tar.gz",
+        "--skip-registry-check",
+        "--dry-run",
+    ]
+    rc = sagemaker_deploy.main()
+    assert rc == 1
+    monkeypatch.delenv("MAXSIGHT_ENV", raising=False)
+
+
 # ── test 5: sagemaker_entrypoint raises ImportError when imported ──────────────
 
 def test_entrypoint_raises_importerror_on_import():

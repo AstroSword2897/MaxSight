@@ -129,14 +129,14 @@ class MetaFusionWeights(nn.Module):
         
         # Weighted fusion.
         weighted_embeddings = [emb * w for emb, w in zip(modality_list, weight_list)]
-        fused_embedding = sum(weighted_embeddings)
+        fused_embedding = torch.stack(weighted_embeddings, dim=0).sum(dim=0)
         
         return fused_embedding, fusion_weights
     
     def adapt_to_user(
         self,
         user_profile: UserProfile,
-        task_performance: Dict[str, float],
+        task_performance: Dict[str, List[float]],
         num_steps: int = 5
     ) -> torch.Tensor:
         """Adapt fusion weights to a specific user using meta-learning."""
@@ -149,6 +149,13 @@ class MetaFusionWeights(nn.Module):
         for i, modality in enumerate(['vision', 'audio', 'haptic']):
             if modality in user_profile.preferred_modalities:
                 adapted_weights[i] *= 1.2
+
+        avg_performance = [
+            sum(scores) / len(scores) for scores in task_performance.values() if scores
+        ]
+        if avg_performance:
+            mean_score = sum(avg_performance) / len(avg_performance)
+            adapted_weights = adapted_weights * (0.9 + 0.2 * float(mean_score))
         
         # Normalize.
         adapted_weights = F.softmax(adapted_weights, dim=0)

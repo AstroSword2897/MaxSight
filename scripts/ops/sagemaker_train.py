@@ -180,6 +180,10 @@ def main() -> int:
         job_config["source_dir"] = str(REPO)
         job_config["metric_definitions"] = "default" if not args.no_metrics else "disabled"
         job_config["debugger"] = bool(args.debugger)
+        if cfg.subnets and cfg.security_group_ids:
+            job_config["vpc"] = {"subnets": list(cfg.subnets), "security_group_ids": list(cfg.security_group_ids)}
+        if cfg.volume_kms_key_id:
+            job_config["volume_kms_key"] = cfg.volume_kms_key_id
         print(json.dumps(job_config, indent=2))
         return 0
 

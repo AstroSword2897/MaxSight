@@ -226,10 +226,16 @@ class MaxSightSession:
         self.therapy_task_integrator = TherapyTaskIntegrator()
         self.therapy_engine = TherapyEngine(config=TherapyEngineConfig())
         self._last_therapy_perception: Optional[Dict[str, Any]] = None
+        self._awaiting_therapy_response = False
         self.therapy_voice_enabled = True
         self.therapy_haptic_enabled = True
         self.voice_feedback = VoiceFeedback()
-        self.haptic_feedback = HapticFeedback()
+        allow_haptic_stub = os.environ.get("MAXSIGHT_ENABLE_HAPTICS_STUB", "0") == "1"
+        self.haptic_feedback = HapticFeedback(
+            enabled=True,
+            backend="log" if allow_haptic_stub else "auto",
+            allow_log_fallback=allow_haptic_stub,
+        )
         self.current_condition: Optional[str] = None
         self.current_scenario: Optional[str] = None
         self.session_active = False
@@ -1057,6 +1063,17 @@ class MaxSightSession:
             if self.session_active and detections_list and not self._aborted:
                 # Feed the closed-loop controller only perception-derived signals.
                 perception_for_therapy = self._build_perception_for_therapy(detections_list, outputs)
+                if self._awaiting_therapy_response:
+                    try:
+                        self.therapy_engine.on_user_response(perception_for_therapy)
+                    except Exception as exc:
+                        session_logger.warning(
+                            "Therapy response update failed: %s",
+                            exc,
+                            session_id=self.session_id,
+                        )
+                    finally:
+                        self._awaiting_therapy_response = False
                 self._last_therapy_perception = perception_for_therapy
                 therapy_future = self._pipeline_executor.submit(self.therapy_engine.update, perception_for_therapy)
             
@@ -1082,6 +1099,7 @@ class MaxSightSession:
                 except Exception:
                     therapy_actions = []
                 therapy_feedback = self._therapy_actions_to_feedback(therapy_actions)
+                self._awaiting_therapy_response = bool(therapy_actions)
                 # Frontend/test-signal: show which channels were generated.
                 contract_debug["therapy_delivery"]["generated_channels"] = [
                     getattr(a, "channel", None) for a in therapy_actions if getattr(a, "channel", None) is not None
@@ -1649,7 +1667,12 @@ class MaxSightSimulator:
         self.therapy = TherapyTaskIntegrator()
         self.overlay_engine = OverlayEngine()
         self.voice_feedback = VoiceFeedback()
-        self.haptic_feedback = HapticFeedback()
+        allow_haptic_stub = os.environ.get("MAXSIGHT_ENABLE_HAPTICS_STUB", "0") == "1"
+        self.haptic_feedback = HapticFeedback(
+            enabled=True,
+            backend="log" if allow_haptic_stub else "auto",
+            allow_log_fallback=allow_haptic_stub,
+        )
         
         # User state.
         self.current_condition = None

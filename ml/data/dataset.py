@@ -10,10 +10,13 @@ import numpy as np
 from PIL import Image
 import torchaudio
 
+from ml.data.assistive_supervision import load_assistive_spec, object_distance_and_urgency
 from ml.models.maxsight_cnn import COCO_CLASSES
 from ml.utils.preprocessing import ImagePreprocessor
 
 logger = logging.getLogger(__name__)
+
+_DATASET_ASSISTIVE_SPEC = load_assistive_spec()
 
 
 class MaxSightDataset(Dataset):
@@ -126,18 +129,9 @@ class MaxSightDataset(Dataset):
                         
                         category_name = category_map.get(category_id, 'unknown')
                         class_idx = self.class_to_idx.get(category_name, 0)
-                        
-                        box_area = w * h
-                        if box_area > 0.1:
-                            distance_zone = 0
-                        elif box_area > 0.05:
-                            distance_zone = 1
-                        else:
-                            distance_zone = 2
-                        
-                        urgency_keywords = ['car', 'truck', 'bus', 'vehicle', 'fire', 'hazard', 'stop', 'traffic']
-                        urgency = 3 if any(kw in category_name.lower() for kw in urgency_keywords) else 0
-                        
+                        distance_zone, urgency = object_distance_and_urgency(
+                            cx, cy, w, h, category_name, _DATASET_ASSISTIVE_SPEC
+                        )
                         annotations[image_id]['objects'].append({
                             'box': [cx, cy, w, h],
                             'class': class_idx,
@@ -169,18 +163,9 @@ class MaxSightDataset(Dataset):
                     
                     category_name = category_map.get(ann['category_id'], 'unknown')
                     class_idx = self.class_to_idx.get(category_name, 0)
-                    
-                    box_area = w * h
-                    if box_area > 0.1:
-                        distance_zone = 0
-                    elif box_area > 0.05:
-                        distance_zone = 1
-                    else:
-                        distance_zone = 2
-                    
-                    urgency_keywords = ['car', 'truck', 'bus', 'vehicle', 'fire', 'hazard', 'stop', 'traffic']
-                    urgency = 3 if any(kw in category_name.lower() for kw in urgency_keywords) else 0
-                    
+                    distance_zone, urgency = object_distance_and_urgency(
+                        cx, cy, w, h, category_name, _DATASET_ASSISTIVE_SPEC
+                    )
                     annotations[image_id]['objects'].append({
                         'box': [cx, cy, w, h],
                         'class': class_idx,

@@ -8,33 +8,13 @@ from typing import Any, Dict, List
 
 from PIL import Image
 
+from ml.data.assistive_supervision import load_assistive_spec, object_distance_and_urgency
 from ml.data.gold.errors import GoldConfigError
 from ml.data.gold.schema import GOLD_LINE_SCHEMA_VERSION, LABEL_SPACE_ACCESSIBILITY_622
 from ml.data.medallion_layout import path_relative_to_repo
 from ml.models.maxsight_cnn import COCO_CLASSES
 
-
-def _distance_zone_from_area(area: float) -> int:
-    if area > 0.1:
-        return 0
-    if area > 0.05:
-        return 1
-    return 2
-
-
-def _urgency_from_category(category_name: str) -> int:
-    keywords = (
-        "car",
-        "truck",
-        "bus",
-        "vehicle",
-        "fire",
-        "hazard",
-        "stop",
-        "traffic",
-    )
-    lower = category_name.lower()
-    return 3 if any(kw in lower for kw in keywords) else 0
+_ASSISTIVE_SPEC = load_assistive_spec()
 
 
 class MaxSightListAdapter:
@@ -103,10 +83,10 @@ class MaxSightListAdapter:
             cy = max(0.0, min(1.0, cy))
             w = max(1e-4, min(1.0, w))
             h = max(1e-4, min(1.0, h))
-            area = w * h
             boxes.append([cx, cy, w, h])
-            distances.append(_distance_zone_from_area(area))
-            object_urgencies.append(_urgency_from_category(name))
+            dz, ur = object_distance_and_urgency(cx, cy, w, h, name, _ASSISTIVE_SPEC)
+            distances.append(dz)
+            object_urgencies.append(ur)
         scene_urgency = int(ann.get("urgency", 0))
         if object_urgencies:
             scene_urgency = max(scene_urgency, max(object_urgencies))
@@ -207,10 +187,10 @@ class COCOAdapter:
                 h = max(1e-4, min(1.0, h))
                 cat_name = category_map.get(ann.get("category_id", 0), "unknown")
                 label_names.append(str(cat_name))
-                area = w * h
                 boxes.append([cx, cy, w, h])
-                distances.append(_distance_zone_from_area(area))
-                object_urgencies.append(_urgency_from_category(cat_name))
+                dz, ur = object_distance_and_urgency(cx, cy, w, h, cat_name, _ASSISTIVE_SPEC)
+                distances.append(dz)
+                object_urgencies.append(ur)
             scene_urgency = max(object_urgencies) if object_urgencies else 0
             self._partials.append(
                 {

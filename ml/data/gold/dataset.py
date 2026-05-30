@@ -18,6 +18,7 @@ import torch
 from PIL import Image
 from torch.utils.data import Dataset
 
+from ml.data.assistive_supervision import load_assistive_spec, object_distance_and_urgency
 from ml.data.gold.builder import validate_gold_line_in_memory
 from ml.data.gold.io import GoldIOError, ShardReader
 from ml.data.gold.schema import (
@@ -25,9 +26,12 @@ from ml.data.gold.schema import (
     LABEL_SPACE_ACCESSIBILITY_622,
     validate_meta,
 )
+from ml.models.maxsight_cnn import COCO_CLASSES
 from ml.utils.preprocessing import ImagePreprocessor
 
 logger = logging.getLogger(__name__)
+
+_GOLD_ASSISTIVE_SPEC = load_assistive_spec()
 
 # Shard URIs are strings; may be absolute local paths or s3:// URIs.
 _URI = str
@@ -307,13 +311,11 @@ class GoldManifestDataset(Dataset):
             if isinstance(raw_dist, list) and i < len(raw_dist):
                 distance[i] = int(raw_dist[i])
             else:
-                area = float(box_tensor[2] * box_tensor[3])
-                if area > 0.1:
-                    distance[i] = 0
-                elif area > 0.05:
-                    distance[i] = 1
-                else:
-                    distance[i] = 2
+                li = int(labels[i])
+                cat = COCO_CLASSES[li] if 0 <= li < len(COCO_CLASSES) else "unknown"
+                cx, cy, bw, bh = (float(box_tensor[j]) for j in range(4))
+                dz, _ = object_distance_and_urgency(cx, cy, bw, bh, cat, _GOLD_ASSISTIVE_SPEC)
+                distance[i] = dz
 
         scene_urgency = int(record.get("scene_urgency", meta.get("urgency", 0)))
         object_urgencies = record.get("object_urgencies")

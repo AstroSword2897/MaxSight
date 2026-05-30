@@ -19,6 +19,7 @@ SageMaker injects:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import logging
 import os
@@ -154,6 +155,35 @@ def _coerce_hp(value: str) -> Any:
 
 # ── Training ──────────────────────────────────────────────────────────────────
 
+def apply_sagemaker_channel_paths(
+    resolved: ResolvedTrainingConfig,
+    train_channel: Path,
+    val_channel: Path,
+) -> ResolvedTrainingConfig:
+    """Map SageMaker channel mount paths into resolved training data paths.
+
+    Parameters:
+        resolved: Config loaded from YAML and CLI overrides.
+        train_channel: ``SM_CHANNEL_TRAIN`` mount directory.
+        val_channel: ``SM_CHANNEL_VAL`` mount directory.
+
+    Returns:
+        A new ``ResolvedTrainingConfig`` with data paths rooted in channel dirs.
+
+    Failure modes:
+        Caller should verify channel directories exist before invoking.
+    """
+    return dataclasses.replace(
+        resolved,
+        data=dataclasses.replace(
+            resolved.data,
+            train_annotation_file=str(train_channel / Path(resolved.data.train_annotation_file).name),
+            val_annotation_file=str(val_channel / Path(resolved.data.val_annotation_file).name),
+            image_dir=str(train_channel),
+        ),
+    )
+
+
 def run(args: argparse.Namespace) -> None:
     cli_overrides = cli_overrides_from_namespace(args, _OVERRIDE_MAP)
     sm_overrides = _hp_overrides_from_env()
@@ -171,6 +201,14 @@ def run(args: argparse.Namespace) -> None:
     except ConfigValidationError as exc:
         logger.error("config_invalid: %s", exc)
         raise SystemExit(2)
+    train_channel = channel_dir("train")
+    val_channel = channel_dir("val")
+    if not train_channel.exists() or not val_channel.exists():
+        raise RuntimeError(
+            f"SageMaker channels missing: train={train_channel} exists={train_channel.exists()} "
+            f"val={val_channel} exists={val_channel.exists()}"
+        )
+    resolved = apply_sagemaker_channel_paths(resolved, train_channel, val_channel)
 
     out_dir = output_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -205,7 +243,9 @@ def run(args: argparse.Namespace) -> None:
         )
 
         ckpt_dir = Path(resolved.checkpoint.save_dir)
-        best_ckpt = ckpt_dir / "best.pt"
+        expected_best_name = "best_model.pt"
+        assert expected_best_name == "best_model.pt", "Entrypoint and train loop must agree on best checkpoint filename."
+        best_ckpt = ckpt_dir / expected_best_name
         if not best_ckpt.exists():
             best_path = results.get("best_model_path")
             if best_path:

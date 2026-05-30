@@ -126,12 +126,10 @@ def create_maxsight_splits_from_coco(
     min_objects_per_image: int = 1
 ) -> Tuple[Path, Path, Path]:
     """Create MaxSight-format train/val/test splits from COCO dataset."""
-    from ml.data.generate_annotations import (
-        map_coco_to_environmental,
-        assign_urgency_score,
-        estimate_distance_zone,
-        generate_scene_description
-    )
+    from ml.data.assistive_supervision import load_assistive_spec, object_distance_and_urgency
+    from ml.data.generate_annotations import map_coco_to_environmental, generate_scene_description
+
+    _spec = load_assistive_spec()
     
     # Validate: use either ratios OR absolute counts, not both.
     if train_samples is not None and val_samples is not None:
@@ -214,10 +212,7 @@ def create_maxsight_splits_from_coco(
             cy = (bbox[1] + bbox[3] / 2) / img_height
             w = max(0.01, bbox[2] / img_width)
             h = max(0.01, bbox[3] / img_height)
-            box_size = w * h
-            
-            urgency = assign_urgency_score(env_category, box_size)
-            distance_zone = estimate_distance_zone(box_size)
+            distance_zone, urgency = object_distance_and_urgency(cx, cy, w, h, env_category, _spec)
             scene_urgency = max(scene_urgency, urgency)
             
             objects.append({

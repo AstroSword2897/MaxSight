@@ -211,7 +211,15 @@ def analyze_lighting_degradation(metrics: Dict[str, float], lighting_conditions:
 
 
 def export_metrics_json(metrics: Dict[str, float], save_path: Path) -> None:
-    """Write metrics to JSON; scalar tensors are converted to float."""
+    """Persist evaluation metrics as JSON for downstream reporting.
+
+    Parameters:
+        metrics: Metric name to scalar value mapping.
+        save_path: Destination file path (parent dirs are created).
+
+    Side effects:
+        Writes JSON to disk and logs the output path.
+    """
     save_path.parent.mkdir(parents=True, exist_ok=True)
     
     json_metrics = {}

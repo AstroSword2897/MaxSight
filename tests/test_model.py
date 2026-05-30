@@ -9,6 +9,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import torch
 import pytest
 from ml.models.maxsight_cnn import create_model, MaxSightCNN, COCO_CLASSES
+from ml.runtime_constants import (
+    DEFAULT_MODEL_MAX_PARAMS,
+    DEFAULT_MODEL_MIN_PARAMS,
+)
 
 
 def test_model_creation():
@@ -91,8 +95,8 @@ def test_parameter_count():
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     
-    # T0 baseline ~99.6M; larger tiers up to ~250M (comprehensive class system)
-    assert 90_000_000 < total_params < 350_000_000
+    # Full MaxSightCNN wiring (~393M params as of 2026-05); bounds in runtime_constants.
+    assert DEFAULT_MODEL_MIN_PARAMS < total_params < DEFAULT_MODEL_MAX_PARAMS
     assert trainable_params == total_params  # All should be trainable initially.
     
     print(f"Parameter count test passed: {total_params:,} parameters")

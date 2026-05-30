@@ -23,10 +23,11 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+from ml.training.observability import cloudwatch_health_metric_definitions
 # CloudWatch metrics parsed from ProductionTrainLoop logs (train_loop.py).
 TRAINING_METRIC_DEFINITIONS = [
     {"Name": "train:loss", "Regex": r"Train Loss: ([0-9.eE+-]+)"},
@@ -37,7 +38,7 @@ TRAINING_METRIC_DEFINITIONS = [
     {"Name": "val:precision", "Regex": r"Precision: ([0-9.eE+-]+)"},
     {"Name": "val:recall", "Regex": r"Recall: ([0-9.eE+-]+)"},
     {"Name": "val:f1", "Regex": r"F1: ([0-9.eE+-]+)"},
-]
+] + list(cloudwatch_health_metric_definitions())
 
 # Default container images (AWS-managed PyTorch DLC).
 # Update the patch version when AWS releases new ones.
@@ -50,6 +51,14 @@ PYTORCH_INFERENCE_DLC = {
     "us-east-1": "763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-inference:2.1.0-gpu-py310-cu121-ubuntu20.04-sagemaker",
     "us-west-2": "763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference:2.1.0-gpu-py310-cu121-ubuntu20.04-sagemaker",
 }
+
+
+def _csv_env_ids(name: str) -> Tuple[str, ...]:
+    """Parse comma-separated subnet or security group IDs from an env var."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return ()
+    return tuple(x.strip() for x in raw.split(",") if x.strip())
 
 
 @dataclass
@@ -67,6 +76,11 @@ class SMConfig:
     max_run_hours: int = 48
     output_s3_prefix: str = ""
     tags: List[Dict[str, str]] = field(default_factory=list)
+    # VPC-only training/inference: set both SM_SUBNET_IDS and SM_SECURITY_GROUP_IDS (comma-separated).
+    subnets: Tuple[str, ...] = ()
+    security_group_ids: Tuple[str, ...] = ()
+    # Optional KMS key ARNs for volume and endpoint model artifacts (org policy).
+    volume_kms_key_id: str = ""
 
     @classmethod
     def from_env(cls) -> "SMConfig":
@@ -79,6 +93,9 @@ class SMConfig:
             instance_type_train=os.environ.get("SM_TRAIN_INSTANCE", "ml.g5.2xlarge"),
             instance_type_infer=os.environ.get("SM_INFER_INSTANCE", "ml.g5.xlarge"),
             max_run_hours=int(os.environ.get("SM_MAX_HOURS", "48")),
+            subnets=_csv_env_ids("SM_SUBNET_IDS"),
+            security_group_ids=_csv_env_ids("SM_SECURITY_GROUP_IDS"),
+            volume_kms_key_id=os.environ.get("SM_VOLUME_KMS_KEY_ID", "").strip(),
         )
 
     @property
@@ -253,6 +270,17 @@ def build_estimator(
     if metrics:
         pytorch_kwargs["metric_definitions"] = metrics
 
+    if cfg.subnets and cfg.security_group_ids:
+        pytorch_kwargs["subnets"] = list(cfg.subnets)
+        pytorch_kwargs["security_group_ids"] = list(cfg.security_group_ids)
+    elif cfg.subnets or cfg.security_group_ids:
+        logger.warning(
+            "SM_SUBNET_IDS and SM_SECURITY_GROUP_IDS must both be set for VPC training; ignoring partial VPC config."
+        )
+
+    if cfg.volume_kms_key_id:
+        pytorch_kwargs["volume_kms_key"] = cfg.volume_kms_key_id
+
     estimator = PyTorch(**pytorch_kwargs)
     return estimator
 
@@ -301,11 +329,22 @@ def deploy_model(
         sagemaker_session=session,
         model_server_workers=model_server_workers,
     )
-    predictor = model.deploy(
+    deploy_kwargs: Dict[str, Any] = dict(
         initial_instance_count=1,
         instance_type=cfg.instance_type_infer,
         endpoint_name=endpoint_name,
     )
+    if cfg.subnets and cfg.security_group_ids:
+        deploy_kwargs["vpc_config_override"] = {
+            "Subnets": list(cfg.subnets),
+            "SecurityGroupIds": list(cfg.security_group_ids),
+        }
+    elif cfg.subnets or cfg.security_group_ids:
+        logger.warning(
+            "SM_SUBNET_IDS and SM_SECURITY_GROUP_IDS must both be set for VPC inference; deploying without vpc_config_override."
+        )
+
+    predictor = model.deploy(**deploy_kwargs)
     logger.info("Endpoint live: %s", endpoint_name)
     return predictor
 

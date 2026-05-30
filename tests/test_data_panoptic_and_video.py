@@ -48,7 +48,8 @@ def test_panoptic_annotations_parsed_to_objects(tmp_path: Path) -> None:
         image_dir=img_path,
         audio_dir=None,
         condition_mode=None,
-        apply_lighting_augmentation=False,
+        lighting_pixel_augmentation=False,
+        tag_lighting_metadata=False,
         max_objects=5,
     )
     assert len(dataset) == 1

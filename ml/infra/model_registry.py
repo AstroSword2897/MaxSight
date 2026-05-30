@@ -13,6 +13,7 @@ Usage
 -----
 from ml.infra.model_registry import ModelRegistry
 
+# Optional: set MAXSIGHT_MODEL_PACKAGE_GROUP so register_model() calls create_model_package.
 registry = ModelRegistry()
 registry.register_model(
     run_id="sm_20260301_120000",
@@ -28,6 +29,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -101,7 +103,8 @@ class ModelRegistry:
     ) -> None:
         self.registry_path = Path(registry_path)
         self._s3_client = s3_client
-        self._sm_group = sm_model_package_group
+        resolved_group = (sm_model_package_group or os.environ.get("MAXSIGHT_MODEL_PACKAGE_GROUP", "").strip() or None)
+        self._sm_group = resolved_group
         self._sm_cfg = sm_config
         self._entries: Dict[str, ModelEntry] = {}
         self._load()

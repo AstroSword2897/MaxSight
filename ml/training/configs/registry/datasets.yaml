@@ -153,7 +153,7 @@ datasets:
     splits: null
     image_dir: null
     audio_dir: null
-    manifest: "datasets/medallion/silver/kinetics700/manifests/clips.jsonl"
+    manifest: "datasets/medallion/silver/kinetics700/manifests/clips.json"
     num_classes: 700
     condition_modes_supported: null
     tier_compatibility:
@@ -173,7 +173,7 @@ datasets:
     splits: null
     image_dir: null
     audio_dir: null
-    manifest: "datasets/medallion/silver/youtube8m/manifests/clips.jsonl"
+    manifest: "datasets/medallion/silver/youtube8m/manifests/clips.json"
     num_classes: 0
     condition_modes_supported: null
     tier_compatibility:
@@ -193,7 +193,7 @@ datasets:
     splits: null
     image_dir: null
     audio_dir: null
-    manifest: "datasets/medallion/silver/howto100m/manifests/clips.jsonl"
+    manifest: "datasets/medallion/silver/howto100m/manifests/clips.json"
     num_classes: 0
     condition_modes_supported: null
     tier_compatibility:
@@ -214,7 +214,7 @@ datasets:
     splits: null
     image_dir: null
     audio_dir: null
-    manifest: "datasets/medallion/silver/webvid10m/manifests/clips.jsonl"
+    manifest: "datasets/medallion/silver/webvid10m/manifests/clips.json"
     num_classes: 0
     condition_modes_supported: null
     tier_compatibility:
@@ -235,7 +235,7 @@ datasets:
     splits: null
     image_dir: null
     audio_dir: null
-    manifest: "datasets/medallion/silver/bdd100k/manifests/clips.jsonl"
+    manifest: "datasets/medallion/silver/bdd100k/manifests/clips.json"
     num_classes: 10
     condition_modes_supported: null
     tier_compatibility:
@@ -258,7 +258,7 @@ datasets:
     splits: null
     image_dir: null
     audio_dir: null
-    manifest: "datasets/medallion/silver/epic_kitchens/manifests/clips.jsonl"
+    manifest: "datasets/medallion/silver/epic_kitchens/manifests/clips.json"
     num_classes: 0
     condition_modes_supported: null
     tier_compatibility:
@@ -278,7 +278,7 @@ datasets:
     splits: null
     image_dir: null
     audio_dir: null
-    manifest: "datasets/medallion/silver/mose/manifests/clips.jsonl"
+    manifest: "datasets/medallion/silver/mose/manifests/clips.json"
     num_classes: 0
     condition_modes_supported: null
     tier_compatibility:
@@ -298,7 +298,7 @@ datasets:
     splits: null
     image_dir: null
     audio_dir: null
-    manifest: "datasets/medallion/silver/youtube_vos/manifests/clips.jsonl"
+    manifest: "datasets/medallion/silver/youtube_vos/manifests/clips.json"
     num_classes: 0
     condition_modes_supported: null
     tier_compatibility:

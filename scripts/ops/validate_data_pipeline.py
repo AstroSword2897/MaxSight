@@ -44,7 +44,8 @@ def main():
         num_workers=0,
         pin_memory=False,
         condition_mode=None,
-        apply_lighting_augmentation=True,
+        tag_lighting_metadata=True,
+        lighting_pixel_augmentation=True,
         max_objects=10,
     )
     print("  Train batches:", len(train_loader))

@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import dataclasses
 import json
 import sys
 from pathlib import Path
@@ -122,18 +123,32 @@ def parse_args() -> argparse.Namespace:
 
 def _cfg(args: argparse.Namespace) -> SMConfig:
     import os
+
+    base = SMConfig.from_env()
     bucket = args.bucket or os.environ.get("MAXSIGHT_S3_BUCKET", "")
     role = args.role or os.environ.get("SAGEMAKER_ROLE_ARN", "")
-    return SMConfig(
-        bucket=bucket,
-        prefix=args.prefix,
-        region=args.region,
-        role_arn=role,
-        instance_type_infer=getattr(args, "instance", "ml.g5.xlarge"),
+    inst = getattr(args, "instance", None) or base.instance_type_infer
+    return dataclasses.replace(
+        base,
+        bucket=bucket or base.bucket,
+        prefix=args.prefix or base.prefix,
+        region=args.region or base.region,
+        role_arn=role or base.role_arn,
+        instance_type_infer=inst,
     )
 
 
 def cmd_deploy(args: argparse.Namespace) -> int:
+    import os
+
+    env_profile = os.environ.get("MAXSIGHT_ENV", "").strip().lower()
+    if args.skip_registry_check and env_profile in ("production", "prod"):
+        print(
+            "ERROR: --skip-registry-check is not allowed when MAXSIGHT_ENV=production (or prod).",
+            file=sys.stderr,
+        )
+        return 1
+
     cfg = _cfg(args)
 
     model_data = args.model_data
@@ -166,8 +181,16 @@ def cmd_deploy(args: argparse.Namespace) -> int:
             return 1
 
     if getattr(args, "dry_run", False):
-        print(json.dumps({"action": "deploy", "model_data": model_data, "endpoint": args.endpoint,
-                          "instance": args.instance, "workers": args.workers}, indent=2))
+        out = {
+            "action": "deploy",
+            "model_data": model_data,
+            "endpoint": args.endpoint,
+            "instance": args.instance,
+            "workers": args.workers,
+        }
+        if cfg.subnets and cfg.security_group_ids:
+            out["vpc"] = {"subnets": list(cfg.subnets), "security_group_ids": list(cfg.security_group_ids)}
+        print(json.dumps(out, indent=2))
         return 0
 
     cfg.instance_type_infer = args.instance

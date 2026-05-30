@@ -1,24 +1,41 @@
-"""Session Manager."""
+"""Session lifecycle management for therapy tasks."""
 
-from typing import Dict, List, Optional, Any, cast
+from typing import Dict, List, Optional, Any
 from datetime import datetime
 import json
+from pathlib import Path
 
 
 class SessionManager:
-    """Manages therapy sessions."""
-    
+    """Track therapy sessions, task attempts, metrics, and persistence."""
+
     def __init__(self, user_id: Optional[str] = None):
+        """Initialize session manager for an optional user.
+
+        Parameters:
+            user_id: User identifier stored on new sessions.
+        """
         self.user_id = user_id
-        self.current_session = None
-        self.session_history = []
-        self.task_attempts = []
+        self.current_session: Optional[Dict[str, Any]] = None
+        self.session_history: List[Dict[str, Any]] = []
+        self.task_attempts: List[Dict[str, Any]] = []
     
     def start_session(self, session_config: Optional[Dict[str, Any]] = None) -> str:
-        """Start a new therapy session. Arguments: session_config: Optional session configuration Returns: Session ID."""
+        """Start a new therapy session.
+
+        Parameters:
+            session_config: Optional metadata stored on the session record.
+
+        Returns:
+            Generated session ID string.
+
+        Side effects:
+            Sets ``current_session`` and resets in-session task list.
+        """
         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.current_session = {
             'session_id': session_id,
+            'user_id': self.user_id,
             'start_time': datetime.now().isoformat(),
             'config': session_config or {},
             'tasks': [],
@@ -26,7 +43,8 @@ class SessionManager:
                 'total_tasks': 0,
                 'completed_tasks': 0,
                 'failed_tasks': 0,
-                'total_time': 0.0
+                'total_time': 0.0,
+                'reaction_count': 0,
             }
         }
         return session_id
@@ -36,10 +54,19 @@ class SessionManager:
         task_type: str,
         task_config: Dict[str, Any],
         result: Dict[str, Any]
-    ):
-        """Log a task attempt."""
+    ) -> None:
+        """Append a task attempt and update running session metrics.
+
+        Parameters:
+            task_type: Task identifier string.
+            task_config: Task parameters for the attempt.
+            result: Outcome dict with ``success`` and optional ``reaction_time``.
+
+        Side effects:
+            Auto-starts a session when none is active.
+        """
         if not self.current_session:
-            self.start_session()
+            self.start_session(session_config={'auto_started': True, 'user_id': self.user_id})
         
         if self.current_session is None:
             raise RuntimeError("Failed to initialize session")
@@ -61,13 +88,25 @@ class SessionManager:
         else:
             self.current_session['metrics']['failed_tasks'] += 1
         
-        if 'reaction_time' in result:
-            self.current_session['metrics']['total_time'] += result['reaction_time']
+        reaction_time = result.get('reaction_time')
+        if reaction_time is not None:
+            self.current_session['metrics']['total_time'] += float(reaction_time)
+            self.current_session['metrics']['reaction_count'] += 1
     
     def end_session(self) -> Dict[str, Any]:
-        """End current session and generate report. Returns: Session report dictionary."""
+        """Finalize the active session and return a report dict.
+
+        Returns:
+            Session report including skill curve and summary metrics.
+
+        Side effects:
+            Clears ``current_session``, appends to history, and flushes history.
+
+        Failure modes:
+            Raises ``RuntimeError`` when no session is active.
+        """
         if not self.current_session:
-            return {}
+            raise RuntimeError("No active session to end.")
         
         self.current_session['end_time'] = datetime.now().isoformat()
         
@@ -83,6 +122,7 @@ class SessionManager:
         self.session_history.append(report)
         self.current_session = None
         self.task_attempts = []
+        self.flush_history()
         
         return report
     
@@ -118,7 +158,8 @@ class SessionManager:
             return {'success_rate': 0.0, 'avg_reaction_time': 0.0}
         
         success_rate = metrics['completed_tasks'] / total
-        avg_reaction_time = metrics['total_time'] / total
+        reaction_count = max(1, metrics.get('reaction_count', 0))
+        avg_reaction_time = metrics['total_time'] / reaction_count
         
         return {
             'success_rate': success_rate,
@@ -128,11 +169,41 @@ class SessionManager:
             'failed_tasks': metrics['failed_tasks']
         }
     
-    def save_session(self, filepath: str):
-        """Save session to file."""
-        if self.current_session:
-            with open(filepath, 'w') as f:
+    def save_session(self, filepath: str) -> None:
+        """Persist the active session JSON to disk.
+
+        Failure modes:
+            Raises ``RuntimeError`` when no active session exists.
+            Raises ``OSError`` when file I/O fails.
+        """
+        if self.current_session is None:
+            raise RuntimeError("No active session to save.")
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(self.current_session, f, indent=2)
+        except OSError as exc:
+            raise OSError(f"Failed to save session to {filepath}: {exc}") from exc
+
+    def flush_history(self, filepath: str = "session_history.jsonl") -> None:
+        """Append completed session reports to JSONL and clear in-memory history.
+
+        Parameters:
+            filepath: Destination JSONL path (created if missing).
+
+        Failure modes:
+            Raises ``OSError`` on write failure.
+        """
+        if not self.session_history:
+            return
+        path = Path(filepath)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(path, "a", encoding="utf-8") as handle:
+                for session in self.session_history:
+                    handle.write(json.dumps(session) + "\n")
+            self.session_history.clear()
+        except OSError as exc:
+            raise OSError(f"Failed to flush session history to {path}: {exc}") from exc
 
 
 

@@ -2,15 +2,27 @@
 
 **Production-Grade Accessibility System** | **Multi-Task Deep Learning for Environmental Understanding**
 
-**Last Updated**: 2026-03  
-**Status**: Production-ready training and data pipeline. Use `python scripts/product/run.py` for canonical `train/validate/export/package/smoke` (or call ops scripts directly under `scripts/ops/`). See **docs/status.md** for current status.  
+**Last Updated**: 2026-05  
+**Status**: Production-ready training and data pipeline. Use `python scripts/product/run.py` for canonical `train/validate/export/package/smoke` (or call ops scripts directly under `scripts/ops/`). See **docs/status.md** and **docs/ops/production_remediation.md** for current contracts and remediation details.  
 **Setup:** **[docs/DOWNLOAD_AND_START.md](docs/DOWNLOAD_AND_START.md)** (clone, install, data, simulator, train).
 
 ---
 
+## Training and Runtime Contracts (2026-05)
+
+Full reference: **[docs/ops/production_remediation.md](docs/ops/production_remediation.md)**
+
+- **Local training:** Use `python scripts/product/run.py train --config <tier-yaml>` or `python scripts/ops/sagemaker_train.py --dry-run` for launcher validation before cloud execution.
+- **SageMaker training:** `ml/training/sagemaker_entry.py` resolves `SM_CHANNEL_TRAIN` and `SM_CHANNEL_VAL` into `ResolvedTrainingConfig.data.*` paths and asserts both channels exist before launching.
+- **Checkpoint contract:** Best checkpoint filename is `best_model.pt`. Corrupt resume files raise; missing files start fresh.
+- **Observability:** Each epoch emits `health_summary` logs with skipped-batch ratio. CI validates schema via `scripts/infra/validate_train_loop_contracts.py`.
+- **Personalization:** `app/personal_mode.py` — instantiate in session orchestration; call `update_preferences()` + `fuse_with_personalization()` per user.
+- **Haptic backends:** `app/ui/haptic_feedback.py` → `app/ui/haptic_backends.py`. Set `MAXSIGHT_HAPTIC_BACKEND` to `auto`, `darwin`, `linux`, `log`, or `none`. Simulator uses `log` when `MAXSIGHT_ENABLE_HAPTICS_STUB=1`.
+- **Model CI envelope:** ~393M params; bounds in `ml/runtime_constants.py` (`DEFAULT_MODEL_MAX_PARAMS`, `DEFAULT_MODEL_INT8_MAX_MB`).
+
 ## Table of Contents
 
-**Quick links:** [Feature inventory](#complete-feature-inventory-at-a-glance) · [RAG mediation model](#rag-mediation-model-user-and-therapy-boundary) · [Roadmap & backlog](#roadmap-backlog--next-steps) · [Download & start](docs/DOWNLOAD_AND_START.md)
+**Quick links:** [TB system governance (single source)](#tb-system-governance-single-source) · [Repository file index](#repository-file-index-complete-source-tree) · [Feature inventory](#complete-feature-inventory-at-a-glance) · [RAG mediation model](#rag-mediation-model-user-and-therapy-boundary) · [Roadmap & backlog](#roadmap-backlog--next-steps) · [Download & start](docs/DOWNLOAD_AND_START.md)
 
 1. [Project Overview & Goals](#-project-overview--goals)
 2. [Complete feature inventory (at a glance)](#complete-feature-inventory-at-a-glance)
@@ -31,8 +43,96 @@
 17. [Performance & Safety](#-performance--safety)
 18. [Deployment & Export](#-deployment--export)
 19. [Documentation](#-documentation)
+20. [Repository file index (complete source tree)](#repository-file-index-complete-source-tree)
 
 ---
+
+## TB system governance (single source)
+
+Track **TB subgraph boundaries (L1–L9), AWS seam mapping, and gold vs medallion** here only. Do not add parallel governance markdown trees under `docs/` for the same rules; other docs may deep-link to this section.
+
+### Meta (order and scope)
+
+- Architectural truth is split across L1–L9. **Do not collapse layers** (e.g. no event semantics inside gold IR; no therapy policy inside the SageMaker estimator builder).
+- Before edits: read **only** the subsection for the layer you touch. If a change crosses layers, read subsections **in order** L1 → L2 → L3/L4 → L5.
+- Prefer **one subgraph per PR**; name tests or dry-runs you ran (e.g. `pytest tests/test_gold_manifest.py`, `python scripts/ops/sagemaker_train.py --dry-run`).
+
+### L1 — Repo core (model + data + train + eval) — system prompt
+
+You are editing **L1 only**. Your job is to keep one trainable stack coherent: tiers, tensors, losses, checkpoints, eval, and export.
+
+- **Purpose:** Own `ml/models/*`, `ml/data/*` (including `ml/data/gold/*`), `ml/training/*`, `ml/evaluation/*`, and `ml/training/export.py`. Decide what the train loop may assume about batches and label spaces.
+- **Hard boundaries:** Do **not** add boto3 or the SageMaker SDK under `ml/training/`, `ml/models/`, or `ml/data/`. Push AWS to `ml/infra/*` and `scripts/ops/*`. Do not embed **C1** event semantics or therapy copy policy into datasets or gold IR.
+- **Layering:** Gold JSONL + `meta.json` is **Layer A** (fixed keys in `ml/data/gold/schema.py`). Collate and the model may emit **Layer B** fields (`distance`, `urgency`, …). Never require registry resolution inside meta-driven gold loading.
+- **Contracts:** Training batches use **`images`** only (`ml/data/sample_contract.py`). With `data_plane=gold` and meta paths in YAML, the data plane is **gold meta + shards** only (`ml/training/run_config.py`, `ml/data/data_pipeline.py`). Keep `training.label_space`, model `num_classes`, and gold `class_map_hash` aligned.
+- **Verification:** `pytest tests/test_gold_manifest.py`, `pytest tests/test_run_config_contract.py`, and a local training smoke after changing the train loop or metric log strings (they feed CloudWatch regexes in `ml/infra/sagemaker_utils.py`).
+
+### L2 — Therapy + RAG (two runtime contracts)
+
+- **Inference:** `ml/infra/inference_handler.py` may call `TherapyTaskIntegrator`; it must **not** import `ml/pipeline/sagemaker_entrypoint.py` or other offline-only mains.
+- **Offline:** `ml/pipeline/pipeline_runner.py` and `sagemaker_entrypoint.py` serve Processing jobs—not the realtime inference contract.
+- **RAG / retrieval:** Advisory-only; must not override hazard / urgency / distance authority (`docs/architecture.md`). No writes to gold shard schema from therapy or retrieval.
+
+### L3 + L4 — Ops CLI and infra
+
+- **L3:** `scripts/ops/*`, `scripts/product/*` — thin arg/env wrappers.
+- **L4:** `ml/infra/*` — sessions, roles, `build_estimator`, `deploy_model`, S3 helpers, `model_registry.py`.
+- **Boundaries:** Default **registry gate** on deploy (`scripts/ops/sagemaker_deploy.py`); `--skip-registry-check` is break-glass only. Role account check: `get_execution_role` / `MAXSIGHT_SKIP_ROLE_ASSERT` in `ml/infra/sagemaker_utils.py`.
+
+### L5 — AWS cloud (repo touchpoints)
+
+| TB / AWS concern | Repo location |
+|------------------|----------------|
+| Role + STS guard | `ml/infra/sagemaker_utils.py`, `infra/iam/sagemaker_execution_role.json` |
+| Training job + DLC | `SMConfig`, `build_estimator` |
+| VPC train / infer | `SM_SUBNET_IDS`, `SM_SECURITY_GROUP_IDS` → `build_estimator` / `deploy_model` |
+| Volume KMS | `SM_VOLUME_KMS_KEY_ID` → `build_estimator` |
+| S3 layout + encryption + lifecycle | [`infra/README.md`](infra/README.md), `infra/s3/bucket_lifecycle_example.json` |
+| Input channels | `build_data_channels` — align S3 URIs with gold YAML + ops uploads |
+| CW metric regex | `TRAINING_METRIC_DEFINITIONS` ↔ `ml/training/train_loop.py` log strings |
+| CW alarm examples | `infra/cloudwatch/README.md` |
+| Debugger (optional) | `_optional_debugger_hook` in `build_estimator` |
+| Model package group | `MAXSIGHT_MODEL_PACKAGE_GROUP` → `ModelRegistry` → `PendingManualApproval` |
+| Deploy registry gate | `sagemaker_deploy.py` (`--skip-registry-check` **forbidden** when `MAXSIGHT_ENV=production`) |
+| Endpoint / batch / processing | `deploy_model`, `sagemaker_deploy.py`, `sagemaker_processing_submit.py` |
+| Pre-integration gate | [`docs/ops/pre_integration_checklist.md`](docs/ops/pre_integration_checklist.md), `scripts/infra/validate_infra_stubs.py` |
+| One-account runbook | [`docs/ops/aws_runbook.md`](docs/ops/aws_runbook.md) |
+
+Org-specific knobs (FSx channel wiring, extra alarms) stay in your account runbook; record env names in [`infra/README.md`](infra/README.md) when you add them.
+
+### L6–L9 — Edge, simulator, infra docs
+
+- **L6–L7:** Post-train export / on-device stack are **downstream seams**; they must not change L1 gold IR or batch keys without an explicit L1 review.
+- **L8:** `tools/simulation/*`, `ml/runtime/mode.py`, tests—parallel to cloud inference; keep payload and error shapes aligned with production where practical.
+- **L9:** `infra/*.json` stubs and `docs/productization/*` are scope and gates, not runtime imports for training.
+
+### Training data plane: gold JSONL + meta vs medallion index (D2)
+
+| Path | Role |
+|------|------|
+| **Canonical (new pipelines, SageMaker-friendly)** | Sharded **JSONL + `meta.json`** from `scripts/ops/build_gold_manifest.py`; `training.data.data_plane: gold` and meta URIs in tier YAML; `ml/data/gold/*`. Meta-driven runs can be **registry-free** at runtime. |
+| **Legacy (medallion D2)** | `datasets/medallion/gold/training_index.json` from `medallion_build.py` — path index for older local flows and `sagemaker_train.py` gold channel upload. Prefer gold JSONL + meta for new L3/L5 pipelines. |
+
+```mermaid
+flowchart LR
+  subgraph canonical [Canonical_D2_gold]
+    B["build_gold_manifest.py"]
+    M["meta.json_plus_JSONL_shards"]
+    T["training_YAML_data_plane_gold"]
+  end
+  subgraph legacy [Legacy_D2_medallion]
+    MB["medallion_build.py"]
+    I["training_index.json"]
+  end
+  B --> M
+  M --> T
+  MB --> I
+  I -->|"sagemaker_train_channel"| SM["SageMaker_optional"]
+  M --> SM
+```
+
+---
+
 
 ## Project Overview & Goals
 
@@ -319,7 +419,7 @@ MaxSight implements a **retrieval subsystem** that follows a RAG-style architect
 
 Quantization, temporal training, and therapy effectiveness all depend on training/inference seeing the **same semantic meaning** as the real world:
 
-- **Panoptic meaning (objects + supervision)**: `ml/data/dataset.py` parses COCO-style panoptic annotations via `segments_info`, converts each segment bbox into normalized boxes, and derives **distance zones** and **urgency** labels from semantic/category fields.
+- **Panoptic meaning (objects + supervision)**: `ml/data/dataset.py` parses COCO-style panoptic annotations via `segments_info`, converts each segment bbox into normalized boxes, and derives **distance zones** and **urgency** via **`ml/data/assistive_supervision.py`** (same rule as gold builders and `generate_annotations`).
 - **Video/sequence meaning (temporal stability)**: `ml/data/data_pipeline.py` supports sequence-aware batching by padding variable-length `frames` into `[B, T, C, H, W]` (with `frame_lengths`). This is the tensor contract expected by T5 temporal reasoning.
 
 For wearable deployment, calibration batches for INT8 must be drawn from the same panoptic/video distributions (and the same `condition_mode`) so activation ranges reflect real meaning rather than synthetic noise.
@@ -1604,7 +1704,8 @@ python -c "import torch; print(f'PyTorch {torch.__version__}, MPS: {torch.backen
 - **AWS credentials**: Configure via AWS SSO/profile or env vars so `aws sts get-caller-identity` works.
 - **IAM + policies**:
   - **Start here**: `infra/README.md`
-  - **Templates**: `infra/iam/sagemaker_execution_role.json`, `infra/iam/s3_bucket_policy.json`, `infra/iam/ecr_policy.json`
+  - **Templates**: `infra/iam/sagemaker_execution_role.json`, `infra/iam/s3_bucket_policy.json`, `infra/iam/ecr_policy.json`, `infra/iam/kms_training_volume_policy.json`, `infra/iam/ssm_parameters_read_policy.json`, `infra/s3/bucket_encryption_sse_s3.json`
+  - **Gate**: `docs/ops/pre_integration_checklist.md`; **stub check**: `python scripts/infra/validate_infra_stubs.py`
   - **Note**: Replace placeholders (`{{ACCOUNT_ID}}`, `{{BUCKET}}`, `{{REGION}}`, `{{SAGEMAKER_ROLE_NAME}}`) before applying.
 - **Required env vars**:
   - `AWS_DEFAULT_REGION` (defaults to `us-east-1`)
@@ -2015,6 +2116,8 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 
 ### Documentation (docs/)
 
+- **TB subgraph governance (L1–L9, AWS seams, gold vs medallion):** [this README section](#tb-system-governance-single-source) — single tracking location; do not add parallel `docs/systems/` prompt trees.
+- **Per-file source tree report:** [Repository file index (complete source tree)](#repository-file-index-complete-source-tree) — every path under `app/`, `ml/`, `scripts/`, `tools/`, `tests/`, `infra/`, `docs/`, `.cursor/` plus root project files (excludes bulk `datasets/**`, checkpoints, logs).
 - **[SYSTEMS.md](docs/SYSTEMS.md)**: All systems in one detailed reference (tiers, backbone, heads, fusion, temporal, therapy, retrieval, preprocessing, training, export, scene graph)
 - **`ml/pipeline/`**: SageMaker-style config, advisory RAG helper, entrypoint imports for cloud jobs (see [Complete feature inventory](#complete-feature-inventory-at-a-glance))
 - **[architecture.md](docs/architecture.md)**: Model and system architecture overview
@@ -2023,8 +2126,10 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 - **[training_architecture.md](docs/training_architecture.md)**: Training loop, losses, balancing, config
 - **[training-data-loading.md](docs/training-data-loading.md)**: Data pipeline and dataset
 - **[algorithmic_efficiency.md](docs/algorithmic_efficiency.md)**: Signal-per-compute tactics mapped to this repo (freeze backbone, tiers, video stride, KD/SSL hooks)
-- **[medallion_data.md](docs/medallion_data.md)**: Bronze/silver/gold layout, gold `training_index.json`, multi-config training
-- **[ml_lifecycle_s3.md](docs/ml_lifecycle_s3.md)**: S3 client validation, structured event logs, retries, partial sync results (large-scale buckets)
+- **[medallion_data.md](docs/medallion_data.md)**: Bronze/silver/medallion path index (`training_index.json`); canonical sharded gold + `meta.json` is documented in [TB system governance](#tb-system-governance-single-source) above
+- **[ml_lifecycle_s3.md](docs/ml_lifecycle_s3.md)**: S3 client validation, structured event logs, retries, partial sync results (large-scale buckets); gold prefix notes
+- **[docs/ops/aws_runbook.md](docs/ops/aws_runbook.md)**: One-account train → deploy → invoke → CloudWatch validation
+- **[docs/ops/pre_integration_checklist.md](docs/ops/pre_integration_checklist.md)**: Ordered gate before deeper AWS integration (IAM, S3, registry, VPC, CI)
 - **[git_workflow.md](docs/git_workflow.md)**: Feature branches, merges to `main`, staging discipline
 - **[transferlearning.md](docs/transferlearning.md)**: Tier transfer and checkpoint loading
 - **[status.md](docs/status.md)**: Project status, health, device policy, limitations
@@ -2047,6 +2152,8 @@ python -m ml.training.export --checkpoint checkpoints/final_model.pt --format ji
 **Optimization**: Quantization (INT8 via ml.training.quantization), pruning (ml.optimization.mobile_optimizations), knowledge distillation (ml.training.self_supervised_pretrain). **Custom heads/losses/augmentation**: Extend base classes in ml.models.heads, ml.training.losses, ml.data.advanced_augmentation; see HEAD_REGISTRY and existing heads for patterns.
 
 ### Repository Index (Production-Focused)
+
+For a **line-by-line path list** with one-line roles, see [Repository file index (complete source tree)](#repository-file-index-complete-source-tree) above the License section.
 
 - **Product pipeline**:
   - `scripts/product/run.py`: canonical entrypoint for `train`, `validate`, `export`, `package`, `smoke`. Use this instead of chaining individual scripts.
@@ -2131,7 +2238,7 @@ Under `ml/training/configs/` (e.g. `t2_hybrid_vit.yaml`, `t5_temporal_2phase.yam
 
 - **model**: `tier`, `num_classes`, `use_se_attention`, `use_cbam_attention`, `use_hybrid_backbone`, `use_dynamic_conv`, `use_cross_task_attention`, `use_cross_modal_attention`, `use_temporal_modeling`, `use_retrieval` — all booleans or scalars; `TierConfig.from_dict()` reads these.
 - **checkpoint**: `save_dir` — used by train_maxsight when `--config` is set.
-- **data**: `train_annotation_file`, `val_annotation_file`, `image_dir`, `batch_size`, `num_workers`, `max_objects`, `condition_mode`, `apply_lighting_augmentation`.
+- **data**: `train_annotation_file`, `val_annotation_file`, `image_dir`, `batch_size`, `num_workers`, `max_objects`, `condition_mode`, `tag_lighting_metadata`, `lighting_pixel_augmentation`.
 - **training**: `num_epochs`, `learning_rate`, `weight_decay`, `optimizer`, `scheduler`, `warmup_epochs`, `gradient_clip_norm`, `mixed_precision`, `accumulate_grad_batches`.
 - **loss**: `use_gradnorm`, `loss_weights` (detection, classification, box_regression, distance, urgency, motion, …).
 
@@ -2241,6 +2348,447 @@ Transfer configs add **source**/ **target** (checkpoint paths) and **transfer** 
 - Use cloud GPU for production training
 
 See **docs/status.md** for device and compatibility notes.
+
+## Repository file index (complete source tree)
+
+This index lists **every source and documentation file** under the main code trees (`app/`, `ml/`, `scripts/`, `tools/`, `tests/`, `infra/`, `docs/`, `.cursor/`) plus common **root project files**. It does **not** list bulk or generated assets (for example `datasets/**` images, `backups/**`, `checkpoints/**`, `test_images/**`, `*.log`, `.git`). One-line summaries come from module docstrings or file headers where available; open the path for full detail.
+
+### Root project files
+
+- **`README.md`** — This document: overview, TB governance, file index, architecture, training, deployment, and links.
+- **`LICENSE`** — Project license terms (see file for full text).
+- **`requirements.txt`** — Python dependencies for development and training.
+- **`requirements-production.txt`** — Narrower dependency set for deployment or minimal installs.
+- **`environment.yml`** — Conda-style environment specification (optional).
+- **`pyproject.toml`** — Project metadata, tooling, and packaging configuration.
+- **`pyrightconfig.json`** — Pyright / static analysis settings for the repo.
+
+### `app/`
+
+- **`app/__init__.py`** — Application-level components for MaxSight 3.0.
+- **`app/overlays/__init__.py`** — Overlay Engine Module.
+- **`app/overlays/overlay_engine.py`** — Overlay Engine Renders visual overlays for therapy guidance. Phase 4: Overlay Engine & UX Guidance See docs/therapy_s...
+- **`app/personal_mode.py`** — Personal Mode for Phase 6: Active Scene Exploration & Personalization Enhances MaxSight with user-specific adaptation...
+- **`app/ui/__init__.py`** — UI Components Module Contains user interface components: - Voice feedback - Haptic feedback - Visual guidance See doc...
+- **`app/ui/haptic_feedback.py`** — Haptic Feedback Provides haptic feedback for therapy tasks. Phase 4: Overlay Engine & UX Guidance See docs/therapy_sy...
+- **`app/ui/voice_feedback.py`** — Voice Feedback Provides voice prompts for therapy guidance. Phase 4: Overlay Engine & UX Guidance See docs/therapy_sy...
+
+### `ml/`
+
+- **`ml/__init__.py`** — *(see file)*
+- **`ml/auth/token.py`** — HMAC-Signed Session Tokens for MaxSight Provides stateless HMAC token generation and verification for secure session ...
+- **`ml/cache/redis_cache.py`** — Redis Caching Utilities for MaxSight Provides Redis-based caching for model outputs and responses with TTL support.
+- **`ml/config.py`** — MaxSight Configuration and Dependency Management Centralized configuration with versioning and dependency tracking.
+- **`ml/data/__init__.py`** — *(see file)*
+- **`ml/data/assistive_supervision.py`** — Deterministic class/geometry-derived urgency and distance zones (shared across loaders and gold).
+- **`ml/config/assistive_supervision.yaml`** — Tunable weights and bin edges for assistive_supervision.
+- **`ml/data/advanced_augmentation.py`** — Advanced Data Augmentation for Real-World Robustness.
+- **`ml/data/coco_dataset_splitter.py`** — COCO Dataset Splitter for MaxSight Creates train/test/validation splits from COCO dataset. Handles both COCO 2017 for...
+- **`ml/data/create_accessibility_dataset.py`** — MaxSight Accessibility Dataset (Production Version)
+- **`ml/data/data_pipeline.py`** — Data pipeline for MaxSight training.
+- **`ml/data/dataset.py`** — Dataset loader with environmental context, audio, and condition-specific augmentations.
+- **`ml/data/dataset_cleaning.py`** — Bronze → silver: validate, deduplicate, remove corrupt frames/samples.
+- **`ml/data/dataset_preprocessing.py`** — Silver → silver: resize, normalise images; extract frames from video clips.
+- **`ml/data/dataset_registry.py`** — Dataset registry: the only place a dataset becomes 'recognized' by the system.
+- **`ml/data/download_datasets.py`** — Dataset download helpers for COCO, Open Images, Objects365, Visual Genome, LVIS, AudioSet.
+- **`ml/data/generate_annotations.py`** — Generate MaxSight annotations from COCO using shared assistive_supervision labeling.
+- **`ml/data/gold/__init__.py`** — Gold training plane: canonical JSONL manifests + lazy tensor materialization.
+- **`ml/data/gold/builder.py`** — Write validated gold JSONL (optionally sharded) plus reproducibility sidecars.
+- **`ml/data/gold/dataNormalizationLayer.py`** — Adapters emit partial gold records (geometry + raw class names); mapping runs in the builder.
+- **`ml/data/gold/dataset.py`** — Lazy torch Dataset over one or more gold JSONL shard files.
+- **`ml/data/gold/errors.py`** — Gold pipeline errors (kept local so ml.data does not import run_config).
+- **`ml/data/gold/io.py`** — URI-agnostic shard I/O for the gold data plane.
+- **`ml/data/gold/label_mapper.py`** — Central label-string → index mapping for gold builds and validation.
+- **`ml/data/gold/schema.py`** — Constants for gold manifest lines (JSONL) and the portable artifact meta contract.
+- **`ml/data/inference_datasets.py`** — Inference Dataset Loaders for MaxSight.
+- **`ml/data/label_space_registry.py`** — Load canonical label-space definitions used by the dataset registry.
+- **`ml/data/medallion_layout.py`** — Bronze / silver / gold paths and training index for COCO + optional video manifests.
+- **`ml/data/multi_modal_augment.py`** — Multi-Modal Augmentation for MaxSight 3.0.
+- **`ml/data/sample_contract.py`** — Canonical keys for image-detection training samples.
+- **`ml/data/synthetic_scene_generator.py`** — Get output size as (height, width).
+- **`ml/data/temporal_clip_targets.py`** — Temporal supervision proxies from per-frame pseudo-panoptic segments.
+- **`ml/data/video_clip_dataset.py`** — Dataset over v1 video panoptic clip manifests (sequence-native samples).
+- **`ml/data/video_dataset_perf.py`** — Manifest frame coverage and VideoClipManifestDataset throughput (no model).
+- **`ml/data/video_manifest.py`** — Validate video panoptic clip manifests (v1 schema).
+- **`ml/data/video_panoptic.py`** — Utilities for sequence-native video panoptic supervision.
+- **`ml/data/video_preprocessing.py`** — Production video preprocessing pipeline for panoptic temporal training.
+- **`ml/evaluation/__init__.py`** — Evaluation metrics module for Phase 9.
+- **`ml/evaluation/metrics.py`** — Evaluation Metrics for Phase 9: Evaluation & Metrics Includes: - Multi-modal metrics - Accessibility-specific metrics...
+- **`ml/infra/__init__.py`** — *(see file)*
+- **`ml/infra/experiment_tracker.py`** — Experiment and run tracking for the MaxSight ML lifecycle.
+- **`ml/infra/inference_handler.py`** — SageMaker inference handler for MaxSight endpoints.
+- **`ml/infra/model_registry.py`** — Model registry: version, promote, and retrieve MaxSight model artefacts.
+- **`ml/infra/s3_client.py`** — S3 utilities for the medallion data lifecycle and checkpoint management.
+- **`ml/infra/s3_validation.py`** — Input validation for S3 paths, keys, and local files used by large-scale sync.
+- **`ml/infra/sagemaker_utils.py`** — SageMaker session, role, and job-configuration helpers.
+- **`ml/middleware/error_sanitizer.py`** — Production-grade error contract system for MaxSight.
+- **`ml/middleware/security_headers.py`** — Security Headers Middleware for Flask/FastAPI Adds security headers to HTTP responses to prevent common web vulnerabi...
+- **`ml/models/__init__.py`** — *(see file)*
+- **`ml/models/attention/__init__.py`** — Attention modules for MaxSight 3.0.
+- **`ml/models/attention/attention.py`** — MaxSight 3.0 Attention Modules - Consolidated Production Version.
+- **`ml/models/attention/cbam_attention.py`** — Attention Modules for MaxSight 3.0 Includes CBAM (Convolutional Block Attention Module) and SE (Squeeze-and-Excitatio...
+- **`ml/models/attention/cross_modal_attention.py`** — Cross-Modal Attention for MaxSight 3.0 Enables attention between vision, audio, and haptic modalities.
+- **`ml/models/attention/cross_task_attention.py`** — Cross-Task Attention for MaxSight 3.0.
+- **`ml/models/backbone/__init__.py`** — Backbone modules for MaxSight 3.0.
+- **`ml/models/backbone/dynamic_conv.py`** — Dynamic Convolution Module for MaxSight 3.0 Per-sample adaptive kernels based on lighting, occlusion, and motion.
+- **`ml/models/backbone/hybrid_backbone.py`** — Enhanced Hybrid CNN + Vision Transformer Backbone for MaxSight 3.0.
+- **`ml/models/backbone/vit_backbone.py`** — Ultra-Optimized Hybrid CNN + Vision Transformer Backbone for MaxSight 3.0.
+- **`ml/models/eye_model/__init__.py`** — Eye/Face Micro-Model - Phase 1 Stub.
+- **`ml/models/eye_model/eye_model.py`** — Eye/Face Micro-Model.
+- **`ml/models/fusion/__init__.py`** — Fusion modules for MaxSight 3.0.
+- **`ml/models/fusion/multimodal_fusion.py`** — Multi-Modal Fusion for MaxSight 3.0 Fuses vision, audio, depth, and haptic modalities using transformer-based fusion.
+- **`ml/models/heads/__init__.py`** — Therapy Heads for MaxSight This module provides specialized heads for therapy tasks and adaptive assistance.
+- **`ml/models/heads/contrast_head.py`** — Initialize weights to prevent degenerate outputs.
+- **`ml/models/heads/depth_head.py`** — Depth/Focus Head.
+- **`ml/models/heads/fatigue_head.py`** — Fatigue/Gaze Head for MaxSight Therapy System.
+- **`ml/models/heads/motion_head.py`** — Motion/Flow Head for MaxSight Therapy System.
+- **`ml/models/heads/ocr_head.py`** — Transformer-Based OCR Head for MaxSight 3.0.
+- **`ml/models/heads/personalization_head.py`** — Personalization Head for MaxSight 3.0 (v2)
+- **`ml/models/heads/predictive_alert_head.py`** — Predictive Alert Head for MaxSight 3.0 Anticipates hazards and provides predictive navigation guidance.
+- **`ml/models/heads/roi_priority_head.py`** — ROI Priority Head for MaxSight Therapy System.
+- **`ml/models/heads/scene_description_head.py`** — Scene Description Head for MaxSight 3.0 Transformer decoder for generating natural language scene descriptions.
+- **`ml/models/heads/sound_event_head.py`** — Sound Event Classification Head for MaxSight 3.0 (v2)
+- **`ml/models/heads/therapy_state_head.py`** — Unified Therapy State Head for MaxSight 3.0.
+- **`ml/models/heads/uncertainty_head.py`** — Global Confidence Aggregator for MaxSight 3.0 (v2)
+- **`ml/models/maxsight_cnn.py`** — MaxSight CNN: anchor-free object detection for accessibility (Stage A + Stage B, condition-specific).
+- **`ml/models/retrieval_heads.py`** — Multi-Vector Retrieval Heads for MaxSight 3.0.
+- **`ml/models/retrieval_heads_production.py`** — Production-Ready Multi-Vector Retrieval Heads for MaxSight 3.0.
+- **`ml/models/scene_graph/__init__.py`** — Scene graph modules for MaxSight 3.0.
+- **`ml/models/scene_graph/scene_graph_encoder.py`** — Batched Scene Graph + GNN Encoder for MaxSight 3.0 - Efficient GPU computation - Supports multiple scene graphs per b...
+- **`ml/models/temporal/__init__.py`** — Temporal Encoder Module - Phase 1 Stub.
+- **`ml/models/temporal/conv_lstm.py`** — Temporal Processing Modules for MaxSight 3.0 Includes ConvLSTM for motion tracking and TimeSformer for long-range tem...
+- **`ml/models/temporal/temporal_encoder.py`** — Temporal Encoder Module for MaxSight 3.0.
+- **`ml/optimization/__init__.py`** — Mobile optimization module for Phase 7.
+- **`ml/optimization/mobile_optimizations.py`** — Mobile Efficiency Optimizations for Phase 7: Optimization & Mobile Deployment Includes: - Model pruning - Knowledge d...
+- **`ml/pipeline/__init__.py`** — Production pipeline modules (SageMaker-ready).
+- **`ml/pipeline/pipeline_runner.py`** — Core offline pipeline logic: temporal preprocessing + advisory generation.
+- **`ml/pipeline/rag_advisory.py`** — Non-blocking advisory logic for retrieval-augmented therapy guidance.
+- **`ml/pipeline/sagemaker_config.py`** — SageMaker configuration contract for production temporal pipeline.
+- **`ml/pipeline/sagemaker_entrypoint.py`** — SageMaker Processing Job (offline) — adaptive temporal preprocessing + advisory.
+- **`ml/retrieval/__init__.py`** — Retrieval system for MaxSight 3.0.
+- **`ml/retrieval/cross_view/__init__.py`** — Cross-view retrieval modules.
+- **`ml/retrieval/cross_view/cv_training.py`** — Cross-View Training and Augmentation for Robust Retrieval.
+- **`ml/retrieval/encoders/__init__.py`** — Retrieval encoders for multi-vector retrieval.
+- **`ml/retrieval/encoders/audio_encoder.py`** — Audio Encoder for Multi-Vector Retrieval Encodes environmental audio using CNN + Transformer.
+- **`ml/retrieval/encoders/depth_extractor.py`** — Depth Extractor for Multi-Vector Retrieval Uses MiDaS for monocular depth estimation and encodes depth maps.
+- **`ml/retrieval/encoders/global_encoder.py`** — Global Encoder for Multi-Vector Retrieval CLIP ViT-B/32 or DINOv2 for global scene embeddings.
+- **`ml/retrieval/encoders/ocr_encoder.py`** — OCR Encoder for Multi-Vector Retrieval Encodes OCR text snippets using sentence-transformers.
+- **`ml/retrieval/encoders/patch_extractor.py`** — Patch Extractor for Multi-Vector Retrieval.
+- **`ml/retrieval/encoders/region_extractor.py`** — Region Extractor for Multi-Vector Retrieval Extracts object-level region embeddings using MaxSightCNN/DETR.
+- **`ml/retrieval/encoders/scene_graph_encoder.py`** — Scene Graph Encoder for Multi-Vector Retrieval Encodes scene graphs for retrieval using GNN.
+- **`ml/retrieval/fusion/__init__.py`** — Fusion modules for retrieval.
+- **`ml/retrieval/fusion/attention_fusion.py`** — Attention-Based Fusion for Multi-Vector Retrieval Query-adaptive attention fusion of multiple embedding types.
+- **`ml/retrieval/fusion/fusion_train.py`** — Fusion MLP Training Script for Multi-Vector Retrieval Trains a fusion MLP that combines multiple embedding types. Bas...
+- **`ml/retrieval/fusion/meta_fusion.py`** — Meta-Learning Fusion Weights for Phase 6: Personalization & Active Guidance.
+- **`ml/retrieval/indexing/__init__.py`** — Indexing modules for retrieval.
+- **`ml/retrieval/indexing/index_manager.py`** — Index Manager for Multi-Vector Retrieval Manages FAISS index loading, updates, and versioning.
+- **`ml/retrieval/indexing/neural_index_builder.py`** — Neural Index Builder for Multi-Vector Retrieval Builds FAISS indices with learned quantization.
+- **`ml/retrieval/retrieval/__init__.py`** — Retrieval modules.
+- **`ml/retrieval/retrieval/async_retrieval.py`** — Async/Non-Blocking Retrieval for MaxSight 3.0 Retrieval system that runs asynchronously to avoid blocking inference. ...
+- **`ml/retrieval/retrieval/concept_retrieval.py`** — Concept-Dimensioned Retrieval for MaxSight 3.0.
+- **`ml/retrieval/retrieval/knowledge_augment.py`** — Knowledge-Augmented Retrieval with GNN for MaxSight 3.0.
+- **`ml/retrieval/retrieval/stage1_ann.py`** — Stage 1: Fast Approximate Nearest Neighbor Search Fast ANN search on fused embeddings for candidate retrieval.
+- **`ml/retrieval/retrieval/stage2_rerank.py`** — Stage 2: Multi-Vector Reranking for MaxSight 3.0.
+- **`ml/runtime/__init__.py`** — Runtime environment helpers (simulator vs production deployment).
+- **`ml/runtime/mode.py`** — Distinguish local simulator runs from production-style deployment via environment.
+- **`ml/runtime_constants.py`** — Runtime and safety gate constants for production. Align with docs/productization/02 and 04.
+- **`ml/security/magic.py`** — File Magic Number Detection for Input Validation Detects file types by checking magic numbers (file signatures) to pr...
+- **`ml/security/validation.py`** — Input Validation Utilities for MaxSight Provides validation for Base64, file uploads, and other user inputs.
+- **`ml/therapy/__init__.py`** — Therapy system: closed-loop decision + adaptation layered on perception.
+- **`ml/therapy/adaptation_engine.py`** — Adaptation Engine: personalize therapy from response evaluation (which prompts work, tolerance).
+- **`ml/therapy/intervention_generator.py`** — Intervention Generator: therapy decisions → concrete therapeutic actions (audio/haptic/visual).
+- **`ml/therapy/response_evaluation.py`** — Response Evaluation: before_state, intervention, after_state → effectiveness score.
+- **`ml/therapy/session_manager.py`** — Session Manager.
+- **`ml/therapy/situation_understanding.py`** — Situation Understanding Layer: perception outputs → psychological context for the therapy engine.
+- **`ml/therapy/task_generator.py`** — Task Generator.
+- **`ml/therapy/therapy_decision_engine.py`** — Therapy Decision Engine: rule + policy gate. Decides should we intervene, what, how strong.
+- **`ml/therapy/therapy_engine.py`** — Therapy Engine: closed-loop behavioral feedback system layered on top of perception.
+- **`ml/therapy/therapy_integration.py`** — Therapy Integration Module for MaxSight.
+- **`ml/therapy/therapy_memory.py`** — Therapy memory: short-term and long-term state for the closed-loop therapy engine.
+- **`ml/therapy/therapy_safety.py`** — Safety layer for the therapy subsystem: guardrails so therapy is non-intrusive and never harmful.
+- **`ml/tools/memory_profile.py`** — Memory Profiling Utilities for MaxSight Provides memory profiling tools for debugging and optimization.
+- **`ml/training/__init__.py`** — *(see file)*
+- **`ml/training/benchmark.py`** — Inference latency benchmarking for MaxSight. Latency targets (e.g. <500 ms) matter for real-time assistive use so haz...
+- **`ml/training/configs/registry/datasets.yaml`** — *(see file)*
+- **`ml/training/configs/registry/label_spaces.yaml`** — *(see file)*
+- **`ml/training/configs/t0_baseline.yaml`** — *(see file)*
+- **`ml/training/configs/t1_attention.yaml`** — *(see file)*
+- **`ml/training/configs/t2_hybrid_vit.yaml`** — *(see file)*
+- **`ml/training/configs/t2_to_t5_transfer.yaml`** — *(see file)*
+- **`ml/training/configs/t3_cross_task.yaml`** — *(see file)*
+- **`ml/training/configs/t4_cross_modal.yaml`** — *(see file)*
+- **`ml/training/configs/t5_sec.yaml`** — *(see file)*
+- **`ml/training/configs/t5_temporal.yaml`** — *(see file)*
+- **`ml/training/configs/t5_temporal_2phase.yaml`** — *(see file)*
+- **`ml/training/evaluation.py`** — Evaluation report generator with lighting-aware metrics. Stratifying by lighting (bright, normal, dim, dark) matters ...
+- **`ml/training/export.py`** — Export models for iOS: JIT, ExecuTorch, CoreML, ONNX. Handle dict outputs so trace and conversion succeed.
+- **`ml/training/head_losses.py`** — Unified loss interface for therapy and assistive heads. These losses train outputs that support visual rehabilitation...
+- **`ml/training/loss_weighting.py`** — Loss weighting utilities for stable temporal training rollouts.
+- **`ml/training/losses.py`** — Per-head loss definitions for MaxSight. Each head supports assistive outputs: what is in the scene, where it is, how ...
+- **`ml/training/manage_stability.py`** — Stability management entry point; delegates to StabilityManager.
+- **`ml/training/matching.py`** — Hungarian matching for multi-object detection. Aligns predictions to ground truth so we train reliable what/where/urg...
+- **`ml/training/metrics.py`** — Compute IoU matrix [P, G] for predicted vs ground-truth boxes (cx, cy, w, h).
+- **`ml/training/personalization_loss.py`** — Contrastive loss for personalization (metric learning).
+- **`ml/training/quantization.py`** — INT8 quantization for mobile and wearable deployment. Enables real-time assistive inference on phones and glasses so ...
+- **`ml/training/regularization.py`** — Regularization, Transfer Learning, and Class Weighting.
+- **`ml/training/run_config.py`** — ResolvedTrainingConfig: the only source of truth for a training run.
+- **`ml/training/runner.py`** — Shared training builder: ResolvedTrainingConfig -> ProductionTrainLoop.
+- **`ml/training/sagemaker_entry.py`** — SageMaker training container entry point for MaxSight.
+- **`ml/training/scene_metrics.py`** — Scene-level metrics: distance estimation accuracy, urgency prediction accuracy.
+- **`ml/training/self_supervised_pretrain.py`** — Advanced Training Techniques for MaxSight 3.0 (Production v2)
+- **`ml/training/stability_manager.py`** — Adaptive Training Stability Manager for MaxSight.
+- **`ml/training/stress_tests.py`** — MaxSight Stress Testing Infrastructure.
+- **`ml/training/task_balancing.py`** — Task Balancing for Multi-Head Training.
+- **`ml/training/train_loop.py`** — Production-grade training loop for MaxSight CNN - IMPROVED VERSION.
+- **`ml/training/transfer_learning.py`** — Tier Transfer Learning for MaxSight.
+- **`ml/training/validation.py`** — Production-grade validation utilities for MaxSight. Provides: - Input validation - Model validation - Data validation...
+- **`ml/utils/__init__.py`** — *(see file)*
+- **`ml/utils/adaptive_assistance.py`** — Adaptive Assistance Module for MaxSight.
+- **`ml/utils/alert_cooldown.py`** — Tiered alert cooldown for MaxSight. Prevents repeated alerts for the same object across frames.
+- **`ml/utils/batch_validation.py`** — Batch Validation Utilities Comprehensive validation for training batches to prevent Hungarian matching failures. Chec...
+- **`ml/utils/clip_utils.py`** — Maps CLIP get_image_features() return value to a single tensor.
+- **`ml/utils/description_generator.py`** — Enhanced Description Generator for MaxSight Generates natural, actionable descriptions with direction, distance, and ...
+- **`ml/utils/error_handling.py`** — Error Handling, Fallback Logic, Kill Switches, and Ethical Safeguards for MaxSight Handles error propagation, runtime...
+- **`ml/utils/exceptions.py`** — Custom exceptions for MaxSight system. Provides structured error handling with clear error messages and recovery guid...
+- **`ml/utils/logging_config.py`** — Production-grade logging configuration for MaxSight. Provides centralized logging setup with: - File and console hand...
+- **`ml/utils/monitoring.py`** — Continuous Monitoring and Readiness Dashboard.
+- **`ml/utils/multihead_benchmark.py`** — Multi-Head Latency Benchmarking Measures latency for each head individually and in combination.
+- **`ml/utils/ocr_integration.py`** — OCR Integration Module for MaxSight.
+- **`ml/utils/output_scheduler.py`** — Cross-Modal Output Scheduler.
+- **`ml/utils/path_planning.py`** — Path Planning Module for MaxSight.
+- **`ml/utils/per_class_metrics.py`** — Per-Class Metrics and Confusion Matrix Analysis.
+- **`ml/utils/performance.py`** — Performance monitoring utilities for MaxSight. Provides timing decorators and performance tracking for identifying bo...
+- **`ml/utils/preprocessing.py`** — Preprocessing Pipeline for Environmental Structuring.
+- **`ml/utils/priority_filter.py`** — Per-frame priority budget filter for MaxSight. Caps alerts per frame to avoid user overload in crowded scenes.
+- **`ml/utils/schema_validator.py`** — Schema Validator, Downgrade Policy, and Stress Tests Validates outputs against schema v1.1, enforces safety rules, an...
+- **`ml/utils/semantic_grouping.py`** — Semantic Grouping Module for MaxSight.
+- **`ml/utils/sound_processing.py`** — Sound Processing Utilities for MaxSight Enhanced sound classification, directional detection, and prioritization. Spr...
+- **`ml/utils/spatial_memory.py`** — Spatial Memory System for MaxSight.
+- **`ml/utils/stage_a_smoother.py`** — Stage A temporal smoother for MaxSight. EMA smoothing of box and confidence across frames to reduce flicker.
+- **`ml/utils/stress_testing.py`** — Stress Testing and Edge Case Evaluation.
+- **`ml/utils/user_preferences.py`** — User Preferences Management for MaxSight Handles user preference persistence, custom labels, and verbosity customizat...
+
+### `scripts/`
+
+- **`scripts/ops/build_gold_manifest.py`** — Build versioned gold JSONL manifests from raw annotations (training data plane).
+- **`scripts/ops/build_pseudo_panoptic_manifest.py`** — Run pseudo-panoptic segmentation over each frame and emit a v1 manifest (full frames_segments).
+- **`scripts/ops/check_export_status.py`** — Check whether all top 7 condition models are exported (JIT/PTE and/or CoreML). Verifies files on disk and manifest.
+- **`scripts/ops/clean_and_preprocess.py`** — Bronze → silver: clean and preprocess every registered dataset.
+- **`scripts/ops/cleanup_cloud_checkpoints.py`** — Cleanup script for Colab/Cloud training artifacts. Deletes old checkpoints, logs, and temporary files to free up spac...
+- **`scripts/ops/compare_condition_models.py`** — Compare trained condition models by best validation loss and mAP.
+- **`scripts/ops/create_minimal_checkpoint.py`** — Create minimal checkpoints so run_checkpoint_inference can be exercised for all conditions.
+- **`scripts/ops/deploy_top7.py`** — Validate and export the top 7 (alive) inference conditions for deployment.
+- **`scripts/ops/diagnose_training_speed.py`** — Diagnose training speed bottlenecks. Identifies slow operations during training epochs: - Data loading time - Forward...
+- **`scripts/ops/download_inference_datasets.py`** — Download all inference datasets for MaxSight evaluation. Downloads: - Open Images V6 (validation set for inference) -...
+- **`scripts/ops/download_open_images_direct.py`** — Direct download script for Open Images V6 validation set. Uses the CVDF GitHub repository downloader for reliable dow...
+- **`scripts/ops/download_open_images_fiftyone.py`** — Download Open Images V6 using FiftyOne (recommended method).
+- **`scripts/ops/download_open_images_s3.py`** — Download Open Images from S3 bucket s3://open-images-dataset.
+- **`scripts/ops/ensure_checkpoint_layout.py`** — Create checkpoints_<condition>/ under a base dir so inference can find best_model.pt when added.
+- **`scripts/ops/ensure_medallion_dataset_paths.py`** — Create canonical raw-data dirs and medallion layout; optionally gather COCO and ingest.
+- **`scripts/ops/export_for_xcode.py`** — Export a single MaxSight checkpoint to an Xcode-ready iOS bundle (configs + model + README).
+- **`scripts/ops/find_annotation_images.py`** — Find where images referenced in the val annotation JSON actually live on disk.
+- **`scripts/ops/find_trained_checkpoints.py`** — Find where trained checkpoints live.
+- **`scripts/ops/gather_datasets_for_bronze.py`** — *(see file)*
+- **`scripts/ops/gather_training_data.py`** — Gather all data required for MaxSight training and AutoML.
+- **`scripts/ops/improve_map_all_models.sh`** — *(see file)*
+- **`scripts/ops/ingest_datasets.py`** — Register a dataset directory into bronze and write an ingest record.
+- **`scripts/ops/medallion_build.py`** — Build bronze/silver/gold layout: COCO splits into silver, gold training_index.json; optional video manifests.
+- **`scripts/ops/monitor_download.py`** — Monitor Open Images V6 download progress.
+- **`scripts/ops/package_for_colab.sh`** — *(see file)*
+- **`scripts/ops/patch_missing_images.py`** — Patch missing COCO images during training.
+- **`scripts/ops/profile_video_dataset.py`** — Benchmark video clip manifest loading and DataLoader throughput (no model).
+- **`scripts/ops/reorganize_open_images.py`** — Reorganize Open Images V6 from FiftyOne to datasets directory.
+- **`scripts/ops/resume_mlx_from_first3_mps.sh`** — *(see file)*
+- **`scripts/ops/run_checkpoint_inference.py`** — Find .json files under root (e.g. COCO-style annotation files).
+- **`scripts/ops/run_image_patcher.sh`** — *(see file)*
+- **`scripts/ops/run_inference_and_monitor.sh`** — *(see file)*
+- **`scripts/ops/run_inference_on_inference_datasets.py`** — Download the two inference datasets (Open Images V6 + ADE20K), then run checkpoint inference on them.
+- **`scripts/ops/run_mlx_style_training.sh`** — *(see file)*
+- **`scripts/ops/run_production_training.sh`** — *(see file)*
+- **`scripts/ops/sagemaker_deploy.py`** — Deploy a trained MaxSight model to a SageMaker real-time endpoint or run batch transform.
+- **`scripts/ops/sagemaker_processing_submit.py`** — Submit an *offline* SageMaker Processing job for ``ml/pipeline/sagemaker_entrypoint.py``.
+- **`scripts/ops/sagemaker_train.py`** — Launch a MaxSight training job on SageMaker.
+- **`scripts/ops/create_model_package_group.py`** — Create a SageMaker Model Package Group (CLI; `--dry-run`).
+- **`scripts/infra/validate_infra_stubs.py`** — Validate `infra/**/*.json` parses; optional strict placeholder check.
+- **`scripts/ops/sample_video_clips.py`** — Build a v1 clip manifest from a video file or a directory of frames (paths-only segments).
+- **`scripts/ops/setup_rclone_upload.sh`** — *(see file)*
+- **`scripts/ops/smoke_train.py`** — Meant to overfit as a boundary.
+- **`scripts/ops/stop_mps_backup_start_mlx.sh`** — *(see file)*
+- **`scripts/ops/sync_medallion_s3.py`** — Sync the local medallion data lake (bronze/silver/gold) to/from S3.
+- **`scripts/ops/train_from_gold_index.py`** — Train MaxSight using paths from datasets/medallion/gold/training_index.json (COCO section).
+- **`scripts/ops/train_maxsight.py`** — MaxSight CNN - production training entrypoint (config-resolved).
+- **`scripts/ops/train_medallion_models.py`** — Run train_maxsight sequentially for each tier YAML using the same gold COCO index.
+- **`scripts/ops/validate_data_pipeline.py`** — Phase 3: Data Pipeline and Augmentation Validation.
+- **`scripts/pilot_eval/test_therapy_effectiveness.py`** — Therapy System Effectiveness Test.
+- **`scripts/product/__init__.py`** — *(see file)*
+- **`scripts/product/run.py`** — Canonical product pipeline runner. Dispatches to train, validate, export, package, smoke per docs/productization/03_p...
+- **`scripts/research_archive/archive/setup_coco_splits.py`** — Setup script for COCO dataset train/test/validation splits.
+- **`scripts/research_archive/AutoMLType.py`** — Full AutoML: Optuna-based hyperparameter tuning for MaxSight training.
+- **`scripts/research_archive/check_and_train_colab.py`** — One script: check setup for training, then run training. Run in Colab after mounting Drive. Set DATA_DIR and RUN_TRAI...
+- **`scripts/research_archive/clean_comments.py`** — Remove verbose comments from Python files, keeping minimal essential ones.
+- **`scripts/research_archive/colab_convert_coreml.py`** — Colab script to convert a single .pt checkpoint to CoreML format.
+- **`scripts/research_archive/colab_export_top7_coreml.ipynb`** — *(see file)*
+- **`scripts/research_archive/convert_pt_to_coreml.py`** — Load a .pt checkpoint and export to CoreML (.mlpackage) for Xcode/iOS.
+- **`scripts/research_archive/export_7_coreml_only.py`** — Export only CoreML for the top 7 conditions (no JIT/PTE). Use when deploy_top7.py lacks --coreml-only or JIT crashes.
+- **`scripts/research_archive/export_one_model.py`** — Load one checkpoint and export to JIT; print full traceback on error.
+- **`scripts/research_archive/export_top7_to_xcode.py`** — Single entry point: export the top 7 condition models to Xcode-ready bundles. Uses JIT-only and CPU to reduce crashes.
+- **`scripts/research_archive/find_and_convert_coreml.py`** — Find best_model.pt in checkpoints_color_blindness and convert to CoreML.
+- **`scripts/research_archive/get_top7_by_map.py`** — Get the top 7 conditions by mAP from inference_data.json.
+- **`scripts/research_archive/improve_map_all_models.py`** — Terminal script to improve mAP for all condition models (detection checkpoints) without retraining.
+- **`scripts/research_archive/inference_and_deploy_top7.py`** — Run inference and deployment for the top 7 conditions only.
+- **`scripts/research_archive/list_saved_models.py`** — List paths to saved condition models (best_model.pt per condition).
+- **`scripts/research_archive/normalize_comments.py`** — Enforce single-line comments and docstrings with consistent, natural wording across the repo.
+- **`scripts/research_archive/optimize_inference.py`** — Auto mAP optimizer: sweep confidence and NMS IoU via inference only (no retraining).
+- **`scripts/research_archive/sanity_check_inference.py`** — *(see file)*
+- **`scripts/research_archive/test_systems_comprehensive.py`** — Comprehensive System Test Suite.
+- **`scripts/research_archive/train_alive_models.py`** — Train alive-condition models on the same train/val data (inference splits).
+- **`scripts/research_archive/train_t5_fast_colab.py`** — T5 Fast Training Script for Colab (~4 hour runs)
+- **`scripts/research_archive/verify_coreml.py`** — Verify a CoreML .mlpackage file is valid and can be loaded.
+
+### `tools/`
+
+- **`tools/quantization/__init__.py`** — Production quantization tools for MaxSight models.
+- **`tools/quantization/qat_finetune.py`** — Production-grade Quantization-Aware Training (QAT) for MaxSight models. Use this when PTQ degrades accuracy >1% on cr...
+- **`tools/quantization/validate_and_bench.py`** — Production validation and benchmarking for quantized MaxSight models. Compares FP32 vs INT8 across all heads with det...
+- **`tools/simulation/__init__.py`** — Simulation tools for MaxSight 3.0.
+- **`tools/simulation/baseline_output.json`** — *(see file)*
+- **`tools/simulation/comprehensive_simulator.py`** — Comprehensive MaxSight Simulator.
+- **`tools/simulation/config.py`** — Configuration for MaxSight Web Simulator. Centralizes settings and production overrides.
+- **`tools/simulation/degraded_modes.py`** — Degraded mode tracking for MaxSight Web Simulator. Explicit failure modes instead of silent degradation.
+- **`tools/simulation/exceptions.py`** — Custom exceptions for MaxSight Web Simulator. Provides consistent error handling hierarchy.
+- **`tools/simulation/metrics.py`** — Metrics and monitoring for the web simulator (used by /api/health and /api/metrics).
+- **`tools/simulation/output_hierarchy.py`** — Output authority hierarchy for MaxSight Web Simulator. Defines clear priority system to prevent conflicting feedback.
+- **`tools/simulation/port_binding.py`** — Choose a TCP port the Flask simulator can bind to.
+- **`tools/simulation/priority_queue.py`** — Priority queue with backpressure for MaxSight Web Simulator. Prevents memory growth and ensures fresh alerts take pri...
+- **`tools/simulation/rate_limiter.py`** — Rate limiting for MaxSight Web Simulator. Prevents abuse and ensures fair resource usage.
+- **`tools/simulation/retrieval_integration.py`** — Retrieval Integration for Phase 8: Simulator Integration & UI Integrates retrieval system into simulator for enhanced...
+- **`tools/simulation/simulator.py`** — Simulation Harness.
+- **`tools/simulation/simulator/__init__.py`** — *(see file)*
+- **`tools/simulation/simulator/config.py`** — *(see file)*
+- **`tools/simulation/simulator/haptic.py`** — *(see file)*
+- **`tools/simulation/simulator/inference_engine.py`** — Inference Engine - State Machine + Circuit Breaker.
+- **`tools/simulation/simulator/overlay.py`** — *(see file)*
+- **`tools/simulation/simulator/scheduler.py`** — *(see file)*
+- **`tools/simulation/simulator/types.py`** — *(see file)*
+- **`tools/simulation/simulator/voice.py`** — *(see file)*
+- **`tools/simulation/sprint_self_tests.py`** — Runnable checks for video manifest, temporal targets, collate, and temporal losses (simulator dev API).
+- **`tools/simulation/start_simulator.sh`** — *(see file)*
+- **`tools/simulation/structured_logging.py`** — Structured logging for MaxSight Web Simulator. Component-based logging with consistent format.
+- **`tools/simulation/templates/simulator.html`** — *(see file)*
+- **`tools/simulation/test_dataset_images.py`** — Dataset Image Testing Script Processes images from datasets through the MaxSight simulator and runs validation tests.
+- **`tools/simulation/utils.py`** — Shared utility functions for MaxSight simulator. Extracted from duplicated code to reduce duplication.
+- **`tools/simulation/validators.py`** — Input validation for MaxSight Web Simulator. Validates all user inputs before processing.
+- **`tools/simulation/web_simulator.py`** — MaxSight web simulator — HTTP API and UI on the configured port (see ``tools/simulation/config.py``).
+
+### `tests/`
+
+- **`tests/test_all_phases.py`** — Master Test Runner for All Phases (0-5) Runs comprehensive tests for all Phase 0-5 components.
+- **`tests/test_comprehensive_system.py`** — Comprehensive System Tests - Maximum Data & Classes Tests the complete MaxSight system with 347 classes for user guid...
+- **`tests/test_condition_specific.py`** — Test model robustness with condition-specific impairment simulations. Tests all 13 vision conditions to ensure model ...
+- **`tests/test_critical_fixes.py`** — Test Plan for Critical Fixes - Thread Safety, Overlay Rendering, OCR Clustering.
+- **`tests/test_data_panoptic_and_video.py`** — *(see file)*
+- **`tests/test_dataset_pipeline.py`** — Tests for bronze→silver cleaning and preprocessing (no GPU, no network).
+- **`tests/test_dataset_registry.py`** — Dataset registry contract: every dataset_id used anywhere must be recognized.
+- **`tests/test_edge_cases.py`** — Edge Case Tests for MaxSight Model Tests extreme conditions, combined impairments, and unusual scenarios.
+- **`tests/test_error_handling.py`** — Error Handling and Fallback Tests Tests error propagation and fallback mechanisms with deterministic, adversarial cov...
+- **`tests/test_export_temporal_smoke.py`** — Export smoke contract:
+- **`tests/test_export_validation.py`** — Validate exported model outputs match PyTorch model.
+- **`tests/test_frames_data_validation.py`** — *(see file)*
+- **`tests/test_gold_manifest.py`** — Gold manifest builder, schema, I/O layer, and lazy dataset tests.
+- **`tests/test_gradnorm_integration.py`** — Test GradNorm Integration in Training Loop Tests that GradNorm can be properly integrated and used in the training loop.
+- **`tests/test_hungarian_matcher_fixes.py`** — Test Hungarian Matcher Robustness Verifies that the matcher handles edge cases without crashing: - NaN/Inf in boxes -...
+- **`tests/test_integration_constraints.py`** — Unit tests for integration constraints. Ensures architectural constraints are enforced.
+- **`tests/test_integration_structure.py`** — Structural Tests for Integration Features.
+- **`tests/test_label_space_registry.py`** — Contract tests for ml/training/configs/registry/label_spaces.yaml.
+- **`tests/test_loss_weighting.py`** — *(see file)*
+- **`tests/test_medallion_layout.py`** — *(see file)*
+- **`tests/test_ml_lifecycle.py`** — Tests for the ML lifecycle: S3 client, experiment tracker, model registry.
+- **`tests/test_model.py`** — Unit Tests for MaxSight CNN Model Sprint 1 Validation.
+- **`tests/test_multihead_benchmark.py`** — Multi-Head Latency Benchmark Tests Tests latency for different head combinations to identify bottlenecks.
+- **`tests/test_ops_launchers.py`** — Offline dry-run tests for scripts/ops/ launcher scripts.
+- **`tests/test_performance.py`** — Performance Benchmark Tests for MaxSight Model Tests latency, throughput, and memory usage for production deployment.
+- **`tests/test_phase0_backbone.py`** — Comprehensive Tests for Phase 0: Advanced Backbone & Architecture.
+- **`tests/test_phase1_fusion.py`** — Comprehensive Tests for Phase 1: Multi-Modal Sensor Fusion Tests all Phase 1 components: - Enhanced Audio Encoder - S...
+- **`tests/test_phase2_heads.py`** — Comprehensive Tests for Phase 2: Advanced Multi-Task Heads.
+- **`tests/test_phase3_retrieval.py`** — Comprehensive Tests for Phase 3: Multi-Vector Retrieval System.
+- **`tests/test_phase4_knowledge.py`** — Comprehensive Tests for Phase 4: Knowledge-Augmented Retrieval Tests all Phase 4 components: - Scene Graph Encoder - ...
+- **`tests/test_phase5_training.py`** — Comprehensive Tests for Phase 5: Advanced Training Techniques.
+- **`tests/test_port_binding.py`** — Tests for simulator port selection (no server start).
+- **`tests/test_production_hardening.py`** — Production hardening tests: pipeline latency, priority filter, temporal smoother, safety bias, thermal throttling, al...
+- **`tests/test_production_rag_and_therapy_contracts.py`** — Retrieval may run asynchronously, but forward must not expose retrieval outputs
+- **`tests/test_rag_advisory.py`** — Strict tests for ml.pipeline.rag_advisory (RAG as advisory layer before therapy copy policy).
+- **`tests/test_run_config_contract.py`** — Contract tests for ml.training.run_config.ResolvedTrainingConfig.
+- **`tests/test_runtime_mode.py`** — Tests for production vs simulator runtime selection.
+- **`tests/test_runtime_safety_gates.py`** — Unit tests for runtime and safety gate constants and critical-path behavior.
+- **`tests/test_sagemaker_config.py`** — *(see file)*
+- **`tests/test_sagemaker_integration.py`** — Offline tests for SageMaker helpers (no AWS calls).
+- **`tests/test_sagemaker_pipeline_entrypoint.py`** — *(see file)*
+- **`tests/test_scene_graph_consistency.py`** — Fake-Graph Test for Scene Graph Consistency CRITICAL: This single test eliminates an entire class of bugs. If this fa...
+- **`tests/test_sprint_self_tests.py`** — *(see file)*
+- **`tests/test_temporal_clip_targets.py`** — *(see file)*
+- **`tests/test_temporal_supervision_loss.py`** — Temporal scalar supervision wired through MultiHeadLoss + run_training builder.
+- **`tests/test_temporal_video_contract.py`** — Video/sequence contract:
+- **`tests/test_therapy.py`** — Tests for therapy modules: SessionManager, TaskGenerator, TherapyTaskIntegrator, TherapyStateHead.
+- **`tests/test_therapy_output_preferences_validation.py`** — *(see file)*
+- **`tests/test_timing_enforcement.py`** — Test Two-Stage Inference Timing Enforcement Tests that timing enforcement works correctly in the two-stage inference ...
+- **`tests/test_training_pipeline.py`** — Training Pipeline Tests for MaxSight Model Tests training infrastructure with dummy/synthetic data.
+- **`tests/test_video_clip_dataset.py`** — *(see file)*
+- **`tests/test_video_dataset_perf.py`** — *(see file)*
+- **`tests/test_video_manifest.py`** — *(see file)*
+- **`tests/test_video_panoptic_utils.py`** — *(see file)*
+- **`tests/test_video_preprocessing_pipeline.py`** — *(see file)*
+
+### `infra/`
+
+- **`infra/iam/ecr_policy.json`** — IAM stub: ECR pull and related permissions (replace placeholders before apply).
+- **`infra/iam/kms_training_volume_policy.json`** — IAM stub: KMS for SageMaker training volumes when using a CMK.
+- **`infra/iam/s3_bucket_policy.json`** — IAM stub: bucket policy for training artefacts (replace placeholders before apply).
+- **`infra/iam/sagemaker_execution_role.json`** — IAM stub: SageMaker execution role trust and inline policy (replace placeholders before apply).
+- **`infra/iam/ssm_parameters_read_policy.json`** — IAM stub: read `/maxsight/*` SSM parameters (CI/ops roles).
+- **`infra/README.md`** — S3 layout, SSE-S3 vs SSE-KMS, lifecycle/versioning, VPC/KMS env vars, Model Package Group, deploy gate.
+- **`infra/s3/bucket_encryption_sse_kms.json`** — Example default bucket encryption (SSE-KMS; replace key id).
+- **`infra/s3/bucket_encryption_sse_s3.json`** — Example default bucket encryption (SSE-S3).
+- **`infra/s3/bucket_lifecycle_example.json`** — Example S3 lifecycle rules (multipart cleanup, noncurrent version expiry).
+- **`infra/cloudwatch/README.md`** — CloudWatch / observability notes and alarm sketches for training and endpoints.
+- **`infra/cloudwatch/eventbridge_training_job_failed.json`** — EventBridge pattern sketch for failed training jobs.
+- **`infra/ssm/README.md`** — SSM parameter naming and bootstrap examples for ops env vars.
+- **`infra/ssm/load_env_from_ssm.example.sh`** — Example shell: export bucket, role, optional model package group from SSM.
+
+### `docs/`
+
+- **`docs/algorithmic_efficiency.md`** — Algorithmic efficiency (signal per unit of compute)
+- **`docs/architecture.md`** — MaxSight architecture
+- **`docs/caching.md`** — Caching in MaxSight
+- **`docs/DOWNLOAD_AND_START.md`** — Download and start
+- **`docs/downloads.md`** — Dataset and asset downloads
+- **`docs/git_workflow.md`** — Git workflow (production-ready `main`)
+- **`docs/IOS_APP_MODEL_INTEGRATION.swift`** — Swift reference for wiring exported models into the iOS app (bundle layout, inference hooks).
+- **`docs/medallion_data.md`** — Medallion data layout (bronze → silver → gold)
+- **`docs/ml_lifecycle_s3.md`** — S3 utilities (large-scale data lifecycle)
+- **`docs/ops/repro_gate.md`** — Reproducibility gate (manual, before any AWS submission)
+- **`docs/ops/aws_runbook.md`** — One-account AWS validation: train, register, deploy, invoke, CloudWatch checks.
+- **`docs/ops/pre_integration_checklist.md`** — Pre-integration AWS gate (IAM, S3, registry, VPC, CI).
+- **`docs/productization/01_product_scope_and_claims.md`** — MaxSight Product Scope and Claims Matrix
+- **`docs/productization/02_safety_first_release_gates.md`** — MaxSight Safety-First V1 Release Gates
+- **`docs/productization/03_pipeline_declutter_map.md`** — MaxSight Declutter Map: Canonical Product Pipeline
+- **`docs/productization/04_runtime_boundary_spec.md`** — MaxSight Critical Runtime Boundary Specification
+- **`docs/productization/05_pilot_validation_protocol.md`** — MaxSight Pilot Validation Protocol
+- **`docs/productization/PRODUCTION_RUNBOOK.md`** — Production and Real-World Runbook
+- **`docs/productization/README.md`** — Productization Docs
+- **`docs/schemas/video_panoptic_manifest_v1.schema.json`** — JSON Schema for video panoptic clip manifest v1.
+- **`docs/status.md`** — Project status and health
+- **`docs/SYSTEMS.md`** — MaxSight Systems — Detailed Reference
+- **`docs/therapy_architecture.md`** — MaxSight Therapy System Architecture
+- **`docs/therapy_system.md`** — Therapy system
+- **`docs/training-data-loading.md`** — Training data loading
+- **`docs/training_architecture.md`** — Training architecture
+- **`docs/transferlearning.md`** — Transfer learning
+- **`docs/video_and_navigation_datasets.md`** — Video, navigation, and large-scale datasets (with COCO)
+- **`docs/video_panoptic_manifest.md`** — Video panoptic clip manifest (v1)
+
+### `.cursor/`
+
+- **`.cursor/rules/comment-style.mdc`** — description: Comment writing style for the whole repo (intent, concise, active voice)
 
 ## License
 

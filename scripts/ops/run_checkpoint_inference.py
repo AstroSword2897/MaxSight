@@ -494,7 +494,8 @@ def main():
         num_workers=args.num_workers,
         pin_memory=(args.device == "cuda"),
         condition_mode=None,
-        apply_lighting_augmentation=False,
+        tag_lighting_metadata=False,
+        lighting_pixel_augmentation=False,
     )
     num_val = len(val_loader.dataset) if hasattr(val_loader, "dataset") else "?"
     logger.info("Val samples: %s, batches: %s", num_val, len(val_loader))

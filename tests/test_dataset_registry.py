@@ -229,7 +229,7 @@ def test_raw_status_requires_null_label_space(tmp_path: Path) -> None:
         annotation_format="video_manifest",
         label_space="coco_80",
         splits=None,
-        manifest="datasets/medallion/silver/kinetics700/manifests/clips.jsonl",
+        manifest="datasets/medallion/silver/kinetics700/manifests/clips.json",
         num_classes=700,
         tier_compatibility=["T5_TEMPORAL"],
     )])

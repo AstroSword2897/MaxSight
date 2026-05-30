@@ -10,6 +10,7 @@ from typing import Dict, List
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ml.models.maxsight_cnn import create_model
+from ml.runtime_constants import DEFAULT_MODEL_INT8_MAX_MB
 from ml.training.benchmark import benchmark_inference
 
 
@@ -128,9 +129,11 @@ def test_memory_usage():
     print(f"  Model parameters: {total_params:,}")
     print(f"  FP32 size: {model_size_mb:.2f} MB")
     print(f"  INT8 size (estimated): {int8_size_mb:.2f} MB")
-    print(f"  Target: <300 MB (quantized)")
-    
-    assert int8_size_mb < 300, f"INT8 model size {int8_size_mb:.2f}MB exceeds 300MB target"
+    print(f"  Target: <{DEFAULT_MODEL_INT8_MAX_MB:.0f} MB (quantized)")
+
+    assert int8_size_mb < DEFAULT_MODEL_INT8_MAX_MB, (
+        f"INT8 model size {int8_size_mb:.2f}MB exceeds {DEFAULT_MODEL_INT8_MAX_MB}MB target"
+    )
     
     print("  PASSED: Memory usage within target")
 

@@ -6,7 +6,10 @@ from typing import Dict, List, Tuple, Any
 import random
 from collections import defaultdict
 
+from ml.data.assistive_supervision import load_assistive_spec, object_distance_and_urgency
 from ml.models.maxsight_cnn import COCO_CLASSES, COCO_BASE_CLASSES
+
+_GEN_SPEC = load_assistive_spec()
 
 
 def map_coco_to_environmental(coco_category_name: str) -> str:
@@ -22,51 +25,27 @@ def map_coco_to_environmental(coco_category_name: str) -> str:
     return COCO_CLASSES[0] if COCO_CLASSES else 'person'
 
 
-def assign_urgency_score(category_name: str, box_size: float) -> int:
-    """Assign urgency score based on object category and size."""
-    category_lower = category_name.lower()
-    
-    # Use sets for O(1) lookup instead of O(K) keyword matching.
-    danger_categories = {
-        'car', 'truck', 'bus', 'motorcycle', 'bicycle', 'vehicle', 'train', 'airplane',
-        'fire', 'hazard', 'stop', 'traffic', 'traffic light', 'fire hydrant',
-        'emergency', 'siren', 'alarm'
-    }
-    warning_categories = {
-        'person', 'dog', 'cat', 'horse', 'bird', 'cow', 'sheep', 'elephant',
-        'zebra', 'giraffe', 'bear'
-    }
-    caution_categories = {
-        'stairs', 'staircase', 'escalator', 'elevator', 'door', 'window',
-        'obstacle', 'barrier', 'fence'
-    }
-    
-    # Direct category match (most efficient)
-    if category_lower in danger_categories:
-        return 3 if box_size > 0.1 else 2
-    elif category_lower in warning_categories:
-        return 2 if box_size > 0.15 else 1
-    elif category_lower in caution_categories:
-        return 1 if box_size > 0.1 else 0
-    else:
-        if any(kw in category_lower for kw in ['vehicle', 'motor', 'fire', 'hazard', 'emergency']):
-            return 3 if box_size > 0.1 else 2
-        elif any(kw in category_lower for kw in ['person', 'animal', 'pet']):
-            return 2 if box_size > 0.15 else 1
-        else:
-            return 0  # Safe - no immediate threat.
+def assign_urgency_score(category_name: str, box_size: float, cx: float = 0.5, cy: float = 0.5) -> int:
+    """Map category + normalized box to urgency 0..3 (delegates to assistive_supervision)."""
+    s = max(1e-8, float(box_size))
+    side = s**0.5
+    _, u = object_distance_and_urgency(cx, cy, side, side, category_name, _GEN_SPEC)
+    return u
 
 
-def estimate_distance_zone(box_size: float, image_size: Tuple[int, int] = (224, 224)) -> int:
-    """Estimate distance zone from bounding box size."""
-    # Complexity: O(1) - three simple comparisons (if/elif/else)
-    if box_size > 0.1:  # Large box = near (close to camera, occupies >10% of image)
-        # Complexity: O(1) - simple return.
-        return 0  # Near.
-    elif box_size > 0.05:
-        return 1  # Medium.
-    else:
-        return 2  # Far.
+def estimate_distance_zone(
+    box_size: float,
+    image_size: Tuple[int, int] = (224, 224),
+    *,
+    cx: float = 0.5,
+    cy: float = 0.5,
+    category_name: str = "object",
+) -> int:
+    """Distance zone from normalized area (image_size unused; kept for API compatibility)."""
+    s = max(1e-8, float(box_size))
+    side = s**0.5
+    d, _ = object_distance_and_urgency(cx, cy, side, side, category_name, _GEN_SPEC)
+    return d
 
 
 def generate_scene_description(objects: List[Dict]) -> str:
@@ -161,9 +140,9 @@ def generate_annotations_from_coco(
             w = bbox[2] / img_width
             h = bbox[3] / img_height
             box_size = w * h
-            
-            urgency = assign_urgency_score(env_category, box_size)
-            distance_zone = estimate_distance_zone(box_size)
+            distance_zone, urgency = object_distance_and_urgency(
+                cx, cy, w, h, env_category, _GEN_SPEC
+            )
             scene_urgency = max(scene_urgency, urgency)
             
             objects.append({
@@ -246,17 +225,18 @@ if __name__ == "__main__":
     args.output.parent.mkdir(parents=True, exist_ok=True)
     
     # Generate annotations.
-    train_file, val_file = generate_annotations_from_coco(
+    train_file, val_file, test_file = generate_annotations_from_coco(
         coco_annotation_file=args.coco_annotations,
         image_dir=args.image_dir,
         output_file=args.output,
         num_samples=args.num_samples,
-        train_split=args.train_split
+        train_split=args.train_split,
     )
-    
+
     print("\nAnnotation generation complete!")
     print(f"Training annotations: {train_file}")
     print(f"Validation annotations: {val_file}")
+    print(f"Test annotations: {test_file}")
 
 
 
