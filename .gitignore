@@ -54,6 +54,8 @@ datasets/
 *.png
 *.json
 !datasets/.gitkeep
+!docs/quality/baseline.json
+!docs/contracts/schemas/*.json
 !requirements.txt
 !pyproject.toml
 !README.md
