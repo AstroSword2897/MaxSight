@@ -1,4 +1,4 @@
-# MaxSight 3.0 - Removing Barriers for Vision & Hearing Disabilities
+### MaxSight ###
 
 **Production-Grade Accessibility System** | **Multi-Task Deep Learning for Environmental Understanding**
 
