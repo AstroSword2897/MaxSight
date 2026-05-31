@@ -176,9 +176,9 @@ flowchart LR
 
 ### Primary Mission
 
-MaxSight 3.0 is a **production-grade accessibility application** that helps users with vision and hearing disabilities navigate and understand their environment through advanced computer vision and multimodal feedback. The system removes barriers by providing the same rich environmental information that sighted people process automatically.
+MaxSight 3.0 is a accessibility application that helps users with vision and hearing disabilities navigate and understand their environment through advanced computer vision and multimodal feedback. The system removes barriers by providing the same rich environmental information that sighted people process automatically. Trying to increase the awareness of the user and better understanding.
 
-### Primary Problem Statement
+### Starting question
 
 **"What are ways that those who cannot see or hear be able to interact with the world like those who can?"**
 
