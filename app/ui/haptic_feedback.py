@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Optional, Union
 
-from app.ui.haptic_backends import HapticBackend, LogHapticBackend, resolve_haptic_backend
+from app.ui.haptic_backends import HapticBackend, resolve_haptic_backend
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +25,10 @@ class HapticFeedback:
     def __init__(
         self,
         enabled: bool = True,
-        backend: Optional[Union[str, HapticBackend]] = None,
+        backend: str | HapticBackend | None = None,
         allow_log_fallback: bool = False,
         *,
-        allow_stub: Optional[bool] = None,
+        allow_stub: bool | None = None,
     ):
         """Initialize haptic delivery.
 

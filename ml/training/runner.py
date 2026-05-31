@@ -15,7 +15,7 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 import torch
@@ -23,7 +23,7 @@ from torch.nn import Module
 
 from ml.data.data_pipeline import create_data_loaders_for_resolved
 from ml.data.dataset_registry import default_registry_path, load_registry
-from ml.models.maxsight_cnn import COCO_CLASSES, CapabilityTier, TierConfig, create_model
+from ml.models.maxsight_cnn import TierConfig, create_model
 from ml.training.losses import (
     BoxRegressionLoss,
     ClassificationLoss,
@@ -35,7 +35,7 @@ from ml.training.losses import (
 )
 from ml.training.run_config import ResolvedTrainingConfig
 from ml.training.task_balancing import GradNormMultiHeadLoss
-from ml.training.train_loop import ProductionTrainLoop
+from ml.training.train_loop import ProductionTrainLoop, write_atomic_torch
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ def _build_loss(resolved: ResolvedTrainingConfig) -> Module:
     cfg_loss = resolved.loss
     cfg_model = resolved.model
     weights = dict(cfg_loss.loss_weights)
-    loss_functions: Dict[str, Module] = {
+    loss_functions: dict[str, Module] = {
         "objectness": ObjectnessLoss(),
         "classification": ClassificationLoss(num_classes=cfg_model.num_classes),
         "box": BoxRegressionLoss(),
@@ -121,16 +121,18 @@ def _backup_artifacts(best_ckpt: Path, resolved: ResolvedTrainingConfig) -> None
         check=False,
         capture_output=True,
     )
-    (backup_dir / "metadata.json").write_text(json.dumps(
-        {
-            "timestamp": datetime.now().isoformat(),
-            "checkpoint": str(best_ckpt),
-            "config_hash": resolved.provenance.config_hash,
-            "dataset_id": resolved.dataset.dataset_id,
-            "dataset_version": resolved.dataset.dataset_version,
-        },
-        indent=2,
-    ))
+    (backup_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "checkpoint": str(best_ckpt),
+                "config_hash": resolved.provenance.config_hash,
+                "dataset_id": resolved.dataset.dataset_id,
+                "dataset_version": resolved.dataset.dataset_version,
+            },
+            indent=2,
+        )
+    )
     (backup_dir / "resolved_config.json").write_text(
         json.dumps(resolved.to_canonical_dict(), sort_keys=True, indent=2, default=str)
     )
@@ -140,13 +142,13 @@ def _backup_artifacts(best_ckpt: Path, resolved: ResolvedTrainingConfig) -> None
 def run_training(
     resolved: ResolvedTrainingConfig,
     *,
-    resume_from: Optional[str] = None,
+    resume_from: str | None = None,
     resume_model_only: bool = False,
     use_compile: bool = False,
     use_audio: bool = False,
     backup: bool = False,
-    registry_path: Optional[Path] = None,
-) -> Dict[str, Any]:
+    registry_path: Path | None = None,
+) -> dict[str, Any]:
     """Build everything from `resolved` and run ProductionTrainLoop.
 
     Local + SageMaker share this entrypoint; any divergence belongs in
@@ -157,6 +159,16 @@ def run_training(
     _seed_everything(resolved.seed)
     device = _resolve_device(resolved.device)
     logger.info("device=%s", device)
+
+    dist_backend = resolved.distributed.backend
+    rank, world_size, local_rank = (0, 1, 0)
+    if dist_backend in ("ddp", "fsdp"):
+        from ml.training.distributed import init_distributed
+
+        rank, world_size, local_rank = init_distributed()
+        if device == "cuda" and torch.cuda.is_available():
+            device = f"cuda:{local_rank}"
+        logger.info("distributed backend=%s rank=%d world_size=%d", dist_backend, rank, world_size)
 
     cfg_data = resolved.data
     repo_root = Path(__file__).resolve().parents[2]
@@ -171,10 +183,15 @@ def run_training(
     n_val = len(val_loader.dataset) if getattr(val_loader, "dataset", None) is not None else 0
     logger.info(
         "data train=%d val=%d batch=%d batches=train:%d/val:%d",
-        n_train, n_val, cfg_data.batch_size, len(train_loader), len(val_loader),
+        n_train,
+        n_val,
+        cfg_data.batch_size,
+        len(train_loader),
+        len(val_loader),
     )
 
     cfg_model = resolved.model
+    cfg_train = resolved.training
     model_section = resolved.to_canonical_dict()["model"]
     tier_config = TierConfig.from_dict(model_section)
     model = create_model(
@@ -183,19 +200,33 @@ def run_training(
         condition_mode=cfg_data.condition_mode,
         tier_config=tier_config,
     ).to(device)
+    if cfg_train.use_gradient_checkpointing:
+        model.use_gradient_checkpointing = True
+        logger.info("gradient_checkpointing enabled")
     logger.info("model_params_M=%.2f", sum(p.numel() for p in model.parameters()) / 1e6)
 
-    if use_compile and device == "cuda":
+    compile_enabled = use_compile or cfg_train.use_compile
+    if compile_enabled and device.startswith("cuda"):
         logger.info("torch.compile enabled")
         model = torch.compile(model)
 
+    if dist_backend == "ddp" and world_size > 1:
+        from ml.training.distributed import wrap_ddp
+
+        model = wrap_ddp(model, local_rank)
+    elif dist_backend == "fsdp" and world_size > 1:
+        from ml.training.distributed import wrap_fsdp
+
+        model = wrap_fsdp(model)
+
     loss_fn = _build_loss(resolved)
 
-    cfg_train = resolved.training
     ckpt_dir = Path(resolved.checkpoint.save_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     provenance_path = _write_provenance(ckpt_dir, resolved)
-    logger.info("provenance_written path=%s hash=%s", provenance_path, resolved.provenance.config_hash)
+    logger.info(
+        "provenance_written path=%s hash=%s", provenance_path, resolved.provenance.config_hash
+    )
 
     assert isinstance(model, Module)
     trainer = ProductionTrainLoop(
@@ -233,7 +264,11 @@ def run_training(
     )
 
     results = trainer.train()
-    logger.info("train_done best_path=%s best_val=%.4f", results.get("best_model_path"), results.get("best_val_loss", float("nan")))
+    logger.info(
+        "train_done best_path=%s best_val=%.4f",
+        results.get("best_model_path"),
+        results.get("best_val_loss", float("nan")),
+    )
 
     best_ckpt = Path(results.get("best_model_path", "")) if results.get("best_model_path") else None
     if best_ckpt is not None and best_ckpt.exists():
@@ -241,7 +276,11 @@ def run_training(
     if backup and best_ckpt is not None:
         _backup_artifacts(best_ckpt, resolved)
 
-    return {**results, "provenance_path": str(provenance_path), "config_hash": resolved.provenance.config_hash}
+    return {
+        **results,
+        "provenance_path": str(provenance_path),
+        "config_hash": resolved.provenance.config_hash,
+    }
 
 
 def _stamp_checkpoint(path: Path, resolved: ResolvedTrainingConfig) -> None:
@@ -263,7 +302,7 @@ def _stamp_checkpoint(path: Path, resolved: ResolvedTrainingConfig) -> None:
     ckpt["config_hash"] = resolved.provenance.config_hash
     ckpt["dataset_id"] = resolved.dataset.dataset_id
     ckpt["dataset_version"] = resolved.dataset.dataset_version
-    torch.save(ckpt, str(path))
+    write_atomic_torch(path, ckpt)
     logger.info("checkpoint_stamped path=%s sidecar=%s", path, sidecar)
 
 

@@ -24,7 +24,9 @@ if str(REPO) not in sys.path:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--name", required=True, help="ModelPackageGroupName (e.g. maxsight-models-prod)")
+    p.add_argument(
+        "--name", required=True, help="ModelPackageGroupName (e.g. maxsight-models-prod)"
+    )
     p.add_argument("--region", default="", help="Or AWS_DEFAULT_REGION")
     p.add_argument("--description", default="MaxSight model packages (manual approval)")
     p.add_argument("--dry-run", action="store_true")

@@ -27,7 +27,7 @@ import shutil
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
@@ -35,9 +35,9 @@ if str(REPO) not in sys.path:
 
 from ml.infra.experiment_tracker import RunTracker  # noqa: E402
 from ml.training.run_config import (  # noqa: E402
+    _UNSET,
     ConfigValidationError,
     ResolvedTrainingConfig,
-    _UNSET,
     cli_overrides_from_namespace,
 )
 from ml.training.runner import run_training  # noqa: E402
@@ -48,6 +48,7 @@ logger = logging.getLogger(__name__)
 
 
 # ── SageMaker environment helpers ─────────────────────────────────────────────
+
 
 def sm_env(key: str, default: str = "") -> str:
     return os.environ.get(key, default)
@@ -94,10 +95,18 @@ _OVERRIDE_MAP = {
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser("MaxSight SageMaker entry point")
 
-    p.add_argument("--config", type=Path, required=True,
-                   help="Tier YAML config (mirrored from the launching client)")
-    p.add_argument("--gold-index", type=Path, default=None,
-                   help="training_index.json; logged for provenance only")
+    p.add_argument(
+        "--config",
+        type=Path,
+        required=True,
+        help="Tier YAML config (mirrored from the launching client)",
+    )
+    p.add_argument(
+        "--gold-index",
+        type=Path,
+        default=None,
+        help="training_index.json; logged for provenance only",
+    )
 
     # Explicit overrides; missing flags = YAML wins.
     p.add_argument("--epochs", type=int, default=_UNSET)
@@ -110,7 +119,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--device", choices=["auto", "cuda", "cpu"], default=_UNSET)
     p.add_argument("--fp16", dest="fp16", action="store_const", const=True, default=_UNSET)
     p.add_argument("--gradient-clip", type=float, default=_UNSET)
-    p.add_argument("--freeze-backbone", dest="freeze_backbone", action="store_const", const=True, default=_UNSET)
+    p.add_argument(
+        "--freeze-backbone",
+        dest="freeze_backbone",
+        action="store_const",
+        const=True,
+        default=_UNSET,
+    )
     p.add_argument("--freeze-backbone-epochs", type=int, default=_UNSET)
     p.add_argument("--checkpoint-dir", type=Path, default=_UNSET)
     p.add_argument("--train-annotation", type=Path, default=_UNSET)
@@ -123,18 +138,18 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def _hp_overrides_from_env() -> Dict[str, Any]:
+def _hp_overrides_from_env() -> dict[str, Any]:
     """Pull SM_HP_* env vars and route them through the override map.
 
     SageMaker exposes hyperparameters as both CLI args and SM_HP_* env vars;
     we accept both, dropping any key not in the override map so the schema
     layer enforces a single shape.
     """
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     for env_key, raw in os.environ.items():
         if not env_key.startswith("SM_HP_"):
             continue
-        attr = env_key[len("SM_HP_"):].lower().replace("-", "_")
+        attr = env_key[len("SM_HP_") :].lower().replace("-", "_")
         dotted = _OVERRIDE_MAP.get(attr)
         if dotted is None:
             continue
@@ -154,6 +169,7 @@ def _coerce_hp(value: str) -> Any:
 
 
 # ── Training ──────────────────────────────────────────────────────────────────
+
 
 def apply_sagemaker_channel_paths(
     resolved: ResolvedTrainingConfig,
@@ -177,18 +193,48 @@ def apply_sagemaker_channel_paths(
         resolved,
         data=dataclasses.replace(
             resolved.data,
-            train_annotation_file=str(train_channel / Path(resolved.data.train_annotation_file).name),
+            train_annotation_file=str(
+                train_channel / Path(resolved.data.train_annotation_file).name
+            ),
             val_annotation_file=str(val_channel / Path(resolved.data.val_annotation_file).name),
             image_dir=str(train_channel),
         ),
     )
 
 
+def _preflight_security_check() -> None:
+    """Validate IAM stub and S3 path safety before any training I/O.
+
+    Soft failure: logs a warning if security_policy module is unavailable so
+    the container can still train; hard failure on a confirmed policy violation.
+    """
+    try:
+        from ml.infra.security_policy import validate_s3_path_safe as validate_s3_path_safety
+
+        train_uri = os.environ.get("SM_CHANNEL_TRAIN", "")
+        val_uri = os.environ.get("SM_CHANNEL_VAL", "")
+        model_uri = os.environ.get("SM_MODEL_DIR", "")
+        for uri in [train_uri, val_uri, model_uri]:
+            if uri.startswith("s3://"):
+                validate_s3_path_safety(uri)
+        logger.info("preflight_security_check=passed")
+    except ImportError:
+        logger.warning(
+            "preflight_security_check=skipped module_unavailable=ml.infra.security_policy"
+        )
+    except Exception as exc:
+        logger.error("preflight_security_check=failed reason=%s", exc)
+        raise SystemExit(3) from exc
+
+
 def run(args: argparse.Namespace) -> None:
+    _preflight_security_check()
     cli_overrides = cli_overrides_from_namespace(args, _OVERRIDE_MAP)
     sm_overrides = _hp_overrides_from_env()
     if "run_id" not in cli_overrides:
-        cli_overrides["run_id"] = sm_env("TRAINING_JOB_NAME") or f"sm_{time.strftime('%Y%m%d_%H%M%S')}"
+        cli_overrides["run_id"] = (
+            sm_env("TRAINING_JOB_NAME") or f"sm_{time.strftime('%Y%m%d_%H%M%S')}"
+        )
     if "experiment" not in cli_overrides:
         cli_overrides["experiment"] = "maxsight"
 
@@ -214,20 +260,22 @@ def run(args: argparse.Namespace) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     with RunTracker(run_id=resolved.run_id, experiment=resolved.experiment) as tracker:
-        tracker.log_params({
-            "tier": resolved.model.tier,
-            "epochs": resolved.training.num_epochs,
-            "batch_size": resolved.data.batch_size,
-            "lr": resolved.training.learning_rate,
-            "weight_decay": resolved.training.weight_decay,
-            "device": resolved.device,
-            "fp16": resolved.training.mixed_precision,
-            "freeze_backbone": resolved.training.freeze_backbone,
-            "freeze_backbone_epochs": resolved.training.freeze_backbone_epochs,
-            "config_hash": resolved.provenance.config_hash,
-            "dataset_id": resolved.dataset.dataset_id,
-            "dataset_version": resolved.dataset.dataset_version,
-        })
+        tracker.log_params(
+            {
+                "tier": resolved.model.tier,
+                "epochs": resolved.training.num_epochs,
+                "batch_size": resolved.data.batch_size,
+                "lr": resolved.training.learning_rate,
+                "weight_decay": resolved.training.weight_decay,
+                "device": resolved.device,
+                "fp16": resolved.training.mixed_precision,
+                "freeze_backbone": resolved.training.freeze_backbone,
+                "freeze_backbone_epochs": resolved.training.freeze_backbone_epochs,
+                "config_hash": resolved.provenance.config_hash,
+                "dataset_id": resolved.dataset.dataset_id,
+                "dataset_version": resolved.dataset.dataset_version,
+            }
+        )
 
         gold_idx = args.gold_index or (channel_dir("gold") / "training_index.json")
         if gold_idx.exists():
@@ -244,7 +292,9 @@ def run(args: argparse.Namespace) -> None:
 
         ckpt_dir = Path(resolved.checkpoint.save_dir)
         expected_best_name = "best_model.pt"
-        assert expected_best_name == "best_model.pt", "Entrypoint and train loop must agree on best checkpoint filename."
+        assert expected_best_name == "best_model.pt", (
+            "Entrypoint and train loop must agree on best checkpoint filename."
+        )
         best_ckpt = ckpt_dir / expected_best_name
         if not best_ckpt.exists():
             best_path = results.get("best_model_path")

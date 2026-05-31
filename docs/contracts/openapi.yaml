@@ -1,0 +1,84 @@
+openapi: 3.1.0
+info:
+  title: MaxSight Production Runtime API
+  version: 1.0.0
+  description: Unified inference and therapy orchestration contract (SCRUM-19).
+paths:
+  /v1/runtime/process:
+    post:
+      summary: Process one perception frame through the production runtime
+      operationId: processFrame
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuntimeRequest'
+      responses:
+        '200':
+          description: Unified runtime response with classification, therapy, and trace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeResponse'
+        '503':
+          description: Critical path unavailable; explicit fallback state returned
+  /health:
+    get:
+      summary: Runtime health and degraded mode
+      responses:
+        '200':
+          description: Health payload
+components:
+  schemas:
+    RuntimeRequest:
+      type: object
+      required: [frame_id, perception]
+      properties:
+        frame_id:
+          type: string
+        perception:
+          type: object
+        user_id:
+          type: string
+          nullable: true
+        tier:
+          type: string
+          enum: [bronze, silver, gold]
+        enable_rag:
+          type: boolean
+        enable_therapy:
+          type: boolean
+    RuntimeResponse:
+      type: object
+      required:
+        - frame_id
+        - tier
+        - degraded_mode
+        - classifications
+        - critical_events
+        - secondary_events
+        - therapy
+        - latency_ms
+      properties:
+        frame_id:
+          type: string
+        tier:
+          type: string
+        degraded_mode:
+          type: string
+        classifications:
+          type: array
+        critical_events:
+          type: array
+        secondary_events:
+          type: array
+        therapy:
+          type: array
+        rag:
+          type: object
+          nullable: true
+        latency_ms:
+          type: number
+        trace:
+          type: object

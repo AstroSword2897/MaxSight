@@ -29,7 +29,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
@@ -40,27 +40,50 @@ from ml.data.video_manifest import CONTRACT_FIXED_STRIDE_T8, validate_manifest_v
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--frames-root", type=Path, required=True, help="Root directory containing per-video frame folders.")
+    p.add_argument(
+        "--frames-root",
+        type=Path,
+        required=True,
+        help="Root directory containing per-video frame folders.",
+    )
     p.add_argument("--out", type=Path, required=True, help="Output manifest JSON path.")
-    p.add_argument("--contract", default=CONTRACT_FIXED_STRIDE_T8, help="Contract label for the manifest.")
+    p.add_argument(
+        "--contract", default=CONTRACT_FIXED_STRIDE_T8, help="Contract label for the manifest."
+    )
     p.add_argument("--window", type=int, default=8, help="Temporal window size (T).")
     p.add_argument("--stride", type=int, default=1, help="Frame stride within a window.")
-    p.add_argument("--overlap", type=int, default=0, help="Overlap in frames between consecutive windows.")
-    p.add_argument("--ext", default="jpg,png,jpeg", help="Comma-separated frame extensions to include.")
-    p.add_argument("--limit-videos", type=int, default=0, help="Optional cap for number of videos processed (0 = no cap).")
-    p.add_argument("--limit-clips", type=int, default=0, help="Optional cap for number of clips written (0 = no cap).")
+    p.add_argument(
+        "--overlap", type=int, default=0, help="Overlap in frames between consecutive windows."
+    )
+    p.add_argument(
+        "--ext", default="jpg,png,jpeg", help="Comma-separated frame extensions to include."
+    )
+    p.add_argument(
+        "--limit-videos",
+        type=int,
+        default=0,
+        help="Optional cap for number of videos processed (0 = no cap).",
+    )
+    p.add_argument(
+        "--limit-clips",
+        type=int,
+        default=0,
+        help="Optional cap for number of clips written (0 = no cap).",
+    )
     return p.parse_args()
 
 
-def _iter_frame_files(video_dir: Path, exts: List[str]) -> List[Path]:
-    frames: List[Path] = []
+def _iter_frame_files(video_dir: Path, exts: list[str]) -> list[Path]:
+    frames: list[Path] = []
     for e in exts:
         frames.extend(sorted(video_dir.glob(f"*.{e}")))
     # If naming is inconsistent, a stable sort by name is still deterministic.
     return sorted({p.resolve(): p for p in frames}.values(), key=lambda p: p.name)
 
 
-def _build_windows(frames: List[Path], *, window: int, stride: int, overlap: int) -> List[List[Path]]:
+def _build_windows(
+    frames: list[Path], *, window: int, stride: int, overlap: int
+) -> list[list[Path]]:
     if window < 2:
         raise ValueError("--window must be >= 2")
     if stride < 1:
@@ -68,7 +91,7 @@ def _build_windows(frames: List[Path], *, window: int, stride: int, overlap: int
     if overlap < 0:
         raise ValueError("--overlap must be >= 0")
     step_between_windows = max(1, window - overlap)
-    windows: List[List[Path]] = []
+    windows: list[list[Path]] = []
     # Build a list of indices sampled with given stride.
     sampled = frames[::stride] if stride > 1 else frames
     for start in range(0, len(sampled) - window + 1, step_between_windows):
@@ -88,7 +111,7 @@ def main() -> int:
         print("Error: --ext must include at least one extension", file=sys.stderr)
         return 1
 
-    clips: List[Dict[str, Any]] = []
+    clips: list[dict[str, Any]] = []
     video_dirs = [p for p in sorted(frames_root.iterdir()) if p.is_dir()]
     if args.limit_videos and args.limit_videos > 0:
         video_dirs = video_dirs[: args.limit_videos]
@@ -97,7 +120,9 @@ def main() -> int:
         frames = _iter_frame_files(vdir, exts)
         if len(frames) < args.window:
             continue
-        windows = _build_windows(frames, window=args.window, stride=args.stride, overlap=args.overlap)
+        windows = _build_windows(
+            frames, window=args.window, stride=args.stride, overlap=args.overlap
+        )
         for wi, win in enumerate(windows):
             if args.limit_clips and args.limit_clips > 0 and len(clips) >= args.limit_clips:
                 break
@@ -119,7 +144,7 @@ def main() -> int:
         if args.limit_clips and args.limit_clips > 0 and len(clips) >= args.limit_clips:
             break
 
-    manifest: Dict[str, Any] = {
+    manifest: dict[str, Any] = {
         "schema_version": "1.0",
         "contract": str(args.contract),
         "clips": clips,
@@ -133,7 +158,9 @@ def main() -> int:
         },
     }
 
-    errs = validate_manifest_v1(manifest, require_fixed_t8=(args.contract == CONTRACT_FIXED_STRIDE_T8))
+    errs = validate_manifest_v1(
+        manifest, require_fixed_t8=(args.contract == CONTRACT_FIXED_STRIDE_T8)
+    )
     if errs:
         print("Error: generated manifest failed validation:", file=sys.stderr)
         for e in errs[:20]:
@@ -148,4 +175,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

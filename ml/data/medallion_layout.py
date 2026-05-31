@@ -23,13 +23,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
+from typing import Any
 
 MEDALLION_INDEX_VERSION = "1.0"
 
 # Canonical dataset keys used everywhere.
-DATASET_KEYS: List[str] = [
+DATASET_KEYS: list[str] = [
     "coco",
     "kinetics700",
     "youtube8m",
@@ -65,13 +64,14 @@ def default_raw_dataset_dir(repo_root: Path, dataset_key: str) -> Path:
     return rr / "datasets" / RAW_DATASETS_DIRNAME / dataset_key
 
 
-def all_default_raw_dataset_dirs(repo_root: Path) -> Dict[str, Path]:
+def all_default_raw_dataset_dirs(repo_root: Path) -> dict[str, Path]:
     """Map every ``DATASET_KEYS`` entry to its canonical raw path."""
 
     return {k: default_raw_dataset_dir(repo_root, k) for k in DATASET_KEYS}
 
 
 # ── Bronze paths ───────────────────────────────────────────────────────────────
+
 
 def bronze_coco_dir(root: Path) -> Path:
     return Path(root) / "bronze" / "coco"
@@ -90,6 +90,7 @@ def bronze_dataset_dir(root: Path, dataset_key: str) -> Path:
 
 
 # ── Silver paths ───────────────────────────────────────────────────────────────
+
 
 def silver_coco_splits_dir(root: Path) -> Path:
     return Path(root) / "silver" / "coco" / "splits"
@@ -117,6 +118,7 @@ def silver_annotations_dir(root: Path, dataset_key: str) -> Path:
 
 
 # ── Gold paths ─────────────────────────────────────────────────────────────────
+
 
 def gold_dir(root: Path) -> Path:
     return Path(root) / "gold"
@@ -150,9 +152,9 @@ def build_coco_training_index(
     bronze_coco_data_dir: Path,
     train_annotation: Path,
     val_annotation: Path,
-    test_annotation: Optional[Path] = None,
-    image_dir: Optional[Path] = None,
-) -> Dict[str, Any]:
+    test_annotation: Path | None = None,
+    image_dir: Path | None = None,
+) -> dict[str, Any]:
     """Assemble the `coco` section of a gold training index."""
 
     img = image_dir if image_dir is not None else bronze_coco_data_dir
@@ -176,7 +178,7 @@ def build_coco_training_index(
     }
 
 
-def merge_video_into_index(base: Dict[str, Any], video: Dict[str, Optional[str]]) -> Dict[str, Any]:
+def merge_video_into_index(base: dict[str, Any], video: dict[str, str | None]) -> dict[str, Any]:
     """Attach non-null video paths into `video` section."""
 
     out = dict(base)
@@ -188,20 +190,18 @@ def merge_video_into_index(base: Dict[str, Any], video: Dict[str, Optional[str]]
     return out
 
 
-def write_training_index(path: Path, data: Dict[str, Any]) -> None:
+def write_training_index(path: Path, data: dict[str, Any]) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def load_training_index(path: Path) -> Dict[str, Any]:
+def load_training_index(path: Path) -> dict[str, Any]:
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
-def resolve_coco_for_train(
-    index: Dict[str, Any], repo_root: Path
-) -> Tuple[Path, Path, Path, Path]:
+def resolve_coco_for_train(index: dict[str, Any], repo_root: Path) -> tuple[Path, Path, Path, Path]:
     """Return (data_dir, train_ann, val_ann, image_dir) as absolute paths."""
 
     coco = index.get("coco") or {}
@@ -219,14 +219,14 @@ def resolve_coco_for_train(
 
 
 def resolve_video_manifests(
-    index: Dict[str, Any], repo_root: Path
-) -> Tuple[Optional[Path], Optional[Path], Optional[Path]]:
+    index: dict[str, Any], repo_root: Path
+) -> tuple[Path | None, Path | None, Path | None]:
     """Return (train_manifest, val_manifest, manifest_root) or None entries."""
 
     vid = index.get("video") or {}
     rr = Path(repo_root).resolve()
 
-    def _p(key: str) -> Optional[Path]:
+    def _p(key: str) -> Path | None:
         s = vid.get(key)
         if not s:
             return None
@@ -235,7 +235,7 @@ def resolve_video_manifests(
     return _p("train_manifest"), _p("val_manifest"), _p("manifest_root")
 
 
-def ensure_medallion_dirs(root: Path, datasets: Optional[List[str]] = None) -> None:
+def ensure_medallion_dirs(root: Path, datasets: list[str] | None = None) -> None:
     """Create the full bronze/silver/gold directory tree for listed datasets."""
 
     keys = datasets if datasets is not None else DATASET_KEYS
@@ -254,7 +254,7 @@ def dataset_bronze_manifest(root: Path, dataset_key: str) -> Path:
 def write_ingest_record(
     root: Path,
     dataset_key: str,
-    record: Dict[str, Any],
+    record: dict[str, Any],
 ) -> Path:
     """Persist an ingest record to bronze so cleaning knows what arrived."""
     p = dataset_bronze_manifest(root, dataset_key)
@@ -263,7 +263,7 @@ def write_ingest_record(
     return p
 
 
-def load_ingest_record(root: Path, dataset_key: str) -> Dict[str, Any]:
+def load_ingest_record(root: Path, dataset_key: str) -> dict[str, Any]:
     p = dataset_bronze_manifest(root, dataset_key)
     if not p.exists():
         raise FileNotFoundError(f"No ingest record for {dataset_key} at {p}")

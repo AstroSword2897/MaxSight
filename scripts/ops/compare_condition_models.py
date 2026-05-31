@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Compare trained condition models by best validation loss and mAP."""
+
 import argparse
 import json
 from pathlib import Path
@@ -44,6 +45,7 @@ def get_best_metrics(ckpt_dir: Path) -> dict | None:
     if best_pt.exists():
         try:
             import torch
+
             ckpt = torch.load(best_pt, map_location="cpu", weights_only=False)
             if isinstance(ckpt, dict):
                 return {
@@ -66,7 +68,12 @@ def main():
         default=Path("/content/drive/MyDrive/MaxSight"),
         help="Base directory containing checkpoints_<condition> folders",
     )
-    parser.add_argument("--sort", choices=["loss", "map"], default="loss", help="Sort by val loss (lower better) or mAP (higher better)")
+    parser.add_argument(
+        "--sort",
+        choices=["loss", "map"],
+        default="loss",
+        help="Sort by val loss (lower better) or mAP (higher better)",
+    )
     args = parser.parse_args()
 
     base = args.base
@@ -80,22 +87,28 @@ def main():
             continue
         cond = d.name.replace("checkpoints_", "")
         metrics = get_best_metrics(d)
-        if metrics and (metrics.get("best_val_loss") is not None or metrics.get("best_val_map") is not None):
-            rows.append({
-                "condition": cond,
-                "best_val_loss": metrics.get("best_val_loss"),
-                "best_val_map": metrics.get("best_val_map"),
-                "epoch": metrics.get("epoch"),
-                "total_epochs": metrics.get("total_epochs"),
-            })
+        if metrics and (
+            metrics.get("best_val_loss") is not None or metrics.get("best_val_map") is not None
+        ):
+            rows.append(
+                {
+                    "condition": cond,
+                    "best_val_loss": metrics.get("best_val_loss"),
+                    "best_val_map": metrics.get("best_val_map"),
+                    "epoch": metrics.get("epoch"),
+                    "total_epochs": metrics.get("total_epochs"),
+                }
+            )
         else:
-            rows.append({
-                "condition": cond,
-                "best_val_loss": None,
-                "best_val_map": None,
-                "epoch": None,
-                "total_epochs": None,
-            })
+            rows.append(
+                {
+                    "condition": cond,
+                    "best_val_loss": None,
+                    "best_val_map": None,
+                    "epoch": None,
+                    "total_epochs": None,
+                }
+            )
 
     if not rows:
         print("No checkpoints_* directories found.")
@@ -117,7 +130,11 @@ def main():
     for r in rows:
         loss_s = f"{r['best_val_loss']:.4f}" if r["best_val_loss"] is not None else "—"
         map_s = f"{r['best_val_map']:.4f}" if r["best_val_map"] is not None else "—"
-        ep_s = f"{r['epoch']+1}/{r['total_epochs']}" if r["epoch"] is not None and r["total_epochs"] is not None else "—"
+        ep_s = (
+            f"{r['epoch'] + 1}/{r['total_epochs']}"
+            if r["epoch"] is not None and r["total_epochs"] is not None
+            else "—"
+        )
         print(f"{r['condition']:<25} {loss_s:>14} {map_s:>14} {ep_s:>8}")
     print()
     print("Lower val loss = better. Higher mAP = better.")
@@ -129,9 +146,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-

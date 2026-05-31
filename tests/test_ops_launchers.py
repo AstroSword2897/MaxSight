@@ -20,11 +20,11 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-import scripts.ops.sagemaker_train as sagemaker_train
 import scripts.ops.sagemaker_deploy as sagemaker_deploy
-
+import scripts.ops.sagemaker_train as sagemaker_train
 
 # ── helpers ────────────────────────────────────────────────────────────────────
+
 
 def _mock_s3_client():
     """Return a MagicMock that satisfies S3Client usage in the train path."""
@@ -44,9 +44,12 @@ def test_train_dry_run_exits_0_and_prints_json(capsys):
     with patch("scripts.ops.sagemaker_train.S3Client", return_value=_mock_s3_client()):
         sys.argv = [
             "sagemaker_train.py",
-            "--bucket", "test-bucket",
-            "--role", "arn:aws:iam::123456789012:role/SageMakerRole",
-            "--config", _TIER_CONFIG,
+            "--bucket",
+            "test-bucket",
+            "--role",
+            "arn:aws:iam::123456789012:role/SageMakerRole",
+            "--config",
+            _TIER_CONFIG,
             "--dry-run",
         ]
         rc = sagemaker_train.main()
@@ -63,15 +66,20 @@ def test_train_dry_run_exits_0_and_prints_json(capsys):
 
 # ── test 2: train dry-run warns to stderr when gold index is absent ────────────
 
+
 def test_train_dry_run_warns_on_missing_gold(tmp_path, capsys):
     """When no gold index exists, a warning containing 'gold index' must appear on stderr."""
     with patch("scripts.ops.sagemaker_train.S3Client", return_value=_mock_s3_client()):
         sys.argv = [
             "sagemaker_train.py",
-            "--bucket", "test-bucket",
-            "--role", "arn:aws:iam::123456789012:role/SageMakerRole",
-            "--config", _TIER_CONFIG,
-            "--medallion-root", str(tmp_path),
+            "--bucket",
+            "test-bucket",
+            "--role",
+            "arn:aws:iam::123456789012:role/SageMakerRole",
+            "--config",
+            _TIER_CONFIG,
+            "--medallion-root",
+            str(tmp_path),
             "--dry-run",
         ]
         rc = sagemaker_train.main()
@@ -79,12 +87,12 @@ def test_train_dry_run_warns_on_missing_gold(tmp_path, capsys):
     assert rc == 0
     err = capsys.readouterr().err.lower()
     assert "gold index" in err, (
-        "stderr must mention 'gold index' when the gold index file is absent; "
-        f"got: {err!r}"
+        f"stderr must mention 'gold index' when the gold index file is absent; got: {err!r}"
     )
 
 
 # ── test 3: deploy rejects an unregistered artifact ───────────────────────────
+
 
 def test_deploy_rejects_unregistered_artifact(tmp_path):
     """cmd_deploy must return 1 when the artifact is not in the registry."""
@@ -95,9 +103,11 @@ def test_deploy_rejects_unregistered_artifact(tmp_path):
 
         sys.argv = [
             "sagemaker_deploy.py",
-            "--bucket", "b",
+            "--bucket",
+            "b",
             "deploy",
-            "--model-data", "s3://b/unregistered/model.tar.gz",
+            "--model-data",
+            "s3://b/unregistered/model.tar.gz",
         ]
         rc = sagemaker_deploy.main()
 
@@ -106,22 +116,22 @@ def test_deploy_rejects_unregistered_artifact(tmp_path):
 
 # ── test 4: --skip-registry-check emits WARNING to stderr ─────────────────────
 
+
 def test_deploy_skip_registry_check_emits_warning(capsys):
     """--skip-registry-check must always emit a WARNING to stderr, even on dry-run."""
     sys.argv = [
         "sagemaker_deploy.py",
-        "--bucket", "b",
+        "--bucket",
+        "b",
         "deploy",
-        "--model-data", "s3://b/m.tar.gz",
+        "--model-data",
+        "s3://b/m.tar.gz",
         "--skip-registry-check",
         "--dry-run",
     ]
     sagemaker_deploy.main()
     err = capsys.readouterr().err
-    assert "WARNING" in err, (
-        "--skip-registry-check must print a WARNING to stderr; "
-        f"got: {err!r}"
-    )
+    assert "WARNING" in err, f"--skip-registry-check must print a WARNING to stderr; got: {err!r}"
 
 
 def test_deploy_skip_registry_check_rejected_in_production(monkeypatch):
@@ -129,9 +139,11 @@ def test_deploy_skip_registry_check_rejected_in_production(monkeypatch):
     monkeypatch.setenv("MAXSIGHT_ENV", "production")
     sys.argv = [
         "sagemaker_deploy.py",
-        "--bucket", "b",
+        "--bucket",
+        "b",
         "deploy",
-        "--model-data", "s3://b/m.tar.gz",
+        "--model-data",
+        "s3://b/m.tar.gz",
         "--skip-registry-check",
         "--dry-run",
     ]
@@ -141,6 +153,7 @@ def test_deploy_skip_registry_check_rejected_in_production(monkeypatch):
 
 
 # ── test 5: sagemaker_entrypoint raises ImportError when imported ──────────────
+
 
 def test_entrypoint_raises_importerror_on_import():
     """ml.pipeline.sagemaker_entrypoint must raise ImportError when imported, not run as __main__."""

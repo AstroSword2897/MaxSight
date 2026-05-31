@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 import torch
@@ -17,7 +17,7 @@ from ml.models.maxsight_cnn import COCO_CLASSES
 from ml.utils.preprocessing import ImagePreprocessor
 
 
-def _bbox_xywh_pixels_to_cxcywh_norm(bbox: List[float], width: int, height: int) -> List[float]:
+def _bbox_xywh_pixels_to_cxcywh_norm(bbox: list[float], width: int, height: int) -> list[float]:
     x, y, w, h = [float(v) for v in bbox]
     w_img = max(1.0, float(width))
     h_img = max(1.0, float(height))
@@ -37,8 +37,8 @@ class VideoClipManifestDataset(Dataset):
         self,
         manifest_path: Path,
         *,
-        manifest_root: Optional[Path] = None,
-        condition_mode: Optional[str] = None,
+        manifest_root: Path | None = None,
+        condition_mode: str | None = None,
         apply_lighting_augmentation: bool = False,
         max_objects: int = 10,
         num_classes: int = len(COCO_CLASSES),
@@ -51,7 +51,7 @@ class VideoClipManifestDataset(Dataset):
         self.preprocessor = ImagePreprocessor(condition_mode=condition_mode)
         self.apply_lighting_augmentation = apply_lighting_augmentation
 
-        with open(self.manifest_path, "r", encoding="utf-8") as f:
+        with open(self.manifest_path, encoding="utf-8") as f:
             self._data = json.load(f)
         errs = validate_manifest_v1(self._data)
         if errs:
@@ -59,7 +59,7 @@ class VideoClipManifestDataset(Dataset):
         clips = self._data.get("clips", [])
         if not isinstance(clips, list):
             raise ValueError("manifest clips must be a list")
-        self._clips: List[Dict[str, Any]] = [c for c in clips if isinstance(c, dict)]
+        self._clips: list[dict[str, Any]] = [c for c in clips if isinstance(c, dict)]
 
     def __len__(self) -> int:
         return len(self._clips)
@@ -70,7 +70,7 @@ class VideoClipManifestDataset(Dataset):
             return path
         return (self.manifest_root / path).resolve()
 
-    def _segment_to_class_idx(self, seg: Dict[str, Any]) -> int:
+    def _segment_to_class_idx(self, seg: dict[str, Any]) -> int:
         if "class_idx" in seg:
             v = int(seg["class_idx"])
             return max(0, min(self.num_classes - 1, v))
@@ -79,7 +79,7 @@ class VideoClipManifestDataset(Dataset):
             return max(0, min(self.num_classes - 1, v))
         return 0
 
-    def _objects_from_last_frame(self, clip: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _objects_from_last_frame(self, clip: dict[str, Any]) -> list[dict[str, Any]]:
         segs_wrap = clip.get("frames_segments")
         paths = clip.get("frame_paths")
         if not isinstance(segs_wrap, list) or not segs_wrap:
@@ -99,7 +99,7 @@ class VideoClipManifestDataset(Dataset):
             with Image.open(img_path) as im:
                 w, h = im.size
 
-        objects: List[Dict[str, Any]] = []
+        objects: list[dict[str, Any]] = []
         for seg in frame_segs:
             if not isinstance(seg, dict):
                 continue
@@ -124,13 +124,13 @@ class VideoClipManifestDataset(Dataset):
             )
         return objects[: self.max_objects]
 
-    def __getitem__(self, idx: int) -> Dict[str, Any]:
+    def __getitem__(self, idx: int) -> dict[str, Any]:
         clip = self._clips[idx]
         paths = clip.get("frame_paths")
         if not isinstance(paths, list):
             raise KeyError("clip missing frame_paths")
 
-        frame_tensors: List[torch.Tensor] = []
+        frame_tensors: list[torch.Tensor] = []
         for p in paths:
             img_path = self._resolve_path(str(p))
             if not img_path.exists():
@@ -139,7 +139,9 @@ class VideoClipManifestDataset(Dataset):
                 try:
                     image = Image.open(img_path).convert("RGB")
                 except Exception:
-                    image = Image.fromarray(np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8))
+                    image = Image.fromarray(
+                        np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8)
+                    )
 
             if self.apply_lighting_augmentation:
                 preprocessed = self.preprocessor.preprocess_with_lighting(image)
@@ -167,7 +169,7 @@ class VideoClipManifestDataset(Dataset):
         else:
             tt = TemporalClipTargets(1.0, 0.0)
 
-        out: Dict[str, Any] = {
+        out: dict[str, Any] = {
             "frames": frames,
             "labels": labels,
             "boxes": boxes,

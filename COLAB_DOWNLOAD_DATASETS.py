@@ -3,12 +3,12 @@
 # CELL 1: Download Inference Datasets (Open Images V6, BDD100K, ADE20K)
 
 import os
+import subprocess
 import sys
 from pathlib import Path
-import subprocess
 
 # Setup paths.
-if 'COLAB_GPU' in os.environ or 'COLAB_JUPYTER_IP' in os.environ:
+if "COLAB_GPU" in os.environ or "COLAB_JUPYTER_IP" in os.environ:
     # Running in Colab.
     BASE_DIR = Path("/content/drive/MyDrive/MaxSight/datasets")
     os.makedirs(BASE_DIR, exist_ok=True)
@@ -33,9 +33,9 @@ print("[ok] Dependencies installed\n")
 
 # Download Open Images V6 Validation Set.
 
-print("="*70)
+print("=" * 70)
 print("Downloading Open Images V6 (Validation Set)")
-print("="*70)
+print("=" * 70)
 
 open_images_dir = BASE_DIR / "open_images_v6"
 validation_dir = open_images_dir / "validation"
@@ -51,7 +51,7 @@ if validation_dir.exists():
 else:
     print("\n📥 Downloading ~41,620 validation images (~2 GB)...")
     print("   This will take 30-60 minutes depending on connection...")
-    
+
     try:
         # Download using FiftyOne.
         dataset = fo.zoo.load_zoo_dataset(
@@ -59,18 +59,18 @@ else:
             split="validation",
             dataset_dir=str(BASE_DIR.parent),
             label_types=["detections"],
-            max_samples=None
+            max_samples=None,
         )
-        
+
         print(f"[ok] Downloaded {len(dataset)} images")
-        
+
         # Reorganize files to expected structure.
         print("  Reorganizing files...")
         fo_dataset_paths = [
             BASE_DIR.parent / "open-images-v6-validation",
             BASE_DIR.parent / "open-images-v6" / "validation",
         ]
-        
+
         source_dir = None
         for path in fo_dataset_paths:
             if path.exists():
@@ -78,7 +78,7 @@ else:
                 if img_count > 0:
                     source_dir = path
                     break
-        
+
         if source_dir:
             validation_dir.mkdir(parents=True, exist_ok=True)
             moved = 0
@@ -99,31 +99,35 @@ else:
                     subdir = validation_dir / img_id[:2] if len(img_id) >= 2 else validation_dir
                     subdir.mkdir(exist_ok=True)
                     dest = subdir / img_path.name
-                
+
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 if not dest.exists():
                     img_path.rename(dest)
                     moved += 1
-            
+
             print(f"  [ok] Moved {moved} images to {validation_dir}")
-        
+
         # Download annotation CSV.
         print("\n📥 Downloading annotations CSV...")
-        csv_url = "https://storage.googleapis.com/openimages/v6/oidv6-validation-annotations-bbox.csv"
-        
+        csv_url = (
+            "https://storage.googleapis.com/openimages/v6/oidv6-validation-annotations-bbox.csv"
+        )
+
         response = requests.get(csv_url, stream=True)
         response.raise_for_status()
-        
-        total_size = int(response.headers.get('content-length', 0))
-        with open(csv_path, 'wb') as f:
-            with tqdm(total=total_size, unit='B', unit_scale=True, desc="  Downloading CSV") as pbar:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        pbar.update(len(chunk))
-        
+
+        total_size = int(response.headers.get("content-length", 0))
+        with (
+            open(csv_path, "wb") as f,
+            tqdm(total=total_size, unit="B", unit_scale=True, desc="  Downloading CSV") as pbar,
+        ):
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    pbar.update(len(chunk))
+
         print("  [ok] Annotations downloaded")
-        
+
     except Exception as e:
         print(f"WARNING FiftyOne download failed: {e}")
         print("  You can download manually from:")
@@ -138,9 +142,9 @@ else:
 
 # Download BDD100K Validation Set.
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("Downloading BDD100K (Validation Set)")
-print("="*70)
+print("=" * 70)
 
 bdd100k_dir = BASE_DIR / "bdd100k"
 images_dir = bdd100k_dir / "images" / "100k" / "val"
@@ -152,92 +156,96 @@ if images_dir.exists() and labels_path.exists():
     print(f"[ok] BDD100K already downloaded ({img_count:,} images)")
 else:
     print("\n📥 Downloading BDD100K validation set (~600 MB)...")
-    
+
     try:
         # Try direct download from ETH Zurich.
         images_url = "https://dl.cv.ethz.ch/bdd100k/data/100k_images_val.zip"
         labels_url = "https://dl.cv.ethz.ch/bdd100k/data/bdd100k_det_20_labels_trainval.zip"
-        
-        import zipfile
+
         import shutil
-        
+        import zipfile
+
         # Download labels first (smaller)
         print("  Downloading labels (53 MB)...")
         labels_zip = bdd100k_dir / "det_20_labels.zip"
         labels_dir.mkdir(parents=True, exist_ok=True)
-        
+
         response = requests.get(labels_url, stream=True)
         response.raise_for_status()
-        
-        total_size = int(response.headers.get('content-length', 0))
-        with open(labels_zip, 'wb') as f:
-            with tqdm(total=total_size, unit='B', unit_scale=True, desc="  Downloading labels") as pbar:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        pbar.update(len(chunk))
-        
+
+        total_size = int(response.headers.get("content-length", 0))
+        with (
+            open(labels_zip, "wb") as f,
+            tqdm(total=total_size, unit="B", unit_scale=True, desc="  Downloading labels") as pbar,
+        ):
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    pbar.update(len(chunk))
+
         # Extract labels.
         print("  Extracting labels...")
         temp_labels = bdd100k_dir / "temp_labels"
-        with zipfile.ZipFile(labels_zip, 'r') as zip_ref:
+        with zipfile.ZipFile(labels_zip, "r") as zip_ref:
             zip_ref.extractall(temp_labels)
-        
+
         # Find det_val.json.
         det_val_source = None
         for path in temp_labels.rglob("det_val.json"):
             det_val_source = path
             break
-        
+
         if det_val_source:
             shutil.copy(det_val_source, labels_path)
             print(f"  [ok] Labels extracted to {labels_path}")
-        
+
         # Cleanup.
         shutil.rmtree(temp_labels, ignore_errors=True)
         labels_zip.unlink(missing_ok=True)
-        
+
         # Download images.
         print("\n  Downloading images (542 MB)...")
         images_zip = bdd100k_dir / "100k_images_val.zip"
         images_dir.mkdir(parents=True, exist_ok=True)
-        
+
         response = requests.get(images_url, stream=True)
         response.raise_for_status()
-        
-        total_size = int(response.headers.get('content-length', 0))
-        with open(images_zip, 'wb') as f:
-            with tqdm(total=total_size, unit='B', unit_scale=True, desc="  Downloading images") as pbar:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        pbar.update(len(chunk))
-        
+
+        total_size = int(response.headers.get("content-length", 0))
+        with (
+            open(images_zip, "wb") as f,
+            tqdm(total=total_size, unit="B", unit_scale=True, desc="  Downloading images") as pbar,
+        ):
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    pbar.update(len(chunk))
+
         # Extract images.
         print("  Extracting images...")
         temp_extract = bdd100k_dir / "temp_extract"
-        with zipfile.ZipFile(images_zip, 'r') as zip_ref:
+        with zipfile.ZipFile(images_zip, "r") as zip_ref:
             zip_ref.extractall(temp_extract)
-        
+
         # Find val folder.
         val_source = None
         for path in temp_extract.rglob("val"):
             if path.is_dir() and len(list(path.glob("*.jpg"))) > 0:
                 val_source = path
                 break
-        
+
         if val_source:
             if images_dir.exists():
                 shutil.rmtree(images_dir)
             shutil.move(str(val_source), str(images_dir))
             print(f"  [ok] Images extracted to {images_dir}")
-        
+
         # Cleanup.
         shutil.rmtree(temp_extract, ignore_errors=True)
         images_zip.unlink(missing_ok=True)
-        
+
         print("OK BDD100K download complete")
-        
+
     except Exception as e:
         print(f"WARNING BDD100K download failed: {e}")
         print("  Alternative: Use FiftyOne:")
@@ -252,9 +260,9 @@ else:
 
 # Download ADE20K Validation Set.
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("Downloading ADE20K (Validation Set)")
-print("="*70)
+print("=" * 70)
 
 ade20k_dir = BASE_DIR / "ade20k"
 ade20k_val_images = ade20k_dir / "images" / "validation"
@@ -265,31 +273,32 @@ if ade20k_val_images.exists() and ade20k_val_annotations.exists():
     print(f"[ok] ADE20K already downloaded ({img_count:,} images)")
 else:
     print("\n📥 Downloading ADE20K validation set (~1 GB)...")
-    
+
     try:
         ade20k_url = "http://data.csail.mit.edu/places/ADEchallenge/ADEChallengeData2016.zip"
         zip_path = ade20k_dir / "ADEChallengeData2016.zip"
         ade20k_dir.mkdir(parents=True, exist_ok=True)
-        
+
         print("  Downloading ADE20K dataset...")
         response = requests.get(ade20k_url, stream=True)
         response.raise_for_status()
-        
-        total_size = int(response.headers.get('content-length', 0))
-        with open(zip_path, 'wb') as f:
-            with tqdm(total=total_size, unit='B', unit_scale=True, desc="  Downloading") as pbar:
+
+        total_size = int(response.headers.get("content-length", 0))
+        with open(zip_path, "wb") as f:
+            with tqdm(total=total_size, unit="B", unit_scale=True, desc="  Downloading") as pbar:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
                         pbar.update(len(chunk))
-        
+
         # Extract.
         print("  Extracting...")
         import zipfile
+
         temp_extract = ade20k_dir / "temp_extract"
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(temp_extract)
-        
+
         # Move to expected structure.
         ade_data = temp_extract / "ADEChallengeData2016"
         if ade_data.exists():
@@ -298,25 +307,27 @@ else:
                 if images_dest.exists():
                     shutil.rmtree(images_dest)
                 shutil.move(str(ade_data / "images"), str(images_dest))
-            
+
             if (ade_data / "annotations").exists():
                 ann_dest = ade20k_dir / "annotations"
                 if ann_dest.exists():
                     shutil.rmtree(ann_dest)
                 shutil.move(str(ade_data / "annotations"), str(ann_dest))
-        
+
         # Cleanup.
         shutil.rmtree(temp_extract, ignore_errors=True)
         zip_path.unlink(missing_ok=True)
-        
+
         print("OK ADE20K download complete")
-        
+
     except Exception as e:
         print(f"WARNING ADE20K download failed: {e}")
 
 # Verify ADE20K.
 img_count = len(list(ade20k_val_images.glob("*.jpg"))) if ade20k_val_images.exists() else 0
-ann_count = len(list(ade20k_val_annotations.glob("*.png"))) if ade20k_val_annotations.exists() else 0
+ann_count = (
+    len(list(ade20k_val_annotations.glob("*.png"))) if ade20k_val_annotations.exists() else 0
+)
 if img_count > 0 and ann_count > 0:
     print(f"OK ADE20K: {img_count:,} images, {ann_count:,} annotations ready")
 else:
@@ -324,9 +335,9 @@ else:
 
 # Summary.
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("Download Summary")
-print("="*70)
+print("=" * 70)
 
 datasets_status = []
 
@@ -354,9 +365,3 @@ for name, count, has_ann, target in datasets_status:
 
 print(f"\n All datasets saved to: {BASE_DIR}")
 print("\nOK Ready for inference evaluation!")
-
-
-
-
-
-

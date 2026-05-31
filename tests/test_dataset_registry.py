@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import pytest
 import yaml
@@ -19,9 +19,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from ml.data.dataset_registry import (  # noqa: E402
+    REGISTRY_SCHEMA_VERSION,
     DatasetRegistry,
     DatasetRegistryError,
-    REGISTRY_SCHEMA_VERSION,
     default_registry_path,
     load_registry,
     verify_content_hash,
@@ -34,13 +34,15 @@ from ml.training.run_config import (  # noqa: E402
 REGISTRY_PATH = default_registry_path(PROJECT_ROOT)
 CONFIG_DIR = PROJECT_ROOT / "ml" / "training" / "configs"
 TIER_CONFIGS = sorted(
-    p for p in CONFIG_DIR.glob("*.yaml")
+    p
+    for p in CONFIG_DIR.glob("*.yaml")
     if p.stem not in {"t5_temporal_2phase", "t2_to_t5_transfer"}
 )
 BASELINE_OVERRIDES = {"run_id": "test-run", "experiment": "ci"}
 
 
 # ── Registry file: shape + invariants ─────────────────────────────────────────
+
 
 def test_registry_loads_from_canonical_path() -> None:
     reg = load_registry(REGISTRY_PATH)
@@ -53,10 +55,19 @@ def test_registry_has_all_nine_medallion_keys_registered() -> None:
     reg = load_registry(REGISTRY_PATH)
     seen_medallion = {e.medallion_key for e in reg.entries.values() if e.medallion_key}
     expected = {
-        "coco", "kinetics700", "youtube8m", "howto100m", "webvid10m",
-        "bdd100k", "epic_kitchens", "mose", "youtube_vos",
+        "coco",
+        "kinetics700",
+        "youtube8m",
+        "howto100m",
+        "webvid10m",
+        "bdd100k",
+        "epic_kitchens",
+        "mose",
+        "youtube_vos",
     }
-    assert expected <= seen_medallion, f"missing medallion keys in registry: {expected - seen_medallion}"
+    assert expected <= seen_medallion, (
+        f"missing medallion keys in registry: {expected - seen_medallion}"
+    )
 
 
 def test_active_datasets_declare_train_and_val_splits() -> None:
@@ -89,6 +100,7 @@ def test_active_maxsight_coco_cleaned_v1_is_present() -> None:
 
 # ── Resolution: failure modes are explicit, never silent ──────────────────────
 
+
 def test_resolve_unknown_id_raises() -> None:
     reg = load_registry(REGISTRY_PATH)
     with pytest.raises(DatasetRegistryError, match="unknown dataset_id"):
@@ -114,6 +126,7 @@ def test_resolve_tier_incompatibility_raises() -> None:
 
 
 # ── End-to-end through ResolvedTrainingConfig ─────────────────────────────────
+
 
 @pytest.mark.parametrize("config_path", TIER_CONFIGS, ids=lambda p: p.stem)
 def test_every_tier_yaml_resolves_through_registry(config_path: Path) -> None:
@@ -155,20 +168,25 @@ def test_inactive_registered_dataset_fails_resolution(tmp_path: Path) -> None:
 
 # ── Registry file-level validation ────────────────────────────────────────────
 
-def _write_registry(tmp_path: Path, entries: List[Dict[str, Any]]) -> Path:
+
+def _write_registry(tmp_path: Path, entries: list[dict[str, Any]]) -> Path:
     # load_registry expects label_spaces.yaml beside the registry file.
     ls_src = PROJECT_ROOT / "ml/training/configs/registry/label_spaces.yaml"
     (tmp_path / "label_spaces.yaml").write_text(ls_src.read_text())
     p = tmp_path / "registry.yaml"
-    p.write_text(yaml.safe_dump({
-        "schema_version": REGISTRY_SCHEMA_VERSION,
-        "datasets": entries,
-    }))
+    p.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": REGISTRY_SCHEMA_VERSION,
+                "datasets": entries,
+            }
+        )
+    )
     return p
 
 
-def _entry(**overrides: Any) -> Dict[str, Any]:
-    base: Dict[str, Any] = {
+def _entry(**overrides: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
         "id": "test-ds",
         "version": "v1",
         "kind": "image",
@@ -223,16 +241,21 @@ def test_registry_rejects_label_space_num_classes_mismatch(tmp_path: Path) -> No
 
 
 def test_raw_status_requires_null_label_space(tmp_path: Path) -> None:
-    p = _write_registry(tmp_path, [_entry(
-        status="raw",
-        kind="video",
-        annotation_format="video_manifest",
-        label_space="coco_80",
-        splits=None,
-        manifest="datasets/medallion/silver/kinetics700/manifests/clips.json",
-        num_classes=700,
-        tier_compatibility=["T5_TEMPORAL"],
-    )])
+    p = _write_registry(
+        tmp_path,
+        [
+            _entry(
+                status="raw",
+                kind="video",
+                annotation_format="video_manifest",
+                label_space="coco_80",
+                splits=None,
+                manifest="datasets/medallion/silver/kinetics700/manifests/clips.json",
+                num_classes=700,
+                tier_compatibility=["T5_TEMPORAL"],
+            )
+        ],
+    )
     with pytest.raises(DatasetRegistryError, match="status='raw' requires label_space=null"):
         load_registry(p)
 
@@ -257,14 +280,19 @@ def test_registry_rejects_active_without_splits(tmp_path: Path) -> None:
 
 def test_per_split_image_dir_resolves_correctly(tmp_path: Path) -> None:
     """SplitSpec image_dir overrides the entry-level image_dir via resolved_image_dir()."""
-    p = _write_registry(tmp_path, [_entry(
-        splits={
-            "train": {"annotations": "train.json", "image_dir": "custom/train"},
-            "val":   {"annotations": "val.json",   "image_dir": "custom/val"},
-        },
-        label_space="accessibility_622",
-        num_classes=622,
-    )])
+    p = _write_registry(
+        tmp_path,
+        [
+            _entry(
+                splits={
+                    "train": {"annotations": "train.json", "image_dir": "custom/train"},
+                    "val": {"annotations": "val.json", "image_dir": "custom/val"},
+                },
+                label_space="accessibility_622",
+                num_classes=622,
+            )
+        ],
+    )
     reg = load_registry(p)
     entry = reg.resolve("test-ds", "v1")
     assert entry.splits.train.image_dir == "custom/train"
@@ -277,10 +305,15 @@ def test_per_split_image_dir_resolves_correctly(tmp_path: Path) -> None:
 
 def test_per_split_image_dir_falls_back_to_entry_level(tmp_path: Path) -> None:
     """When SplitSpec has no image_dir, resolved_image_dir returns entry-level image_dir."""
-    p = _write_registry(tmp_path, [_entry(
-        splits={"train": "train.json", "val": "val.json"},
-        image_dir="shared/images",
-    )])
+    p = _write_registry(
+        tmp_path,
+        [
+            _entry(
+                splits={"train": "train.json", "val": "val.json"},
+                image_dir="shared/images",
+            )
+        ],
+    )
     reg = load_registry(p)
     entry = reg.resolve("test-ds", "v1")
     assert entry.splits.train.image_dir is None
@@ -301,6 +334,7 @@ def test_registry_rejects_bad_content_hash(tmp_path: Path) -> None:
 
 # ── On-disk hash verification (only triggered when require_match=True) ────────
 
+
 def test_verify_content_hash_passes_when_match(tmp_path: Path) -> None:
     train = tmp_path / "datasets" / "train.json"
     val = tmp_path / "datasets" / "val.json"
@@ -312,10 +346,15 @@ def test_verify_content_hash_passes_when_match(tmp_path: Path) -> None:
         with p.open("rb") as f:
             h.update(f.read())
     digest = h.hexdigest()
-    p = _write_registry(tmp_path, [_entry(
-        splits={"train": "datasets/train.json", "val": "datasets/val.json"},
-        content_hash=digest,
-    )])
+    p = _write_registry(
+        tmp_path,
+        [
+            _entry(
+                splits={"train": "datasets/train.json", "val": "datasets/val.json"},
+                content_hash=digest,
+            )
+        ],
+    )
     reg = load_registry(p)
     entry = reg.resolve("test-ds", "v1")
     verify_content_hash(entry, repo_root=tmp_path)
@@ -325,10 +364,15 @@ def test_verify_content_hash_raises_on_drift(tmp_path: Path) -> None:
     train = tmp_path / "datasets" / "train.json"
     train.parent.mkdir(parents=True, exist_ok=True)
     train.write_bytes(b'{"original":true}')
-    p = _write_registry(tmp_path, [_entry(
-        splits={"train": "datasets/train.json", "val": "datasets/val.json"},
-        content_hash="0" * 64,
-    )])
+    p = _write_registry(
+        tmp_path,
+        [
+            _entry(
+                splits={"train": "datasets/train.json", "val": "datasets/val.json"},
+                content_hash="0" * 64,
+            )
+        ],
+    )
     reg = load_registry(p)
     entry = reg.resolve("test-ds", "v1")
     with pytest.raises(DatasetRegistryError, match="content_hash mismatch"):

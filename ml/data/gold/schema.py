@@ -13,16 +13,14 @@ inference can resolve every invariant (label_space, num_classes, shard uris,
 integrity hashes) from the meta alone — no dataset registry needed at runtime.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # ── JSONL row schema ───────────────────────────────────────────────────────────
 
 GOLD_LINE_SCHEMA_VERSION = "1.0"
 LABEL_SPACE_ACCESSIBILITY_622 = "accessibility_622"
 
-REQUIRED_LINE_KEYS = frozenset(
-    {"schema_version", "image_path", "boxes", "labels", "metadata"}
-)
+REQUIRED_LINE_KEYS = frozenset({"schema_version", "image_path", "boxes", "labels", "metadata"})
 
 # ── Artifact meta schema ───────────────────────────────────────────────────────
 
@@ -46,14 +44,22 @@ REQUIRED_META_KEYS = frozenset(
 
 # ── Optional provenance keys (never used for runtime branching) ────────────────
 PROVENANCE_META_KEYS = frozenset(
-    {"dataset_id", "version", "split", "source_datasets", "source_annotation", "repo_root", "num_skipped"}
+    {
+        "dataset_id",
+        "version",
+        "split",
+        "source_datasets",
+        "source_annotation",
+        "repo_root",
+        "num_skipped",
+    }
 )
 
 # Required keys in each shard entry within meta["shards"]
 REQUIRED_SHARD_ENTRY_KEYS = frozenset({"uri", "num_lines", "sha256"})
 
 
-def validate_meta(meta: Dict[str, Any]) -> List[str]:
+def validate_meta(meta: dict[str, Any]) -> list[str]:
     """Return human-readable errors for a meta dict; empty list means valid.
 
     Purely in-memory — does NOT check whether shard URIs are reachable.
@@ -62,7 +68,7 @@ def validate_meta(meta: Dict[str, Any]) -> List[str]:
     """
     if not isinstance(meta, dict):
         return ["meta root must be a JSON object"]
-    errs: List[str] = []
+    errs: list[str] = []
     missing = sorted(REQUIRED_META_KEYS - meta.keys())
     if missing:
         errs.append(f"meta missing required keys: {missing}")

@@ -17,7 +17,52 @@ venv = "venv"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["ml", "app", "scripts", "tests"]
+# Tier 3: research / Colab scripts — excluded from default ruff runs.
+exclude = [
+    "scripts/research_archive",
+    ".venv",
+    "venv",
+    "__pycache__",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+"scripts/research_archive/*" = ["E999", "F821"]
+
+# Tier 1 (strict): ml/therapy, ml/runtime, app/personal_mode.py
+# Tier 2 (moderate): tools/, scripts/infra — run separately when needed
+# Tier 3 (ignored): scripts/research_archive/
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+follow_imports = "silent"
+exclude = "(?x)(^scripts/research_archive/|^tools/simulation/)"
+packages = ["ml.therapy", "ml.runtime"]
+
+[[tool.mypy.overrides]]
+module = "app.personal_mode"
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["ml", "app"]
+omit = ["tests/*", "scripts/research_archive/*"]
+
+[tool.coverage.report]
+fail_under = 0
+show_missing = true
 

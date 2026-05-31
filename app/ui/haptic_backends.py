@@ -7,9 +7,8 @@ import os
 import platform
 import shutil
 import subprocess
-import sys
 from abc import ABC, abstractmethod
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.ui.haptic_feedback import HapticPattern
@@ -21,7 +20,7 @@ class HapticBackend(ABC):
     """Abstract device adapter for delivering haptic patterns."""
 
     @abstractmethod
-    def trigger(self, pattern: "HapticPattern", intensity: float) -> None:
+    def trigger(self, pattern: HapticPattern, intensity: float) -> None:
         """Play a haptic pattern at the given intensity in [0, 1]."""
 
     @abstractmethod
@@ -36,7 +35,7 @@ class HapticBackend(ABC):
 class NoopHapticBackend(HapticBackend):
     """Backend that intentionally performs no output."""
 
-    def trigger(self, pattern: "HapticPattern", intensity: float) -> None:
+    def trigger(self, pattern: HapticPattern, intensity: float) -> None:
         return
 
     def stop(self) -> None:
@@ -46,7 +45,7 @@ class NoopHapticBackend(HapticBackend):
 class LogHapticBackend(HapticBackend):
     """Development backend that records haptic events without hardware I/O."""
 
-    def trigger(self, pattern: "HapticPattern", intensity: float) -> None:
+    def trigger(self, pattern: HapticPattern, intensity: float) -> None:
         logger.info("Haptic %s intensity=%.3f backend=log", pattern.value, intensity)
 
     def stop(self) -> None:
@@ -75,7 +74,7 @@ class DarwinHapticBackend(HapticBackend):
         except Exception as exc:
             logger.debug("PyObjC AppKit unavailable for haptics: %s", exc)
 
-    def trigger(self, pattern: "HapticPattern", intensity: float) -> None:
+    def trigger(self, pattern: HapticPattern, intensity: float) -> None:
         style = self._PATTERN_MAP.get(pattern.value, "generic")
         if self._use_pyobjc and self._performer is not None:
             self._trigger_pyobjc(style)
@@ -83,7 +82,9 @@ class DarwinHapticBackend(HapticBackend):
         if self._swift_available:
             self._trigger_swift(style)
             return
-        raise RuntimeError("Darwin haptic backend unavailable: install PyObjC AppKit or Swift toolchain.")
+        raise RuntimeError(
+            "Darwin haptic backend unavailable: install PyObjC AppKit or Swift toolchain."
+        )
 
     def stop(self) -> None:
         # NSHapticFeedbackManager has no explicit stop API.
@@ -141,7 +142,7 @@ class LinuxEvdevHapticBackend(HapticBackend):
         except Exception as exc:
             logger.debug("Linux evdev haptic unavailable: %s", exc)
 
-    def trigger(self, pattern: "HapticPattern", intensity: float) -> None:
+    def trigger(self, pattern: HapticPattern, intensity: float) -> None:
         if self._device is None or self._ff is None or self._ecodes is None:
             raise RuntimeError("No Linux force-feedback evdev device found.")
         duration_ms = int(80 + 220 * float(intensity))
@@ -171,7 +172,7 @@ class LinuxEvdevHapticBackend(HapticBackend):
 
 
 def resolve_haptic_backend(
-    backend: Optional[str] = None,
+    backend: str | None = None,
     *,
     allow_log_fallback: bool = False,
 ) -> HapticBackend:

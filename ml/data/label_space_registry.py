@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
 
 LABEL_SPACE_REGISTRY_SCHEMA_VERSION = "1.0.0"
 
@@ -16,17 +15,19 @@ class LabelSpaceRegistryError(ValueError):
 @dataclass(frozen=True)
 class LabelSpaceDefinition:
     """One named class vocabulary (immutable after load)."""
+
     id: str
     num_classes: int
-    parent: Optional[str]
+    parent: str | None
 
 
 @dataclass(frozen=True)
 class LabelSpaceRegistry:
     """Loaded label-space table; resolve() is the only lookup path."""
+
     schema_version: str
-    spaces: Dict[str, LabelSpaceDefinition]
-    source_path: Optional[str] = None
+    spaces: dict[str, LabelSpaceDefinition]
+    source_path: str | None = None
 
     def resolve(self, label_space_id: str) -> LabelSpaceDefinition:
         if label_space_id not in self.spaces:
@@ -39,16 +40,11 @@ class LabelSpaceRegistry:
 
 def default_label_space_registry_path(repo_root: Path) -> Path:
     return (
-        Path(repo_root).resolve()
-        / "ml"
-        / "training"
-        / "configs"
-        / "registry"
-        / "label_spaces.yaml"
+        Path(repo_root).resolve() / "ml" / "training" / "configs" / "registry" / "label_spaces.yaml"
     )
 
 
-def load_label_space_registry(path: Optional[Path] = None) -> LabelSpaceRegistry:
+def load_label_space_registry(path: Path | None = None) -> LabelSpaceRegistry:
     """Load and validate label_spaces.yaml."""
     if path is None:
         repo_root = Path(__file__).resolve().parents[2]
@@ -77,7 +73,7 @@ def load_label_space_registry(path: Optional[Path] = None) -> LabelSpaceRegistry
     if not isinstance(items, list) or not items:
         raise LabelSpaceRegistryError("label_spaces must be a non-empty list")
 
-    spaces: Dict[str, LabelSpaceDefinition] = {}
+    spaces: dict[str, LabelSpaceDefinition] = {}
     for idx, item in enumerate(items):
         if not isinstance(item, dict):
             raise LabelSpaceRegistryError(
@@ -89,14 +85,10 @@ def load_label_space_registry(path: Optional[Path] = None) -> LabelSpaceRegistry
         allowed = {"id", "num_classes", "parent"}
         unknown = set(item.keys()) - allowed
         if unknown:
-            raise LabelSpaceRegistryError(
-                f"label_spaces[{idx}] unknown keys {sorted(unknown)}"
-            )
+            raise LabelSpaceRegistryError(f"label_spaces[{idx}] unknown keys {sorted(unknown)}")
         nc = item.get("num_classes")
         if not isinstance(nc, int) or nc < 1:
-            raise LabelSpaceRegistryError(
-                f"label_spaces[{idx}].num_classes must be int >= 1"
-            )
+            raise LabelSpaceRegistryError(f"label_spaces[{idx}].num_classes must be int >= 1")
         parent = item.get("parent")
         if parent is not None and (not isinstance(parent, str) or not parent.strip()):
             raise LabelSpaceRegistryError(

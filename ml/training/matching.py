@@ -1,7 +1,7 @@
 """Hungarian matching for multi-object detection. Aligns predictions to ground truth so we train reliable what/where/urgency outputs for assistive scene understanding and safety cues."""
 
 import logging
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 import numpy as np
 import torch
@@ -110,7 +110,9 @@ def compute_matching_cost(
     return total_cost
 
 
-def _empty_matches(device: torch.device, dtype: torch.dtype = torch.long) -> Tuple[torch.Tensor, torch.Tensor]:
+def _empty_matches(
+    device: torch.device, dtype: torch.dtype = torch.long
+) -> tuple[torch.Tensor, torch.Tensor]:
     return (
         torch.empty((2, 0), dtype=dtype, device=device),
         torch.empty((0,), device=device),
@@ -121,11 +123,15 @@ def _sanitize_boxes_and_logits(
     pred_boxes: torch.Tensor,
     gt_boxes: torch.Tensor,
     pred_logits: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Replace NaN/Inf with zeros; clamp width/height and coords to [0,1]."""
-    pred_boxes = torch.where(torch.isfinite(pred_boxes), pred_boxes, torch.zeros_like(pred_boxes)).float()
+    pred_boxes = torch.where(
+        torch.isfinite(pred_boxes), pred_boxes, torch.zeros_like(pred_boxes)
+    ).float()
     gt_boxes = torch.where(torch.isfinite(gt_boxes), gt_boxes, torch.zeros_like(gt_boxes)).float()
-    pred_logits = torch.where(torch.isfinite(pred_logits), pred_logits, torch.zeros_like(pred_logits)).float()
+    pred_logits = torch.where(
+        torch.isfinite(pred_logits), pred_logits, torch.zeros_like(pred_logits)
+    ).float()
 
     pred_boxes = pred_boxes.clone()
     pred_boxes[:, 2] = torch.clamp(pred_boxes[:, 2], min=1e-4)
@@ -138,13 +144,15 @@ def _sanitize_boxes_and_logits(
     return pred_boxes, gt_boxes, pred_logits
 
 
-def _greedy_assignment(cost: torch.Tensor, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
+def _greedy_assignment(
+    cost: torch.Tensor, device: torch.device
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Assign each gt to its lowest-cost unused prediction."""
     num_gt = cost.shape[1]
-    pred_idx_list: List[int] = []
-    gt_idx_list: List[int] = []
-    matched_costs_list: List[torch.Tensor] = []
-    used_preds: Set[int] = set()
+    pred_idx_list: list[int] = []
+    gt_idx_list: list[int] = []
+    matched_costs_list: list[torch.Tensor] = []
+    used_preds: set[int] = set()
 
     for gt_i in range(num_gt):
         gt_costs = cost[:, gt_i]
@@ -175,17 +183,24 @@ def match_predictions_to_gt(
     lambda_bbox: float = 5.0,
     lambda_giou: float = 2.0,
     use_hungarian: bool = True,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Optimal assignment pred<->gt. Returns (indices [2, K], costs [K])."""
     if pred_boxes.shape[0] == 0 or gt_boxes.shape[0] == 0:
         return _empty_matches(pred_boxes.device)
 
-    pred_boxes, gt_boxes, pred_logits = _sanitize_boxes_and_logits(pred_boxes, gt_boxes, pred_logits)
+    pred_boxes, gt_boxes, pred_logits = _sanitize_boxes_and_logits(
+        pred_boxes, gt_boxes, pred_logits
+    )
 
     try:
         cost = compute_matching_cost(
-            pred_boxes, pred_logits, gt_boxes, gt_labels,
-            lambda_class, lambda_bbox, lambda_giou,
+            pred_boxes,
+            pred_logits,
+            gt_boxes,
+            gt_labels,
+            lambda_class,
+            lambda_bbox,
+            lambda_giou,
         )
     except ValueError as e:
         logger.debug("Cost computation failed after sanitization: %s. Returning empty matches.", e)
@@ -194,6 +209,7 @@ def match_predictions_to_gt(
     if use_hungarian:
         try:
             from scipy.optimize import linear_sum_assignment
+
             cost_np = cost.detach().cpu().numpy()
             if np.isfinite(cost_np).all():
                 pred_indices, gt_indices = linear_sum_assignment(cost_np)
@@ -214,7 +230,7 @@ def _sanitize_sample_predictions(
     device: torch.device,
     dtype: torch.dtype,
     sample_idx: int,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Replace NaN/Inf in one sample's predictions (clone then column updates for GradNorm)."""
     if torch.isnan(pred_boxes_i).any() or torch.isinf(pred_boxes_i).any():
         logger.warning("Sample %d has NaN/Inf in pred_boxes, sanitizing", sample_idx)
@@ -237,15 +253,15 @@ def match_batch(
     lambda_class: float = 1.0,
     lambda_bbox: float = 5.0,
     lambda_giou: float = 2.0,
-) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
     """One-to-one matching per batch item. Produces consistent training targets across the batch for assistive detection quality."""
     batch_size = pred_boxes.shape[0]
     device = pred_boxes.device
     empty_indices = torch.empty((2, 0), dtype=torch.long, device=device)
     empty_costs = torch.empty((0,), device=device)
 
-    indices_list: List[torch.Tensor] = []
-    costs_list: List[torch.Tensor] = []
+    indices_list: list[torch.Tensor] = []
+    costs_list: list[torch.Tensor] = []
 
     for i in range(batch_size):
         valid_gt = (gt_boxes[i, :, 2] > 0) & (gt_boxes[i, :, 3] > 0)
@@ -270,8 +286,13 @@ def match_batch(
         gt_boxes_valid = gt_boxes[i][valid_gt]
         gt_labels_valid = gt_labels[i][valid_gt]
         indices, costs = match_predictions_to_gt(
-            pred_boxes_i, pred_logits_i, gt_boxes_valid, gt_labels_valid,
-            lambda_class, lambda_bbox, lambda_giou,
+            pred_boxes_i,
+            pred_logits_i,
+            gt_boxes_valid,
+            gt_labels_valid,
+            lambda_class,
+            lambda_bbox,
+            lambda_giou,
         )
         indices_list.append(indices)
         costs_list.append(costs)
@@ -286,7 +307,7 @@ def _interpret_indices(
     idx: torch.Tensor,
     num_locations: int,
     num_gt: int,
-) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
+) -> tuple[torch.Tensor | None, torch.Tensor | None]:
     """From [2, K] indices (pred row, gt row, order may swap), return (pred_idx, gt_idx) or (None, None)."""
     if idx[0].max().item() < num_locations and idx[1].max().item() < num_gt:
         return idx[0], idx[1]
@@ -296,9 +317,9 @@ def _interpret_indices(
 
 
 def build_matched_pred_targets(
-    outputs: Dict[str, Any],
-    targets: Dict[str, Any],
-) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+    outputs: dict[str, Any],
+    targets: dict[str, Any],
+) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
     """Run Hungarian matching and return aligned pred/target dicts for loss. Aligns model outputs to ground truth so all assistive heads (objectness, class, box, distance, urgency) get correct supervision."""
     batch_size = outputs["boxes"].size(0)
     num_locations = outputs["boxes"].size(1)
@@ -310,13 +331,15 @@ def build_matched_pred_targets(
 
     indices_list, _ = match_batch(pred_boxes, pred_logits, gt_boxes, gt_labels)
 
-    target_objectness = torch.zeros(batch_size, num_locations, device=device, dtype=pred_boxes.dtype)
-    matched_pred_cls: List[torch.Tensor] = []
-    matched_gt_cls: List[torch.Tensor] = []
-    matched_pred_box: List[torch.Tensor] = []
-    matched_gt_box: List[torch.Tensor] = []
-    matched_pred_dist: List[torch.Tensor] = []
-    matched_gt_dist: List[torch.Tensor] = []
+    target_objectness = torch.zeros(
+        batch_size, num_locations, device=device, dtype=pred_boxes.dtype
+    )
+    matched_pred_cls: list[torch.Tensor] = []
+    matched_gt_cls: list[torch.Tensor] = []
+    matched_pred_box: list[torch.Tensor] = []
+    matched_gt_box: list[torch.Tensor] = []
+    matched_pred_dist: list[torch.Tensor] = []
+    matched_gt_dist: list[torch.Tensor] = []
 
     for i in range(batch_size):
         idx = indices_list[i]
@@ -346,22 +369,28 @@ def build_matched_pred_targets(
     num_classes = pred_logits.size(-1)
     aligned_pred = {
         "objectness": outputs["objectness"],
-        "classification": torch.cat(matched_pred_cls, dim=0) if matched_pred_cls else torch.empty(0, num_classes, device=device),
-        "box": torch.cat(matched_pred_box, dim=0) if matched_pred_box else torch.empty(0, 4, device=device),
-        "distance": torch.cat(matched_pred_dist, dim=0) if matched_pred_dist else torch.empty(0, 3, device=device),
+        "classification": torch.cat(matched_pred_cls, dim=0)
+        if matched_pred_cls
+        else torch.empty(0, num_classes, device=device),
+        "box": torch.cat(matched_pred_box, dim=0)
+        if matched_pred_box
+        else torch.empty(0, 4, device=device),
+        "distance": torch.cat(matched_pred_dist, dim=0)
+        if matched_pred_dist
+        else torch.empty(0, 3, device=device),
         "urgency_scores": outputs.get("urgency_scores"),
     }
     aligned_target = {
         "objectness": target_objectness,
-        "labels": torch.cat(matched_gt_cls, dim=0) if matched_gt_cls else torch.empty(0, dtype=torch.long, device=device),
-        "boxes": torch.cat(matched_gt_box, dim=0) if matched_gt_box else torch.empty(0, 4, device=device),
-        "distance": torch.cat(matched_gt_dist, dim=0) if matched_gt_dist else torch.empty(0, dtype=torch.long, device=device),
+        "labels": torch.cat(matched_gt_cls, dim=0)
+        if matched_gt_cls
+        else torch.empty(0, dtype=torch.long, device=device),
+        "boxes": torch.cat(matched_gt_box, dim=0)
+        if matched_gt_box
+        else torch.empty(0, 4, device=device),
+        "distance": torch.cat(matched_gt_dist, dim=0)
+        if matched_gt_dist
+        else torch.empty(0, dtype=torch.long, device=device),
         "urgency": targets.get("urgency"),
     }
     return aligned_pred, aligned_target
-
-
-
-
-
-

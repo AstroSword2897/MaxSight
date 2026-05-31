@@ -1,17 +1,19 @@
 """User-specific personalization for fusion weights, exploration, and output scaling."""
 
 import hashlib
+import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Any, cast
 
 import torch
-
 from ml.retrieval.fusion.meta_fusion import (
     ActiveSceneExploration,
     MetaFusionWeights,
     PredictiveNavigationGuidance,
     UserProfile,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -28,11 +30,11 @@ class PersonalizationState:
     """
 
     user_id: str
-    preferences: Dict[str, float] = field(default_factory=dict)
-    task_history: List[str] = field(default_factory=list)
-    performance_metrics: Dict[str, List[float]] = field(default_factory=dict)
+    preferences: dict[str, float] = field(default_factory=dict)
+    task_history: list[str] = field(default_factory=list)
+    performance_metrics: dict[str, list[float]] = field(default_factory=dict)
     adaptation_count: int = 0
-    adapted_weights: Optional[torch.Tensor] = None
+    adapted_weights: torch.Tensor | None = None
 
 
 class PersonalMode:
@@ -58,7 +60,7 @@ class PersonalMode:
         self.meta_fusion = MetaFusionWeights(num_modalities=num_modalities, embed_dim=embed_dim)
         self.active_exploration = ActiveSceneExploration(embed_dim=embed_dim)
         self.navigation_guidance = PredictiveNavigationGuidance(embed_dim=embed_dim)
-        self.user_states: Dict[str, PersonalizationState] = {}
+        self.user_states: dict[str, PersonalizationState] = {}
 
     def get_user_state(self, user_id: str) -> PersonalizationState:
         """Return existing user state or create a new one.
@@ -78,7 +80,7 @@ class PersonalMode:
         user_id: str,
         task_type: str,
         performance_score: float,
-        preferred_modalities: Optional[List[str]] = None,
+        preferred_modalities: list[str] | None = None,
     ) -> None:
         """Record task performance and periodically adapt fusion weights.
 
@@ -114,19 +116,21 @@ class PersonalMode:
                 preferred_modalities=preferred_modalities or ["vision", "audio"],
                 task_preferences=state.preferences,
             )
-            adapted_weights = self.meta_fusion.adapt_to_user(user_profile, state.performance_metrics)
+            adapted_weights = self.meta_fusion.adapt_to_user(
+                user_profile, state.performance_metrics
+            )
             state.adapted_weights = adapted_weights.detach().clone()
 
         state.adaptation_count += 1
 
     def fuse_with_personalization(
         self,
-        modality_embeddings: Dict[str, torch.Tensor],
-        user_id: Optional[str] = None,
-        task_type: Optional[str] = None,
-        urgency: Optional[float] = None,
-        confidence: Optional[float] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        modality_embeddings: dict[str, torch.Tensor],
+        user_id: str | None = None,
+        task_type: str | None = None,
+        urgency: float | None = None,
+        confidence: float | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Fuse modality embeddings with user-specific weight adaptation.
 
         Parameters:
@@ -178,9 +182,9 @@ class PersonalMode:
         self,
         region_embeddings: torch.Tensor,
         uncertainties: torch.Tensor,
-        user_id: Optional[str] = None,
-        urgency: Optional[float] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        user_id: str | None = None,
+        urgency: float | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Score regions for active exploration.
 
         Parameters:
@@ -202,36 +206,115 @@ class PersonalMode:
         if urgency is not None:
             urgency_tensor = torch.tensor([urgency], device=region_embeddings.device)
 
-        return self.active_exploration(
-            region_embeddings=region_embeddings,
-            uncertainties=uncertainties,
-            urgency=urgency_tensor,
-            user_preference=user_preference,
+        return cast(
+            tuple[torch.Tensor, torch.Tensor],
+            self.active_exploration(
+                region_embeddings=region_embeddings,
+                uncertainties=uncertainties,
+                urgency=urgency_tensor,
+                user_preference=user_preference,
+            ),
         )
 
     def predict_navigation(
         self,
         current_embedding: torch.Tensor,
         goal_embedding: torch.Tensor,
-        scene_context: Optional[torch.Tensor] = None,
-    ) -> Dict[str, torch.Tensor]:
+        scene_context: torch.Tensor | None = None,
+    ) -> dict[str, torch.Tensor]:
         """Predict navigation guidance from current and goal embeddings.
 
         Returns:
             Dict with direction, distance, confidence, and guidance priority tensors.
         """
-        return self.navigation_guidance(
-            current_embedding=current_embedding,
-            goal_embedding=goal_embedding,
-            scene_context=scene_context,
+        return cast(
+            dict[str, torch.Tensor],
+            self.navigation_guidance(
+                current_embedding=current_embedding,
+                goal_embedding=goal_embedding,
+                scene_context=scene_context,
+            ),
         )
+
+    def get_therapy_recommendations(
+        self,
+        perception: dict[str, Any],
+        user_id: str | None = None,
+        *,
+        disability_id: str | None = None,
+        preferred_channel: str | None = None,
+    ) -> list[Any]:
+        """Return ``TherapyRecommendation`` objects for the current perception frame.
+
+        Enriches the perception dict with ``disability_id`` and ``preferred_channel``
+        from the user profile before calling the therapy engine so the decision
+        engine and scoring model can apply condition-specific routing.
+
+        Parameters:
+            perception: Raw perception output dict (not mutated).
+            user_id: Used to look up disability and channel preference from profile.
+            disability_id: Explicit disability override (takes priority over profile).
+            preferred_channel: Explicit channel override (takes priority over profile).
+
+        Returns:
+            List of ``TherapyRecommendation`` dataclass instances (may be empty).
+        """
+        from ml.runtime.contracts import TherapyRecommendation
+        from ml.therapy.therapy_engine import TherapyEngine
+
+        if not hasattr(self, "_therapy_engine"):
+            self._therapy_engine = TherapyEngine()
+
+        enriched = dict(perception)
+        if user_id:
+            state = self.get_user_state(user_id)
+            profile_channel = state.preferences.get("preferred_channel", "audio")
+            profile_disability = state.preferences.get("disability_id", "")
+            enriched.setdefault("disability_id", disability_id or profile_disability)
+            enriched.setdefault("preferred_channel", preferred_channel or profile_channel)
+        if disability_id:
+            enriched["disability_id"] = disability_id
+        if preferred_channel:
+            enriched["preferred_channel"] = preferred_channel
+
+        try:
+            actions = self._therapy_engine.update(enriched)
+        except Exception as exc:
+            logger.error("therapy_engine_error in personal_mode: %s", exc)
+            return []
+
+        results = []
+        last_context = self._therapy_engine.get_last_context()
+        for action in actions:
+            score_trace: dict[str, float] = {}
+            try:
+                from ml.therapy.situation_understanding import SituationContext
+
+                trace_context = last_context or SituationContext()
+                trace = self._therapy_engine.scoring_model.score_intervention(
+                    trace_context, action.intervention_type
+                )
+                score_trace = trace.to_dict()
+            except Exception:
+                pass
+            results.append(
+                TherapyRecommendation(
+                    intervention_type=action.intervention_type,
+                    channel=action.channel,
+                    content=action.content,
+                    intensity=action.intensity,
+                    score=score_trace.get("final_score", action.intensity),
+                    score_trace=score_trace,
+                )
+            )
+        return results
 
     def get_personalized_outputs(
         self,
-        model_outputs: Dict[str, torch.Tensor],
-        user_id: Optional[str] = None,
-        task_type: Optional[str] = None,
-    ) -> Dict[str, torch.Tensor]:
+        model_outputs: dict[str, torch.Tensor],
+        user_id: str | None = None,
+        task_type: str | None = None,
+    ) -> dict[str, torch.Tensor]:
         """Scale tensor outputs using user task preferences.
 
         Parameters:

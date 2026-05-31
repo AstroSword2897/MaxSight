@@ -4,23 +4,24 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Any
 
 import torch
 
 # Tests avoid pytest so the simulator can import and run without dev deps layout issues.
 
 
-def _ok(name: str, detail: str = "") -> Dict[str, Any]:
+def _ok(name: str, detail: str = "") -> dict[str, Any]:
     return {"name": name, "ok": True, "detail": detail, "ms": 0.0}
 
 
-def _fail(name: str, err: str) -> Dict[str, Any]:
+def _fail(name: str, err: str) -> dict[str, Any]:
     return {"name": name, "ok": False, "detail": err, "ms": 0.0}
 
 
-def _timed(name: str, fn: Callable[[], None]) -> Dict[str, Any]:
+def _timed(name: str, fn: Callable[[], None]) -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         fn()
@@ -35,10 +36,10 @@ def _timed(name: str, fn: Callable[[], None]) -> Dict[str, Any]:
         return r
 
 
-def run_sprint_self_tests() -> Dict[str, Any]:
+def run_sprint_self_tests() -> dict[str, Any]:
     """Run all sprint-related self-tests; return JSON-serializable report."""
 
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
 
     def t_manifest_validate() -> None:
         from ml.data.video_manifest import validate_manifest_v1
@@ -123,7 +124,6 @@ def run_sprint_self_tests() -> Dict[str, Any]:
 
     def t_sample_script_import() -> None:
         import importlib.util
-        from pathlib import Path
 
         p = Path(__file__).resolve().parents[2] / "scripts" / "ops" / "sample_video_clips.py"
         spec = importlib.util.spec_from_file_location("sample_video_clips", p)
@@ -143,7 +143,7 @@ def run_sprint_self_tests() -> Dict[str, Any]:
     }
 
 
-def run_manifest_json_check(manifest_json: str) -> Dict[str, Any]:
+def run_manifest_json_check(manifest_json: str) -> dict[str, Any]:
     """Validate user-pasted JSON manifest (optional body for POST)."""
 
     from ml.data.video_manifest import validate_manifest_v1

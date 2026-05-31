@@ -23,17 +23,18 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Supported image and video extensions.
-IMAGE_EXTS: Set[str] = {"jpg", "jpeg", "png", "bmp", "webp", "tiff", "tif"}
-VIDEO_EXTS: Set[str] = {"mp4", "avi", "mov", "mkv", "webm"}
-ANNOTATION_EXTS: Set[str] = {"json"}
+IMAGE_EXTS: set[str] = {"jpg", "jpeg", "png", "bmp", "webp", "tiff", "tif"}
+VIDEO_EXTS: set[str] = {"mp4", "avi", "mov", "mkv", "webm"}
+ANNOTATION_EXTS: set[str] = {"json"}
 
 
 # ── Result dataclasses ─────────────────────────────────────────────────────────
+
 
 @dataclass
 class CleaningReport:
@@ -45,10 +46,10 @@ class CleaningReport:
     removed_corrupt: int = 0
     removed_duplicate: int = 0
     removed_too_small: int = 0
-    annotation_errors: List[str] = field(default_factory=list)
-    skipped_files: List[str] = field(default_factory=list)
+    annotation_errors: list[str] = field(default_factory=list)
+    skipped_files: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "dataset_key": self.dataset_key,
             "started_at": self.started_at,
@@ -64,6 +65,7 @@ class CleaningReport:
 
 
 # ── Core cleaner ──────────────────────────────────────────────────────────────
+
 
 class DatasetCleaner:
     """Validate and deduplicate files from a bronze directory into silver."""
@@ -89,7 +91,7 @@ class DatasetCleaner:
 
     def clean_images(
         self,
-        ext: Optional[List[str]] = None,
+        ext: list[str] | None = None,
         subdir: str = "images",
     ) -> CleaningReport:
         """Scan bronze images, remove corrupt/duplicate/too-small, copy valid to silver."""
@@ -102,7 +104,7 @@ class DatasetCleaner:
         silver_img_dir = self.silver_dir / subdir
         silver_img_dir.mkdir(parents=True, exist_ok=True)
 
-        seen_hashes: Set[str] = set()
+        seen_hashes: set[str] = set()
         for src in _iter_files(self.bronze_dir, exts):
             report.total_scanned += 1
             try:
@@ -149,7 +151,7 @@ class DatasetCleaner:
 
     def clean_videos(
         self,
-        ext: Optional[List[str]] = None,
+        ext: list[str] | None = None,
         subdir: str = "videos",
         min_duration_s: float = 0.5,
     ) -> CleaningReport:
@@ -157,7 +159,9 @@ class DatasetCleaner:
         try:
             import cv2  # type: ignore
         except ImportError:
-            raise ImportError("opencv-python is required for video cleaning: pip install opencv-python")
+            raise ImportError(
+                "opencv-python is required for video cleaning: pip install opencv-python"
+            )
 
         report = CleaningReport(dataset_key=self.dataset_key)
         report.started_at = _now()
@@ -166,7 +170,7 @@ class DatasetCleaner:
         silver_vid_dir = self.silver_dir / subdir
         silver_vid_dir.mkdir(parents=True, exist_ok=True)
 
-        seen_hashes: Set[str] = set()
+        seen_hashes: set[str] = set()
         for src in _iter_files(self.bronze_dir, exts):
             report.total_scanned += 1
             try:
@@ -224,7 +228,7 @@ class DatasetCleaner:
         with open(src_annotation, encoding="utf-8") as f:
             data = json.load(f)
 
-        valid_img_ids: Set[int] = set()
+        valid_img_ids: set[int] = set()
         kept_images = []
         for img in data.get("images", []):
             fn = img.get("file_name", "")
@@ -275,7 +279,8 @@ class DatasetCleaner:
 
 # ── Dataset-specific cleaning functions ───────────────────────────────────────
 
-def clean_coco(bronze_dir: Path, silver_dir: Path) -> List[CleaningReport]:
+
+def clean_coco(bronze_dir: Path, silver_dir: Path) -> list[CleaningReport]:
     """COCO: clean images and instances_*.json annotation files."""
     reports = []
     cleaner = DatasetCleaner(bronze_dir, silver_dir / "images", dataset_key="coco")
@@ -291,7 +296,7 @@ def clean_coco(bronze_dir: Path, silver_dir: Path) -> List[CleaningReport]:
     return reports
 
 
-def clean_bdd100k(bronze_dir: Path, silver_dir: Path) -> List[CleaningReport]:
+def clean_bdd100k(bronze_dir: Path, silver_dir: Path) -> list[CleaningReport]:
     """BDD100K: images + COCO-style annotation JSON exports."""
     cleaner = DatasetCleaner(bronze_dir, silver_dir, dataset_key="bdd100k")
     reports = [cleaner.clean_images(ext=["jpg", "jpeg"])]
@@ -314,7 +319,7 @@ def clean_video_dataset(
     silver_dir: Path,
     dataset_key: str,
     min_duration_s: float = 0.5,
-) -> List[CleaningReport]:
+) -> list[CleaningReport]:
     """Generic video-only cleaner for Kinetics, HowTo100M, WebVid, Epic-Kitchens."""
     cleaner = DatasetCleaner(bronze_dir, silver_dir, dataset_key=dataset_key)
     return [cleaner.clean_videos(min_duration_s=min_duration_s)]
@@ -324,7 +329,7 @@ def clean_vos_dataset(
     bronze_dir: Path,
     silver_dir: Path,
     dataset_key: str,
-) -> List[CleaningReport]:
+) -> list[CleaningReport]:
     """Video Object Segmentation datasets (MOSE, YouTube-VOS): validate frame dirs."""
     report = CleaningReport(dataset_key=dataset_key)
     report.started_at = _now()
@@ -332,7 +337,7 @@ def clean_vos_dataset(
 
     silver_frames = silver_dir / "frames"
     silver_frames.mkdir(parents=True, exist_ok=True)
-    seen_hashes: Set[str] = set()
+    seen_hashes: set[str] = set()
 
     for src in _iter_files(bronze_dir, IMAGE_EXTS):
         report.total_scanned += 1
@@ -359,13 +364,16 @@ def clean_vos_dataset(
         report.kept += 1
 
     report.finished_at = _now()
-    logger.info("VOS clean [%s]: kept=%d / scanned=%d", dataset_key, report.kept, report.total_scanned)
+    logger.info(
+        "VOS clean [%s]: kept=%d / scanned=%d", dataset_key, report.kept, report.total_scanned
+    )
     return [report]
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _iter_files(root: Path, exts: Set[str]):
+
+def _iter_files(root: Path, exts: set[str]):
     for p in root.rglob("*"):
         if p.is_file() and p.suffix.lower().lstrip(".") in exts:
             yield p
@@ -381,6 +389,7 @@ def _file_hash(path: Path, chunk_bytes: int = 65536) -> str:
 
 def _copy_file(src: Path, dst: Path) -> None:
     import shutil
+
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
 

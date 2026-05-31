@@ -6,7 +6,7 @@ import json
 import random
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ml.data.data_pipeline import collate_fn
 from ml.data.video_clip_dataset import VideoClipManifestDataset
@@ -16,13 +16,13 @@ from ml.data.video_manifest import validate_manifest_v1
 def summarize_manifest_frame_files(
     manifest_path: Path,
     *,
-    manifest_root: Optional[Path] = None,
-) -> Dict[str, Any]:
+    manifest_root: Path | None = None,
+) -> dict[str, Any]:
     """Count how many manifest frame_paths resolve to existing files."""
 
     mp = Path(manifest_path)
     root = Path(manifest_root) if manifest_root is not None else mp.parent
-    with open(mp, "r", encoding="utf-8") as f:
+    with open(mp, encoding="utf-8") as f:
         data = json.load(f)
     clips = data.get("clips", [])
     if not isinstance(clips, list):
@@ -56,7 +56,7 @@ def summarize_manifest_frame_files(
     }
 
 
-def time_manifest_parse_and_validate_ms(manifest_path: Path) -> Dict[str, float]:
+def time_manifest_parse_and_validate_ms(manifest_path: Path) -> dict[str, float]:
     """Split timing for JSON parse vs validate (milliseconds)."""
 
     mp = Path(manifest_path)
@@ -76,7 +76,7 @@ def time_manifest_parse_and_validate_ms(manifest_path: Path) -> Dict[str, float]
 def profile_video_clip_dataset(
     manifest_path: Path,
     *,
-    manifest_root: Optional[Path] = None,
+    manifest_root: Path | None = None,
     warmup_samples: int = 2,
     timed_getitem_count: int = 32,
     dataloader_batches: int = 10,
@@ -84,7 +84,7 @@ def profile_video_clip_dataset(
     num_workers: int = 0,
     seed: int = 0,
     shuffle_indices: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Measure init, sequential __getitem__, and DataLoader+collate throughput."""
 
     mp = Path(manifest_path)

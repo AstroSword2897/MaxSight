@@ -35,6 +35,8 @@ def test_validate_infra_stubs_strict_fails_on_placeholder_iam():
         text=True,
         check=False,
     )
-    assert proc.returncode == 1, "strict mode should fail while IAM stubs still contain {{placeholders}}"
+    assert proc.returncode == 1, (
+        "strict mode should fail while IAM stubs still contain {{placeholders}}"
+    )
     combined = proc.stderr + proc.stdout
     assert "infra/iam/" in combined or "placeholders" in combined.lower()

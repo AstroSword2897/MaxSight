@@ -33,7 +33,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,7 @@ STAGES = ("candidate", "staging", "production", "archived")
 
 # ── Registry entry ────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ModelEntry:
     run_id: str
@@ -54,11 +55,11 @@ class ModelEntry:
     tier: str = ""
     backbone: str = ""
     stage: str = "candidate"
-    metrics: Dict[str, float] = field(default_factory=dict)
-    tags: Dict[str, str] = field(default_factory=dict)
+    metrics: dict[str, float] = field(default_factory=dict)
+    tags: dict[str, str] = field(default_factory=dict)
     notes: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
             "registered_at": self.registered_at,
@@ -73,7 +74,7 @@ class ModelEntry:
         }
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "ModelEntry":
+    def from_dict(cls, d: dict[str, Any]) -> ModelEntry:
         return cls(
             run_id=d["run_id"],
             registered_at=d.get("registered_at", ""),
@@ -90,6 +91,7 @@ class ModelEntry:
 
 # ── Registry ──────────────────────────────────────────────────────────────────
 
+
 class ModelRegistry:
     """Local + optional SageMaker Model Registry."""
 
@@ -98,15 +100,19 @@ class ModelRegistry:
         registry_path: Path = DEFAULT_REGISTRY_PATH,
         *,
         s3_client=None,
-        sm_model_package_group: Optional[str] = None,
+        sm_model_package_group: str | None = None,
         sm_config=None,
     ) -> None:
         self.registry_path = Path(registry_path)
         self._s3_client = s3_client
-        resolved_group = (sm_model_package_group or os.environ.get("MAXSIGHT_MODEL_PACKAGE_GROUP", "").strip() or None)
+        resolved_group = (
+            sm_model_package_group
+            or os.environ.get("MAXSIGHT_MODEL_PACKAGE_GROUP", "").strip()
+            or None
+        )
         self._sm_group = resolved_group
         self._sm_cfg = sm_config
-        self._entries: Dict[str, ModelEntry] = {}
+        self._entries: dict[str, ModelEntry] = {}
         self._load()
 
     def _load(self) -> None:
@@ -128,10 +134,10 @@ class ModelRegistry:
         run_id: str,
         checkpoint_path: Path,
         *,
-        metrics: Optional[Dict[str, float]] = None,
+        metrics: dict[str, float] | None = None,
         tier: str = "",
         backbone: str = "",
-        tags: Optional[Dict[str, str]] = None,
+        tags: dict[str, str] | None = None,
         notes: str = "",
         upload_to_s3: bool = False,
     ) -> ModelEntry:
@@ -180,21 +186,21 @@ class ModelRegistry:
         logger.info("Promoted %s → %s", run_id, stage)
         return entry
 
-    def get_production_model(self) -> Optional[ModelEntry]:
+    def get_production_model(self) -> ModelEntry | None:
         for e in reversed(list(self._entries.values())):
             if e.stage == "production":
                 return e
         return None
 
-    def get_stage_models(self, stage: str) -> List[ModelEntry]:
+    def get_stage_models(self, stage: str) -> list[ModelEntry]:
         return [e for e in self._entries.values() if e.stage == stage]
 
     def list_models(
         self,
-        stage: Optional[str] = None,
-        tier: Optional[str] = None,
+        stage: str | None = None,
+        tier: str | None = None,
         top_n: int = 20,
-    ) -> List[ModelEntry]:
+    ) -> list[ModelEntry]:
         entries = list(self._entries.values())
         if stage:
             entries = [e for e in entries if e.stage == stage]
@@ -205,8 +211,8 @@ class ModelRegistry:
     def compare_models(
         self,
         metric: str = "val_map",
-        stage: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        stage: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Return models sorted by a metric (descending)."""
         entries = self.list_models(stage=stage)
         rows = [
@@ -219,7 +225,7 @@ class ModelRegistry:
             }
             for e in entries
         ]
-        rows.sort(key=lambda r: (r[metric] or 0.0), reverse=True)
+        rows.sort(key=lambda r: r[metric] or 0.0, reverse=True)
         return rows
 
     def tag_model(self, run_id: str, **tags: str) -> None:
@@ -237,15 +243,18 @@ class ModelRegistry:
         # Propagate exceptions when a package group is configured — callers depend on
         # the SageMaker ARN being present for the registry gate to work correctly.
         import boto3
+
         sm = boto3.client("sagemaker", region_name=getattr(self._sm_cfg, "region", "us-east-1"))
         sm.create_model_package(
             ModelPackageGroupName=self._sm_group,
             ModelPackageDescription=f"MaxSight {entry.tier} {entry.run_id}",
             InferenceSpecification={
-                "Containers": [{
-                    "Image": getattr(self._sm_cfg, "inference_image", ""),
-                    "ModelDataUrl": model_data_s3,
-                }],
+                "Containers": [
+                    {
+                        "Image": getattr(self._sm_cfg, "inference_image", ""),
+                        "ModelDataUrl": model_data_s3,
+                    }
+                ],
                 "SupportedContentTypes": ["application/json"],
                 "SupportedResponseMIMETypes": ["application/json"],
             },

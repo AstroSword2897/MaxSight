@@ -29,8 +29,12 @@ def main() -> int:
         type=Path,
         default=REPO / "datasets" / "medallion" / "gold" / "training_index.json",
     )
-    p.add_argument("--checkpoint-parent", type=Path, default=REPO / "checkpoints" / "medallion_runs")
-    p.add_argument("--epochs", type=int, default=2, help="Per-config epochs (raise for real training)")
+    p.add_argument(
+        "--checkpoint-parent", type=Path, default=REPO / "checkpoints" / "medallion_runs"
+    )
+    p.add_argument(
+        "--epochs", type=int, default=2, help="Per-config epochs (raise for real training)"
+    )
     p.add_argument("--device", type=str, default="auto")
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--dry-run", action="store_true")

@@ -40,6 +40,7 @@ def get_filenames_from_json(val_json: Path, max_filenames: int = 100) -> list[st
 def find_file_in_tree(root: Path, filename: str, max_dirs: int = 10000) -> list[Path]:
     """BFS under root for filename; return list of full paths (usually 0 or 1)."""
     from collections import deque
+
     root = Path(root)
     if not root.exists():
         return []
@@ -98,7 +99,9 @@ def main():
         return 1
 
     filenames = get_filenames_from_json(args.val_json, args.max_filenames)
-    print(f"Looking up {len(filenames)} filenames from {args.val_json.name} under {args.search_root}\n")
+    print(
+        f"Looking up {len(filenames)} filenames from {args.val_json.name} under {args.search_root}\n"
+    )
 
     found_count = 0
     first_found_path = None
@@ -110,10 +113,10 @@ def main():
                 first_found_path = paths[0]
             loc = str(paths[0])
             if len(paths) > 1:
-                loc += f" (and {len(paths)-1} more)"
-            print(f"  [{i+1}] {name}\n      -> {loc}")
+                loc += f" (and {len(paths) - 1} more)"
+            print(f"  [{i + 1}] {name}\n      -> {loc}")
         else:
-            print(f"  [{i+1}] {name}\n      -> NOT FOUND")
+            print(f"  [{i + 1}] {name}\n      -> NOT FOUND")
 
     print(f"\nSummary: {found_count}/{len(filenames)} found under {args.search_root}")
     if first_found_path is not None:
@@ -125,9 +128,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-
-
-
-

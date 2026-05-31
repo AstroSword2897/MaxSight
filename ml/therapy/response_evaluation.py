@@ -1,12 +1,13 @@
 """Response Evaluation: before_state, intervention, after_state → effectiveness score."""
 
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Any
 
 
 @dataclass
 class ResponseEvaluationResult:
     """Result of evaluating whether an intervention worked."""
+
     effectiveness_score: float  # 0-1
     stress_reduction: float
     reason: str
@@ -20,9 +21,9 @@ class ResponseEvaluationModel:
 
     def evaluate(
         self,
-        before_state: Dict[str, Any],
+        before_state: dict[str, Any],
         intervention_type: str,
-        after_state: Dict[str, Any],
+        after_state: dict[str, Any],
     ) -> ResponseEvaluationResult:
         """
         Compare stress/cognitive load before vs after. Positive delta → effectiveness.

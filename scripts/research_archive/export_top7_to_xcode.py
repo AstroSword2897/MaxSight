@@ -12,10 +12,12 @@ if __name__ == "__main__":
     # CoreML-only: skip JIT/PTE (faster, avoids JIT segfault). Output ready for Xcode.
     sys.argv = [
         sys.argv[0],
-        "--output-dir", str(REPO / "exports" / "top7"),
-        "--device", "cpu",
+        "--output-dir",
+        str(REPO / "exports" / "top7"),
+        "--device",
+        "cpu",
         "--coreml-only",
     ]
     import scripts.deploy_top7 as deploy
-    deploy.main()
 
+    deploy.main()

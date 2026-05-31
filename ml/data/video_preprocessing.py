@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Protocol, Sequence
+from typing import Any, Protocol
 
 from ml.data.video_panoptic import (
     AdaptiveTemporalConfig,
@@ -21,7 +22,7 @@ from ml.data.video_panoptic import (
 class PanopticSegmenter(Protocol):
     """Interface for panoptic segmentation backends."""
 
-    def segment(self, frame: Any) -> List[Dict[str, Any]]:
+    def segment(self, frame: Any) -> list[dict[str, Any]]:
         """Return pseudo-panoptic segments for one frame."""
 
 
@@ -62,14 +63,14 @@ class VideoPanopticPreprocessor:
         self,
         segmenter: PanopticSegmenter,
         frame_loader: Callable[[str], Any],
-        config: Optional[PreprocessingConfig] = None,
+        config: PreprocessingConfig | None = None,
     ):
         self.segmenter = segmenter
         self.frame_loader = frame_loader
         self.config = config or PreprocessingConfig()
         self.config.validate()
 
-    def _segment_frame_path(self, frame_path: str) -> List[Dict[str, Any]]:
+    def _segment_frame_path(self, frame_path: str) -> list[dict[str, Any]]:
         frame = self.frame_loader(frame_path)
         segments = self.segmenter.segment(frame)
         return prune_pseudo_segments(segments, self.config.quality)
@@ -78,7 +79,7 @@ class VideoPanopticPreprocessor:
         self,
         video_id: str,
         frame_paths: Sequence[str],
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build sequence-ready clip manifest with pseudo-panoptic supervision."""
 
         if not video_id:
@@ -91,7 +92,7 @@ class VideoPanopticPreprocessor:
             }
 
         # Parallel segmentation with chunked submission to avoid unbounded memory.
-        per_frame_segments: List[List[Dict[str, Any]]] = []
+        per_frame_segments: list[list[dict[str, Any]]] = []
         with ThreadPoolExecutor(max_workers=self.config.segmentation_workers) as executor:
             for frame_chunk in iter_chunks(list(frame_paths), self.config.chunk_size):
                 results = list(executor.map(self._segment_frame_path, frame_chunk))
@@ -107,7 +108,7 @@ class VideoPanopticPreprocessor:
             windows = build_adaptive_windows(associated, self.config.adaptive)
         else:
             windows = build_fixed_stride_windows(len(frame_paths), self.config.sampling)
-        clips: List[Dict[str, Any]] = []
+        clips: list[dict[str, Any]] = []
         for clip_idx, (start, end) in enumerate(windows):
             clip_frames = list(frame_paths[start:end])
             clip_segments = associated[start:end]
@@ -142,4 +143,3 @@ class VideoPanopticPreprocessor:
                 "num_clips": len(clips),
             },
         }
-

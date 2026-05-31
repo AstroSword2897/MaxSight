@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import socket
-from typing import Tuple
 
 
 def port_is_available(host: str, port: int) -> bool:
@@ -27,7 +26,7 @@ def resolve_listen_port(
     *,
     strict: bool = False,
     scan_max: int = 128,
-) -> Tuple[int, bool]:
+) -> tuple[int, bool]:
     """Return ``(port, used_fallback)``.
 
     If ``preferred`` is free, use it. Otherwise scan upward up to ``scan_max`` attempts, then

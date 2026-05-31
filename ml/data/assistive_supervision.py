@@ -7,11 +7,12 @@ training targets stay reproducible when COCO-style boxes are the only signal.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from math import sqrt
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Optional, Tuple, cast
+from typing import Any, cast
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_YAML = _REPO_ROOT / "ml" / "config" / "assistive_supervision.yaml"
@@ -24,8 +25,8 @@ class AssistiveSupervisionSpec:
     w_class: float
     w_proximity: float
     w_center: float
-    urgency_bin_edges: Tuple[float, float, float]
-    distance_area_thresholds: Tuple[float, float]
+    urgency_bin_edges: tuple[float, float, float]
+    distance_area_thresholds: tuple[float, float]
     default_class_prior: float
     class_prior_overrides: Mapping[str, float]
 
@@ -34,7 +35,7 @@ def _spec_from_flat_dict(data: Mapping[str, Any]) -> AssistiveSupervisionSpec:
     w = data.get("weights") or {}
     if not isinstance(w, dict):
         raise TypeError("weights must be a dict")
-    w = cast(Dict[str, Any], w)
+    w = cast(dict[str, Any], w)
     edges = tuple(float(x) for x in (data.get("urgency_bin_edges") or [0.30, 0.50, 0.68]))
     if len(edges) != 3:
         raise ValueError("urgency_bin_edges must have exactly 3 values (4 urgency levels).")
@@ -56,7 +57,7 @@ def _spec_from_flat_dict(data: Mapping[str, Any]) -> AssistiveSupervisionSpec:
     )
 
 
-def _default_yaml_dict() -> Dict:
+def _default_yaml_dict() -> dict:
     return {
         "weights": {"class": 0.52, "proximity": 0.33, "center": 0.15},
         "urgency_bin_edges": [0.30, 0.50, 0.68],
@@ -66,12 +67,16 @@ def _default_yaml_dict() -> Dict:
     }
 
 
-def _merge_yaml_into_base(base: Dict, loaded: Mapping[str, object]) -> Dict:
+def _merge_yaml_into_base(base: dict, loaded: Mapping[str, object]) -> dict:
     out = dict(base)
     for k, v in loaded.items():
         if k == "weights" and isinstance(v, dict) and isinstance(out.get("weights"), dict):
             out["weights"] = {**out["weights"], **v}
-        elif k == "class_prior_overrides" and isinstance(v, dict) and isinstance(out.get("class_prior_overrides"), dict):
+        elif (
+            k == "class_prior_overrides"
+            and isinstance(v, dict)
+            and isinstance(out.get("class_prior_overrides"), dict)
+        ):
             out["class_prior_overrides"] = {**out["class_prior_overrides"], **v}
         else:
             out[k] = v
@@ -98,7 +103,7 @@ def _load_assistive_spec_cached(resolved_key: str) -> AssistiveSupervisionSpec:
     return _spec_from_flat_dict(merged)
 
 
-def load_assistive_spec(path: Optional[str] = None) -> AssistiveSupervisionSpec:
+def load_assistive_spec(path: str | None = None) -> AssistiveSupervisionSpec:
     """Load YAML spec; fall back to defaults. Cached per resolved file path."""
     env_path = os.environ.get("MAXSIGHT_ASSISTIVE_SPEC_PATH", "").strip()
     if path:
@@ -113,7 +118,7 @@ def load_assistive_spec(path: Optional[str] = None) -> AssistiveSupervisionSpec:
 
 
 @lru_cache(maxsize=1)
-def _coco_base_priors() -> Dict[str, float]:
+def _coco_base_priors() -> dict[str, float]:
     """Static risk table for COCO-80 names (exact string keys as in maxsight_cnn)."""
     from ml.models.maxsight_cnn import COCO_BASE_CLASSES
 
@@ -152,7 +157,7 @@ def _coco_base_priors() -> Dict[str, float]:
         "toilet",
         "sink",
     }
-    out: Dict[str, float] = {}
+    out: dict[str, float] = {}
     for c in COCO_BASE_CLASSES:
         if c in high:
             out[c] = 0.90
@@ -165,12 +170,37 @@ def _coco_base_priors() -> Dict[str, float]:
     return out
 
 
-def _keyword_boost_prior(name: str) -> Optional[float]:
+def _keyword_boost_prior(name: str) -> float | None:
     """Fallback for extended class names not in COCO-80."""
     n = name.lower()
-    if any(k in n for k in ("traffic", "crosswalk", "vehicle", "collision", "emergency", "fire_", "stair", "escalator")):
+    if any(
+        k in n
+        for k in (
+            "traffic",
+            "crosswalk",
+            "vehicle",
+            "collision",
+            "emergency",
+            "fire_",
+            "stair",
+            "escalator",
+        )
+    ):
         return 0.78
-    if any(k in n for k in ("sign", "exit", "warning", "hazard", "braille", "elevator", "door", "ramp", "curb")):
+    if any(
+        k in n
+        for k in (
+            "sign",
+            "exit",
+            "warning",
+            "hazard",
+            "braille",
+            "elevator",
+            "door",
+            "ramp",
+            "curb",
+        )
+    ):
         return 0.58
     if any(k in n for k in ("food", "vase", "remote", "clock", "book", "toothbrush", "hair drier")):
         return 0.22
@@ -259,8 +289,8 @@ def object_distance_and_urgency(
     w: float,
     h: float,
     category_name: str,
-    spec: Optional[AssistiveSupervisionSpec] = None,
-) -> Tuple[int, int]:
+    spec: AssistiveSupervisionSpec | None = None,
+) -> tuple[int, int]:
     """Return (distance_zone, urgency_level) for one normalized box."""
     sp = spec or load_assistive_spec()
     area = max(1e-8, float(w) * float(h))

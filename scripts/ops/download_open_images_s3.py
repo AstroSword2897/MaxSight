@@ -53,13 +53,12 @@ def main():
         print("(dry run)")
     result = subprocess.run(cmd)
     if result.returncode != 0:
-        print("Sync failed. If the bucket is not public, use: aws s3 sync ... (without --no-sign-request)")
+        print(
+            "Sync failed. If the bucket is not public, use: aws s3 sync ... (without --no-sign-request)"
+        )
         sys.exit(result.returncode)
     print("Done.")
 
 
 if __name__ == "__main__":
     main()
-
-
-

@@ -9,7 +9,6 @@ from __future__ import annotations
 import re
 import unicodedata
 from pathlib import Path
-from typing import Optional, Tuple
 
 # AWS limits relevant to this client (see S3 docs).
 MAX_OBJECT_KEY_BYTES = 1024
@@ -90,7 +89,7 @@ def validate_local_file(
     path: Path,
     *,
     must_exist: bool = True,
-    max_size_bytes: Optional[int] = None,
+    max_size_bytes: int | None = None,
 ) -> Path:
     """Ensure path is a readable file and optionally under a size cap."""
 
@@ -120,7 +119,7 @@ def validate_local_dir(path: Path, *, must_exist: bool = True) -> Path:
     return p
 
 
-def parse_s3_uri(uri: str) -> Tuple[str, str]:
+def parse_s3_uri(uri: str) -> tuple[str, str]:
     """Parse s3://bucket/key into (bucket, key); key may be empty."""
 
     if uri is None or not isinstance(uri, str):

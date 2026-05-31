@@ -2,18 +2,18 @@
 
 from .attention import (
     CBAM,
-    SEBlock,
     ChannelAttention,
-    SpatialAttention,
     CrossModalAttention,
-    CrossTaskAttention
+    CrossTaskAttention,
+    SEBlock,
+    SpatialAttention,
 )
 
 __all__ = [
-    'CBAM',
-    'SEBlock',
-    'ChannelAttention',
-    'SpatialAttention',
-    'CrossModalAttention',
-    'CrossTaskAttention'
+    "CBAM",
+    "SEBlock",
+    "ChannelAttention",
+    "SpatialAttention",
+    "CrossModalAttention",
+    "CrossTaskAttention",
 ]

@@ -1,5 +1,5 @@
 """Production hardening tests: pipeline latency, priority filter, temporal smoother, safety bias, thermal throttling, alert cooldown. Run with: pytest tests/test_production_hardening.py -v."""
-import pytest
+
 import sys
 import time
 import unittest.mock
@@ -8,12 +8,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Mock Flask before importing web_simulator (needed for PipelineLatencyTracker)
-sys.modules['flask'] = unittest.mock.MagicMock()
-sys.modules['flask_cors'] = unittest.mock.MagicMock()
+sys.modules["flask"] = unittest.mock.MagicMock()
+sys.modules["flask_cors"] = unittest.mock.MagicMock()
 
+from ml.utils.alert_cooldown import AlertCooldownFilter
 from ml.utils.priority_filter import PriorityBudgetFilter
 from ml.utils.stage_a_smoother import StageATemporalSmoother
-from ml.utils.alert_cooldown import AlertCooldownFilter
 from tools.simulation.simulator.inference_engine import ThermalThrottleDetector
 from tools.simulation.web_simulator import PipelineLatencyTracker
 
@@ -128,33 +128,28 @@ class TestThermalThrottleDetector:
 class TestPipelineLatencyTracker:
     def test_stages_recorded(self):
         t = PipelineLatencyTracker()
-        t.start_stage('preprocess')
+        t.start_stage("preprocess")
         time.sleep(0.01)
         t.end_stage()
-        t.start_stage('model')
+        t.start_stage("model")
         time.sleep(0.02)
         t.end_stage()
         b = t.get_breakdown()
-        assert 'preprocess' in b and 'model' in b and 'total_ms' in b
-        assert b['preprocess'] >= 10 and b['model'] >= 20
+        assert "preprocess" in b and "model" in b and "total_ms" in b
+        assert b["preprocess"] >= 10 and b["model"] >= 20
 
 
 class TestSafetyBiasUrgency:
     def test_get_urgency_with_safety_bias(self):
         from ml.models.maxsight_cnn import MaxSightCNN
+
         model = MaxSightCNN(num_classes=80)
         # Hazard class + confidence + large box -> at least warning.
-        u = model._get_urgency('car', box_size=0.25, confidence=0.5)
+        u = model._get_urgency("car", box_size=0.25, confidence=0.5)
         assert u >= 2
         # Non-hazard, small box: low urgency (0 or 1 depending on _urgency_map)
-        u_safe = model._get_urgency('chair', box_size=0.01, confidence=0.9)
+        u_safe = model._get_urgency("chair", box_size=0.01, confidence=0.9)
         assert u_safe <= 1
         # Large/close object gets +1 urgency.
-        u_large = model._get_urgency('chair', box_size=0.3, confidence=0.5)
+        u_large = model._get_urgency("chair", box_size=0.3, confidence=0.5)
         assert u_large >= 1
-
-
-
-
-
-

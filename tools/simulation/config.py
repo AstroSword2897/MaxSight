@@ -4,7 +4,7 @@ import os
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from ml.runtime.mode import is_production_runtime
 from ml.utils.output_scheduler import OutputMode
@@ -13,7 +13,7 @@ from ml.utils.output_scheduler import OutputMode
 DEFAULT_SIMULATOR_PORT = 8002
 
 
-def _default_demo_assumptions() -> Dict[str, Any]:
+def _default_demo_assumptions() -> dict[str, Any]:
     # Documented constraints for risk review; production mode flips development_mode via _apply_runtime_overrides.
     return {
         "single_camera": True,
@@ -59,7 +59,7 @@ class SimulatorConfig:
     rate_limit_global: int = 1000
 
     max_image_size_mb: int = 10
-    allowed_image_formats: Tuple[str, ...] = ("JPEG", "PNG", "GIF", "BMP", "WEBP", "TIFF")
+    allowed_image_formats: tuple[str, ...] = ("JPEG", "PNG", "GIF", "BMP", "WEBP", "TIFF")
     max_frames_data_count: int = 16
     max_frames_payload_mb: int = 40
 
@@ -67,13 +67,13 @@ class SimulatorConfig:
     enable_structured_logging: bool = True
 
     enable_metrics: bool = True
-    metrics_port: Optional[int] = None
+    metrics_port: int | None = None
 
     default_output_mode: OutputMode = OutputMode.PATIENT
 
     enable_dev_sprint_tests: bool = True
 
-    model_checkpoint_path: Optional[str] = None
+    model_checkpoint_path: str | None = None
 
     min_confidence_for_patient_output: float = 0.5
     min_confidence_for_critical_alert: float = 0.7
@@ -85,7 +85,7 @@ class SimulatorConfig:
     voice_queue_maxsize: int = 10
     haptic_queue_maxsize: int = 10
 
-    demo_assumptions: Dict[str, Any] = field(default_factory=_default_demo_assumptions)
+    demo_assumptions: dict[str, Any] = field(default_factory=_default_demo_assumptions)
 
     def __post_init__(self) -> None:
         if not (1 <= self.port <= 65535):

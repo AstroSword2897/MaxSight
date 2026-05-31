@@ -22,6 +22,11 @@ from copy import deepcopy
 import numpy as np
 
 from ml.training.stability_manager import StabilityManager
+from ml.training.reproducibility import (
+    checkpoint_content_hash,
+    set_deterministic_seed,
+    reproducibility_manifest,
+)
 
 try:
     from torch.amp import autocast
@@ -68,6 +73,44 @@ def set_seed(seed: int = 42) -> None:
         # MPS has no explicit seed API; manual_seed covers RNG.
         pass
     logger.debug(f"Random seed set to {seed}")
+
+
+def write_atomic_json(path: Path, payload: Dict[str, Any]) -> None:
+    """Write JSON atomically so crash mid-write never leaves a partial manifest."""
+    import os
+    import tempfile
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def write_atomic_torch(path: Path, payload: Any) -> None:
+    """Write a torch checkpoint atomically so crash mid-write never corrupts the file."""
+    import os
+    import tempfile
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    os.close(fd)
+    try:
+        torch.save(payload, tmp_path)
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def move_targets_to_device(targets: Dict[str, torch.Tensor], device: str) -> Dict[str, torch.Tensor]:
@@ -336,9 +379,12 @@ class ProductionTrainLoop:
             self.logger.addHandler(handler)
             self.logger.setLevel(logging.INFO)
         
-        # Set seed.
+        # Set seed — use reproducibility module for deterministic backends then
+        # fall back to the local helper for MPS/legacy compat.
+        set_deterministic_seed(seed)
         set_seed(seed)
-        
+        self._write_reproducibility_manifest(seed=seed)
+
         # GradNorm integration state (initialized after parameter partitioning).
         self.use_gradnorm = use_gradnorm and GRADNORM_AVAILABLE
         self.gradnorm_loss = None
@@ -1068,6 +1114,18 @@ class ProductionTrainLoop:
             'assistive_urgency_level_accuracy': assistive['urgency_level_accuracy'],
         }
     
+    def _write_reproducibility_manifest(
+        self,
+        seed: int,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Persist reproducibility manifest with atomic replace for crash safety."""
+        try:
+            manifest = reproducibility_manifest(seed=seed, config_path=None, extra=extra)
+            write_atomic_json(self.checkpoint_dir / "reproducibility_manifest.json", manifest)
+        except Exception as exc:
+            self.logger.warning("reproducibility_manifest_write_failed: %s", exc)
+
     def _save_checkpoint(self, epoch: int, is_best: bool = False, extra_path: Optional[Path] = None) -> None:
         """Save checkpoint with comprehensive state for resume on same or different GPU/machine. If extra_path is set, also save a copy there (e.g. checkpoint_epoch_N.pt)."""
         lr_current = self.optimizer.param_groups[0]['lr'] if self.optimizer.param_groups else self.learning_rate
@@ -1143,7 +1201,12 @@ class ProductionTrainLoop:
         # Save last checkpoint.
         last_checkpoint_path = self.checkpoint_dir / 'last_checkpoint.pt'
         try:
-            torch.save(checkpoint, last_checkpoint_path)
+            from ml.training.distributed import barrier, should_checkpoint
+
+            if not should_checkpoint():
+                barrier()
+                return
+            write_atomic_torch(last_checkpoint_path, checkpoint)
         except Exception as e:
             self.logger.error(f"Failed to save checkpoint: {e}")
             return
@@ -1169,7 +1232,16 @@ class ProductionTrainLoop:
             best_checkpoint_path = self.checkpoint_dir / 'best_model.pt'
             assert best_checkpoint_path.name == "best_model.pt", "Best checkpoint name must remain stable for deployment."
             try:
-                torch.save(checkpoint, best_checkpoint_path)
+                write_atomic_torch(best_checkpoint_path, checkpoint)
+                content_hash = checkpoint_content_hash(checkpoint["model_state_dict"])
+                self._write_reproducibility_manifest(
+                    self.seed,
+                    extra={
+                        "checkpoint_hash": content_hash,
+                        "config_hash": checkpoint.get("config", {}).get("config_hash"),
+                        "epoch": epoch,
+                    },
+                )
                 self.logger.info(
                     f"Saved best model (val_loss: {self.best_val_loss:.4f}, "
                     f"val_map: {self.best_val_map:.4f})"
@@ -1181,17 +1253,24 @@ class ProductionTrainLoop:
         if epoch == self.num_epochs - 1:
             final_checkpoint_path = self.checkpoint_dir / 'final_model.pt'
             try:
-                torch.save(checkpoint, final_checkpoint_path)
+                write_atomic_torch(final_checkpoint_path, checkpoint)
             except Exception as e:
                 self.logger.error(f"Failed to save final model: {e}")
         
         # Optional: save to extra path (e.g. checkpoint_epoch_5.pt)
         if extra_path is not None:
             try:
-                torch.save(checkpoint, extra_path)
+                write_atomic_torch(extra_path, checkpoint)
                 self.logger.info(f"Saved snapshot: {extra_path}")
             except Exception as e:
                 self.logger.error(f"Failed to save snapshot to {extra_path}: {e}")
+
+        try:
+            from ml.training.distributed import barrier
+
+            barrier()
+        except Exception:
+            pass
     
     def _load_checkpoint(self, checkpoint_path: str, model_only: bool = False) -> bool:
         """Load checkpoint and resume training. If model_only=True, load only model + epoch (and best/history); use current optimizer/scheduler (e.g. new LRs)."""

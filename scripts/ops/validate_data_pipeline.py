@@ -12,12 +12,24 @@ import torch
 
 def main():
     parser = argparse.ArgumentParser(description="Validate data pipeline and augmentations")
-    parser.add_argument("--train-annotation", type=Path, default=Path("datasets/cleaned_splits/maxsight_train.json"),
-                        help="Train annotation JSON")
-    parser.add_argument("--val-annotation", type=Path, default=Path("datasets/cleaned_splits/maxsight_val.json"),
-                        help="Val annotation JSON")
-    parser.add_argument("--image-dir", type=Path, default=None, help="Image root (default: parent of splits)")
-    parser.add_argument("--max-samples", type=int, default=100, help="Max samples to check for overflow")
+    parser.add_argument(
+        "--train-annotation",
+        type=Path,
+        default=Path("datasets/cleaned_splits/maxsight_train.json"),
+        help="Train annotation JSON",
+    )
+    parser.add_argument(
+        "--val-annotation",
+        type=Path,
+        default=Path("datasets/cleaned_splits/maxsight_val.json"),
+        help="Val annotation JSON",
+    )
+    parser.add_argument(
+        "--image-dir", type=Path, default=None, help="Image root (default: parent of splits)"
+    )
+    parser.add_argument(
+        "--max-samples", type=int, default=100, help="Max samples to check for overflow"
+    )
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size for loader")
     args = parser.parse_args()
 
@@ -32,7 +44,7 @@ def main():
     val_ann = args.val_annotation if args.val_annotation.exists() else args.train_annotation
 
     # --- 1) create_data_loaders + collate (variable-length audio padding) ---.
-    from ml.data.data_pipeline import create_data_loaders, compute_class_weights
+    from ml.data.data_pipeline import compute_class_weights, create_data_loaders
 
     print("Loading dataset (custom collate, variable-length audio padding)...")
     train_loader, val_loader, _ = create_data_loaders(
@@ -75,16 +87,12 @@ def main():
     else:
         sorted_weights = sorted(weights.items(), key=lambda x: -x[1])
         print("  Top 5 rare classes (highest weight):", sorted_weights[:5])
-        print("  Weights computed; use in create_data_loaders(class_weights=...) for weighted sampling.")
+        print(
+            "  Weights computed; use in create_data_loaders(class_weights=...) for weighted sampling."
+        )
     print("Validation passed: no invalid values; augmentations preserve annotations.")
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-
-
-
-

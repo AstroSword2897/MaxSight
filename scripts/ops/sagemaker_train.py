@@ -36,13 +36,15 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from ml.infra.sagemaker_utils import SMConfig, build_estimator, build_data_channels  # noqa: E402
-from ml.infra.s3_client import S3Client  # noqa: E402
 from ml.data.medallion_layout import default_gold_index_path, default_medallion_root  # noqa: E402
+from ml.infra.s3_client import S3Client  # noqa: E402
+from ml.infra.sagemaker_utils import SMConfig, build_data_channels, build_estimator  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
 
     # AWS / infra
     parser.add_argument("--bucket", default="", help="S3 bucket (or set MAXSIGHT_S3_BUCKET)")
@@ -54,26 +56,40 @@ def parse_args() -> argparse.Namespace:
 
     # Data
     parser.add_argument("--medallion-root", type=Path, default=default_medallion_root(REPO))
-    parser.add_argument("--upload-silver", action="store_true",
-                        help="Upload silver data to S3 before submitting the job")
+    parser.add_argument(
+        "--upload-silver",
+        action="store_true",
+        help="Upload silver data to S3 before submitting the job",
+    )
 
     # Tier YAML config drives all training-affecting fields; --epochs etc.
     # are explicit overrides only and feed through SM_HP_* on the container.
-    parser.add_argument("--config", required=True,
-                        help="Path to tier YAML (e.g. ml/training/configs/t5_temporal.yaml); "
-                             "the file is shipped via source_dir and read inside the container")
-    parser.add_argument("--epochs", type=int, default=None,
-                        help="Override training.num_epochs (otherwise YAML wins)")
-    parser.add_argument("--batch-size", type=int, default=None,
-                        help="Override data.batch_size")
-    parser.add_argument("--lr", type=float, default=None,
-                        help="Override training.learning_rate")
-    parser.add_argument("--freeze-backbone", action="store_true",
-                        help="Override training.freeze_backbone=true")
-    parser.add_argument("--freeze-backbone-epochs", type=int, default=None,
-                        help="Override training.freeze_backbone_epochs")
-    parser.add_argument("--fp16", action="store_true",
-                        help="Override training.mixed_precision=true")
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Path to tier YAML (e.g. ml/training/configs/t5_temporal.yaml); "
+        "the file is shipped via source_dir and read inside the container",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=None,
+        help="Override training.num_epochs (otherwise YAML wins)",
+    )
+    parser.add_argument("--batch-size", type=int, default=None, help="Override data.batch_size")
+    parser.add_argument("--lr", type=float, default=None, help="Override training.learning_rate")
+    parser.add_argument(
+        "--freeze-backbone", action="store_true", help="Override training.freeze_backbone=true"
+    )
+    parser.add_argument(
+        "--freeze-backbone-epochs",
+        type=int,
+        default=None,
+        help="Override training.freeze_backbone_epochs",
+    )
+    parser.add_argument(
+        "--fp16", action="store_true", help="Override training.mixed_precision=true"
+    )
 
     parser.add_argument("--experiment", default="maxsight")
     parser.add_argument("--job-name", default="", help="Override auto-generated job name")
@@ -96,6 +112,7 @@ def main() -> int:
     args = parse_args()
 
     import os
+
     bucket = args.bucket or os.environ.get("MAXSIGHT_S3_BUCKET", "")
     if not bucket:
         print("Error: --bucket required or set MAXSIGHT_S3_BUCKET", file=sys.stderr)
@@ -181,14 +198,20 @@ def main() -> int:
         job_config["metric_definitions"] = "default" if not args.no_metrics else "disabled"
         job_config["debugger"] = bool(args.debugger)
         if cfg.subnets and cfg.security_group_ids:
-            job_config["vpc"] = {"subnets": list(cfg.subnets), "security_group_ids": list(cfg.security_group_ids)}
+            job_config["vpc"] = {
+                "subnets": list(cfg.subnets),
+                "security_group_ids": list(cfg.security_group_ids),
+            }
         if cfg.volume_kms_key_id:
             job_config["volume_kms_key"] = cfg.volume_kms_key_id
         print(json.dumps(job_config, indent=2))
         return 0
 
     if not role:
-        print("Error: --role or SAGEMAKER_ROLE_ARN required for actual job submission", file=sys.stderr)
+        print(
+            "Error: --role or SAGEMAKER_ROLE_ARN required for actual job submission",
+            file=sys.stderr,
+        )
         return 1
 
     # Build data channels.
@@ -208,7 +231,9 @@ def main() -> int:
     print(f"\nSubmitting training job: {job_name}")
     estimator.fit(channels or None, job_name=job_name, wait=False, logs="None")
     print(f"Job submitted: {job_name}")
-    print(f"Monitor at: https://{args.region}.console.aws.amazon.com/sagemaker/home#/jobs/{job_name}")
+    print(
+        f"Monitor at: https://{args.region}.console.aws.amazon.com/sagemaker/home#/jobs/{job_name}"
+    )
     return 0
 
 

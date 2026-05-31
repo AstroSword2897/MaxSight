@@ -41,16 +41,18 @@ def get_top_conditions_by_map(
 
 
 def main():
-    p = argparse.ArgumentParser(
-        description="Get top K conditions by mAP from inference_data.json."
+    p = argparse.ArgumentParser(description="Get top K conditions by mAP from inference_data.json.")
+    p.add_argument(
+        "--inference-data",
+        type=Path,
+        default=REPO / "inference_data.json",
+        help="Path to inference_data.json from run_checkpoint_inference",
     )
-    p.add_argument("--inference-data", type=Path, default=REPO / "inference_data.json",
-                   help="Path to inference_data.json from run_checkpoint_inference")
     p.add_argument("--k", type=int, default=DEFAULT_K, help="Number of top conditions (default 7)")
-    p.add_argument("--map-key", type=str, default=MAP_KEY,
-                   help="JSON key for mAP (default mAP_50)")
-    p.add_argument("--print", action="store_true",
-                   help="Print one condition per line (for shell consumption)")
+    p.add_argument("--map-key", type=str, default=MAP_KEY, help="JSON key for mAP (default mAP_50)")
+    p.add_argument(
+        "--print", action="store_true", help="Print one condition per line (for shell consumption)"
+    )
     args = p.parse_args()
 
     top = get_top_conditions_by_map(args.inference_data, k=args.k, map_key=args.map_key)
@@ -67,9 +69,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-
-
-
-

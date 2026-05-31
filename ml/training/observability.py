@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import re
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Any
 
 # Default skipped-batch abort threshold used by ProductionTrainLoop.
 DEFAULT_MAX_SKIPPED_BATCH_RATIO = 0.1
 
 # Prefix for structured epoch health logs emitted at end of each epoch.
 HEALTH_SUMMARY_LOG_PREFIX = "health_summary"
+EVENT_LOG_PREFIX = "event="
 
 # Required keys in health_summary log lines (key=value tokens).
 HEALTH_SUMMARY_REQUIRED_FIELDS = (
@@ -23,6 +26,13 @@ HEALTH_SUMMARY_REQUIRED_FIELDS = (
     "lr",
 )
 
+STRUCTURED_EVENT_SCHEMAS: dict[str, frozenset[str]] = {
+    "training.health_summary": frozenset(HEALTH_SUMMARY_REQUIRED_FIELDS),
+    "therapy.suppressed": frozenset({"reason", "count", "module", "function"}),
+    "rag.degraded": frozenset({"guard_reason", "latency_ms"}),
+    "runtime.tier_resolved": frozenset({"tier", "enable_rag", "enable_therapy"}),
+}
+
 # Regex used by CloudWatch metric extraction and CI contract tests.
 HEALTH_SUMMARY_LOG_REGEX = (
     r"health_summary epoch=(?P<epoch>\d+) processed_batches=(?P<processed_batches>\d+) "
@@ -32,6 +42,34 @@ HEALTH_SUMMARY_LOG_REGEX = (
 )
 
 HEALTH_SUMMARY_PATTERN = re.compile(HEALTH_SUMMARY_LOG_REGEX)
+
+
+@dataclass
+class StructuredEvent:
+    """Structured JSON log event validated against a named schema."""
+
+    name: str
+    fields: dict[str, Any]
+
+    def validate(self) -> None:
+        """Raise ValueError when required fields for the schema are missing."""
+        required = STRUCTURED_EVENT_SCHEMAS.get(self.name)
+        if required is None:
+            raise ValueError(f"unknown structured event schema: {self.name}")
+        missing = required - set(self.fields.keys())
+        if missing:
+            raise ValueError(f"event {self.name} missing fields: {sorted(missing)}")
+
+    def to_log_line(self) -> str:
+        self.validate()
+        payload = {"event": self.name, **self.fields}
+        return f"{EVENT_LOG_PREFIX}{json.dumps(payload, sort_keys=True, default=str)}"
+
+
+def emit_event(name: str, **fields: Any) -> None:
+    """Emit a structured event as a single JSON log line."""
+    event = StructuredEvent(name=name, fields=fields)
+    logging.getLogger(__name__).info(event.to_log_line())
 
 
 @dataclass(frozen=True)
@@ -83,12 +121,10 @@ def validate_skipped_batch_ratio(
         return
     ratio = skipped_batches / total_batches
     if ratio > max_ratio:
-        raise RuntimeError(
-            f"Skipped batch ratio {ratio:.2%} exceeded threshold {max_ratio:.2%}."
-        )
+        raise RuntimeError(f"Skipped batch ratio {ratio:.2%} exceeded threshold {max_ratio:.2%}.")
 
 
-def cloudwatch_health_metric_definitions() -> Tuple[Dict[str, str], ...]:
+def cloudwatch_health_metric_definitions() -> tuple[dict[str, str], ...]:
     """CloudWatch metric definitions derived from health_summary logs."""
     return (
         {

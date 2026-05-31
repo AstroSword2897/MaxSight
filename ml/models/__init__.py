@@ -3,18 +3,11 @@
 # Complexity: ~29M params, O(H*W*C) forward pass (H/W=image size, C=channels)
 # Usage: from ml.models import create_model, MaxSightCNN.
 
-from .maxsight_cnn import MaxSightCNN, create_model, COCO_CLASSES, ACCESSIBILITY_CLASSES
+from .maxsight_cnn import ACCESSIBILITY_CLASSES, COCO_CLASSES, MaxSightCNN, create_model
 
 __all__ = [
-    'MaxSightCNN',
-    'create_model',
-    'COCO_CLASSES',
-    'ACCESSIBILITY_CLASSES',
+    "MaxSightCNN",
+    "create_model",
+    "COCO_CLASSES",
+    "ACCESSIBILITY_CLASSES",
 ]
-
-
-
-
-
-
-

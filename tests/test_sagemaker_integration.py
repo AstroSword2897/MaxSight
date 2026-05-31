@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -26,7 +27,9 @@ def test_training_metric_regexes_match_log_line() -> None:
         assert rx.search(line), f"No match for {mdef['Name']}: {mdef['Regex']}"
 
 
-def test_pipeline_config_prefers_env_over_processing_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_pipeline_config_prefers_env_over_processing_paths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from ml.pipeline.sagemaker_config import SageMakerPipelineConfig
 
     d = tmp_path / "train_in"

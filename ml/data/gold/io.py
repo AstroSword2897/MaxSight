@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import hashlib
 import threading
-from typing import List, Optional, Tuple
 
 _CHUNK = 8192
 
@@ -29,6 +28,7 @@ _s3_local = threading.local()
 
 
 # ── URI helpers ────────────────────────────────────────────────────────────────
+
 
 def is_s3(uri: str) -> bool:
     return str(uri).startswith("s3://")
@@ -46,15 +46,16 @@ def _s3_client():
     return _s3_local.client
 
 
-def _parse_s3_uri(uri: str) -> Tuple[str, str]:
-    without = uri[len("s3://"):]
+def _parse_s3_uri(uri: str) -> tuple[str, str]:
+    without = uri[len("s3://") :]
     slash = without.find("/")
     if slash == -1:
         return without, ""
-    return without[:slash], without[slash + 1:]
+    return without[:slash], without[slash + 1 :]
 
 
 # ── GoldIOError ────────────────────────────────────────────────────────────────
+
 
 class GoldIOError(RuntimeError):
     """Raised when shard I/O fails; carries structured context for pinpointing
@@ -86,8 +87,8 @@ class GoldIOError(RuntimeError):
         offset: int,
         raw_prefix: bytes,
         reason: str,
-        shard_sha256: Optional[str] = None,
-        line_schema_version: Optional[str] = None,
+        shard_sha256: str | None = None,
+        line_schema_version: str | None = None,
     ) -> None:
         self.uri = uri
         self.idx = idx
@@ -109,6 +110,7 @@ class GoldIOError(RuntimeError):
 
 
 # ── ShardReader ────────────────────────────────────────────────────────────────
+
 
 class ShardReader:
     """Reads a single shard URI; encapsulates local-file vs S3 backend.
@@ -133,15 +135,15 @@ class ShardReader:
         self,
         uri: str,
         *,
-        shard_sha256: Optional[str] = None,
-        line_schema_version: Optional[str] = None,
+        shard_sha256: str | None = None,
+        line_schema_version: str | None = None,
     ) -> None:
         self.uri = str(uri)
         self.shard_sha256 = shard_sha256
         self.line_schema_version = line_schema_version
         self._is_s3 = is_s3(self.uri)
 
-    def index_line_starts(self) -> List[int]:
+    def index_line_starts(self) -> list[int]:
         """Return the byte offset of every non-empty line in the shard."""
         if self._is_s3:
             return _index_s3(self.uri)
@@ -221,8 +223,9 @@ class ShardReader:
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
 
-def _index_local(uri: str) -> List[int]:
-    offsets: List[int] = []
+
+def _index_local(uri: str) -> list[int]:
+    offsets: list[int] = []
     with open(uri, "rb") as f:
         while True:
             p = f.tell()
@@ -234,12 +237,12 @@ def _index_local(uri: str) -> List[int]:
     return offsets
 
 
-def _index_s3(uri: str) -> List[int]:
+def _index_s3(uri: str) -> list[int]:
     client = _s3_client()
     bucket, key = _parse_s3_uri(uri)
     obj = client.get_object(Bucket=bucket, Key=key)
     stream = obj["Body"]
-    offsets: List[int] = []
+    offsets: list[int] = []
     pos = 0
     buf = b""
     while True:
@@ -273,9 +276,7 @@ def _readline_s3(uri: str, offset: int) -> bytes:
     start = offset
     while True:
         range_end = start + _CHUNK - 1
-        response = client.get_object(
-            Bucket=bucket, Key=key, Range=f"bytes={start}-{range_end}"
-        )
+        response = client.get_object(Bucket=bucket, Key=key, Range=f"bytes={start}-{range_end}")
         data: bytes = response["Body"].read()
         if not data:
             break
@@ -293,7 +294,8 @@ def _readline_s3(uri: str, offset: int) -> bytes:
 
 # ── Convenience wrappers (used by dataset.py) ──────────────────────────────────
 
-def index_jsonl_line_starts(uri: str) -> List[int]:
+
+def index_jsonl_line_starts(uri: str) -> list[int]:
     """Return byte offsets of every non-empty line in a shard URI."""
     return ShardReader(uri).index_line_starts()
 

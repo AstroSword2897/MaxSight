@@ -2,8 +2,8 @@
 
 **Production-Grade Accessibility System** | **Multi-Task Deep Learning for Environmental Understanding**
 
-**Last Updated**: 2026-05  
-**Status**: Production-ready training and data pipeline. Use `python scripts/product/run.py` for canonical `train/validate/export/package/smoke` (or call ops scripts directly under `scripts/ops/`). See **docs/status.md** and **docs/ops/production_remediation.md** for current contracts and remediation details.  
+**Last Updated**: 2026-05-30  
+**Status**: Production-ready training and data pipeline. Use `python scripts/product/run.py` for canonical `train/validate/export/package/smoke/gate` (or call ops scripts directly under `scripts/ops/`). See **docs/status.md** and **docs/ops/production_remediation.md** for current contracts and remediation details.  
 **Setup:** **[docs/DOWNLOAD_AND_START.md](docs/DOWNLOAD_AND_START.md)** (clone, install, data, simulator, train).
 
 ---
@@ -14,11 +14,48 @@ Full reference: **[docs/ops/production_remediation.md](docs/ops/production_remed
 
 - **Local training:** Use `python scripts/product/run.py train --config <tier-yaml>` or `python scripts/ops/sagemaker_train.py --dry-run` for launcher validation before cloud execution.
 - **SageMaker training:** `ml/training/sagemaker_entry.py` resolves `SM_CHANNEL_TRAIN` and `SM_CHANNEL_VAL` into `ResolvedTrainingConfig.data.*` paths and asserts both channels exist before launching.
-- **Checkpoint contract:** Best checkpoint filename is `best_model.pt`. Corrupt resume files raise; missing files start fresh.
-- **Observability:** Each epoch emits `health_summary` logs with skipped-batch ratio. CI validates schema via `scripts/infra/validate_train_loop_contracts.py`.
+- **Checkpoint contract:** Best checkpoint filename is `best_model.pt`. Saves use atomic writes (`write_atomic_torch`); corrupt resume files raise; missing files start fresh. Reproducibility manifest includes `checkpoint_hash` on best save.
+- **Observability:** Each epoch emits `health_summary` logs with skipped-batch ratio. Structured events (`therapy.suppressed`, `rag.degraded`, `runtime.tier_resolved`) use JSON `event=` lines in `ml/training/observability.py`. CI validates schema via `scripts/infra/validate_train_loop_contracts.py`.
+- **Runtime contracts:** `ml/runtime/contracts.py` — `RuntimeRequest`/`RuntimeResponse`, `ModelOutputContract`, `validate_model_outputs()`. JSON schema at `docs/contracts/schemas/model_output.json`.
+- **Compute tiers:** Bronze/Silver/Gold routing via `ml/runtime/tier_router.py` and YAML under `ml/config/tiers/`.
+- **Distributed training:** `ml/training/distributed.py` — DDP init, rank-0 checkpoint guard, FSDP wrapper (v2). Config section `distributed:` in tier YAML (`backend: none|ddp|fsdp`).
+- **Training flags:** `training.use_compile` and `training.use_gradient_checkpointing` in `ResolvedTrainingConfig` / tier YAML (e.g. `ml/training/configs/t0_baseline.yaml`).
 - **Personalization:** `app/personal_mode.py` — instantiate in session orchestration; call `update_preferences()` + `fuse_with_personalization()` per user.
 - **Haptic backends:** `app/ui/haptic_feedback.py` → `app/ui/haptic_backends.py`. Set `MAXSIGHT_HAPTIC_BACKEND` to `auto`, `darwin`, `linux`, `log`, or `none`. Simulator uses `log` when `MAXSIGHT_ENABLE_HAPTICS_STUB=1`.
 - **Model CI envelope:** ~393M params; bounds in `ml/runtime_constants.py` (`DEFAULT_MODEL_MAX_PARAMS`, `DEFAULT_MODEL_INT8_MAX_MB`).
+
+### Quality baseline (Tier 1 production core)
+
+Static analysis is **scoped by tier** — do not run `ruff .` or `mypy .` and expect meaningful gates. Tier 1 targets:
+
+```
+ml/therapy  ml/runtime  app/personal_mode.py
+```
+
+| Tier | Scope | Gate |
+|------|--------|------|
+| **1 — Production core** | `ml/therapy`, `ml/runtime`, `app/personal_mode.py` | Strict: 0 D-rated blocks, 0 mypy/ruff on scoped paths |
+| **2 — Tools** | `tools/simulation/`, `scripts/infra/` | Moderate; high complexity expected |
+| **3 — Research** | `scripts/research_archive/` | Excluded from mypy/ruff defaults |
+
+**One-shot audit** (writes `docs/quality/baseline.json` and regression gate):
+
+```bash
+python scripts/infra/run_quality_audit.py
+python scripts/product/run.py gate          # pre-SageMaker + train-loop + runtime contracts
+pytest tests/test_therapy_safety.py tests/test_phase0_contracts.py tests/test_training_hardening.py -q
+```
+
+**Manual Tier 1 commands:**
+
+```bash
+mypy ml/therapy ml/runtime app/personal_mode.py --follow-imports=silent --ignore-missing-imports
+ruff check ml/therapy ml/runtime app/personal_mode.py
+radon cc ml/therapy ml/runtime app/personal_mode.py -s
+xenon ml/therapy ml/runtime app/personal_mode.py --max-absolute B --max-average A --max-modules B
+```
+
+CI: `.github/workflows/quality.yml`. Config: `pyproject.toml` (`pythonpath`, mypy excludes for Tier 3).
 
 ## Table of Contents
 
@@ -214,7 +251,7 @@ This is the **master checklist** of what the repo implements today. Deep module 
 - **Progressive tiers T0–T5**: Baseline → attention → hybrid ViT → cross-task → cross-modal (audio) → temporal (ConvLSTM / TimeSformer on Stage A feature sequences).
 - **30+ task heads**: Detection stack, contrast/edge, motion, depth, fatigue & therapy state, ROI/findability, navigation difficulty, glare, predictive alerts, OCR/text, scene description, scene graph, sound events, personalization, color when enabled.
 - **Thirteen vision condition modes**: Simulated preprocessing per condition (`ml/utils/preprocessing.py`); optional dynamic conv and condition strings on forward.
-- **MVP runtime contract**: `MVP_MODEL_OUTPUT_KEYS` and `filter_mvp_model_outputs()` so shipped apps depend on a stable output surface.
+- **MVP runtime contract**: `ModelOutputContract` + `validate_model_outputs()` in `ml/runtime/contracts.py` (sources `MVP_MODEL_OUTPUT_KEYS` from `ml/runtime_constants.py`). Prefer this over direct `filter_mvp_model_outputs()` in app paths.
 - **Output scheduling**: `CrossModalScheduler` merges voice/haptic/visual with caps, cooldowns, and critical-urgency priority (`ml/utils/output_scheduler.py`).
 
 ### Temporal, video, and data production
@@ -1992,8 +2029,15 @@ ImagePreprocessor: normalization (ImageNet), resize (e.g. 224×224), condition-s
 ### Test Suites
 
 ```bash
-# Run all phase tests
+# Full suite
 pytest tests/
+
+# Tier 1 safety + contracts (fast gate)
+pytest tests/test_therapy_safety.py tests/test_phase0_contracts.py tests/test_training_hardening.py -q
+
+# Infra gates (7/7 pre-SageMaker + train-loop + runtime contracts)
+python scripts/product/run.py gate
+python scripts/infra/run_quality_audit.py
 
 # Phase-specific tests
 pytest tests/test_phase0_backbone.py
@@ -2004,11 +2048,13 @@ pytest tests/test_phase4_knowledge.py
 pytest tests/test_phase5_training.py
 
 # Smoke training (proof of life)
-python scripts/smoke_train.py --tier T2_HYBRID_VIT --epochs 2 --batches 5
+python scripts/ops/smoke_train.py --tier T2_HYBRID_VIT --epochs 2 --batches 5
 
 # Benchmark inference (ml/training/benchmark.py)
 python -m ml.training.benchmark
 ```
+
+**Tier 1 quality snapshot** (committed under `docs/quality/`): `baseline.json`, `baseline_cc.txt`, `baseline_ruff.txt`, `mypy_baseline.txt`. Re-run `run_quality_audit.py` before PRs that touch therapy/runtime.
 
 ### Validation Status
 

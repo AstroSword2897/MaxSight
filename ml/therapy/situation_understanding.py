@@ -1,12 +1,13 @@
 """Situation Understanding Layer: perception outputs → psychological context for the therapy engine."""
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
+from typing import Any
 
 
 @dataclass
 class SituationContext:
     """Psychological / behavioral context derived from perception. Feeds the therapy decision engine."""
+
     crowd_density: float = 0.0
     noise_level: float = 0.0
     navigation_complexity: float = 0.0
@@ -15,10 +16,13 @@ class SituationContext:
     cognitive_load_estimate: float = 0.0
     task_difficulty: float = 0.0
     user_motion_state: str = "unknown"  # e.g. stationary, walking, turning
-    raw: Dict[str, Any] = field(default_factory=dict)
+    disability_id: str = ""
+    preferred_channel: str = ""
+    raw: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for API responses, logging, and persistence only."""
+        payload = {
             "crowd_density": self.crowd_density,
             "noise_level": self.noise_level,
             "navigation_complexity": self.navigation_complexity,
@@ -28,6 +32,11 @@ class SituationContext:
             "task_difficulty": self.task_difficulty,
             "user_motion_state": self.user_motion_state,
         }
+        if self.disability_id:
+            payload["disability_id"] = self.disability_id
+        if self.preferred_channel:
+            payload["preferred_channel"] = self.preferred_channel
+        return payload
 
 
 class SituationUnderstandingLayer:
@@ -36,7 +45,7 @@ class SituationUnderstandingLayer:
     No neural network: deterministic derived features so therapy stays interpretable and safe.
     """
 
-    def __init__(self, stress_weights: Optional[Dict[str, float]] = None):
+    def __init__(self, stress_weights: dict[str, float] | None = None):
         self.stress_weights = stress_weights or {
             "crowd": 0.35,
             "noise": 0.25,
@@ -44,7 +53,7 @@ class SituationUnderstandingLayer:
             "uncertainty": 0.15,
         }
 
-    def compute(self, perception: Dict[str, Any]) -> SituationContext:
+    def compute(self, perception: dict[str, Any]) -> SituationContext:
         """
         Build situation context from perception. Expects keys from model/output pipeline:
         detections or object counts, urgency, distance, motion, audio env, uncertainty, etc.
@@ -54,7 +63,9 @@ class SituationUnderstandingLayer:
         crowd_density = self._derive_crowd_density(perception)
         noise_level = self._derive_noise_level(perception)
         navigation_complexity = self._derive_navigation_complexity(perception)
-        uncertainty = self._extract_float(perception, "uncertainty", "uncertainty_score", default=0.0)
+        uncertainty = self._extract_float(
+            perception, "uncertainty", "uncertainty_score", default=0.0
+        )
         if hasattr(uncertainty, "item"):
             uncertainty = float(uncertainty.item())
 
@@ -65,14 +76,23 @@ class SituationUnderstandingLayer:
             + self.stress_weights["uncertainty"] * uncertainty
         )
         environment_stress_level = min(1.0, max(0.0, environment_stress_level))
+        # Respect an explicit stress signal (e.g. from wearable sensors or
+        # a parent controller that has already synthesised the stress level).
+        direct_stress = self._extract_float(perception, "environment_stress_level")
+        if direct_stress > environment_stress_level:
+            environment_stress_level = min(1.0, direct_stress)
 
-        cognitive_load_estimate = (navigation_complexity * 0.5 + crowd_density * 0.3 + uncertainty * 0.2)
+        cognitive_load_estimate = (
+            navigation_complexity * 0.5 + crowd_density * 0.3 + uncertainty * 0.2
+        )
         cognitive_load_estimate = min(1.0, max(0.0, cognitive_load_estimate))
 
         task_difficulty = (navigation_complexity + uncertainty) / 2.0
         task_difficulty = min(1.0, max(0.0, task_difficulty))
 
         user_motion_state = self._derive_motion_state(perception)
+        disability_id = str(perception.get("disability_id") or "")
+        preferred_channel = str(perception.get("preferred_channel") or "")
 
         return SituationContext(
             crowd_density=crowd_density,
@@ -83,10 +103,12 @@ class SituationUnderstandingLayer:
             cognitive_load_estimate=cognitive_load_estimate,
             task_difficulty=task_difficulty,
             user_motion_state=user_motion_state,
+            disability_id=disability_id,
+            preferred_channel=preferred_channel,
             raw=raw,
         )
 
-    def _extract_float(self, d: Dict[str, Any], *keys: str, default: float = 0.0) -> float:
+    def _extract_float(self, d: dict[str, Any], *keys: str, default: float = 0.0) -> float:
         for k in keys:
             v = d.get(k)
             if v is None:
@@ -97,21 +119,25 @@ class SituationUnderstandingLayer:
                 return float(v)
         return default
 
-    def _derive_crowd_density(self, perception: Dict[str, Any]) -> float:
+    def _derive_crowd_density(self, perception: dict[str, Any]) -> float:
         detections = perception.get("detections") or perception.get("objects") or []
-        if isinstance(detections, list):
-            n = len(detections)
-        else:
-            n = 0
-        person_count = sum(1 for d in (detections if isinstance(detections, list) else [])
-                          if isinstance(d, dict) and d.get("class_name", "").lower() in ("person", "people"))
+        n = len(detections) if isinstance(detections, list) else 0
+        person_count = sum(
+            1
+            for d in (detections if isinstance(detections, list) else [])
+            if isinstance(d, dict) and d.get("class_name", "").lower() in ("person", "people")
+        )
         if not isinstance(detections, list):
             person_count = 0
         density = min(1.0, (person_count * 0.15) + (n * 0.02))
         return min(1.0, max(0.0, density))
 
-    def _derive_noise_level(self, perception: Dict[str, Any]) -> float:
-        audio = perception.get("audio_environment") or perception.get("sound_level") or perception.get("noise_level")
+    def _derive_noise_level(self, perception: dict[str, Any]) -> float:
+        audio = (
+            perception.get("audio_environment")
+            or perception.get("sound_level")
+            or perception.get("noise_level")
+        )
         if audio is not None:
             if hasattr(audio, "item"):
                 return min(1.0, max(0.0, float(audio.item())))
@@ -119,7 +145,7 @@ class SituationUnderstandingLayer:
                 return min(1.0, max(0.0, float(audio)))
         return 0.0
 
-    def _derive_navigation_complexity(self, perception: Dict[str, Any]) -> float:
+    def _derive_navigation_complexity(self, perception: dict[str, Any]) -> float:
         nav = perception.get("navigation_difficulty")
         if nav is not None:
             if hasattr(nav, "item"):
@@ -136,7 +162,7 @@ class SituationUnderstandingLayer:
                 return min(1.0, float(urgency) / 3.0)
         return 0.0
 
-    def _derive_motion_state(self, perception: Dict[str, Any]) -> str:
+    def _derive_motion_state(self, perception: dict[str, Any]) -> str:
         motion = perception.get("motion_magnitude") or perception.get("motion_flow")
         if motion is None:
             return "unknown"

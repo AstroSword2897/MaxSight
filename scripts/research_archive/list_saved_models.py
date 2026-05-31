@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """List paths to saved condition models (best_model.pt per condition)."""
+
 import argparse
 import shutil
 from pathlib import Path
 
 
 def main():
-    parser = argparse.ArgumentParser(description="List saved condition models; optionally copy best_model.pt per condition")
+    parser = argparse.ArgumentParser(
+        description="List saved condition models; optionally copy best_model.pt per condition"
+    )
     parser.add_argument(
         "--base",
         type=Path,
@@ -61,6 +64,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-

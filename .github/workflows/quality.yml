@@ -1,0 +1,50 @@
+name: Quality
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install quality tools
+        run: |
+          pip install --upgrade pip
+          pip install ruff mypy radon xenon pytest pytest-cov
+
+      - name: Baseline quality audit
+        run: python scripts/infra/run_quality_audit.py
+        continue-on-error: true
+
+      - name: Ruff lint (therapy + runtime)
+        run: |
+          ruff check ml/therapy ml/runtime app/personal_mode.py scripts/infra/pre_sagemaker_gate.py
+
+      - name: Mypy (Tier 1 production core)
+        run: |
+          mypy ml/therapy ml/runtime app/personal_mode.py \
+            --follow-imports=silent \
+            --ignore-missing-imports
+        continue-on-error: true
+
+      - name: Safety-adjacent test coverage
+        env:
+          PYTHONPATH: .
+        run: |
+          pytest tests/test_therapy_safety.py tests/test_phase0_contracts.py \
+            tests/test_production_remediation.py \
+            --cov=ml/therapy --cov=ml/runtime \
+            --cov-report=term-missing -q
+
+      - name: Pre-SageMaker gate
+        run: python scripts/infra/pre_sagemaker_gate.py

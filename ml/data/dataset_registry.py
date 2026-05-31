@@ -21,9 +21,10 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -47,25 +48,39 @@ _ALLOWED_ANNOTATION_FORMAT = {
 # Mirror ml/data/medallion_layout.DATASET_KEYS without importing it, to keep
 # this module dependency-free (the registry must load even if ml.data.* fails).
 _ALLOWED_MEDALLION_KEYS = {
-    "coco", "kinetics700", "youtube8m", "howto100m", "webvid10m",
-    "bdd100k", "epic_kitchens", "mose", "youtube_vos",
+    "coco",
+    "kinetics700",
+    "youtube8m",
+    "howto100m",
+    "webvid10m",
+    "bdd100k",
+    "epic_kitchens",
+    "mose",
+    "youtube_vos",
 }
 
 # Mirror _ALLOWED_TIERS in run_config.py. Duplicated intentionally; both lists
 # are short and the registry must not import the training config module.
 _ALLOWED_TIERS = {
-    "T0_BASELINE_CNN", "T1_LIGHTWEIGHT", "T2_DETECTOR", "T2_HYBRID_VIT",
-    "T3_MULTI_TASK", "T4_ADVANCED", "T5_TEMPORAL",
+    "T0_BASELINE_CNN",
+    "T1_LIGHTWEIGHT",
+    "T2_DETECTOR",
+    "T2_HYBRID_VIT",
+    "T3_MULTI_TASK",
+    "T4_ADVANCED",
+    "T5_TEMPORAL",
 }
 
 
 # ── Errors ────────────────────────────────────────────────────────────────────
+
 
 class DatasetRegistryError(ValueError):
     """Raised when the registry file or a resolution request violates contract."""
 
 
 # ── Schema ────────────────────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class SplitSpec:
@@ -76,21 +91,24 @@ class SplitSpec:
     with train/val/test under separate image roots) be expressed without
     flattening the directory structure on disk.
     """
+
     annotations: str
-    image_dir: Optional[str] = None
+    image_dir: str | None = None
 
 
 @dataclass(frozen=True)
 class DatasetSplits:
     """Per-split specs; each value is a SplitSpec or None."""
-    train: Optional[SplitSpec] = None
-    val: Optional[SplitSpec] = None
-    test: Optional[SplitSpec] = None
+
+    train: SplitSpec | None = None
+    val: SplitSpec | None = None
+    test: SplitSpec | None = None
 
 
 @dataclass(frozen=True)
 class DatasetEntry:
     """One registered dataset; immutable once loaded."""
+
     id: str
     version: str
     kind: str
@@ -99,17 +117,17 @@ class DatasetEntry:
     dataset_type: str
     annotation_format: str
     # None = no canonical vocabulary contract (raw / uningested sources only).
-    label_space: Optional[str]
-    medallion_key: Optional[str]
+    label_space: str | None
+    medallion_key: str | None
     num_classes: int
-    splits: Optional[DatasetSplits]
+    splits: DatasetSplits | None
     # Fallback image root when a SplitSpec does not declare its own image_dir.
-    image_dir: Optional[str]
-    audio_dir: Optional[str]
-    manifest: Optional[str]
-    condition_modes_supported: Optional[List[str]]
-    tier_compatibility: List[str]
-    content_hash: Optional[str]
+    image_dir: str | None
+    audio_dir: str | None
+    manifest: str | None
+    condition_modes_supported: list[str] | None
+    tier_compatibility: list[str]
+    content_hash: str | None
     notes: str = ""
 
     @property
@@ -117,39 +135,40 @@ class DatasetEntry:
         """Composite (id, version) lookup key."""
         return f"{self.id}@{self.version}"
 
-    def resolved_image_dir(self, split: str = "train") -> Optional[str]:
+    def resolved_image_dir(self, split: str = "train") -> str | None:
         """Return the image directory to use for a given split.
 
         Prefers the per-split image_dir from SplitSpec; falls back to the
         entry-level image_dir. Returns None if neither is set.
         """
         if self.splits is not None:
-            spec: Optional[SplitSpec] = getattr(self.splits, split, None)
+            spec: SplitSpec | None = getattr(self.splits, split, None)
             if spec is not None and spec.image_dir is not None:
                 return spec.image_dir
         return self.image_dir
 
-    def annotation_path(self, split: str) -> Optional[str]:
+    def annotation_path(self, split: str) -> str | None:
         """Return the annotation file path for the given split, or None."""
         if self.splits is None:
             return None
-        spec: Optional[SplitSpec] = getattr(self.splits, split, None)
+        spec: SplitSpec | None = getattr(self.splits, split, None)
         return spec.annotations if spec is not None else None
 
 
 @dataclass(frozen=True)
 class DatasetRegistry:
     """Loaded registry; resolve() is the only sanctioned access path."""
+
     schema_version: str
-    entries: Dict[str, DatasetEntry] = field(default_factory=dict)
-    source_path: Optional[str] = None
+    entries: dict[str, DatasetEntry] = field(default_factory=dict)
+    source_path: str | None = None
 
     def resolve(
         self,
         dataset_id: str,
-        version: Optional[str] = None,
+        version: str | None = None,
         *,
-        tier: Optional[str] = None,
+        tier: str | None = None,
         require_active: bool = False,
     ) -> DatasetEntry:
         """Look up an entry by id (and optional version).
@@ -190,18 +209,19 @@ class DatasetRegistry:
             )
         return entry
 
-    def all_ids(self) -> List[str]:
+    def all_ids(self) -> list[str]:
         return sorted({e.id for e in self.entries.values()})
 
 
 # ── Loader ────────────────────────────────────────────────────────────────────
+
 
 def default_registry_path(repo_root: Path) -> Path:
     """Canonical location of the registry file."""
     return Path(repo_root).resolve() / "ml" / "training" / "configs" / "registry" / "datasets.yaml"
 
 
-def load_registry(path: Optional[Path] = None) -> DatasetRegistry:
+def load_registry(path: Path | None = None) -> DatasetRegistry:
     """Load and validate the registry; the only sanctioned constructor."""
     if path is None:
         repo_root = Path(__file__).resolve().parents[2]
@@ -219,9 +239,7 @@ def load_registry(path: Optional[Path] = None) -> DatasetRegistry:
 
     raw = yaml.safe_load(path.read_text()) or {}
     if not isinstance(raw, dict):
-        raise DatasetRegistryError(
-            f"registry root must be a mapping, got {type(raw).__name__}"
-        )
+        raise DatasetRegistryError(f"registry root must be a mapping, got {type(raw).__name__}")
     schema_version = raw.get("schema_version")
     if schema_version != REGISTRY_SCHEMA_VERSION:
         raise DatasetRegistryError(
@@ -236,7 +254,7 @@ def load_registry(path: Optional[Path] = None) -> DatasetRegistry:
     label_spaces_path = path.parent / "label_spaces.yaml"
     label_spaces = load_label_space_registry(label_spaces_path)
 
-    entries: Dict[str, DatasetEntry] = {}
+    entries: dict[str, DatasetEntry] = {}
     for idx, item in enumerate(entries_raw):
         if not isinstance(item, dict):
             raise DatasetRegistryError(
@@ -258,9 +276,23 @@ def load_registry(path: Optional[Path] = None) -> DatasetRegistry:
 
 _ENTRY_FIELDS = {f.name for f in fields(DatasetEntry)}
 _REQUIRED_ENTRY_KEYS = {
-    "id", "version", "kind", "status", "source", "dataset_type", "annotation_format",
-    "label_space", "medallion_key", "splits", "image_dir", "audio_dir", "manifest",
-    "num_classes", "condition_modes_supported", "tier_compatibility", "content_hash",
+    "id",
+    "version",
+    "kind",
+    "status",
+    "source",
+    "dataset_type",
+    "annotation_format",
+    "label_space",
+    "medallion_key",
+    "splits",
+    "image_dir",
+    "audio_dir",
+    "manifest",
+    "num_classes",
+    "condition_modes_supported",
+    "tier_compatibility",
+    "content_hash",
 }
 _OPTIONAL_ENTRY_KEYS = {"notes"}
 
@@ -282,19 +314,13 @@ def _build_entry(
     version = _str(raw["version"], where, "version")
     kind = _str(raw["kind"], where, "kind")
     if kind not in _ALLOWED_KIND:
-        raise DatasetRegistryError(
-            f"{where}.kind {kind!r} not in {sorted(_ALLOWED_KIND)}"
-        )
+        raise DatasetRegistryError(f"{where}.kind {kind!r} not in {sorted(_ALLOWED_KIND)}")
     status = _str(raw["status"], where, "status")
     if status not in _ALLOWED_STATUS:
-        raise DatasetRegistryError(
-            f"{where}.status {status!r} not in {sorted(_ALLOWED_STATUS)}"
-        )
+        raise DatasetRegistryError(f"{where}.status {status!r} not in {sorted(_ALLOWED_STATUS)}")
     source = _str(raw["source"], where, "source")
     if source not in _ALLOWED_SOURCE:
-        raise DatasetRegistryError(
-            f"{where}.source {source!r} not in {sorted(_ALLOWED_SOURCE)}"
-        )
+        raise DatasetRegistryError(f"{where}.source {source!r} not in {sorted(_ALLOWED_SOURCE)}")
     dataset_type = _str(raw["dataset_type"], where, "dataset_type")
     if dataset_type not in _ALLOWED_DATASET_TYPES:
         raise DatasetRegistryError(
@@ -310,16 +336,14 @@ def _build_entry(
             f"{where}: kind=image requires annotation_format in {{maxsight_list, coco_dict}}"
         )
     if kind == "video" and annotation_format != "video_manifest":
-        raise DatasetRegistryError(
-            f"{where}: kind=video requires annotation_format=video_manifest"
-        )
+        raise DatasetRegistryError(f"{where}: kind=video requires annotation_format=video_manifest")
     if kind == "multimodal" and annotation_format != "multimodal_manifest":
         raise DatasetRegistryError(
             f"{where}: kind=multimodal requires annotation_format=multimodal_manifest"
         )
 
     ls_raw = raw.get("label_space")
-    label_space: Optional[str]
+    label_space: str | None
     if ls_raw is None:
         label_space = None
     elif isinstance(ls_raw, str) and ls_raw.strip():
@@ -329,9 +353,7 @@ def _build_entry(
                 f"{where}.label_space {label_space!r} not in {sorted(_ALLOWED_CANONICAL_LABEL_SPACES)}"
             )
     else:
-        raise DatasetRegistryError(
-            f"{where}.label_space must be null or a non-empty string"
-        )
+        raise DatasetRegistryError(f"{where}.label_space must be null or a non-empty string")
 
     if status == "raw" and label_space is not None:
         raise DatasetRegistryError(
@@ -369,16 +391,16 @@ def _build_entry(
 
     condition_modes = raw["condition_modes_supported"]
     if condition_modes is not None:
-        if not isinstance(condition_modes, list) or not all(isinstance(x, str) for x in condition_modes):
+        if not isinstance(condition_modes, list) or not all(
+            isinstance(x, str) for x in condition_modes
+        ):
             raise DatasetRegistryError(
                 f"{where}.condition_modes_supported must be null or list[str]"
             )
 
     tier_compat = raw["tier_compatibility"]
     if not isinstance(tier_compat, list) or not tier_compat:
-        raise DatasetRegistryError(
-            f"{where}.tier_compatibility must be a non-empty list"
-        )
+        raise DatasetRegistryError(f"{where}.tier_compatibility must be a non-empty list")
     bad_tiers = [t for t in tier_compat if t not in _ALLOWED_TIERS]
     if bad_tiers:
         raise DatasetRegistryError(
@@ -389,9 +411,7 @@ def _build_entry(
     content_hash = raw["content_hash"]
     if content_hash is not None:
         if not isinstance(content_hash, str) or len(content_hash) != 64:
-            raise DatasetRegistryError(
-                f"{where}.content_hash must be null or 64-char sha256 hex"
-            )
+            raise DatasetRegistryError(f"{where}.content_hash must be null or 64-char sha256 hex")
 
     if status == "active" and (splits is None or splits.train is None or splits.val is None):
         raise DatasetRegistryError(
@@ -420,7 +440,7 @@ def _build_entry(
     )
 
 
-def _build_splits(raw: Any, *, where: str, status: str) -> Optional[DatasetSplits]:
+def _build_splits(raw: Any, *, where: str, status: str) -> DatasetSplits | None:
     if raw is None:
         return None
     if not isinstance(raw, dict):
@@ -438,7 +458,7 @@ def _build_splits(raw: Any, *, where: str, status: str) -> Optional[DatasetSplit
     )
 
 
-def _build_split_spec(raw: Any, *, where: str, name: str) -> Optional[SplitSpec]:
+def _build_split_spec(raw: Any, *, where: str, name: str) -> SplitSpec | None:
     """Parse a split entry.
 
     Accepts two forms:
@@ -475,7 +495,7 @@ def _str(value: Any, where: str, field_name: str) -> str:
     return value
 
 
-def _opt_str(value: Any, where: str, field_name: str) -> Optional[str]:
+def _opt_str(value: Any, where: str, field_name: str) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str) or not value.strip():
@@ -484,6 +504,7 @@ def _opt_str(value: Any, where: str, field_name: str) -> Optional[str]:
 
 
 # ── Optional disk verification (called only when require_match=true) ──────────
+
 
 def verify_content_hash(
     entry: DatasetEntry,
@@ -499,9 +520,9 @@ def verify_content_hash(
     if entry.content_hash is None or entry.splits is None:
         return
     rr = Path(repo_root).resolve()
-    paths: List[Path] = []
+    paths: list[Path] = []
     for name in ("train", "val", "test"):
-        spec: Optional[SplitSpec] = getattr(entry.splits, name, None)
+        spec: SplitSpec | None = getattr(entry.splits, name, None)
         if spec is None:
             continue
         paths.append((rr / spec.annotations).resolve())

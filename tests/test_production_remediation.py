@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import dataclasses
 import io
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
-from unittest.mock import MagicMock, patch
+from typing import Any
 
 import pytest
 import torch
@@ -20,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.ui.haptic_backends import LogHapticBackend, NoopHapticBackend, resolve_haptic_backend
 from app.ui.haptic_feedback import HapticFeedback, HapticPattern
+from ml.therapy.therapy_engine import TherapyEngine
 from ml.training.observability import (
     DEFAULT_MAX_SKIPPED_BATCH_RATIO,
     parse_health_summary_line,
@@ -28,7 +27,6 @@ from ml.training.observability import (
 from ml.training.run_config import ResolvedTrainingConfig
 from ml.training.sagemaker_entry import apply_sagemaker_channel_paths
 from ml.training.train_loop import ProductionTrainLoop
-from ml.therapy.therapy_engine import TherapyEngine
 
 
 class _TinyModel(nn.Module):
@@ -36,7 +34,7 @@ class _TinyModel(nn.Module):
         super().__init__()
         self.fc = nn.Linear(4, 2)
 
-    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
         logits = self.fc(x.mean(dim=(2, 3)))
         return {
             "classifications": logits.unsqueeze(1).expand(-1, 2, -1),
@@ -46,7 +44,9 @@ class _TinyModel(nn.Module):
 
 
 class _DummyLoss(nn.Module):
-    def forward(self, outputs: Dict[str, torch.Tensor], targets: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(
+        self, outputs: dict[str, torch.Tensor], targets: dict[str, torch.Tensor]
+    ) -> torch.Tensor:
         return outputs["classifications"].sum() * 0.0 + 1.0
 
 
@@ -55,7 +55,7 @@ def _make_train_loop(tmp_path: Path) -> ProductionTrainLoop:
     dataset = TensorDataset(images)
     loader = DataLoader(dataset, batch_size=2)
 
-    def collate(batch: List[Any]) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    def collate(batch: list[Any]) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         imgs = torch.stack([item[0] for item in batch])
         b = imgs.shape[0]
         return imgs, {
@@ -104,7 +104,7 @@ def test_resume_from_corrupt_checkpoint_raises_in_init(tmp_path: Path) -> None:
     images = torch.randn(2, 3, 8, 8)
     dataset = TensorDataset(images)
 
-    def collate(batch: List[Any]) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    def collate(batch: list[Any]) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         imgs = torch.stack([item[0] for item in batch])
         b = imgs.shape[0]
         return imgs, {
@@ -148,7 +148,7 @@ def test_health_summary_parser_roundtrip() -> None:
     assert parsed.val_map == pytest.approx(0.41)
 
 
-def _high_stress_perception(**overrides: Any) -> Dict[str, Any]:
+def _high_stress_perception(**overrides: Any) -> dict[str, Any]:
     base = {
         "detections": [{"class_name": "person"} for _ in range(12)],
         "uncertainty": 0.4,
@@ -185,16 +185,18 @@ def test_simulator_therapy_response_flow_unit() -> None:
     awaiting = False
     calls: list[str] = []
 
-    def update(perception: Dict[str, Any]) -> list[Any]:
+    def update(perception: dict[str, Any]) -> list[Any]:
         calls.append("update")
         return engine.update(perception)
 
-    def on_user_response(perception: Dict[str, Any]) -> None:
+    def on_user_response(perception: dict[str, Any]) -> None:
         calls.append("on_user_response")
         engine.on_user_response(perception)
 
     p1 = _high_stress_perception()
-    p2 = _high_stress_perception(uncertainty=0.2, navigation_difficulty=0.2, audio_environment=0.1, temporal_consistency=0.9)
+    p2 = _high_stress_perception(
+        uncertainty=0.2, navigation_difficulty=0.2, audio_environment=0.1, temporal_consistency=0.9
+    )
 
     actions = update(p1)
     awaiting = bool(actions)
@@ -271,7 +273,9 @@ def test_sagemaker_run_remaps_channels(monkeypatch: pytest.MonkeyPatch, tmp_path
     model_dir.mkdir(parents=True)
     (tmp_path / "output").mkdir(parents=True)
     monkeypatch.setattr(sys, "argv", ["sagemaker_entry", "--config", str(config_path)])
-    monkeypatch.setattr(sagemaker_entry, "channel_dir", lambda name, fallback="": train if name == "train" else val)
+    monkeypatch.setattr(
+        sagemaker_entry, "channel_dir", lambda name, fallback="": train if name == "train" else val
+    )
     monkeypatch.setattr(sagemaker_entry, "run_training", fake_run_training)
     monkeypatch.setattr(sagemaker_entry, "RunTracker", _FakeTracker)
     monkeypatch.setattr(sagemaker_entry, "model_dir", lambda: model_dir)

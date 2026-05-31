@@ -80,12 +80,21 @@ def process_file(path: Path) -> bool:
         # Merge short standalone # blocks into one line so we avoid multiline comments. Skip shebangs so the script still runs.
         if stripped.startswith("#") and not is_shebang(stripped):
             block: list[tuple[str, str]] = []
-            while i < len(lines) and lines[i].strip().startswith("#") and not is_shebang(lines[i].strip()):
+            while (
+                i < len(lines)
+                and lines[i].strip().startswith("#")
+                and not is_shebang(lines[i].strip())
+            ):
                 ln = lines[i]
                 ind = len(ln) - len(ln.lstrip())
                 pfx = ln[:ind]
                 part = ln.strip()[1:].strip()
-                if part and not part.strip().lower().startswith("type:") and "://" not in part and not part.strip().lower().startswith("noqa"):
+                if (
+                    part
+                    and not part.strip().lower().startswith("type:")
+                    and "://" not in part
+                    and not part.strip().lower().startswith("noqa")
+                ):
                     block.append((pfx, part))
                     changed = True
                 else:
@@ -111,12 +120,20 @@ def process_file(path: Path) -> bool:
             continue
 
         # Treat as docstring only after def/class or shebang so we do not touch string literals or f-string continuations.
-        prev_ok = not out or out[-1].rstrip().endswith(":") or (len(out) == 1 and is_shebang(out[0].strip()))
+        prev_ok = (
+            not out
+            or out[-1].rstrip().endswith(":")
+            or (len(out) == 1 and is_shebang(out[0].strip()))
+        )
         first_dq = line.find('"""')
         first_sq = line.find("'''")
         first_quote = min(first_dq if first_dq >= 0 else 9999, first_sq if first_sq >= 0 else 9999)
         has_assign_before_quote = first_quote < 9999 and "=" in line[:first_quote]
-        if prev_ok and (stripped.startswith('"""') or stripped.startswith("'''")) and not has_assign_before_quote:
+        if (
+            prev_ok
+            and (stripped.startswith('"""') or stripped.startswith("'''"))
+            and not has_assign_before_quote
+        ):
             quote = '"""' if stripped.startswith('"""') else "'''"
             # Docstring fits on one line; normalize and keep on one line.
             if stripped.rstrip().endswith(quote) and len(stripped) > len(quote) * 2:
@@ -151,7 +168,11 @@ def process_file(path: Path) -> bool:
                 out.append(prefix + quote + norm + quote)
             else:
                 # Use first sentence when docstring is long so the one-line summary stays under the length limit.
-                first_sent = (norm.split(". ")[0] + ".") if ". " in norm else (norm.rstrip() + "." if norm and norm[-1] != "." else norm)
+                first_sent = (
+                    (norm.split(". ")[0] + ".")
+                    if ". " in norm
+                    else (norm.rstrip() + "." if norm and norm[-1] != "." else norm)
+                )
                 if len(first_sent) <= MAX_DOCSTRING_SINGLE_LINE:
                     out.append(prefix + quote + first_sent + quote)
                 else:
@@ -166,7 +187,12 @@ def process_file(path: Path) -> bool:
             if before.count('"') % 2 == 0 and before.count("'") % 2 == 0:
                 comment = line[idx + 1 :].strip()
                 clow = comment.strip().lower()
-                if comment and not clow.startswith("type:") and not clow.startswith("noqa") and "://" not in comment:
+                if (
+                    comment
+                    and not clow.startswith("type:")
+                    and not clow.startswith("noqa")
+                    and "://" not in comment
+                ):
                     new_comment = normalize_inline_comment(comment)
                     if new_comment != comment:
                         line = line[: idx + 1] + " " + new_comment
@@ -192,7 +218,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-
-

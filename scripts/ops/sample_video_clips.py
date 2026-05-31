@@ -12,7 +12,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from ml.data.video_manifest import CONTRACT_FIXED_STRIDE_T8, MANIFEST_SCHEMA_VERSION, validate_manifest_v1
+from ml.data.video_manifest import (
+    CONTRACT_FIXED_STRIDE_T8,
+    MANIFEST_SCHEMA_VERSION,
+    validate_manifest_v1,
+)
 from ml.data.video_panoptic import VideoSamplingConfig, build_fixed_stride_windows
 
 
@@ -97,7 +101,9 @@ def build_manifest(
     }
     if contract_t8 and sampling.temporal_window == 8:
         payload["contract"] = CONTRACT_FIXED_STRIDE_T8
-    errs = validate_manifest_v1(payload, require_fixed_t8=contract_t8 and sampling.temporal_window == 8)
+    errs = validate_manifest_v1(
+        payload, require_fixed_t8=contract_t8 and sampling.temporal_window == 8
+    )
     if errs:
         raise ValueError("Manifest validation failed: " + "; ".join(errs))
     return payload
@@ -113,8 +119,12 @@ def main() -> None:
         type=Path,
         help="Directory to write extracted frames (required with --video)",
     )
-    parser.add_argument("--manifest-out", type=Path, required=True, help="Output JSON manifest path")
-    parser.add_argument("--video-id", type=str, default=None, help="Logical video id (default: stem)")
+    parser.add_argument(
+        "--manifest-out", type=Path, required=True, help="Output JSON manifest path"
+    )
+    parser.add_argument(
+        "--video-id", type=str, default=None, help="Logical video id (default: stem)"
+    )
     parser.add_argument("--temporal-window", type=int, default=8)
     parser.add_argument("--temporal-overlap", type=int, default=0)
     parser.add_argument("--temporal-stride", type=int, default=1)

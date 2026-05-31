@@ -45,7 +45,10 @@ def main() -> int:
 
     # 1. Drive mounted.
     if not Path(DRIVE_MOUNT).exists():
-        log("Drive not mounted. Run: from google.colab import drive; drive.mount('/content/drive')", ok=False)
+        log(
+            "Drive not mounted. Run: from google.colab import drive; drive.mount('/content/drive')",
+            ok=False,
+        )
         return 1
     log("Drive mounted")
 
@@ -80,8 +83,12 @@ def main() -> int:
             annotations_empty = True
         if annotations_empty:
             print()
-            print("WARNING EMPTY annotation files. Skipping training (would fail with empty dataset).")
-            print("   Add real maxsight_train.json and maxsight_val.json to Drive/MaxSight_Training/cleaned_splits/")
+            print(
+                "WARNING EMPTY annotation files. Skipping training (would fail with empty dataset)."
+            )
+            print(
+                "   Add real maxsight_train.json and maxsight_val.json to Drive/MaxSight_Training/cleaned_splits/"
+            )
             print("   Then re-run this script or run the training command below.")
             print()
             run_training = False
@@ -112,14 +119,20 @@ def main() -> int:
         log(f"Image dir not found: {image_dir}. Set IMAGE_DIR if images are elsewhere.", ok=None)
 
     print()
-    print("Setup OK. Starting training..." if run_training else "Setup OK. Run training manually (see command below).")
+    print(
+        "Setup OK. Starting training..."
+        if run_training
+        else "Setup OK. Run training manually (see command below)."
+    )
     print()
 
     if not run_training:
         print("Command to run training:")
         print(f"  cd {repo} && python scripts/train_maxsight.py \\")
         print(f"    --data-dir {data} --train-annotation {TRAIN_ANN} --val-annotation {VAL_ANN} \\")
-        print(f"    --image-dir {image_dir} --device cuda --batch-size {BATCH_SIZE} --epochs {EPOCHS} \\")
+        print(
+            f"    --image-dir {image_dir} --device cuda --batch-size {BATCH_SIZE} --epochs {EPOCHS} \\"
+        )
         print(f"    --num-workers {NUM_WORKERS} --checkpoint-interval 0 --use-gradnorm")
         return 0
 
@@ -129,31 +142,50 @@ def main() -> int:
         cmd = [
             sys.executable,
             str(automl_script),
-            "--data-dir", str(data),
-            "--train-annotation", TRAIN_ANN,
-            "--val-annotation", VAL_ANN,
-            "--image-dir", str(image_dir),
-            "--checkpoint-dir", str(repo / "checkpoints_automl"),
-            "--n-trials", str(N_TRIALS),
-            "--epochs-per-trial", str(EPOCHS_PER_TRIAL),
-            "--num-workers", str(NUM_WORKERS),
-            "--device", "cuda",
+            "--data-dir",
+            str(data),
+            "--train-annotation",
+            TRAIN_ANN,
+            "--val-annotation",
+            VAL_ANN,
+            "--image-dir",
+            str(image_dir),
+            "--checkpoint-dir",
+            str(repo / "checkpoints_automl"),
+            "--n-trials",
+            str(N_TRIALS),
+            "--epochs-per-trial",
+            str(EPOCHS_PER_TRIAL),
+            "--num-workers",
+            str(NUM_WORKERS),
+            "--device",
+            "cuda",
             "--use-gradnorm",
         ]
     else:
         cmd = [
             sys.executable,
             str(train_script),
-            "--data-dir", str(data),
-            "--train-annotation", TRAIN_ANN,
-            "--val-annotation", VAL_ANN,
-            "--image-dir", str(image_dir),
-            "--checkpoint-dir", str(repo / "checkpoints"),
-            "--device", "cuda",
-            "--batch-size", str(BATCH_SIZE),
-            "--epochs", str(EPOCHS),
-            "--num-workers", str(NUM_WORKERS),
-            "--checkpoint-interval", "0",
+            "--data-dir",
+            str(data),
+            "--train-annotation",
+            TRAIN_ANN,
+            "--val-annotation",
+            VAL_ANN,
+            "--image-dir",
+            str(image_dir),
+            "--checkpoint-dir",
+            str(repo / "checkpoints"),
+            "--device",
+            "cuda",
+            "--batch-size",
+            str(BATCH_SIZE),
+            "--epochs",
+            str(EPOCHS),
+            "--num-workers",
+            str(NUM_WORKERS),
+            "--checkpoint-interval",
+            "0",
             "--use-gradnorm",
         ]
     return subprocess.run(cmd).returncode
@@ -161,9 +193,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-
-
-
-

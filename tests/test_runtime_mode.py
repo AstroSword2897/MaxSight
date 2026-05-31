@@ -1,6 +1,5 @@
 """Tests for production vs simulator runtime selection."""
 
-import os
 import sys
 from pathlib import Path
 

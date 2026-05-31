@@ -1,26 +1,25 @@
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from ml.pipeline.rag_advisory import RetrievalResult  # noqa: E402
-from ml.pipeline.sagemaker_config import SageMakerPipelineConfig  # noqa: E402
-from ml.pipeline.pipeline_runner import run_sagemaker_pipeline  # noqa: E402
-from ml.training.loss_weighting import TemporalWeightSchedule  # noqa: E402
-from ml.data.video_preprocessing import PreprocessingConfig  # noqa: E402
 from ml.data.video_panoptic import (  # noqa: E402
     AdaptiveTemporalConfig,
     PseudoPanopticQualityConfig,
     VideoSamplingConfig,
 )
+from ml.data.video_preprocessing import PreprocessingConfig  # noqa: E402
+from ml.pipeline.pipeline_runner import run_sagemaker_pipeline  # noqa: E402
+from ml.pipeline.rag_advisory import RetrievalResult  # noqa: E402
+from ml.pipeline.sagemaker_config import SageMakerPipelineConfig  # noqa: E402
+from ml.training.loss_weighting import TemporalWeightSchedule  # noqa: E402
 
 
 class DummyRetriever:
-    def retrieve(self, query: Dict, top_k: int = 5) -> List[RetrievalResult]:
+    def retrieve(self, query: dict, top_k: int = 5) -> list[RetrievalResult]:
         return [RetrievalResult(payload={"kind": "therapy_hint"}, score=0.8)]
 
 
@@ -35,8 +34,7 @@ def test_run_sagemaker_pipeline_with_precomputed_manifest(tmp_path: Path) -> Non
             "video_id": "vid-1",
             "frame_paths": [f"f{i}" for i in range(8)],
             "frames_segments": [
-                [{"bbox": [i, 0, 10, 10], "score": 0.9, "area": 100}]
-                for i in range(8)
+                [{"bbox": [i, 0, 10, 10], "score": 0.9, "area": 100}] for i in range(8)
             ],
         }
     ]
@@ -73,4 +71,3 @@ def test_run_sagemaker_pipeline_with_precomputed_manifest(tmp_path: Path) -> Non
     first_clip = out_data[0]["clips"][0]
     assert "advisory" in first_clip
     assert "temporal_weight_updates" in first_clip
-

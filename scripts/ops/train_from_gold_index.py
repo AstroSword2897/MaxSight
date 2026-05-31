@@ -22,7 +22,9 @@ from ml.data.medallion_layout import (  # noqa: E402
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo-root", type=Path, default=REPO, help="Repository root (path resolution)")
+    parser.add_argument(
+        "--repo-root", type=Path, default=REPO, help="Repository root (path resolution)"
+    )
     parser.add_argument(
         "--gold-index",
         type=Path,
@@ -36,7 +38,10 @@ def main() -> int:
         gold = default_gold_index_path(default_medallion_root(rr))
     gold = gold.resolve()
     if not gold.exists():
-        print(f"Gold index not found: {gold}. Run: python scripts/ops/medallion_build.py all", file=sys.stderr)
+        print(
+            f"Gold index not found: {gold}. Run: python scripts/ops/medallion_build.py all",
+            file=sys.stderr,
+        )
         return 1
 
     idx = load_training_index(gold)

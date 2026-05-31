@@ -24,23 +24,45 @@ def main():
     parser = argparse.ArgumentParser(
         description="Download 2 inference datasets (Open Images V6 + ADE20K) then run checkpoint inference on them."
     )
-    parser.add_argument("--download", action="store_true",
-                        help="Download inference datasets first (skips BDD100K; gets open_images_v6 + ade20k)")
-    parser.add_argument("--datasets-dir", type=Path, default=REPO / "datasets",
-                        help="Base dir for datasets (default: repo/datasets)")
-    parser.add_argument("--checkpoints-base", type=Path, required=True,
-                        help="Base dir with checkpoints_<condition>/best_model.pt")
-    parser.add_argument("--conditions", nargs="*", default=None,
-                        help="Conditions to run (default: cvi amd; use one or more)")
-    parser.add_argument("--datasets", nargs="*", default=DEFAULT_DATASETS,
-                        help=f"Datasets to run inference on (default: {DEFAULT_DATASETS})")
-    parser.add_argument("--max-samples", type=int, default=None,
-                        help="Cap samples per dataset (default: all)")
-    parser.add_argument("--confidence", type=float, default=0.3,
-                        help="Detection confidence threshold")
+    parser.add_argument(
+        "--download",
+        action="store_true",
+        help="Download inference datasets first (skips BDD100K; gets open_images_v6 + ade20k)",
+    )
+    parser.add_argument(
+        "--datasets-dir",
+        type=Path,
+        default=REPO / "datasets",
+        help="Base dir for datasets (default: repo/datasets)",
+    )
+    parser.add_argument(
+        "--checkpoints-base",
+        type=Path,
+        required=True,
+        help="Base dir with checkpoints_<condition>/best_model.pt",
+    )
+    parser.add_argument(
+        "--conditions",
+        nargs="*",
+        default=None,
+        help="Conditions to run (default: cvi amd; use one or more)",
+    )
+    parser.add_argument(
+        "--datasets",
+        nargs="*",
+        default=DEFAULT_DATASETS,
+        help=f"Datasets to run inference on (default: {DEFAULT_DATASETS})",
+    )
+    parser.add_argument(
+        "--max-samples", type=int, default=None, help="Cap samples per dataset (default: all)"
+    )
+    parser.add_argument(
+        "--confidence", type=float, default=0.3, help="Detection confidence threshold"
+    )
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    parser.add_argument("--output", type=Path, default=None,
-                        help="Write per-dataset/condition stats to this JSON")
+    parser.add_argument(
+        "--output", type=Path, default=None, help="Write per-dataset/condition stats to this JSON"
+    )
     parser.add_argument("--quiet", action="store_true", help="Less verbose")
     args = parser.parse_args()
 
@@ -59,7 +81,8 @@ def main():
         cmd = [
             sys.executable,
             str(download_script),
-            "--base-dir", str(datasets_dir),
+            "--base-dir",
+            str(datasets_dir),
             "--skip-bdd100k",
         ]
         result = subprocess.run(cmd, cwd=str(REPO))
@@ -70,9 +93,9 @@ def main():
 
     # Step 2: Run inference on each dataset with each condition.
     from ml.data.inference_datasets import (
+        DetectionPostProcessor,
         create_inference_dataloader,
         run_inference_on_dataset,
-        DetectionPostProcessor,
     )
     from ml.models.maxsight_cnn import (
         COCO_CLASSES,
@@ -153,7 +176,9 @@ def main():
                     "images_without_detections": stats["images_without_detections"],
                 }
                 if not args.quiet:
-                    print(f"  {cond}: images={stats['total_images']} detections={stats['total_detections']} avg={stats['avg_detections_per_image']:.2f}")
+                    print(
+                        f"  {cond}: images={stats['total_images']} detections={stats['total_detections']} avg={stats['avg_detections_per_image']:.2f}"
+                    )
             except Exception as e:
                 print(f"  {cond} error: {e}", file=sys.stderr)
                 all_results[dname][cond] = {"error": str(e)}
@@ -161,7 +186,15 @@ def main():
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         with open(args.output, "w") as f:
-            json.dump({"datasets_dir": str(datasets_dir), "checkpoints_base": str(checkpoints_base), "results": all_results}, f, indent=2)
+            json.dump(
+                {
+                    "datasets_dir": str(datasets_dir),
+                    "checkpoints_base": str(checkpoints_base),
+                    "results": all_results,
+                },
+                f,
+                indent=2,
+            )
         print(f"Wrote {args.output}")
 
     return 0
@@ -169,9 +202,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-
-
-
-

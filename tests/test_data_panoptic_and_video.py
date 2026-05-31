@@ -1,7 +1,7 @@
 import json
 import sys
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any
 
 import torch
 
@@ -9,11 +9,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from ml.data.dataset import MaxSightDataset
 from ml.data.data_pipeline import collate_fn
+from ml.data.dataset import MaxSightDataset
 
 
-def _write_json(tmp_dir: Path, name: str, data: Dict[str, Any]) -> Path:
+def _write_json(tmp_dir: Path, name: str, data: dict[str, Any]) -> Path:
     path = tmp_dir / name
     path.write_text(json.dumps(data))
     return path
@@ -68,7 +68,7 @@ def test_sequence_collate_stacks_frames_and_lengths() -> None:
     b = 2
     t1, t2 = 3, 5
     c, h, w = 3, 4, 4
-    batch: List[Dict[str, Any]] = []
+    batch: list[dict[str, Any]] = []
     for t in (t1, t2):
         frames = torch.randn(t, c, h, w)
         item = {
@@ -84,4 +84,3 @@ def test_sequence_collate_stacks_frames_and_lengths() -> None:
     collated = collate_fn(batch)
     assert collated["images"].shape == (b, max(t1, t2), c, h, w)
     assert torch.equal(collated["frame_lengths"], torch.tensor([t1, t2]))
-

@@ -50,6 +50,13 @@ training:
   freeze_backbone_epochs: 0
   early_stopping_patience: 10
   early_stopping_metric: "val_loss"
+  use_compile: false
+  use_gradient_checkpointing: false
+
+distributed:
+  backend: none
+  world_size: 1
+  local_rank: 0
 
 # Loss Configuration
 # Trimmed to active heads in create_loss_fn (objectness, classification, box,

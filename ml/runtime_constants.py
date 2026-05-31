@@ -32,16 +32,16 @@ DEFAULT_MODEL_MAX_PARAMS = 400_000_000
 DEFAULT_MODEL_INT8_MAX_MB = 400.0
 # Model-output keys that the T5-only MVP runtime is allowed to depend on.
 MVP_MODEL_OUTPUT_KEYS = (
-    "classifications",      # logits for detection head.
-    "boxes",                # bounding boxes for hazards/objects.
-    "objectness",           # objectness scores for detections.
-    "text_regions",         # OCR/text-region logits.
-    "urgency_scores",       # per-image or per-detection urgency.
-    "distance_zones",       # coarse distance buckets.
-    "precise_distances",    # per-detection distance estimates.
+    "classifications",  # logits for detection head.
+    "boxes",  # bounding boxes for hazards/objects.
+    "objectness",  # objectness scores for detections.
+    "text_regions",  # OCR/text-region logits.
+    "urgency_scores",  # per-image or per-detection urgency.
+    "distance_zones",  # coarse distance buckets.
+    "precise_distances",  # per-detection distance estimates.
     "distance_uncertainties",
-    "uncertainty",          # global uncertainty scalar.
-    "temporal_consistency", # temporal stability features.
+    "uncertainty",  # global uncertainty scalar.
+    "temporal_consistency",  # temporal stability features.
 )
 
 

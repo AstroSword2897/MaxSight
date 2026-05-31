@@ -1,0 +1,44 @@
+# Therapy constraints derived from SCRUM-9 research → executable ML/runtime gates.
+# Loaded by ml.therapy.constraints_loader and enforced by TherapyEngine + safety layer.
+
+version: "1.0.0"
+
+rate_limits:
+  max_prompts_per_minute: 2
+  min_gap_between_prompts_s: 10.0
+
+uncertainty:
+  suppress_threshold: 0.7
+  never_suppress_critical_hazard: true
+
+intervention_families:
+  high_stress:
+    - grounding
+    - breathing
+    - calming
+  low_stress:
+    - navigation_reassurance
+    - attention_redirection
+    - rest_suggestion
+
+contraindications:
+  disallowed_phrases:
+    - diagnos
+    - prescribe
+    - cure
+    - treatment
+    - medical advice
+    - you have
+    - you are sick
+
+disability_routing:
+  # Maps ontology id → preferred intervention family ordering
+  low_vision_amd: [contrast_micro, roi_findability]
+  cvi: [gaze_stabilization, fatigue_rest]
+  retinitis_pigmentosa: [motion_tracking, warning_recognition]
+
+scoring_weights:
+  stress_reduction: 0.4
+  reaction_time_improvement: 0.3
+  user_engagement: 0.2
+  safety_compliance: 0.1

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Find where trained checkpoints live."""
+
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 try:
     REPO = Path(__file__).resolve().parents[1]
 except NameError:
     REPO = Path.cwd()
+
 
 # Canonical locations (order matters: env first, then repo, then common Drive mounts)
 def _candidates():
@@ -26,13 +27,17 @@ def _candidates():
     yield Path("/content/drive/MyDrive/MaxSight")
 
 
-def find_base() -> Optional[Path]:
+def find_base() -> Path | None:
     for base in _candidates():
         if not base.exists():
             continue
         try:
             for d in base.iterdir():
-                if d.is_dir() and d.name.startswith("checkpoints_") and (d / "best_model.pt").exists():
+                if (
+                    d.is_dir()
+                    and d.name.startswith("checkpoints_")
+                    and (d / "best_model.pt").exists()
+                ):
                     return base.resolve()
         except OSError:
             continue
@@ -42,9 +47,12 @@ def find_base() -> Optional[Path]:
 def main():
     base = find_base()
     if base is None:
-        print("No trained checkpoints found. Tried: CHECKPOINTS_BASE, repo/checkpoints, repo/backups, "
-              "~/Google Drive/My Drive/MaxSight, ~/Library/CloudStorage/GoogleDrive-*/My Drive/MaxSight, "
-              "/content/drive/MyDrive/MaxSight.", file=sys.stderr)
+        print(
+            "No trained checkpoints found. Tried: CHECKPOINTS_BASE, repo/checkpoints, repo/backups, "
+            "~/Google Drive/My Drive/MaxSight, ~/Library/CloudStorage/GoogleDrive-*/My Drive/MaxSight, "
+            "/content/drive/MyDrive/MaxSight.",
+            file=sys.stderr,
+        )
         return 1
     print(str(base))
     return 0
@@ -52,9 +60,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-
-
-
-

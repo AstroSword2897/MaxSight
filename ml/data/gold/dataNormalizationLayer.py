@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from PIL import Image
 
@@ -36,24 +36,22 @@ class MaxSightListAdapter:
         self.dataset_id = dataset_id
         self.version = version
         self.split = split
-        self._source_file = path_relative_to_repo(
-            self.annotation_path.resolve(), self.repo_root
-        )
+        self._source_file = path_relative_to_repo(self.annotation_path.resolve(), self.repo_root)
         with self.annotation_path.open(encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, list):
             raise ValueError(
                 f"MaxSight list adapter expects a JSON array, got {type(data).__name__}"
             )
-        self._rows: List[Dict[str, Any]] = data
+        self._rows: list[dict[str, Any]] = data
 
     def __len__(self) -> int:
         return len(self._rows)
 
-    def load_partial(self, idx: int) -> Dict[str, Any]:
+    def load_partial(self, idx: int) -> dict[str, Any]:
         return self._partial_for_row(self._rows[idx])
 
-    def _partial_for_row(self, ann: Dict[str, Any]) -> Dict[str, Any]:
+    def _partial_for_row(self, ann: dict[str, Any]) -> dict[str, Any]:
         image_id = ann.get("image_id", ann.get("id", 0))
         raw_path = ann.get("image_path", f"{image_id}.jpg")
         p = Path(raw_path)
@@ -65,10 +63,10 @@ class MaxSightListAdapter:
                     width, height = im.size
             except Exception:
                 width, height = 0, 0
-        label_names: List[str] = []
-        boxes: List[List[float]] = []
-        distances: List[int] = []
-        object_urgencies: List[int] = []
+        label_names: list[str] = []
+        boxes: list[list[float]] = []
+        distances: list[int] = []
+        object_urgencies: list[int] = []
         for obj in ann.get("objects", []):
             category = obj.get("category")
             if isinstance(category, str):
@@ -141,7 +139,7 @@ class COCOAdapter:
             data = json.load(f)
         images = data.get("images") or []
         anns_raw = data.get("annotations") or []
-        self._partials: List[Dict[str, Any]] = []
+        self._partials: list[dict[str, Any]] = []
         if not images or not anns_raw:
             return
         first = anns_raw[0] if anns_raw else {}
@@ -149,7 +147,7 @@ class COCOAdapter:
             return
         image_map = {img["id"]: img for img in images}
         category_map = {c["id"]: c["name"] for c in data.get("categories", [])}
-        by_image: Dict[int, List[Dict[str, Any]]] = {}
+        by_image: dict[int, list[dict[str, Any]]] = {}
         for ann in anns_raw:
             if "bbox" not in ann:
                 continue
@@ -165,10 +163,10 @@ class COCOAdapter:
             height = int(img_info.get("height") or 0)
             file_name = img_info.get("file_name") or f"{image_id}.jpg"
             abs_img = (self.image_root / file_name).resolve()
-            label_names: List[str] = []
-            boxes: List[List[float]] = []
-            distances: List[int] = []
-            object_urgencies: List[int] = []
+            label_names: list[str] = []
+            boxes: list[list[float]] = []
+            distances: list[int] = []
+            object_urgencies: list[int] = []
             for ann in by_image[image_id]:
                 bbox = ann.get("bbox", [0.0, 0.0, 0.0, 0.0])
                 bx, by, bw, bh = (
@@ -219,7 +217,7 @@ class COCOAdapter:
     def __len__(self) -> int:
         return len(self._partials)
 
-    def load_partial(self, idx: int) -> Dict[str, Any]:
+    def load_partial(self, idx: int) -> dict[str, Any]:
         return dict(self._partials[idx])
 
 

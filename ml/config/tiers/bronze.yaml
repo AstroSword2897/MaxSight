@@ -1,0 +1,6 @@
+tier: bronze
+model_tier: T0
+max_latency_ms: 80
+enable_temporal: false
+enable_rag: false
+enable_vit: false
