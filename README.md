@@ -52,7 +52,7 @@ pytest tests/test_therapy_safety.py tests/test_phase0_contracts.py tests/test_tr
 mypy ml/therapy ml/runtime app/personal_mode.py --follow-imports=silent --ignore-missing-imports
 ruff check ml/therapy ml/runtime app/personal_mode.py
 radon cc ml/therapy ml/runtime app/personal_mode.py -s
-xenon ml/therapy ml/runtime app/personal_mode.py --max-absolute B --max-average A --max-modules B
+xenon ml/therapy ml/runtime app/personal_mode.py --max-absolute B --max-average A --max-modules B 
 ```
 
 CI: `.github/workflows/quality.yml`. Config: `pyproject.toml` (`pythonpath`, mypy excludes for Tier 3).
@@ -96,7 +96,6 @@ Track **TB subgraph boundaries (L1–L9), AWS seam mapping, and gold vs medallio
 
 ### L1 — Repo core (model + data + train + eval) — system prompt
 
-You are editing **L1 only**. Your job is to keep one trainable stack coherent: tiers, tensors, losses, checkpoints, eval, and export.
 
 - **Purpose:** Own `ml/models/*`, `ml/data/*` (including `ml/data/gold/*`), `ml/training/*`, `ml/evaluation/*`, and `ml/training/export.py`. Decide what the train loop may assume about batches and label spaces.
 - **Hard boundaries:** Do **not** add boto3 or the SageMaker SDK under `ml/training/`, `ml/models/`, or `ml/data/`. Push AWS to `ml/infra/*` and `scripts/ops/*`. Do not embed **C1** event semantics or therapy copy policy into datasets or gold IR.
@@ -111,6 +110,8 @@ You are editing **L1 only**. Your job is to keep one trainable stack coherent: t
 - **RAG / retrieval:** Advisory-only; must not override hazard / urgency / distance authority (`docs/architecture.md`). No writes to gold shard schema from therapy or retrieval.
 
 ### L3 + L4 — Ops CLI and infra
+
+**Important governing system**
 
 - **L3:** `scripts/ops/*`, `scripts/product/*` — thin arg/env wrappers.
 - **L4:** `ml/infra/*` — sessions, roles, `build_estimator`, `deploy_model`, S3 helpers, `model_registry.py`.
