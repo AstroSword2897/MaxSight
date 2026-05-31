@@ -62,9 +62,14 @@ def cmd_validate(args) -> int:
             sys.path.insert(0, str(REPO))
             import torch
             from ml.models.maxsight_cnn import create_model
+
             model = create_model()
             ckpt_data = torch.load(str(ckpt), map_location="cpu", weights_only=True)
-            state = ckpt_data.get("model_state_dict", ckpt_data) if isinstance(ckpt_data, dict) else ckpt_data
+            state = (
+                ckpt_data.get("model_state_dict", ckpt_data)
+                if isinstance(ckpt_data, dict)
+                else ckpt_data
+            )
             model.load_state_dict(state, strict=False)
             model.eval()
             x = torch.randn(1, 3, 224, 224)
@@ -103,7 +108,7 @@ def cmd_transfer(args) -> int:
     try:
         import torch
         import yaml
-        from ml.models.maxsight_cnn import create_model, TierConfig, CapabilityTier
+        from ml.models.maxsight_cnn import CapabilityTier, TierConfig, create_model
         from ml.training.transfer_learning import TierTransferManager
     except ImportError as e:
         print(f"Transfer failed: {e}", file=sys.stderr)
@@ -117,7 +122,9 @@ def cmd_transfer(args) -> int:
     if config_path and config_path.exists():
         with open(config_path) as f:
             transfer_config = yaml.safe_load(f) or {}
-    target_dir = Path(transfer_config.get("target", {}).get("checkpoint_dir", "checkpoints/t5_temporal_transfer"))
+    target_dir = Path(
+        transfer_config.get("target", {}).get("checkpoint_dir", "checkpoints/t5_temporal_transfer")
+    )
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / "t5_from_t2_init.pt"
     model = create_model(tier_config=TierConfig.for_tier(CapabilityTier.T5_TEMPORAL))
@@ -126,9 +133,46 @@ def cmd_transfer(args) -> int:
         print("Source checkpoint validation failed.", file=sys.stderr)
         return 1
     stats = manager.transfer_weights(strict=False)
-    torch.save({"model_state_dict": model.state_dict(), "epoch": 0, "val_loss": float("inf"), "transfer_stats": stats}, target_path)
-    print(f"Transferred T2 -> T5; saved to {target_path}. Fine-tune with: run.py train --resume-from {target_path} ...")
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "epoch": 0,
+            "val_loss": float("inf"),
+            "transfer_stats": stats,
+        },
+        target_path,
+    )
+    print(
+        f"Transferred T2 -> T5; saved to {target_path}. Fine-tune with: run.py train --resume-from {target_path} ..."
+    )
     return 0
+
+
+def cmd_gate(args) -> int:
+    """Run pre-flight gates: train-loop contracts, runtime contracts, and optionally pre-SageMaker."""
+    gates = {
+        "train_loop": REPO / "scripts" / "infra" / "validate_train_loop_contracts.py",
+        "runtime": REPO / "scripts" / "infra" / "validate_runtime_contracts.py",
+        "pre_sagemaker": REPO / "scripts" / "infra" / "pre_sagemaker_gate.py",
+    }
+    targets = getattr(args, "checks", None) or list(gates.keys())
+    overall = 0
+    for name in targets:
+        script = gates.get(name)
+        if script is None:
+            print(f"Unknown gate: {name}", file=sys.stderr)
+            overall = 1
+            continue
+        if not script.exists():
+            print(f"Gate script not found (skipping): {script}", file=sys.stderr)
+            continue
+        code = _run([sys.executable, str(script)])
+        if code != 0:
+            print(f"Gate FAILED: {name}", file=sys.stderr)
+            overall = code
+        else:
+            print(f"Gate OK: {name}")
+    return overall
 
 
 def cmd_smoke(args) -> int:
@@ -146,6 +190,7 @@ def cmd_smoke(args) -> int:
     sys.path.insert(0, str(REPO))
     import torch
     from ml.models.maxsight_cnn import create_model
+
     model = create_model()
     model.eval()
     x = torch.randn(1, 3, 224, 224)
@@ -166,19 +211,27 @@ def main():
     p_train.add_argument("--epochs", type=int, default=100)
     p_train.add_argument("--batch-size", type=int, default=32)
     p_train.add_argument("--device", default="auto")
-    p_train.add_argument("--config", help="YAML config (e.g. ml/training/configs/t2_hybrid_vit.yaml)")
+    p_train.add_argument(
+        "--config", help="YAML config (e.g. ml/training/configs/t2_hybrid_vit.yaml)"
+    )
     p_train.add_argument("extra", nargs="*", help="Extra args for train_maxsight.py")
 
     # validate
     p_val = sub.add_parser("validate", help="Run tests and optional checkpoint/data checks")
     p_val.add_argument("--checkpoint", help="Optional checkpoint to load and run one forward")
     p_val.add_argument("--data", action="store_true", help="Run validate_data_pipeline.py")
-    p_val.add_argument("--skip-export-tests", action="store_true", help="Skip test_export_validation (JIT trace can be flaky per docs/status.md)")
+    p_val.add_argument(
+        "--skip-export-tests",
+        action="store_true",
+        help="Skip test_export_validation (JIT trace can be flaky per docs/status.md)",
+    )
 
     # export
     p_exp = sub.add_parser("export", help="Export checkpoint to CoreML/JIT/ONNX/ExecuTorch")
     p_exp.add_argument("--checkpoint", required=True)
-    p_exp.add_argument("--format", choices=["jit", "coreml", "onnx", "executorch"], default="coreml")
+    p_exp.add_argument(
+        "--format", choices=["jit", "coreml", "onnx", "executorch"], default="coreml"
+    )
     p_exp.add_argument("--output", required=True)
 
     # package
@@ -187,13 +240,28 @@ def main():
     p_pkg.add_argument("--output", default="maxsight_ios_bundle")
 
     # transfer
-    p_xfer = sub.add_parser("transfer", help="Transfer T2 checkpoint into T5; save init checkpoint for fine-tuning")
-    p_xfer.add_argument("--source", required=True, help="Path to T2 (or compatible) checkpoint .pth/.pt")
+    p_xfer = sub.add_parser(
+        "transfer", help="Transfer T2 checkpoint into T5; save init checkpoint for fine-tuning"
+    )
+    p_xfer.add_argument(
+        "--source", required=True, help="Path to T2 (or compatible) checkpoint .pth/.pt"
+    )
     p_xfer.add_argument("--config", help="Path to t2_to_t5_transfer.yaml (optional)")
 
     # smoke
     p_smoke = sub.add_parser("smoke", help="Short training + inference sanity")
     p_smoke.add_argument("--epochs", type=int, default=2)
+
+    # gate
+    p_gate = sub.add_parser(
+        "gate", help="Run pre-flight CI gates (train_loop, runtime, pre_sagemaker)"
+    )
+    p_gate.add_argument(
+        "--checks",
+        nargs="*",
+        choices=["train_loop", "runtime", "pre_sagemaker"],
+        help="Gates to run (default: all)",
+    )
 
     args = parser.parse_args()
     if args.command == "train":
@@ -208,6 +276,8 @@ def main():
         return cmd_transfer(args)
     if args.command == "smoke":
         return cmd_smoke(args)
+    if args.command == "gate":
+        return cmd_gate(args)
     return 1
 
 

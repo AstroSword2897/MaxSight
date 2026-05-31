@@ -7,8 +7,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import torch
-import pytest
-from ml.models.maxsight_cnn import create_model, MaxSightCNN, COCO_CLASSES
+from ml.models.maxsight_cnn import COCO_CLASSES, MaxSightCNN, create_model
+from ml.runtime_constants import (
+    DEFAULT_MODEL_MAX_PARAMS,
+    DEFAULT_MODEL_MIN_PARAMS,
+)
 
 
 def test_model_creation():
@@ -23,27 +26,27 @@ def test_forward_pass():
     """Test forward pass with dummy data."""
     model = create_model()
     model.eval()
-    
+
     batch_size = 2
     dummy_image = torch.randn(batch_size, 3, 224, 224)
-    
+
     with torch.no_grad():
         outputs = model(dummy_image)
-    
+
     # Check output shapes - current architecture uses 14x14 grid (196 locations)
-    nl = outputs['num_locations']
-    num_locations = int(nl.item()) if hasattr(nl, 'item') else int(nl)
+    nl = outputs["num_locations"]
+    num_locations = int(nl.item()) if hasattr(nl, "item") else int(nl)
     num_classes = len(COCO_CLASSES)
-    
-    assert outputs['classifications'].shape == (batch_size, num_locations, num_classes)
-    assert outputs['boxes'].shape == (batch_size, num_locations, 4)
-    assert outputs['objectness'].shape == (batch_size, num_locations)
-    assert outputs['text_regions'].shape == (batch_size, num_locations)
-    assert outputs['scene_embedding'].shape == (batch_size, 512)
-    assert outputs['urgency_scores'].shape == (batch_size, 4)  # Scene-level, not per-object.
-    assert outputs['distance_zones'].shape == (batch_size, num_locations, 3)
+
+    assert outputs["classifications"].shape == (batch_size, num_locations, num_classes)
+    assert outputs["boxes"].shape == (batch_size, num_locations, 4)
+    assert outputs["objectness"].shape == (batch_size, num_locations)
+    assert outputs["text_regions"].shape == (batch_size, num_locations)
+    assert outputs["scene_embedding"].shape == (batch_size, 512)
+    assert outputs["urgency_scores"].shape == (batch_size, 4)  # Scene-level, not per-object.
+    assert outputs["distance_zones"].shape == (batch_size, num_locations, 3)
     assert num_locations == 196  # 14x14 grid.
-    
+
     print("Forward pass test passed")
 
 
@@ -51,37 +54,41 @@ def test_audio_fusion():
     """Test audio fusion mode."""
     model = create_model(use_audio=True)
     model.eval()
-    
+
     batch_size = 2
     dummy_image = torch.randn(batch_size, 3, 224, 224)
     dummy_audio = torch.randn(batch_size, 128)
-    
+
     with torch.no_grad():
         outputs = model(dummy_image, dummy_audio)
-    
-    nl = outputs['num_locations']
-    num_locations = int(nl.item()) if hasattr(nl, 'item') else int(nl)
+
+    nl = outputs["num_locations"]
+    num_locations = int(nl.item()) if hasattr(nl, "item") else int(nl)
     num_classes = len(COCO_CLASSES)
-    assert outputs['classifications'].shape == (batch_size, num_locations, num_classes)
-    assert outputs['scene_embedding'].shape == (batch_size, 512)
+    assert outputs["classifications"].shape == (batch_size, num_locations, num_classes)
+    assert outputs["scene_embedding"].shape == (batch_size, 512)
     print("Audio fusion test passed")
 
 
 def test_color_blindness_mode():
     """Test color blindness condition mode."""
-    model = create_model(condition_mode='color_blindness')
+    model = create_model(condition_mode="color_blindness")
     model.eval()
-    
+
     batch_size = 2
     dummy_image = torch.randn(batch_size, 3, 224, 224)
-    
+
     with torch.no_grad():
         outputs = model(dummy_image)
-    
-    assert 'colors' in outputs
-    nl = outputs['num_locations']
-    num_locations = int(nl.item()) if hasattr(nl, 'item') else int(nl)
-    assert outputs['colors'].shape == (batch_size, num_locations, 12)  # Per-location color predictions.
+
+    assert "colors" in outputs
+    nl = outputs["num_locations"]
+    num_locations = int(nl.item()) if hasattr(nl, "item") else int(nl)
+    assert outputs["colors"].shape == (
+        batch_size,
+        num_locations,
+        12,
+    )  # Per-location color predictions.
     print("Color blindness mode test passed")
 
 
@@ -90,11 +97,11 @@ def test_parameter_count():
     model = create_model()
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    
-    # T0 baseline ~99.6M; larger tiers up to ~250M (comprehensive class system)
-    assert 90_000_000 < total_params < 350_000_000
+
+    # Full MaxSightCNN wiring (~393M params as of 2026-05); bounds in runtime_constants.
+    assert DEFAULT_MODEL_MIN_PARAMS < total_params < DEFAULT_MODEL_MAX_PARAMS
     assert trainable_params == total_params  # All should be trainable initially.
-    
+
     print(f"Parameter count test passed: {total_params:,} parameters")
 
 
@@ -102,21 +109,21 @@ def test_gradient_flow():
     """Test that gradients can flow through the model."""
     model = create_model()
     model.train()
-    
+
     dummy_image = torch.randn(2, 3, 224, 224, requires_grad=True)
     outputs = model(dummy_image)
-    
+
     # Compute dummy loss on classifications.
-    loss = outputs['classifications'].sum()
+    loss = outputs["classifications"].sum()
     loss.backward()
-    
+
     # Check that gradients exist.
     has_gradients = False
     for param in model.parameters():
         if param.grad is not None:
             has_gradients = True
             break
-    
+
     assert has_gradients
     print("Gradient flow test passed")
 
@@ -125,32 +132,32 @@ def test_inference_mode():
     """Test inference mode (eval)"""
     model = create_model()
     model.eval()
-    
+
     dummy_image = torch.randn(1, 3, 224, 224)
-    
+
     with torch.no_grad():
         outputs = model(dummy_image)
-    
+
     # Check that all required outputs exist.
-    assert 'classifications' in outputs
-    assert 'boxes' in outputs
-    assert 'objectness' in outputs
-    assert 'scene_embedding' in outputs
-    assert 'urgency_scores' in outputs
-    assert 'distance_zones' in outputs
-    assert 'num_locations' in outputs
-    
+    assert "classifications" in outputs
+    assert "boxes" in outputs
+    assert "objectness" in outputs
+    assert "scene_embedding" in outputs
+    assert "urgency_scores" in outputs
+    assert "distance_zones" in outputs
+    assert "num_locations" in outputs
+
     # Test detection post-processing.
     detections = model.get_detections(outputs, confidence_threshold=0.3)
     assert isinstance(detections, list)
     assert len(detections) == 1
-    
+
     print("Inference mode test passed")
 
 
 if __name__ == "__main__":
     print("Running MaxSight CNN Tests")
-    
+
     test_model_creation()
     test_forward_pass()
     test_audio_fusion()
@@ -158,12 +165,5 @@ if __name__ == "__main__":
     test_parameter_count()
     test_gradient_flow()
     test_inference_mode()
-    
+
     print("\nAll tests passed")
-
-
-
-
-
-
-

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Create minimal checkpoints so run_checkpoint_inference can be exercised for all conditions."""
+
 import sys
 from pathlib import Path
 
@@ -18,9 +19,20 @@ from ml.models.maxsight_cnn import (
 )
 
 CONDITIONS = [
-    "amblyopia", "amd", "astigmatism", "cataracts", "color_blindness",
-    "cvi", "diabetic_retinopathy", "glaucoma", "hyperopia", "myopia",
-    "presbyopia", "refractive_errors", "retinitis_pigmentosa", "strabismus",
+    "amblyopia",
+    "amd",
+    "astigmatism",
+    "cataracts",
+    "color_blindness",
+    "cvi",
+    "diabetic_retinopathy",
+    "glaucoma",
+    "hyperopia",
+    "myopia",
+    "presbyopia",
+    "refractive_errors",
+    "retinitis_pigmentosa",
+    "strabismus",
 ]
 
 
@@ -45,5 +57,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-

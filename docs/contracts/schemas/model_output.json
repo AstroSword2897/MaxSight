@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MVPModelOutput",
+  "description": "Model output keys allowed in the T5 MVP runtime surface.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "classifications": { "description": "Detection head logits." },
+    "boxes": { "description": "Bounding boxes for hazards/objects." },
+    "objectness": { "description": "Objectness scores for detections." },
+    "text_regions": { "description": "OCR/text-region logits." },
+    "urgency_scores": { "description": "Per-image or per-detection urgency." },
+    "distance_zones": { "description": "Coarse distance buckets." },
+    "precise_distances": { "description": "Per-detection distance estimates." },
+    "distance_uncertainties": { "description": "Distance uncertainty estimates." },
+    "uncertainty": { "description": "Global uncertainty scalar." },
+    "temporal_consistency": { "description": "Temporal stability features." }
+  }
+}

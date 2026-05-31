@@ -6,9 +6,13 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
-from ml.data.video_panoptic import AdaptiveTemporalConfig, PseudoPanopticQualityConfig, VideoSamplingConfig
+from ml.data.video_panoptic import (
+    AdaptiveTemporalConfig,
+    PseudoPanopticQualityConfig,
+    VideoSamplingConfig,
+)
 from ml.data.video_preprocessing import PreprocessingConfig
 from ml.training.loss_weighting import TemporalWeightSchedule
 
@@ -56,7 +60,7 @@ class SageMakerPipelineConfig:
         return Path("/opt/ml/model")
 
     @staticmethod
-    def _read_hyperparameters() -> Dict[str, Any]:
+    def _read_hyperparameters() -> dict[str, Any]:
         hp_path = Path("/opt/ml/input/config/hyperparameters.json")
         if not hp_path.exists():
             return {}
@@ -66,7 +70,7 @@ class SageMakerPipelineConfig:
             return {}
 
     @classmethod
-    def from_env(cls) -> "SageMakerPipelineConfig":
+    def from_env(cls) -> SageMakerPipelineConfig:
         hp = cls._read_hyperparameters()
         input_dir = cls._resolve_input_dir()
         output_dir = cls._resolve_output_dir()
@@ -120,4 +124,3 @@ class SageMakerPipelineConfig:
         cfg.preprocessing.validate()
         cfg.temporal_weight_schedule.validate()
         return cfg
-

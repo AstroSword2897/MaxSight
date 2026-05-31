@@ -26,4 +26,3 @@ from ml.pipeline.pipeline_runner import run_sagemaker_pipeline  # noqa: E402 —
 if __name__ == "__main__":
     result = run_sagemaker_pipeline()
     print(json.dumps(result))
-

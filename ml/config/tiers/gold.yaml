@@ -1,0 +1,6 @@
+tier: gold
+model_tier: T5
+max_latency_ms: 200
+enable_temporal: true
+enable_rag: true
+enable_vit: true

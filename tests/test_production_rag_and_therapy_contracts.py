@@ -77,7 +77,10 @@ def test_therapy_is_independent_of_retrieval_keys() -> None:
 
     assert len(actions_without_retrieval) == len(actions_with_retrieval)
     if actions_without_retrieval:
-        assert actions_without_retrieval[0].intervention_type == actions_with_retrieval[0].intervention_type
+        assert (
+            actions_without_retrieval[0].intervention_type
+            == actions_with_retrieval[0].intervention_type
+        )
 
 
 def test_forward_triggers_retrieval_with_blocking_false() -> None:
@@ -119,4 +122,3 @@ def test_forward_triggers_retrieval_with_blocking_false() -> None:
     assert "indices" not in outputs
     # Scene description head stays disabled in forward to preserve trace/export safety.
     assert "scene_description" not in outputs
-

@@ -1,0 +1,12 @@
+# Tunable weights for deterministic assistive labels (COCO + derived targets).
+# Loaded by ml.data.assistive_supervision.load_assistive_spec(); unknown keys ignored.
+version: 1
+weights:
+  class: 0.52
+  proximity: 0.33
+  center: 0.15
+# Monotonic score in [0,1]; urgency level = count(score > edge) for edges below.
+urgency_bin_edges: [0.30, 0.50, 0.68]
+# Normalized box area (w*h): larger = closer; same cutoffs as legacy near/medium/far.
+distance_area_thresholds: [0.10, 0.05]
+default_class_prior: 0.38

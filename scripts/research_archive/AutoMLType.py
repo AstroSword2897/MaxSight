@@ -17,8 +17,8 @@ from torch.utils.data import DataLoader
 # Project path.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ml.data.dataset import MaxSightDataset
 from ml.data.data_pipeline import create_data_loaders
+from ml.data.dataset import MaxSightDataset
 from ml.models.maxsight_cnn import COCO_CLASSES, create_model
 from ml.training.losses import (
     BoxRegressionLoss,
@@ -63,7 +63,9 @@ def resolve_device(requested: str) -> str:
     if requested == "cuda" and not torch.cuda.is_available():
         logger.warning("CUDA unavailable -> CPU fallback")
         return "cpu"
-    if requested == "mps" and (not getattr(torch.backends, "mps", None) or not torch.backends.mps.is_available()):
+    if requested == "mps" and (
+        not getattr(torch.backends, "mps", None) or not torch.backends.mps.is_available()
+    ):
         logger.warning("MPS unavailable -> CPU fallback")
         return "cpu"
     return requested
@@ -85,21 +87,62 @@ def create_loss_fn(num_classes: int, use_gradnorm: bool = False):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Optuna hyperparameter tuning for MaxSight")
-    parser.add_argument("--data-dir", type=Path, required=True, help="Data root (COCO dir or parent of train/val)")
-    parser.add_argument("--train-annotation", type=Path, default=None, help="Train split JSON (e.g. datasets/cleaned_splits/maxsight_train.json); if set, use with --val-annotation and --image-dir")
+    parser.add_argument(
+        "--data-dir", type=Path, required=True, help="Data root (COCO dir or parent of train/val)"
+    )
+    parser.add_argument(
+        "--train-annotation",
+        type=Path,
+        default=None,
+        help="Train split JSON (e.g. datasets/cleaned_splits/maxsight_train.json); if set, use with --val-annotation and --image-dir",
+    )
     parser.add_argument("--val-annotation", type=Path, default=None, help="Val split JSON")
-    parser.add_argument("--image-dir", type=Path, default=None, help="Image root (default: data-dir; used with train/val-annotation)")
-    parser.add_argument("--checkpoint-dir", type=Path, default=Path("./checkpoints_tuning"), help="Base dir for trial checkpoints")
-    parser.add_argument("--device", choices=["cpu", "cuda", "mps", "auto"], default="cuda", help="Device for training")
+    parser.add_argument(
+        "--image-dir",
+        type=Path,
+        default=None,
+        help="Image root (default: data-dir; used with train/val-annotation)",
+    )
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=Path,
+        default=Path("./checkpoints_tuning"),
+        help="Base dir for trial checkpoints",
+    )
+    parser.add_argument(
+        "--device",
+        choices=["cpu", "cuda", "mps", "auto"],
+        default="cuda",
+        help="Device for training",
+    )
     parser.add_argument("--n-trials", type=int, default=20, help="Number of Optuna trials")
-    parser.add_argument("--epochs-per-trial", type=int, default=5, help="Epochs per trial (short for feasible search)")
+    parser.add_argument(
+        "--epochs-per-trial",
+        type=int,
+        default=5,
+        help="Epochs per trial (short for feasible search)",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Base random seed")
     # FP32 only (--use-fp16 removed)
-    parser.add_argument("--use-gradnorm", action="store_true", help="Use GradNorm for task balancing")
-    parser.add_argument("--study-name", type=str, default="maxsight_tuning", help="Optuna study name")
-    parser.add_argument("--storage", type=str, default=None, help="Optuna storage URL (e.g. sqlite:///optuna.db) for resume")
+    parser.add_argument(
+        "--use-gradnorm", action="store_true", help="Use GradNorm for task balancing"
+    )
+    parser.add_argument(
+        "--study-name", type=str, default="maxsight_tuning", help="Optuna study name"
+    )
+    parser.add_argument(
+        "--storage",
+        type=str,
+        default=None,
+        help="Optuna storage URL (e.g. sqlite:///optuna.db) for resume",
+    )
     parser.add_argument("--num-workers", type=int, default=4, help="DataLoader workers")
-    parser.add_argument("--num-classes", type=int, default=None, help="Number of classes (default: len(COCO_CLASSES))")
+    parser.add_argument(
+        "--num-classes",
+        type=int,
+        default=None,
+        help="Number of classes (default: len(COCO_CLASSES))",
+    )
     parser.add_argument("--use-audio", action="store_true")
     parser.add_argument(
         "--condition-mode",
@@ -121,7 +164,10 @@ def main() -> int:
         train_ann = Path(args.train_annotation).resolve()
         val_ann = Path(args.val_annotation).resolve()
         if not train_ann.exists():
-            for candidate in [data_dir / "cleaned_splits" / train_ann.name, data_dir / train_ann.name]:
+            for candidate in [
+                data_dir / "cleaned_splits" / train_ann.name,
+                data_dir / train_ann.name,
+            ]:
                 if candidate.exists():
                     train_ann = candidate
                     break
@@ -151,7 +197,9 @@ def main() -> int:
         train_dir = data_dir / "train"
         val_dir = data_dir / "val"
         if not train_dir.exists() or not val_dir.exists():
-            logger.error("Either provide --train-annotation and --val-annotation, or ensure train/ and val/ exist under --data-dir")
+            logger.error(
+                "Either provide --train-annotation and --val-annotation, or ensure train/ and val/ exist under --data-dir"
+            )
             return 1
 
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -167,7 +215,9 @@ def main() -> int:
         # Sample hyperparameters.
         learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
         weight_decay = trial.suggest_float("weight_decay", 1e-5, 1e-1, log=True)
-        batch_size = trial.suggest_categorical("batch_size", [4, 8, 16])  # Reduced for T4 GPU stability.
+        batch_size = trial.suggest_categorical(
+            "batch_size", [4, 8, 16]
+        )  # Reduced for T4 GPU stability.
         gradient_clip_norm = trial.suggest_float("gradient_clip_norm", 0.5, 2.0)
 
         # Per-trial checkpoint subdir so trials do not overwrite each other.
@@ -290,19 +340,33 @@ def main() -> int:
     # Optional: run full training with updated hyperparameters.
     if args.full_train_after is not None:
         import subprocess
+
         hp_path = args.checkpoint_dir / "best_hyperparameters.json"
         cmd = [
             sys.executable,
             str(Path(__file__).parent / "train_maxsight.py"),
-            "--data-dir", str(args.data_dir),
-            "--checkpoint-dir", str(args.checkpoint_dir / "full_train"),
-            "--hyperparameters", str(hp_path),
-            "--epochs", str(args.full_train_after),
-            "--device", args.device,
-            "--num-workers", str(args.num_workers),
+            "--data-dir",
+            str(args.data_dir),
+            "--checkpoint-dir",
+            str(args.checkpoint_dir / "full_train"),
+            "--hyperparameters",
+            str(hp_path),
+            "--epochs",
+            str(args.full_train_after),
+            "--device",
+            args.device,
+            "--num-workers",
+            str(args.num_workers),
         ]
         if use_annotation_based:
-            cmd.extend(["--train-annotation", str(args.train_annotation), "--val-annotation", str(args.val_annotation)])
+            cmd.extend(
+                [
+                    "--train-annotation",
+                    str(args.train_annotation),
+                    "--val-annotation",
+                    str(args.val_annotation),
+                ]
+            )
             if args.image_dir is not None:
                 cmd.extend(["--image-dir", str(args.image_dir)])
         # FP32 only (no --fp16)
@@ -321,9 +385,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-
-
-
-

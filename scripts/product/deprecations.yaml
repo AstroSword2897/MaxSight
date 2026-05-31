@@ -1,0 +1,28 @@
+# Canonical entry point: python scripts/product/run.py
+# Deprecated paths redirect here; removed after two release cycles.
+
+deprecated:
+  - path: scripts/research_archive/export_7_coreml_only.py
+    replacement: scripts/product/run.py export
+    reason: Duplicate CoreML export path
+  - path: scripts/research_archive/convert_pt_to_coreml.py
+    replacement: scripts/product/run.py export
+    reason: Superseded by ml.training.export
+  - path: scripts/research_archive/export_top7_to_xcode.py
+    replacement: scripts/product/run.py package
+    reason: Superseded by export_for_xcode.py via run.py package
+  - path: scripts/ops/train_maxsight.py
+    replacement: scripts/product/run.py train
+    reason: Use canonical product runner (still invoked internally)
+
+canonical_commands:
+  train: scripts/product/run.py train
+  validate: scripts/product/run.py validate
+  export: scripts/product/run.py export
+  package: scripts/product/run.py package
+  smoke: scripts/product/run.py smoke
+  transfer: scripts/product/run.py transfer
+  gate: scripts/product/run.py gate
+  gate_pre_sagemaker: scripts/product/run.py gate --checks pre_sagemaker
+  gate_runtime_contracts: scripts/product/run.py gate --checks runtime
+  gate_train_loop: scripts/product/run.py gate --checks train_loop

@@ -21,7 +21,9 @@ python scripts/ops/sagemaker_processing_submit.py ... --dry-run
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -31,16 +33,28 @@ if str(REPO) not in sys.path:
 
 from ml.infra.sagemaker_utils import SMConfig, get_execution_role, get_session  # noqa: E402
 
+logger = logging.getLogger(__name__)
+
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--bucket", default="", help="Or MAXSIGHT_S3_BUCKET")
     p.add_argument("--prefix", default="maxsight")
     p.add_argument("--region", default="us-east-1")
     p.add_argument("--role", default="", help="Or SAGEMAKER_ROLE_ARN")
-    p.add_argument("--input-s3", required=True, help="S3 URI prefix for processing input (video_records.json + assets)")
-    p.add_argument("--output-s3", required=True, help="S3 URI prefix for processing output artefacts")
-    p.add_argument("--instance", default="ml.m5.2xlarge", help="CPU or GPU instance for preprocessing")
+    p.add_argument(
+        "--input-s3",
+        required=True,
+        help="S3 URI prefix for processing input (video_records.json + assets)",
+    )
+    p.add_argument(
+        "--output-s3", required=True, help="S3 URI prefix for processing output artefacts"
+    )
+    p.add_argument(
+        "--instance", default="ml.m5.2xlarge", help="CPU or GPU instance for preprocessing"
+    )
     p.add_argument("--job-name", default="", help="Override auto job name")
     p.add_argument("--dry-run", action="store_true")
     return p.parse_args()
@@ -60,7 +74,14 @@ def main() -> int:
         print("Error: --role or SAGEMAKER_ROLE_ARN required", file=sys.stderr)
         return 1
 
-    cfg = SMConfig(bucket=bucket, prefix=args.prefix, region=args.region, role_arn=role)
+    base = SMConfig.from_env()
+    cfg = dataclasses.replace(
+        base,
+        bucket=bucket or base.bucket,
+        prefix=args.prefix or base.prefix,
+        region=args.region or base.region,
+        role_arn=role or base.role_arn,
+    )
     job_name = args.job_name or f"maxsight-pipeline-{time.strftime('%Y%m%d-%H%M%S')}"
 
     payload = {
@@ -72,6 +93,17 @@ def main() -> int:
         "output_s3": args.output_s3,
         "instance": args.instance,
     }
+    if cfg.subnets and cfg.security_group_ids:
+        payload["vpc"] = {
+            "subnets": list(cfg.subnets),
+            "security_group_ids": list(cfg.security_group_ids),
+        }
+    elif cfg.subnets or cfg.security_group_ids:
+        logger.warning(
+            "SM_SUBNET_IDS and SM_SECURITY_GROUP_IDS must both be set for VPC processing; ignoring partial VPC config."
+        )
+    if cfg.volume_kms_key_id:
+        payload["volume_kms_key"] = cfg.volume_kms_key_id
 
     if args.dry_run:
         print(json.dumps(payload, indent=2))
@@ -86,15 +118,21 @@ def main() -> int:
         return 1
 
     session = get_session(cfg.region)
-    pytorch_processor = PyTorchProcessor(
+    proc_kw: dict = dict(
         framework_version="2.1.0",
         py_version="py310",
-        role=get_execution_role(role),
+        role=get_execution_role(cfg.role_arn),
         instance_type=args.instance,
         instance_count=1,
         base_job_name="maxsight-pipeline",
         sagemaker_session=session,
     )
+    if cfg.subnets and cfg.security_group_ids:
+        proc_kw["subnets"] = list(cfg.subnets)
+        proc_kw["security_group_ids"] = list(cfg.security_group_ids)
+    if cfg.volume_kms_key_id:
+        proc_kw["volume_kms_key"] = cfg.volume_kms_key_id
+    pytorch_processor = PyTorchProcessor(**proc_kw)
 
     pytorch_processor.run(
         code="ml/pipeline/sagemaker_entrypoint.py",

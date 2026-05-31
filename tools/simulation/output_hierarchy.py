@@ -1,11 +1,13 @@
 """Output authority hierarchy for MaxSight Web Simulator. Defines clear priority system to prevent conflicting feedback."""
-from enum import IntEnum
-from typing import Optional, Dict, Any
+
 from dataclasses import dataclass
+from enum import IntEnum
+from typing import Any
 
 
 class OutputAuthority(IntEnum):
     """Authority hierarchy for outputs (higher = more important). Lower layers cannot override higher layers."""
+
     DESCRIPTIVE_NARRATION = 1  # Lowest: General scene descriptions.
     THERAPY_PROMPTS = 2  # Therapy task instructions.
     NAVIGATION_GUIDANCE = 3  # Navigation assistance.
@@ -15,12 +17,13 @@ class OutputAuthority(IntEnum):
 @dataclass
 class OutputRequest:
     """Represents an output request with authority level."""
+
     authority: OutputAuthority
     content: str
     priority: int = 0  # Within same authority level.
     suppress_lower: bool = True  # Whether to suppress lower authority outputs.
-    metadata: Dict[str, Any] = None
-    
+    metadata: dict[str, Any] = None
+
     def __post_init__(self):
         if self.metadata is None:
             self.metadata = {}
@@ -28,18 +31,18 @@ class OutputRequest:
 
 class OutputAuthorityManager:
     """Manages output authority hierarchy. Ensures higher-priority outputs take precedence."""
-    
+
     def __init__(self):
-        self.current_output: Optional[OutputRequest] = None
+        self.current_output: OutputRequest | None = None
         self.suppressed_outputs: list = []
-    
+
     def request_output(self, request: OutputRequest) -> bool:
         """Request an output, respecting authority hierarchy."""
         # Allow output when no current output is active.
         if self.current_output is None:
             self.current_output = request
             return True
-        
+
         # Compare authority levels.
         if request.authority > self.current_output.authority:
             # Higher authority: suppress current, allow new.
@@ -59,23 +62,16 @@ class OutputAuthorityManager:
             else:
                 self.suppressed_outputs.append(request)
                 return False
-    
+
     def clear_current(self):
         """Clear current output (e.g., after completion)."""
         self.current_output = None
-    
-    def get_current_authority(self) -> Optional[OutputAuthority]:
+
+    def get_current_authority(self) -> OutputAuthority | None:
         """Get current output authority level."""
         return self.current_output.authority if self.current_output else None
-    
+
     def reset(self):
         """Reset manager state."""
         self.current_output = None
         self.suppressed_outputs.clear()
-
-
-
-
-
-
-

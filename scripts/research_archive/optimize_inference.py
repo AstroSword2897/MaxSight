@@ -2,12 +2,11 @@
 """Auto mAP optimizer: sweep confidence and NMS IoU via inference only (no retraining)."""
 
 import argparse
+import itertools
 import re
 import subprocess
 import sys
 from pathlib import Path
-
-import itertools
 
 CONF_THRESHOLDS = [0.3, 0.1, 0.05, 0.02, 0.01]
 NMS_IOU_VALUES = [0.5, 0.6, 0.7, 0.8]
@@ -131,7 +130,7 @@ def main():
         if m > best_map:
             best_map = m
             best_config = (conf, iou)
-            print(f"  -> new best")
+            print("  -> new best")
 
     print("\nBEST RESULT")
     print("  mAP@0.5:", best_map)
@@ -144,9 +143,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-
-
-
-

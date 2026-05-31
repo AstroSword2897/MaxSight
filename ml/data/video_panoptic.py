@@ -6,8 +6,9 @@ the same clip sampling, quality filtering, and temporal track construction.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Sequence, Tuple
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -83,7 +84,7 @@ class AdaptiveTemporalConfig:
 def build_fixed_stride_windows(
     num_frames: int,
     config: VideoSamplingConfig,
-) -> List[Tuple[int, int]]:
+) -> list[tuple[int, int]]:
     """Build [start, end) frame windows with overlap support."""
 
     config.validate()
@@ -92,7 +93,7 @@ def build_fixed_stride_windows(
     if num_frames < config.temporal_window:
         return []
 
-    windows: List[Tuple[int, int]] = []
+    windows: list[tuple[int, int]] = []
     start = 0
     while start + config.temporal_window <= num_frames:
         end = start + config.temporal_window
@@ -111,13 +112,13 @@ def iter_chunks(items: Sequence[Any], chunk_size: int) -> Iterable[Sequence[Any]
 
 
 def prune_pseudo_segments(
-    segments_info: Sequence[Dict[str, Any]],
+    segments_info: Sequence[dict[str, Any]],
     config: PseudoPanopticQualityConfig,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Drop low-quality pseudo-panoptic segments."""
 
     config.validate()
-    kept: List[Dict[str, Any]] = []
+    kept: list[dict[str, Any]] = []
     for seg in segments_info:
         conf = float(seg.get("score", seg.get("confidence", 1.0)))
         area = float(seg.get("area", 0.0))
@@ -136,7 +137,7 @@ def prune_pseudo_segments(
     return kept
 
 
-def _xywh_to_xyxy(box: Sequence[float]) -> Tuple[float, float, float, float]:
+def _xywh_to_xyxy(box: Sequence[float]) -> tuple[float, float, float, float]:
     x, y, w, h = [float(v) for v in box]
     return x, y, x + w, y + h
 
@@ -174,8 +175,8 @@ def _center_displacement_xywh(a: Sequence[float], b: Sequence[float]) -> float:
 
 
 def compute_motion_score(
-    prev_frame: Sequence[Dict[str, Any]],
-    curr_frame: Sequence[Dict[str, Any]],
+    prev_frame: Sequence[dict[str, Any]],
+    curr_frame: Sequence[dict[str, Any]],
     alpha_iou: float = 0.5,
     beta_displacement: float = 0.5,
     image_size_norm: float = 256.0,
@@ -188,8 +189,8 @@ def compute_motion_score(
         return 1.0
 
     # Greedy matching by best IoU for each current segment.
-    ious: List[float] = []
-    disps: List[float] = []
+    ious: list[float] = []
+    disps: list[float] = []
     for cur in curr_frame:
         cur_bbox = cur.get("bbox")
         if not isinstance(cur_bbox, (list, tuple)) or len(cur_bbox) != 4:
@@ -230,20 +231,22 @@ def motion_to_temporal_window(
     t_new = int(round(config.t_max - (config.t_max - config.t_min) * ms))
     if t_prev is None:
         return max(config.t_min, min(config.t_max, t_new))
-    t_smooth = int(round((1.0 - config.smooth_factor) * float(t_prev) + config.smooth_factor * float(t_new)))
+    t_smooth = int(
+        round((1.0 - config.smooth_factor) * float(t_prev) + config.smooth_factor * float(t_new))
+    )
     return max(config.t_min, min(config.t_max, t_smooth))
 
 
 def build_adaptive_windows(
-    frames_segments: Sequence[Sequence[Dict[str, Any]]],
+    frames_segments: Sequence[Sequence[dict[str, Any]]],
     config: AdaptiveTemporalConfig,
-) -> List[Tuple[int, int]]:
+) -> list[tuple[int, int]]:
     """Build adaptive [start, end) windows from per-frame motion."""
     config.validate()
     n = len(frames_segments)
     if n <= 0:
         return []
-    windows: List[Tuple[int, int]] = []
+    windows: list[tuple[int, int]] = []
     i = 0
     t_prev: int | None = None
     while i < n:
@@ -268,10 +271,10 @@ def build_adaptive_windows(
 
 
 def associate_tracks_multi_frame(
-    frames_segments: Sequence[Sequence[Dict[str, Any]]],
+    frames_segments: Sequence[Sequence[dict[str, Any]]],
     lookback: int = 2,
     iou_threshold: float = 0.3,
-) -> List[List[Dict[str, Any]]]:
+) -> list[list[dict[str, Any]]]:
     """Assign robust temporal track ids using multi-frame IoU association.
 
     Input is per-frame segment dicts where each segment has `bbox`.
@@ -284,14 +287,14 @@ def associate_tracks_multi_frame(
         raise ValueError("iou_threshold must be in [0, 1]")
 
     next_track_id = 1
-    history: List[List[Dict[str, Any]]] = []
-    out: List[List[Dict[str, Any]]] = []
+    history: list[list[dict[str, Any]]] = []
+    out: list[list[dict[str, Any]]] = []
 
     for frame_idx, segments in enumerate(frames_segments):
-        frame_out: List[Dict[str, Any]] = []
+        frame_out: list[dict[str, Any]] = []
         for seg in segments:
             cur = dict(seg)
-            bbox = cur.get("bbox", None)
+            bbox = cur.get("bbox")
             if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
                 cur["track_proxy_id"] = next_track_id
                 next_track_id += 1
@@ -323,4 +326,3 @@ def associate_tracks_multi_frame(
         out.append(frame_out)
         history.append(frame_out)
     return out
-

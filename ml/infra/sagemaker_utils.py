@@ -23,9 +23,11 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
+
+from ml.training.observability import cloudwatch_health_metric_definitions
 
 # CloudWatch metrics parsed from ProductionTrainLoop logs (train_loop.py).
 TRAINING_METRIC_DEFINITIONS = [
@@ -37,7 +39,7 @@ TRAINING_METRIC_DEFINITIONS = [
     {"Name": "val:precision", "Regex": r"Precision: ([0-9.eE+-]+)"},
     {"Name": "val:recall", "Regex": r"Recall: ([0-9.eE+-]+)"},
     {"Name": "val:f1", "Regex": r"F1: ([0-9.eE+-]+)"},
-]
+] + list(cloudwatch_health_metric_definitions())
 
 # Default container images (AWS-managed PyTorch DLC).
 # Update the patch version when AWS releases new ones.
@@ -50,6 +52,14 @@ PYTORCH_INFERENCE_DLC = {
     "us-east-1": "763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-inference:2.1.0-gpu-py310-cu121-ubuntu20.04-sagemaker",
     "us-west-2": "763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference:2.1.0-gpu-py310-cu121-ubuntu20.04-sagemaker",
 }
+
+
+def _csv_env_ids(name: str) -> tuple[str, ...]:
+    """Parse comma-separated subnet or security group IDs from an env var."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return ()
+    return tuple(x.strip() for x in raw.split(",") if x.strip())
 
 
 @dataclass
@@ -66,10 +76,15 @@ class SMConfig:
     volume_size_gb: int = 100
     max_run_hours: int = 48
     output_s3_prefix: str = ""
-    tags: List[Dict[str, str]] = field(default_factory=list)
+    tags: list[dict[str, str]] = field(default_factory=list)
+    # VPC-only training/inference: set both SM_SUBNET_IDS and SM_SECURITY_GROUP_IDS (comma-separated).
+    subnets: tuple[str, ...] = ()
+    security_group_ids: tuple[str, ...] = ()
+    # Optional KMS key ARNs for volume and endpoint model artifacts (org policy).
+    volume_kms_key_id: str = ""
 
     @classmethod
-    def from_env(cls) -> "SMConfig":
+    def from_env(cls) -> SMConfig:
         """Load from environment variables (with sensible defaults)."""
         return cls(
             bucket=os.environ.get("MAXSIGHT_S3_BUCKET", "maxsight-ml"),
@@ -79,6 +94,9 @@ class SMConfig:
             instance_type_train=os.environ.get("SM_TRAIN_INSTANCE", "ml.g5.2xlarge"),
             instance_type_infer=os.environ.get("SM_INFER_INSTANCE", "ml.g5.xlarge"),
             max_run_hours=int(os.environ.get("SM_MAX_HOURS", "48")),
+            subnets=_csv_env_ids("SM_SUBNET_IDS"),
+            security_group_ids=_csv_env_ids("SM_SECURITY_GROUP_IDS"),
+            volume_kms_key_id=os.environ.get("SM_VOLUME_KMS_KEY_ID", "").strip(),
         )
 
     @property
@@ -101,7 +119,8 @@ class SMConfig:
 
 # ── Session / role ────────────────────────────────────────────────────────────
 
-def get_session(region: Optional[str] = None):
+
+def get_session(region: str | None = None):
     """Return a SageMaker Session (creates boto3 Session internally)."""
     import boto3
     import sagemaker  # type: ignore
@@ -126,6 +145,7 @@ def _assert_role_matches_caller(role_arn: str) -> None:
     role_account = match.group(1)
     try:
         import boto3
+
         caller = boto3.client("sts").get_caller_identity()
         caller_account = caller["Account"]
     except Exception:
@@ -156,6 +176,7 @@ def get_execution_role(role_arn: str = "") -> str:
         else:
             try:
                 import sagemaker  # type: ignore
+
                 resolved = sagemaker.get_execution_role()
             except Exception:
                 raise RuntimeError(
@@ -167,6 +188,7 @@ def get_execution_role(role_arn: str = "") -> str:
 
 
 # ── Training job config builder ───────────────────────────────────────────────
+
 
 def _default_source_dir() -> str:
     # ml/infra/sagemaker_utils.py -> repo root
@@ -193,12 +215,12 @@ def _optional_debugger_hook(enable: bool):
 def build_estimator(
     cfg: SMConfig,
     entry_point: str = "ml/training/sagemaker_entry.py",
-    hyperparameters: Optional[Dict[str, Any]] = None,
+    hyperparameters: dict[str, Any] | None = None,
     *,
-    source_dir: Optional[str] = None,
-    dependencies: Optional[List[str]] = None,
+    source_dir: str | None = None,
+    dependencies: list[str] | None = None,
     use_spot: bool = False,
-    metric_definitions: Optional[List[Dict[str, str]]] = None,
+    metric_definitions: list[dict[str, str]] | None = None,
     emit_cloudwatch_metrics: bool = True,
     enable_debugger: bool = False,
 ):
@@ -212,7 +234,7 @@ def build_estimator(
     session = get_session(cfg.region)
     role = get_execution_role(cfg.role_arn)
 
-    spot_kwargs: Dict[str, Any] = {}
+    spot_kwargs: dict[str, Any] = {}
     if use_spot:
         spot_kwargs = {
             "use_spot_instances": True,
@@ -220,18 +242,18 @@ def build_estimator(
         }
 
     dbg = _optional_debugger_hook(enable_debugger)
-    extra_estimator_kwargs: Dict[str, Any] = {}
+    extra_estimator_kwargs: dict[str, Any] = {}
     if dbg is not None:
         extra_estimator_kwargs["debugger_hook_config"] = dbg
 
     if metric_definitions is not None:
-        metrics: Optional[List[Dict[str, str]]] = metric_definitions
+        metrics: list[dict[str, str]] | None = metric_definitions
     elif emit_cloudwatch_metrics:
         metrics = TRAINING_METRIC_DEFINITIONS
     else:
         metrics = None
 
-    pytorch_kwargs: Dict[str, Any] = dict(
+    pytorch_kwargs: dict[str, Any] = dict(
         entry_point=entry_point,
         source_dir=source_dir or _default_source_dir(),
         role=role,
@@ -253,6 +275,17 @@ def build_estimator(
     if metrics:
         pytorch_kwargs["metric_definitions"] = metrics
 
+    if cfg.subnets and cfg.security_group_ids:
+        pytorch_kwargs["subnets"] = list(cfg.subnets)
+        pytorch_kwargs["security_group_ids"] = list(cfg.security_group_ids)
+    elif cfg.subnets or cfg.security_group_ids:
+        logger.warning(
+            "SM_SUBNET_IDS and SM_SECURITY_GROUP_IDS must both be set for VPC training; ignoring partial VPC config."
+        )
+
+    if cfg.volume_kms_key_id:
+        pytorch_kwargs["volume_kms_key"] = cfg.volume_kms_key_id
+
     estimator = PyTorch(**pytorch_kwargs)
     return estimator
 
@@ -260,14 +293,14 @@ def build_estimator(
 def build_data_channels(
     cfg: SMConfig,
     *,
-    train_s3_uri: Optional[str] = None,
-    val_s3_uri: Optional[str] = None,
-    gold_index_s3_uri: Optional[str] = None,
-) -> Dict[str, Any]:
+    train_s3_uri: str | None = None,
+    val_s3_uri: str | None = None,
+    gold_index_s3_uri: str | None = None,
+) -> dict[str, Any]:
     """Build SageMaker data channel inputs for a training job."""
     from sagemaker.inputs import TrainingInput  # type: ignore
 
-    channels: Dict[str, Any] = {}
+    channels: dict[str, Any] = {}
     if train_s3_uri:
         channels["train"] = TrainingInput(train_s3_uri, content_type="application/json")
     if val_s3_uri:
@@ -278,6 +311,7 @@ def build_data_channels(
 
 
 # ── Endpoint helpers ──────────────────────────────────────────────────────────
+
 
 def deploy_model(
     cfg: SMConfig,
@@ -301,11 +335,22 @@ def deploy_model(
         sagemaker_session=session,
         model_server_workers=model_server_workers,
     )
-    predictor = model.deploy(
+    deploy_kwargs: dict[str, Any] = dict(
         initial_instance_count=1,
         instance_type=cfg.instance_type_infer,
         endpoint_name=endpoint_name,
     )
+    if cfg.subnets and cfg.security_group_ids:
+        deploy_kwargs["vpc_config_override"] = {
+            "Subnets": list(cfg.subnets),
+            "SecurityGroupIds": list(cfg.security_group_ids),
+        }
+    elif cfg.subnets or cfg.security_group_ids:
+        logger.warning(
+            "SM_SUBNET_IDS and SM_SECURITY_GROUP_IDS must both be set for VPC inference; deploying without vpc_config_override."
+        )
+
+    predictor = model.deploy(**deploy_kwargs)
     logger.info("Endpoint live: %s", endpoint_name)
     return predictor
 
@@ -321,11 +366,12 @@ def get_latest_training_job_output(job_name: str, cfg: SMConfig) -> str:
 
 # ── Spot-instance resume helper ───────────────────────────────────────────────
 
+
 def checkpoint_s3_uri_for_run(cfg: SMConfig, run_id: str) -> str:
     return f"{cfg.checkpoint_s3_path}/{run_id}"
 
 
-def latest_checkpoint_key(cfg: SMConfig, run_id: str) -> Optional[str]:
+def latest_checkpoint_key(cfg: SMConfig, run_id: str) -> str | None:
     """Find the most recent checkpoint key for a run in S3."""
     from ml.infra.s3_client import S3Client
 

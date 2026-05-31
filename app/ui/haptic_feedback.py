@@ -1,54 +1,105 @@
-"""Haptic Feedback Provides haptic feedback for therapy tasks. Phase 4: Overlay Engine & UX Guidance See docs/therapy_system_implementation_plan.md for implementation details."""
+"""Haptic feedback facade with platform-specific device adapters."""
 
-from typing import Optional
-from enum import Enum
+from __future__ import annotations
+
 import logging
+from enum import Enum
 
-# Use structured logging instead of print.
+from app.ui.haptic_backends import HapticBackend, resolve_haptic_backend
+
 logger = logging.getLogger(__name__)
 
 
 class HapticPattern(Enum):
-    """Haptic feedback patterns."""
-    MICRO_PULSE = "micro_pulse"  # Target found.
-    LONG_PULSE = "long_pulse"  # Wrong region.
+    """Named haptic feedback patterns used by therapy and simulator flows."""
+
+    MICRO_PULSE = "micro_pulse"
+    LONG_PULSE = "long_pulse"
     SUCCESS_SEQUENCE = "success_sequence"
     FAILURE_SEQUENCE = "failure_sequence"
 
 
 class HapticFeedback:
-    """Manages haptic feedback for therapy tasks. Patterns: - Micro pulse: target found - Longer pulse: wrong region."""
-    
-    def __init__(self, enabled: bool = True):
+    """Deliver therapy haptics through a resolved platform backend."""
+
+    def __init__(
+        self,
+        enabled: bool = True,
+        backend: str | HapticBackend | None = None,
+        allow_log_fallback: bool = False,
+        *,
+        allow_stub: bool | None = None,
+    ):
+        """Initialize haptic delivery.
+
+        Parameters:
+            enabled: When False, all trigger/stop calls no-op.
+            backend: Explicit backend name (``auto``, ``darwin``, ``linux``,
+                ``log``, ``none``) or a ``HapticBackend`` instance.
+            allow_log_fallback: Use log backend when hardware is unavailable.
+            allow_stub: Deprecated alias for ``allow_log_fallback``.
+
+        Side effects:
+            Resolves and stores a concrete backend adapter.
+
+        Failure modes:
+            Raises ``RuntimeError`` when no backend can be resolved and log
+            fallback is disabled.
+        """
+        if allow_stub is not None:
+            allow_log_fallback = allow_log_fallback or allow_stub
         self.enabled = enabled
-    
-    def trigger(self, pattern: HapticPattern, intensity: float = 0.5):
-        """Trigger haptic feedback pattern. Arguments: pattern: HapticPattern enum value intensity: Intensity [0, 1]."""
+        if isinstance(backend, HapticBackend):
+            self._backend: HapticBackend = backend
+        else:
+            self._backend = resolve_haptic_backend(
+                backend,
+                allow_log_fallback=allow_log_fallback,
+            )
+
+    def trigger(self, pattern: HapticPattern, intensity: float = 0.5) -> None:
+        """Play a haptic pattern.
+
+        Parameters:
+            pattern: Pattern enum value.
+            intensity: Normalized intensity in ``[0, 1]``.
+
+        Side effects:
+            Invokes the active backend when enabled.
+
+        Failure modes:
+            Propagates backend ``RuntimeError`` when hardware delivery fails.
+        """
         if not self.enabled:
             return
-        
-        # Use logger instead of print.
-        logger.info(f"Haptic {pattern.value} intensity: {intensity}")
-    
-    def micro_pulse(self, intensity: float = 0.3):
-        """Short pulse for target found."""
+        intensity = max(0.0, min(1.0, float(intensity)))
+        self._backend.trigger(pattern, intensity)
+
+    def micro_pulse(self, intensity: float = 0.3) -> None:
+        """Short pulse indicating a target was found."""
         self.trigger(HapticPattern.MICRO_PULSE, intensity)
-    
-    def long_pulse(self, intensity: float = 0.6):
-        """Longer pulse for wrong region."""
+
+    def long_pulse(self, intensity: float = 0.6) -> None:
+        """Longer pulse indicating an incorrect region."""
         self.trigger(HapticPattern.LONG_PULSE, intensity)
-    
-    def success_sequence(self):
-        """Success feedback sequence."""
-        self.trigger(HapticPattern.SUCCESS_SEQUENCE, 0.7)
-    
-    def failure_sequence(self):
-        """Failure feedback sequence."""
+
+    def success_sequence(self) -> None:
+        """Two-step success feedback sequence."""
+        self.trigger(HapticPattern.MICRO_PULSE, 0.5)
+        self.trigger(HapticPattern.SUCCESS_SEQUENCE, 0.8)
+
+    def failure_sequence(self) -> None:
+        """Two-step failure feedback sequence."""
+        self.trigger(HapticPattern.LONG_PULSE, 0.6)
         self.trigger(HapticPattern.FAILURE_SEQUENCE, 0.4)
 
+    def stop(self) -> None:
+        """Stop in-flight haptic playback when supported by the backend."""
+        if not self.enabled:
+            return
+        self._backend.stop()
 
-
-
-
-
-
+    @property
+    def backend_name(self) -> str:
+        """Return the active backend class name for diagnostics."""
+        return self._backend.name

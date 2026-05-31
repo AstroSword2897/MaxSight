@@ -31,7 +31,9 @@ This document describes how training data is loaded, batched, and fed to the mod
 ## Splits and annotation generation
 
 - **Splits:** Train/val (and optionally test) splits are defined by separate annotation JSON files. They can be produced by `scripts/gather_training_data.py` or by splitting a single COCO JSON (e.g. `ml/data/coco_dataset_splitter.py`).
-- **Medallion (bronze/silver/gold):** Optional layout under `datasets/medallion/` with `gold/training_index.json` for reproducible paths; see **[medallion_data.md](medallion_data.md)**.
+- **Gold JSONL + meta (canonical, SageMaker-friendly):** `scripts/ops/build_gold_manifest.py` produces sharded lines + `meta.json`; training uses `data_plane: gold` and meta URIs in YAML. See root **[README.md](../README.md#training-data-plane-gold-jsonl--meta-vs-medallion-index-d2)** and **[infra/README.md](../infra/README.md)** for S3 prefixes.
+- **Assistive-derived labels:** COCO-style boxes use the shared formula in **`ml/data/assistive_supervision.py`** with weights in **`ml/config/assistive_supervision.yaml`**. Dataset roles (BDD100K, Epic-Kitchens, VOS, sim) are summarized in **[video_and_navigation_datasets.md](video_and_navigation_datasets.md)**.
+- **Medallion (legacy D2):** Optional layout under `datasets/medallion/` with `gold/training_index.json` for path-indexed flows; see **[medallion_data.md](medallion_data.md)**.
 - **Inference datasets:** For evaluation (e.g. mAP), inference datasets and annotations may be prepared by `scripts/download_inference_datasets.py` or similar; those are separate from the training data pipeline but follow similar path and annotation conventions.
 
 ## Best practices

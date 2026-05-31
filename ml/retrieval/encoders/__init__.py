@@ -37,19 +37,11 @@ except (ImportError, ModuleNotFoundError):
     SceneGraphRetrievalEncoder = None
 
 __all__ = [
-    'GlobalEncoder',
-    'RegionExtractor',
-    'PatchExtractor',
-    'DepthExtractor',
-    'OCREncoder',
-    'AudioEncoder',
-    'SceneGraphRetrievalEncoder',
+    "GlobalEncoder",
+    "RegionExtractor",
+    "PatchExtractor",
+    "DepthExtractor",
+    "OCREncoder",
+    "AudioEncoder",
+    "SceneGraphRetrievalEncoder",
 ]
-
-
-
-
-
-
-
-

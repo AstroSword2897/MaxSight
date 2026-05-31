@@ -20,4 +20,3 @@ def test_sagemaker_config_from_env_defaults(monkeypatch) -> None:
     assert str(cfg.output_dir) == "/tmp/out"
     assert str(cfg.model_dir) == "/tmp/model"
     assert cfg.preprocessing.sampling.temporal_window >= 2
-

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Sequence
+from typing import Any
 
 from ml.data.video_panoptic import bbox_iou_xywh
 
@@ -16,7 +17,9 @@ class TemporalClipTargets:
     flicker_proxy: float
 
 
-def derive_temporal_clip_targets(frames_segments: Sequence[Sequence[Dict[str, Any]]]) -> TemporalClipTargets:
+def derive_temporal_clip_targets(
+    frames_segments: Sequence[Sequence[dict[str, Any]]],
+) -> TemporalClipTargets:
     """Derive stability and flicker proxies from track-linked segments.
 
     Higher temporal_consistency means matched tracks stay spatially aligned (mean IoU).
@@ -27,8 +30,8 @@ def derive_temporal_clip_targets(frames_segments: Sequence[Sequence[Dict[str, An
     if T < 2:
         return TemporalClipTargets(1.0, 0.0)
 
-    ious: List[float] = []
-    count_ratios: List[float] = []
+    ious: list[float] = []
+    count_ratios: list[float] = []
 
     for t in range(1, T):
         prev = frames_segments[t - 1]
@@ -40,7 +43,7 @@ def derive_temporal_clip_targets(frames_segments: Sequence[Sequence[Dict[str, An
         denom = max(1, n_prev + n_cur)
         count_ratios.append(abs(n_cur - n_prev) / denom)
 
-        prev_by_track: Dict[Any, Dict[str, Any]] = {}
+        prev_by_track: dict[Any, dict[str, Any]] = {}
         for s in prev:
             if isinstance(s, dict) and "track_proxy_id" in s:
                 prev_by_track[s["track_proxy_id"]] = s

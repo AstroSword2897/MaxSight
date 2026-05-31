@@ -18,20 +18,23 @@ import json
 import logging
 import random
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, cast
+from typing import Any, cast
 
 from ml.infra.s3_validation import (
     MAX_SINGLE_PUT_BYTES,
     S3ValidationError,
-    parse_s3_uri as _parse_s3_uri_strict,
     sanitize_relative_key,
     validate_bucket_name,
     validate_local_dir,
     validate_local_file,
     validate_object_key,
     validate_prefix,
+)
+from ml.infra.s3_validation import (
+    parse_s3_uri as _parse_s3_uri_strict,
 )
 
 logger = logging.getLogger(__name__)
@@ -104,7 +107,7 @@ def _call_with_retry(
 ) -> Any:
     """Run fn with exponential backoff and jitter on transient failures."""
 
-    last_exc: Optional[BaseException] = None
+    last_exc: BaseException | None = None
     for attempt in range(1, max_attempts + 1):
         try:
             return fn()
@@ -122,7 +125,9 @@ def _call_with_retry(
                     error_type=type(exc).__name__,
                     error=str(exc)[:500],
                 )
-                raise S3OperationError(f"{operation} failed after {attempt} attempt(s): {exc}") from exc
+                raise S3OperationError(
+                    f"{operation} failed after {attempt} attempt(s): {exc}"
+                ) from exc
             delay = min(max_delay_s, base_delay_s * (2 ** (attempt - 1)))
             delay *= 0.5 + random.random() * 0.5
             _emit(
@@ -142,9 +147,9 @@ def _call_with_retry(
 class SyncUploadResult:
     """Aggregate outcome for large directory uploads (partial success supported)."""
 
-    uris: List[str] = field(default_factory=list)
+    uris: list[str] = field(default_factory=list)
     skipped: int = 0
-    failed: List[Dict[str, str]] = field(default_factory=list)
+    failed: list[dict[str, str]] = field(default_factory=list)
     bytes_uploaded: int = 0
 
 
@@ -152,13 +157,13 @@ class SyncUploadResult:
 class SyncDownloadResult:
     """Aggregate outcome for prefix downloads."""
 
-    paths: List[Path] = field(default_factory=list)
+    paths: list[Path] = field(default_factory=list)
     skipped: int = 0
-    failed: List[Dict[str, str]] = field(default_factory=list)
+    failed: list[dict[str, str]] = field(default_factory=list)
 
 
 # Backward-compatible helpers (strict validation).
-def parse_s3_uri(uri: str) -> Tuple[str, str]:
+def parse_s3_uri(uri: str) -> tuple[str, str]:
     """Return (bucket, key) from s3://bucket/key; raises S3ValidationError if invalid."""
 
     return _parse_s3_uri_strict(uri)
@@ -182,11 +187,11 @@ class S3Client:
         self,
         bucket: str,
         prefix: str = "maxsight",
-        region: Optional[str] = None,
+        region: str | None = None,
         session=None,
         *,
         max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
-        max_upload_bytes: Optional[int] = MAX_SINGLE_PUT_BYTES,
+        max_upload_bytes: int | None = MAX_SINGLE_PUT_BYTES,
     ) -> None:
         self.bucket = validate_bucket_name(bucket)
         self.prefix = validate_prefix(prefix)
@@ -322,12 +327,12 @@ class S3Client:
             _emit("exists_error", key=s3_key, code=code, level=logging.ERROR)
             raise
 
-    def list_keys(self, prefix: str, *, max_keys: Optional[int] = None) -> List[str]:
+    def list_keys(self, prefix: str, *, max_keys: int | None = None) -> list[str]:
         """List object keys under prefix; cap max_keys to bound memory on huge buckets."""
 
         if prefix:
             prefix = validate_object_key(prefix, field="list prefix")
-        keys: List[str] = []
+        keys: list[str] = []
         paginator = self._s3.get_paginator("list_objects_v2")
         for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
             for obj in page.get("Contents", []) or []:
@@ -349,11 +354,11 @@ class S3Client:
         local_dir: Path,
         s3_prefix: str,
         *,
-        extensions: Optional[List[str]] = None,
+        extensions: list[str] | None = None,
         overwrite: bool = False,
-        on_progress: Optional[Callable[[str], None]] = None,
+        on_progress: Callable[[str], None] | None = None,
         continue_on_error: bool = True,
-        max_files: Optional[int] = None,
+        max_files: int | None = None,
     ) -> SyncUploadResult:
         """Upload files under local_dir; collect per-file failures when continue_on_error."""
 
@@ -404,9 +409,9 @@ class S3Client:
         local_dir: Path,
         *,
         overwrite: bool = False,
-        on_progress: Optional[Callable[[str], None]] = None,
+        on_progress: Callable[[str], None] | None = None,
         continue_on_error: bool = True,
-        max_keys: Optional[int] = None,
+        max_keys: int | None = None,
     ) -> SyncDownloadResult:
         s3_prefix = validate_object_key(s3_prefix, field="s3_prefix") if s3_prefix else ""
         local_dir = Path(local_dir)
@@ -450,7 +455,7 @@ class S3Client:
         *,
         overwrite: bool = False,
         continue_on_error: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         target = Path(local_root) / layer
         if not target.exists():
             raise S3ValidationError(f"medallion layer directory missing: {target}")
@@ -486,7 +491,7 @@ class S3Client:
         *,
         overwrite: bool = False,
         continue_on_error: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         s3_prefix = self.medallion_s3_prefix(layer)
         dest = Path(local_root) / layer
         dest.mkdir(parents=True, exist_ok=True)
@@ -523,7 +528,9 @@ class S3Client:
         if not run_id or not str(run_id).strip():
             raise S3ValidationError("run_id must be non-empty")
         tag = validate_object_key(str(tag), field="tag")
-        cp = validate_local_file(checkpoint_path, must_exist=True, max_size_bytes=self._max_upload_bytes)
+        cp = validate_local_file(
+            checkpoint_path, must_exist=True, max_size_bytes=self._max_upload_bytes
+        )
         key = self._s3_key("checkpoints", run_id.strip(), tag, cp.name)
         uri = self.upload_file(cp, key, overwrite=True)
         _emit("checkpoint_upload_ok", run_id=run_id, tag=tag, uri=uri)
@@ -546,7 +553,7 @@ class S3Client:
         dest = dest_dir / filename
         return self.download_file(key, dest, overwrite=True)
 
-    def list_checkpoints(self, run_id: Optional[str] = None) -> List[str]:
+    def list_checkpoints(self, run_id: str | None = None) -> list[str]:
         if run_id is None:
             prefix = self._s3_key("checkpoints")
         else:
@@ -555,7 +562,7 @@ class S3Client:
             prefix = self._s3_key("checkpoints", run_id.strip())
         return self.list_keys(prefix)
 
-    def upload_run_artefacts(self, run_dir: Path, run_id: str) -> List[str]:
+    def upload_run_artefacts(self, run_dir: Path, run_id: str) -> list[str]:
         rd = validate_local_dir(run_dir, must_exist=True)
         if not run_id or not str(run_id).strip():
             raise S3ValidationError("run_id must be non-empty")

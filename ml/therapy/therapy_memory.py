@@ -1,17 +1,18 @@
 """Therapy memory: short-term and long-term state for the closed-loop therapy engine."""
 
-from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
 import time
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
 class ShortTermMemory:
     """Rolling window of recent state for response evaluation and cooldowns."""
-    last_intervention_type: Optional[str] = None
+
+    last_intervention_type: str | None = None
     last_intervention_time: float = -1e9
-    recent_stress_levels: List[float] = field(default_factory=list)
-    recent_prompts: List[Dict[str, Any]] = field(default_factory=list)
+    recent_stress_levels: list[float] = field(default_factory=list)
+    recent_prompts: list[dict[str, Any]] = field(default_factory=list)
     max_stress_history: int = 30
     max_prompt_history: int = 20
 
@@ -20,7 +21,9 @@ class ShortTermMemory:
         if len(self.recent_stress_levels) > self.max_stress_history:
             self.recent_stress_levels.pop(0)
 
-    def push_prompt(self, intervention_type: str, content: str, timestamp: Optional[float] = None) -> None:
+    def push_prompt(
+        self, intervention_type: str, content: str, timestamp: float | None = None
+    ) -> None:
         t = timestamp if timestamp is not None else time.time()
         self.last_intervention_type = intervention_type
         self.last_intervention_time = t
@@ -41,10 +44,11 @@ class ShortTermMemory:
 @dataclass
 class LongTermMemory:
     """Persistent preferences and patterns (e.g. preferred channel, stress triggers)."""
+
     preferred_channel: str = "audio"  # audio, haptic, visual
-    stress_triggers: List[str] = field(default_factory=lambda: ["crowded areas", "noise"])
-    successful_interventions: Dict[str, float] = field(default_factory=dict)  # type -> success rate
-    failed_intervention_types: List[str] = field(default_factory=list)
+    stress_triggers: list[str] = field(default_factory=lambda: ["crowded areas", "noise"])
+    successful_interventions: dict[str, float] = field(default_factory=dict)  # type -> success rate
+    failed_intervention_types: list[str] = field(default_factory=list)
     user_tolerance_level: float = 0.5  # 0 = low tolerance (fewer prompts), 1 = high
 
     def record_success(self, intervention_type: str) -> None:
@@ -68,7 +72,9 @@ class TherapyMemorySystem:
         self.short_term = ShortTermMemory()
         self.long_term = LongTermMemory()
 
-    def update_after_intervention(self, intervention_type: str, content: str, effectiveness: float) -> None:
+    def update_after_intervention(
+        self, intervention_type: str, content: str, effectiveness: float
+    ) -> None:
         self.short_term.push_prompt(intervention_type, content)
         if effectiveness >= 0.5:
             self.long_term.record_success(intervention_type)

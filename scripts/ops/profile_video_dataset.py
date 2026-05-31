@@ -28,7 +28,9 @@ def main() -> None:
         default=None,
         help="Directory for resolving relative frame_paths (default: manifest parent)",
     )
-    p.add_argument("--summary-only", action="store_true", help="Only frame file coverage + parse times")
+    p.add_argument(
+        "--summary-only", action="store_true", help="Only frame file coverage + parse times"
+    )
     p.add_argument("--warmup", type=int, default=2)
     p.add_argument("--getitem-samples", type=int, default=32)
     p.add_argument("--dataloader-batches", type=int, default=10)

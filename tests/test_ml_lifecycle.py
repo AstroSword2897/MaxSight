@@ -7,19 +7,17 @@ credentials or network access is required.
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
-from ml.infra.experiment_tracker import RunRecord, RunTracker, leaderboard, load_all_runs
-from ml.infra.model_registry import ModelEntry, ModelRegistry
+from ml.infra.experiment_tracker import RunTracker, leaderboard
+from ml.infra.model_registry import ModelRegistry
 from ml.infra.s3_client import S3Client, is_s3_uri, parse_s3_uri, s3_uri_to_local
 from ml.infra.s3_validation import MAX_OBJECT_KEY_BYTES, S3ValidationError, validate_object_key
 
-
 # ── S3 helpers (pure Python — no boto3 needed) ─────────────────────────────────
+
 
 def test_parse_s3_uri() -> None:
     b, k = parse_s3_uri("s3://my-bucket/some/prefix/file.json")
@@ -55,6 +53,7 @@ def test_s3_uri_to_local() -> None:
 
 
 # ── S3Client (mocked boto3) ────────────────────────────────────────────────────
+
 
 def _make_s3_client(mock_s3) -> S3Client:
     from ml.infra.s3_validation import MAX_SINGLE_PUT_BYTES, validate_bucket_name, validate_prefix
@@ -161,6 +160,7 @@ def test_sync_upload_continue_on_error_collects_failures(tmp_path: Path) -> None
 
 # ── SMConfig ──────────────────────────────────────────────────────────────────
 
+
 def test_smconfig_output_path() -> None:
     from ml.infra.sagemaker_utils import SMConfig
 
@@ -186,6 +186,7 @@ def test_smconfig_from_env(monkeypatch) -> None:
 
 
 # ── RunTracker ────────────────────────────────────────────────────────────────
+
 
 def test_run_tracker_creates_run_json(tmp_path: Path) -> None:
     with RunTracker(run_id="test_run_001", runs_dir=tmp_path) as run:
@@ -214,9 +215,8 @@ def test_run_tracker_metrics_jsonl(tmp_path: Path) -> None:
 
 
 def test_run_tracker_marks_failed_on_exception(tmp_path: Path) -> None:
-    with pytest.raises(ValueError):
-        with RunTracker(run_id="test_fail", runs_dir=tmp_path):
-            raise ValueError("training exploded")
+    with pytest.raises(ValueError), RunTracker(run_id="test_fail", runs_dir=tmp_path):
+        raise ValueError("training exploded")
 
     run_json = tmp_path / "maxsight" / "test_fail" / "run.json"
     record = json.loads(run_json.read_text())
@@ -243,14 +243,13 @@ def test_leaderboard(tmp_path: Path) -> None:
 
 # ── ModelRegistry ─────────────────────────────────────────────────────────────
 
+
 def test_model_registry_register_and_list(tmp_path: Path) -> None:
     registry = ModelRegistry(registry_path=tmp_path / "registry.json")
     ckpt = tmp_path / "best.pt"
     ckpt.write_bytes(b"fake weights")
 
-    entry = registry.register_model(
-        "run_001", ckpt, metrics={"val_map": 0.52}, tier="T5_TEMPORAL"
-    )
+    entry = registry.register_model("run_001", ckpt, metrics={"val_map": 0.52}, tier="T5_TEMPORAL")
     assert entry.stage == "candidate"
     assert entry.run_id == "run_001"
     assert len(registry.list_models()) == 1

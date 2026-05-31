@@ -99,14 +99,17 @@ def main() -> int:
                     [
                         sys.executable,
                         str(download_script),
-                        "--data_dir", str(data_dir),
+                        "--data_dir",
+                        str(data_dir),
                         *(["--auto"] if args.download_auto else []),
                     ],
                     check=False,
                 )
             except Exception as e:
                 print(f"  Warning: download step failed: {e}")
-                print("  You can run manually: python scripts/archive/download_coco.py --data_dir ... [--auto]")
+                print(
+                    "  You can run manually: python scripts/archive/download_coco.py --data_dir ... [--auto]"
+                )
         print()
     else:
         print("Step 1: Skip download (--skip-download)")
@@ -120,6 +123,7 @@ def main() -> int:
             print("  Warning: scripts/extract_coco.py not found")
         else:
             from ml.data.download_datasets import verify_coco_dataset
+
             data_dir.mkdir(parents=True, exist_ok=True)
             if data_dir == ROOT / "datasets" / "coco_raw":
                 try:
@@ -127,8 +131,12 @@ def main() -> int:
                 except Exception as e:
                     print(f"  Warning: extract failed: {e}")
             else:
-                print(f"  Note: extract_coco.py uses datasets/coco_raw. If your data is elsewhere, run:")
-                print(f"        python scripts/archive/extract_coco.py  # then copy/move to {data_dir}")
+                print(
+                    "  Note: extract_coco.py uses datasets/coco_raw. If your data is elsewhere, run:"
+                )
+                print(
+                    f"        python scripts/archive/extract_coco.py  # then copy/move to {data_dir}"
+                )
         print()
     else:
         print("Step 2: Skip extract (--skip-extract)")
@@ -137,10 +145,15 @@ def main() -> int:
     # 3. Setup splits (create_maxsight_splits_from_coco)
     print("Step 3: Create train/val/test splits...")
     from ml.data.download_datasets import verify_coco_dataset
+
     status = verify_coco_dataset(data_dir, check_coco_raw=(data_dir.name == "coco_raw"))
-    if not (status.get("train_images") or status.get("val_images")) or not status.get("annotations"):
+    if not (status.get("train_images") or status.get("val_images")) or not status.get(
+        "annotations"
+    ):
         print("  COCO data missing or incomplete. Run download and extract first.")
-        print("  Verify: python scripts/archive/download_coco.py --verify-only --data_dir", data_dir)
+        print(
+            "  Verify: python scripts/archive/download_coco.py --verify-only --data_dir", data_dir
+        )
         return 1
 
     from ml.data.coco_dataset_splitter import create_maxsight_splits_from_coco
@@ -172,6 +185,7 @@ def main() -> int:
     except Exception as e:
         print(f"  Error creating splits: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -185,20 +199,20 @@ def main() -> int:
     print(f"  Test:  {test_file}")
     print()
     print("Training (use annotation files and image dir):")
-    print(f"  python scripts/train_maxsight.py \\")
+    print("  python scripts/train_maxsight.py \\")
     print(f"    --data-dir {data_dir} \\")
     print(f"    --train-annotation {train_file} \\")
     print(f"    --val-annotation {val_file} \\")
     print(f"    --image-dir {image_dir} \\")
-    print(f"    --epochs 2 --device cpu")
+    print("    --epochs 2 --device cpu")
     print()
     print("AutoML (Optuna) after data is ready:")
-    print(f"  python scripts/AutoMLType.py \\")
+    print("  python scripts/AutoMLType.py \\")
     print(f"    --data-dir {data_dir} \\")
     print(f"    --train-annotation {train_file} \\")
     print(f"    --val-annotation {val_file} \\")
     print(f"    --image-dir {image_dir} \\")
-    print(f"    --n-trials 5 --epochs-per-trial 2 --device cpu")
+    print("    --n-trials 5 --epochs-per-trial 2 --device cpu")
     print()
     print("arm64 (Apple Silicon): use --device mps for inference/benchmarks;")
     print("  use --device cpu for training if MPS has unsupported ops.")
@@ -210,9 +224,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-
-
-
-

@@ -17,22 +17,56 @@ if str(REPO) not in sys.path:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Load one model and export to JIT; print full traceback on error.")
+    parser = argparse.ArgumentParser(
+        description="Load one model and export to JIT; print full traceback on error."
+    )
     parser.add_argument("--checkpoint", type=Path, default=None, help="Path to best_model.pt")
-    parser.add_argument("--condition", type=str, default=None, help="Condition name (e.g. amblyopia); used with --checkpoints-base")
-    parser.add_argument("--checkpoints-base", type=Path, default=None, help="Base dir; with --condition uses <base>/checkpoints_<cond>/best_model.pt")
-    parser.add_argument("--out", type=Path, default=Path("maxsight_traced.pt"), help="Output .pt path")
-    parser.add_argument("--device", default="cpu", choices=["cpu", "cuda"], help="Device for load/forward (export uses cpu)")
-    parser.add_argument("--no-subprocess", action="store_true", help="Run in this process (default: run in subprocess with 10 min timeout to detect OOM/kill)")
-    parser.add_argument("--fp16", action="store_true", help="Trace in half precision (uses less memory; can avoid OOM on Colab)")
+    parser.add_argument(
+        "--condition",
+        type=str,
+        default=None,
+        help="Condition name (e.g. amblyopia); used with --checkpoints-base",
+    )
+    parser.add_argument(
+        "--checkpoints-base",
+        type=Path,
+        default=None,
+        help="Base dir; with --condition uses <base>/checkpoints_<cond>/best_model.pt",
+    )
+    parser.add_argument(
+        "--out", type=Path, default=Path("maxsight_traced.pt"), help="Output .pt path"
+    )
+    parser.add_argument(
+        "--device",
+        default="cpu",
+        choices=["cpu", "cuda"],
+        help="Device for load/forward (export uses cpu)",
+    )
+    parser.add_argument(
+        "--no-subprocess",
+        action="store_true",
+        help="Run in this process (default: run in subprocess with 10 min timeout to detect OOM/kill)",
+    )
+    parser.add_argument(
+        "--fp16",
+        action="store_true",
+        help="Trace in half precision (uses less memory; can avoid OOM on Colab)",
+    )
     args = parser.parse_args()
 
     ckpt_path = args.checkpoint
     if ckpt_path is None and args.condition and args.checkpoints_base:
-        ckpt_path = Path(args.checkpoints_base).resolve() / f"checkpoints_{args.condition}" / "best_model.pt"
+        ckpt_path = (
+            Path(args.checkpoints_base).resolve()
+            / f"checkpoints_{args.condition}"
+            / "best_model.pt"
+        )
     if ckpt_path is None or not Path(ckpt_path).exists():
         print(f"Checkpoint not found: {ckpt_path}", file=sys.stderr)
-        print("Use --checkpoint /path/to/best_model.pt or --condition NAME --checkpoints-base /path", file=sys.stderr)
+        print(
+            "Use --checkpoint /path/to/best_model.pt or --condition NAME --checkpoints-base /path",
+            file=sys.stderr,
+        )
         return 1
 
     ckpt_path = Path(ckpt_path).resolve()
@@ -50,19 +84,27 @@ def main():
             cmd += ["--checkpoints-base", str(args.checkpoints_base)]
         cmd += ["--out", str(out_path), "--device", device, "--no-subprocess"]
         env = {**os.environ, "EXPORT_ONE_CHILD": "1"}
-        print("Running export in subprocess (timeout 10 min). If killed, you'll see exit code below.", flush=True)
+        print(
+            "Running export in subprocess (timeout 10 min). If killed, you'll see exit code below.",
+            flush=True,
+        )
         try:
             r = subprocess.run(cmd, cwd=str(REPO), env=env, timeout=600)
             if r.returncode == 0:
                 print(f"Done. Saved: {out_path}", flush=True)
                 return 0
             if r.returncode == -9:
-                print("Process killed (signal 9). Likely out of memory during JIT trace.", flush=True)
+                print(
+                    "Process killed (signal 9). Likely out of memory during JIT trace.", flush=True
+                )
             else:
                 print(f"Subprocess exited with code {r.returncode}", flush=True)
             return 1
         except subprocess.TimeoutExpired:
-            print("Export timed out after 10 minutes. JIT trace may be stuck or very slow.", flush=True)
+            print(
+                "Export timed out after 10 minutes. JIT trace may be stuck or very slow.",
+                flush=True,
+            )
             return 1
 
     def progress(msg: str) -> None:
@@ -93,6 +135,7 @@ def main():
 
         progress("Step 3: Loading best_model.pt weights into model...")
         import torch
+
         ckpt = torch.load(ckpt_path, map_location=device, weights_only=True)
         state = ckpt.get("model_state_dict", ckpt)
         model.load_state_dict(state, strict=False)
@@ -112,6 +155,7 @@ def main():
         del dummy, out
         del ckpt, state
         import gc
+
         gc.collect()
         if device == "cuda":
             torch.cuda.empty_cache()
@@ -143,9 +187,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-
-
-
-

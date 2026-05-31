@@ -34,8 +34,8 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from ml.infra.s3_client import S3Client, MEDALLION_LAYERS  # noqa: E402
 from ml.data.medallion_layout import default_medallion_root  # noqa: E402
+from ml.infra.s3_client import MEDALLION_LAYERS, S3Client  # noqa: E402
 
 LAYER_CHOICES = list(MEDALLION_LAYERS) + ["all"]
 
@@ -110,7 +110,9 @@ def _make_client(args: argparse.Namespace) -> S3Client:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--bucket", required=True, help="S3 bucket name")
     parser.add_argument("--prefix", default="maxsight", help="S3 key prefix")
     parser.add_argument("--region", default="", help="AWS region")

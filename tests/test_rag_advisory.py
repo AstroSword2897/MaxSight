@@ -61,8 +61,7 @@ class _FakeRetriever:
         assert query["video_id"] == "v1"
         assert query["clip_id"] == "c1"
         return [
-            RetrievalResult(payload={"k": i}, score=s)
-            for i, s in enumerate(self.scores[:top_k])
+            RetrievalResult(payload={"k": i}, score=s) for i, s in enumerate(self.scores[:top_k])
         ]
 
 

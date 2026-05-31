@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 MANIFEST_SCHEMA_VERSION = "1.0"
 CONTRACT_FIXED_STRIDE_T8 = "fixed_stride_t8"
 
 
 def validate_manifest_v1(
-    data: Dict[str, Any],
+    data: dict[str, Any],
     *,
     require_fixed_t8: bool = False,
-) -> List[str]:
+) -> list[str]:
     """Return human-readable errors; empty list means the manifest is usable."""
 
-    errors: List[str] = []
+    errors: list[str] = []
     if not isinstance(data, dict):
         return ["root must be an object"]
     ver = data.get("schema_version")
@@ -43,11 +44,17 @@ def validate_manifest_v1(
             start = clip.get("start_frame")
             end = clip.get("end_frame")
             if tw != 8:
-                errors.append(f"clips[{i}]: fixed_stride_t8 requires temporal_window==8, got {tw!r}")
+                errors.append(
+                    f"clips[{i}]: fixed_stride_t8 requires temporal_window==8, got {tw!r}"
+                )
             if isinstance(paths, list) and len(paths) != 8:
-                errors.append(f"clips[{i}]: fixed_stride_t8 requires len(frame_paths)==8, got {len(paths)}")
+                errors.append(
+                    f"clips[{i}]: fixed_stride_t8 requires len(frame_paths)==8, got {len(paths)}"
+                )
             if isinstance(segs, list) and len(segs) != 8:
-                errors.append(f"clips[{i}]: fixed_stride_t8 requires len(frames_segments)==8, got {len(segs)}")
+                errors.append(
+                    f"clips[{i}]: fixed_stride_t8 requires len(frames_segments)==8, got {len(segs)}"
+                )
             if isinstance(start, int) and isinstance(end, int) and end - start != 8:
                 errors.append(
                     f"clips[{i}]: fixed_stride_t8 requires end_frame - start_frame == 8, got {end}-{start}"
@@ -56,8 +63,8 @@ def validate_manifest_v1(
     return errors
 
 
-def _validate_clip(clip: Dict[str, Any], index: int) -> List[str]:
-    errors: List[str] = []
+def _validate_clip(clip: dict[str, Any], index: int) -> list[str]:
+    errors: list[str] = []
     prefix = f"clips[{index}]"
     required = (
         "clip_id",
@@ -89,7 +96,9 @@ def _validate_clip(clip: Dict[str, Any], index: int) -> List[str]:
             )
 
     if isinstance(paths, list) and isinstance(tw, int) and len(paths) != tw:
-        errors.append(f"{prefix}: len(frame_paths) ({len(paths)}) must equal temporal_window ({tw})")
+        errors.append(
+            f"{prefix}: len(frame_paths) ({len(paths)}) must equal temporal_window ({tw})"
+        )
 
     if isinstance(segs, list) and isinstance(tw, int) and len(segs) != tw:
         errors.append(
@@ -107,12 +116,14 @@ def _validate_clip(clip: Dict[str, Any], index: int) -> List[str]:
                     continue
                 bbox = seg.get("bbox")
                 if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
-                    errors.append(f"{prefix}: frames_segments[{fi}][{si}].bbox must be length-4 array")
+                    errors.append(
+                        f"{prefix}: frames_segments[{fi}][{si}].bbox must be length-4 array"
+                    )
 
     return errors
 
 
-def clip_spans(clip: Dict[str, Any]) -> Optional[Tuple[int, int]]:
+def clip_spans(clip: dict[str, Any]) -> tuple[int, int] | None:
     """Return (start_frame, end_frame) if valid integers are present."""
 
     s, e = clip.get("start_frame"), clip.get("end_frame")
@@ -122,8 +133,8 @@ def clip_spans(clip: Dict[str, Any]) -> Optional[Tuple[int, int]]:
 
 
 def iter_clip_frame_paths(
-    clip: Dict[str, Any],
-    manifest_root: Optional[Any] = None,
+    clip: dict[str, Any],
+    manifest_root: Any | None = None,
 ) -> Sequence[str]:
     """Return frame_paths list from a clip (for callers that resolve paths themselves)."""
 

@@ -72,7 +72,9 @@ def _run_ingest(medallion_root: Path, key: str, path: Path) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
         "--repo-root",
         type=Path,
@@ -116,7 +118,11 @@ def main() -> int:
     print()
 
     if gather_rest and not args.gather_coco:
-        print("Unknown arguments (use --gather-coco to forward extras to gather_training_data.py):", gather_rest, file=sys.stderr)
+        print(
+            "Unknown arguments (use --gather-coco to forward extras to gather_training_data.py):",
+            gather_rest,
+            file=sys.stderr,
+        )
         return 2
 
     if args.gather_coco:
@@ -143,7 +149,9 @@ def main() -> int:
             if rc != 0:
                 return rc
         if not any_ingest:
-            print("  (no non-empty canonical dirs; populate paths then re-run with --ingest-nonempty)")
+            print(
+                "  (no non-empty canonical dirs; populate paths then re-run with --ingest-nonempty)"
+            )
 
     return 0
 

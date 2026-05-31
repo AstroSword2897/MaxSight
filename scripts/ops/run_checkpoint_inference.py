@@ -7,7 +7,6 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
@@ -61,10 +60,7 @@ def _discover_conditions(base_dir: Path):
     base_dir = Path(base_dir)
     if not base_dir.exists():
         raise FileNotFoundError(f"Checkpoints base dir not found: {base_dir}")
-    dirs = sorted(
-        d for d in base_dir.iterdir()
-        if d.is_dir() and d.name.startswith("checkpoints_")
-    )
+    dirs = sorted(d for d in base_dir.iterdir() if d.is_dir() and d.name.startswith("checkpoints_"))
     out = []
     for d in dirs:
         cond = d.name.replace("checkpoints_", "")
@@ -76,7 +72,9 @@ def _discover_conditions(base_dir: Path):
     return out
 
 
-def _adaptive_confidence_threshold(outputs: dict, percentile: float = 85.0, min_thresh: float = 0.01, max_thresh: float = 0.5) -> float:
+def _adaptive_confidence_threshold(
+    outputs: dict, percentile: float = 85.0, min_thresh: float = 0.01, max_thresh: float = 0.5
+) -> float:
     """Compute confidence threshold from objectness so top (100 - percentile)% of scores pass. No retraining."""
     if "objectness" not in outputs:
         return min_thresh
@@ -94,11 +92,11 @@ def run_inference_for_checkpoint(
     device: str,
     num_classes: int,
     tier: str,
-    max_batches: Optional[int],
+    max_batches: int | None,
     confidence_threshold: float,
     auto_confidence: bool = False,
     nms_threshold: float = 0.5,
-    remap_pred_class: Optional[int] = None,
+    remap_pred_class: int | None = None,
     diagnose: bool = False,
 ) -> dict:
     """Load one checkpoint, run validation inference, return metrics and latency stats."""
@@ -159,20 +157,31 @@ def run_inference_for_checkpoint(
                 n = len(obj_np)
                 logger.info(
                     "Diagnostic (first batch): objectness min=%.4f max=%.4f mean=%.4f p50=%.4f p90=%.4f p95=%.4f",
-                    float(obj_np.min()), float(obj_np.max()), float(obj_np.mean()),
+                    float(obj_np.min()),
+                    float(obj_np.max()),
+                    float(obj_np.mean()),
                     float(np.percentile(obj_np, 50)),
                     float(np.percentile(obj_np, 90)),
                     float(np.percentile(obj_np, 95)),
                 )
                 for thresh in (0.05, 0.1, 0.2, 0.3):
                     count = (obj_np > thresh).sum()
-                    logger.info("  objectness > %.2f: %d / %d (%.1f%%)", thresh, int(count), n, 100.0 * count / n if n else 0)
+                    logger.info(
+                        "  objectness > %.2f: %d / %d (%.1f%%)",
+                        thresh,
+                        int(count),
+                        n,
+                        100.0 * count / n if n else 0,
+                    )
 
             batch_conf = confidence_threshold
             if auto_confidence:
                 batch_conf = _adaptive_confidence_threshold(outputs)
                 if batch_idx == 0:
-                    logger.info("Auto confidence (batch 0): using threshold=%.4f from objectness 85th percentile", batch_conf)
+                    logger.info(
+                        "Auto confidence (batch 0): using threshold=%.4f from objectness 85th percentile",
+                        batch_conf,
+                    )
             try:
                 batch_detections = model.get_detections(
                     outputs,
@@ -190,9 +199,7 @@ def run_inference_for_checkpoint(
 
                 gt_boxes_b = targets["boxes"][b]
                 gt_labels_b = targets["labels"][b]
-                num_objects = int(
-                    targets.get("num_objects", torch.tensor([10]))[b].item()
-                )
+                num_objects = int(targets.get("num_objects", torch.tensor([10]))[b].item())
                 if num_objects == 0:
                     continue
                 gt_boxes_valid = gt_boxes_b[:num_objects].to(device)
@@ -200,7 +207,9 @@ def run_inference_for_checkpoint(
                 if gt_boxes_valid.numel() == 0:
                     continue
                 if remap_pred_class is not None:
-                    gt_labels_valid = torch.zeros_like(gt_labels_valid, device=device, dtype=gt_labels_valid.dtype)
+                    gt_labels_valid = torch.zeros_like(
+                        gt_labels_valid, device=device, dtype=gt_labels_valid.dtype
+                    )
 
                 has_pred = b < len(batch_detections) and batch_detections[b]
                 if has_pred:
@@ -215,9 +224,7 @@ def run_inference_for_checkpoint(
                             pred_labels_list.append(
                                 remap_pred_class if remap_pred_class is not None else raw_class
                             )
-                            pred_scores_list.append(
-                                det.get("confidence", 0.5)
-                            )
+                            pred_scores_list.append(det.get("confidence", 0.5))
                     if pred_boxes_list:
                         pred_boxes = torch.tensor(
                             pred_boxes_list, device=device, dtype=torch.float32
@@ -425,9 +432,13 @@ def main():
         return 0
 
     if args.val_annotation is None or args.image_dir is None:
-        parser.error("--val-annotation and --image-dir are required (or use --find-annotations to discover paths).")
+        parser.error(
+            "--val-annotation and --image-dir are required (or use --find-annotations to discover paths)."
+        )
     if args.checkpoints_base is None:
-        parser.error("--checkpoints-base is required (e.g. ./checkpoints or path to folder containing checkpoints_<condition>).")
+        parser.error(
+            "--checkpoints-base is required (e.g. ./checkpoints or path to folder containing checkpoints_<condition>)."
+        )
 
     auto_confidence = str(args.confidence).strip().lower() == "auto"
     if auto_confidence:
@@ -476,10 +487,7 @@ def main():
 
     conditions_list = _discover_conditions(args.checkpoints_base)
     if args.conditions:
-        conditions_list = [
-            (c, d) for c, d in conditions_list
-            if c in args.conditions
-        ]
+        conditions_list = [(c, d) for c, d in conditions_list if c in args.conditions]
     if not conditions_list:
         logger.error("No checkpoints found under %s", args.checkpoints_base)
         return 1
@@ -494,7 +502,8 @@ def main():
         num_workers=args.num_workers,
         pin_memory=(args.device == "cuda"),
         condition_mode=None,
-        apply_lighting_augmentation=False,
+        tag_lighting_metadata=False,
+        lighting_pixel_augmentation=False,
     )
     num_val = len(val_loader.dataset) if hasattr(val_loader, "dataset") else "?"
     logger.info("Val samples: %s, batches: %s", num_val, len(val_loader))
@@ -531,11 +540,13 @@ def main():
             )
         except Exception as e:
             logger.exception("Failed condition %s: %s", condition, e)
-            results.append({
-                "condition": condition,
-                "checkpoint_path": str(best_path),
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "condition": condition,
+                    "checkpoint_path": str(best_path),
+                    "error": str(e),
+                }
+            )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     out_data = {
@@ -561,9 +572,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-
-
-
-

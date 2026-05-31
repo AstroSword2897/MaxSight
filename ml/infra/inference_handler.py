@@ -18,9 +18,8 @@ import base64
 import io
 import json
 import logging
-import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ml.middleware.error_sanitizer import (
     ConfigError,
@@ -30,7 +29,6 @@ from ml.middleware.error_sanitizer import (
     ValidationError,
     error_context,
     log_error,
-    sanitize_error,
 )
 
 if TYPE_CHECKING:
@@ -52,7 +50,8 @@ try:
         Downstream services must check output_policy_applied and suppressed
         before consuming therapy_feedback — the output policy layer sets these.
         """
-        therapy_feedback: Dict[str, Any]
+
+        therapy_feedback: dict[str, Any]
         output_policy_applied: bool
         suppressed: bool
 
@@ -63,10 +62,10 @@ except ImportError:
 
 # ── Lazy therapy initialiser ───────────────────────────────────────────────────
 
-_THERAPY: "Optional[_TTI]" = None
+_THERAPY: _TTI | None = None
 
 
-def _get_therapy() -> "_TTI":
+def _get_therapy() -> _TTI:
     """Return the shared TherapyTaskIntegrator, constructing it on first call.
 
     Deferred construction avoids import-time GPU/env-var side effects in
@@ -75,13 +74,15 @@ def _get_therapy() -> "_TTI":
     global _THERAPY
     if _THERAPY is None:
         from ml.therapy.therapy_integration import TherapyTaskIntegrator
+
         _THERAPY = TherapyTaskIntegrator()
     return _THERAPY
 
 
 # ── SageMaker hooks ───────────────────────────────────────────────────────────
 
-def model_fn(model_dir: str) -> Dict[str, Any]:
+
+def model_fn(model_dir: str) -> dict[str, Any]:
     """Load model from the SageMaker model directory."""
     import sys
 
@@ -90,14 +91,12 @@ def model_fn(model_dir: str) -> Dict[str, Any]:
         sys.path.insert(0, str(repo))
 
     try:
-        from ml.models.maxsight_cnn import create_model, TierConfig, CapabilityTier  # type: ignore
+        from ml.models.maxsight_cnn import CapabilityTier, TierConfig, create_model  # type: ignore
     except ImportError as exc:
-        raise ConfigError(
-            f"Cannot import model module from {repo}: {exc}"
-        ) from exc
+        raise ConfigError(f"Cannot import model module from {repo}: {exc}") from exc
 
     meta_path = Path(model_dir) / "model_meta.json"
-    meta: Dict[str, Any] = {}
+    meta: dict[str, Any] = {}
     if meta_path.exists():
         try:
             with open(meta_path) as f:
@@ -132,7 +131,7 @@ def model_fn(model_dir: str) -> Dict[str, Any]:
     return {"model": model, "device": device, "meta": meta}
 
 
-def input_fn(request_body: bytes, content_type: str = "application/json") -> Dict[str, Any]:
+def input_fn(request_body: bytes, content_type: str = "application/json") -> dict[str, Any]:
     """Deserialise an inference request; raises typed errors on bad input."""
     if content_type == "application/json":
         try:
@@ -151,10 +150,11 @@ def input_fn(request_body: bytes, content_type: str = "application/json") -> Dic
         )
 
 
-def _predict_impl(data: Dict[str, Any], model_pack: Dict[str, Any]) -> InferenceOutput:
+def _predict_impl(data: dict[str, Any], model_pack: dict[str, Any]) -> InferenceOutput:
     """Inner predict logic — all exceptions here are wrapped by predict_fn."""
-    from PIL import Image  # type: ignore
     import torchvision.transforms.functional as TF  # type: ignore
+    from PIL import Image  # type: ignore
+
     from ml.therapy.therapy_integration import TherapyTaskType
 
     model = model_pack["model"]
@@ -195,7 +195,7 @@ def _predict_impl(data: Dict[str, Any], model_pack: Dict[str, Any]) -> Inference
     except Exception as exc:
         raise ModelInferenceError(f"Forward pass failed: {exc}") from exc
 
-    result: Dict[str, Any] = {}
+    result: dict[str, Any] = {}
     for k, v in raw_outputs.items():
         if isinstance(v, torch.Tensor):
             result[k] = v.cpu().tolist()
@@ -205,10 +205,9 @@ def _predict_impl(data: Dict[str, Any], model_pack: Dict[str, Any]) -> Inference
     # Required therapy pass — not optional.  Skipping this call bypasses the
     # safety and adaptation systems; it must remain in the call chain.
     try:
-        detections: List[Dict[str, Any]] = result.get("detections", [])
+        detections: list[dict[str, Any]] = result.get("detections", [])
         scene_desc = (
-            ", ".join(d.get("class_name", "object") for d in detections[:5])
-            or "inference scene"
+            ", ".join(d.get("class_name", "object") for d in detections[:5]) or "inference scene"
         )
         therapy_feedback = _get_therapy().generate_task_from_scene(
             detections=detections,
@@ -226,7 +225,7 @@ def _predict_impl(data: Dict[str, Any], model_pack: Dict[str, Any]) -> Inference
     return result  # type: ignore[return-value]
 
 
-def predict_fn(data: Dict[str, Any], model_pack: Dict[str, Any]) -> InferenceOutput:
+def predict_fn(data: dict[str, Any], model_pack: dict[str, Any]) -> InferenceOutput:
     """Run inference on a single frame with structured error handling.
 
     All exceptions are caught, logged with a correlation ID, and re-raised as
@@ -249,6 +248,6 @@ def predict_fn(data: Dict[str, Any], model_pack: Dict[str, Any]) -> InferenceOut
             raise
 
 
-def output_fn(prediction: Dict[str, Any], accept: str = "application/json") -> bytes:
+def output_fn(prediction: dict[str, Any], accept: str = "application/json") -> bytes:
     """Serialise the prediction to the response format."""
     return json.dumps(prediction).encode()

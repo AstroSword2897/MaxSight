@@ -1,4 +1,3 @@
-import json
 import sys
 from pathlib import Path
 
@@ -83,7 +82,9 @@ def test_write_load_merge_video(tmp_path: Path) -> None:
     }
     write_training_index(p, base)
     loaded = load_training_index(p)
-    m = merge_video_into_index(loaded, {"train_manifest": "silver/video/t.json", "manifest_root": "frames"})
+    m = merge_video_into_index(
+        loaded, {"train_manifest": "silver/video/t.json", "manifest_root": "frames"}
+    )
     assert m["video"]["train_manifest"] == "silver/video/t.json"
     assert m["video"]["manifest_root"] == "frames"
 

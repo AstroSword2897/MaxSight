@@ -2,32 +2,34 @@
 
 import torch
 import torch.nn as nn
-from typing import Dict, List, Tuple, Optional
 
 
 class Stage2Reranker(nn.Module):
     """Reranks candidates using multi-vector weighted scoring."""
-    
-    def __init__(self, embedding_dims: Dict[str, int], hidden_dim: int = 256, num_concepts: int = 10):
+
+    def __init__(
+        self, embedding_dims: dict[str, int], hidden_dim: int = 256, num_concepts: int = 10
+    ):
         super().__init__()
         self.embedding_dims = embedding_dims
         self.num_concepts = num_concepts
         self.concept_weights = nn.Parameter(torch.randn(num_concepts, len(embedding_dims)) * 0.02)
         self.rerank_mlp = nn.Sequential(
-            nn.Linear(sum(embedding_dims.values()), hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, 1)
+            nn.Linear(sum(embedding_dims.values()), hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, 1)
         )
-    
-    def forward(self, query_embeddings: Dict[str, torch.Tensor], 
-                candidate_embeddings: List[Dict[str, torch.Tensor]],
-                concept_weights: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
+
+    def forward(
+        self,
+        query_embeddings: dict[str, torch.Tensor],
+        candidate_embeddings: list[dict[str, torch.Tensor]],
+        concept_weights: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         N = len(candidate_embeddings)
         device = next(iter(query_embeddings.values())).device
         scores = []
         for candidate in candidate_embeddings:
             similarities = []
-            for name in query_embeddings.keys():
+            for name in query_embeddings:
                 if name in candidate:
                     q_emb = query_embeddings[name]
                     c_emb = candidate[name]
@@ -42,7 +44,10 @@ class Stage2Reranker(nn.Module):
                 else:
                     similarities.append(torch.tensor(0.0, device=device))
             if concept_weights is not None:
-                weighted_sim = torch.sum(concept_weights.unsqueeze(1) * self.concept_weights * torch.stack(similarities), dim=0).sum()
+                weighted_sim = torch.sum(
+                    concept_weights.unsqueeze(1) * self.concept_weights * torch.stack(similarities),
+                    dim=0,
+                ).sum()
             else:
                 weighted_sim = torch.stack(similarities).mean()
             # Aggregate query embeddings properly (handle multi-dimensional tensors)
@@ -58,10 +63,17 @@ class Stage2Reranker(nn.Module):
                     if q_emb.numel() != self.embedding_dims[name]:
                         # Reshape or project to expected dimension.
                         if q_emb.numel() > self.embedding_dims[name]:
-                            q_emb = q_emb.flatten()[:self.embedding_dims[name]]
+                            q_emb = q_emb.flatten()[: self.embedding_dims[name]]
                         else:
-                            q_emb = torch.cat([q_emb.flatten(), torch.zeros(self.embedding_dims[name] - q_emb.numel(), device=device)])
-                    query_vecs.append(q_emb.flatten()[:self.embedding_dims[name]])
+                            q_emb = torch.cat(
+                                [
+                                    q_emb.flatten(),
+                                    torch.zeros(
+                                        self.embedding_dims[name] - q_emb.numel(), device=device
+                                    ),
+                                ]
+                            )
+                    query_vecs.append(q_emb.flatten()[: self.embedding_dims[name]])
                 else:
                     query_vecs.append(torch.zeros(self.embedding_dims[name], device=device))
             combined = torch.cat(query_vecs)
@@ -71,9 +83,3 @@ class Stage2Reranker(nn.Module):
         scores = torch.stack(scores)
         sorted_indices = torch.argsort(scores, descending=True)
         return scores[sorted_indices], sorted_indices
-
-
-
-
-
-

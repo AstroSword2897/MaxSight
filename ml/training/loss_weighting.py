@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
 
 
 @dataclass(frozen=True)
@@ -38,9 +37,8 @@ class TemporalWeightSchedule:
 def build_temporal_weight_updates(
     epoch: int,
     schedule: TemporalWeightSchedule,
-    temporal_heads: Dict[str, float],
-) -> Dict[str, float]:
+    temporal_heads: dict[str, float],
+) -> dict[str, float]:
     """Generate per-head updates for temporal losses in current epoch."""
     weight = schedule.at_epoch(epoch)
     return {head: float(base * weight) for head, base in temporal_heads.items()}
-

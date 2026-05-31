@@ -1,9 +1,10 @@
 """Stage A temporal smoother for MaxSight. EMA smoothing of box and confidence across frames to reduce flicker."""
-from typing import List, Dict, Any, Optional
+
 import math
+from typing import Any
 
 
-def _get_object_id(det: Dict[str, Any]) -> str:
+def _get_object_id(det: dict[str, Any]) -> str:
     """Stable ID from class + approximate position (grid)."""
     cls = det.get("class_name", "unknown")
     box = det.get("box")
@@ -20,7 +21,7 @@ def _get_object_id(det: Dict[str, Any]) -> str:
     return cls
 
 
-def _box_to_list(box: Any) -> List[float]:
+def _box_to_list(box: Any) -> list[float]:
     if hasattr(box, "tolist"):
         return box.tolist()
     if isinstance(box, (list, tuple)):
@@ -34,13 +35,13 @@ class StageATemporalSmoother:
     def __init__(self, alpha: float = 0.7, max_age: int = 5):
         self.alpha = alpha
         self.max_age = max_age
-        self._history: Dict[str, Dict[str, Any]] = {}
-        self._last_seen: Dict[str, int] = {}
+        self._history: dict[str, dict[str, Any]] = {}
+        self._last_seen: dict[str, int] = {}
         self._frame_count = 0
 
     def smooth_detections(
-        self, detections: List[Dict[str, Any]], frame_id: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+        self, detections: list[dict[str, Any]], frame_id: int | None = None
+    ) -> list[dict[str, Any]]:
         """Smooth detection boxes and confidence with EMA. Uses frame_id if provided, else internal frame counter."""
         if frame_id is not None:
             self._frame_count = frame_id
@@ -48,7 +49,7 @@ class StageATemporalSmoother:
             self._frame_count += 1
         fid = self._frame_count
 
-        result: List[Dict[str, Any]] = []
+        result: list[dict[str, Any]] = []
         for det in detections:
             oid = _get_object_id(det)
             self._last_seen[oid] = fid
@@ -85,9 +86,3 @@ class StageATemporalSmoother:
                 del self._last_seen[oid]
 
         return result
-
-
-
-
-
-

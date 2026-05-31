@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-05-31T02:09:48.061415+00:00",
+  "targets": [
+    "ml/therapy",
+    "ml/runtime",
+    "app/personal_mode.py"
+  ],
+  "radon": {
+    "d_rated": [],
+    "c_rated": [
+      "app/personal_mode.py:get_therapy_recommendations",
+      "ml/runtime/mode.py:process",
+      "ml/therapy/intervention_generator.py:generate",
+      "ml/therapy/response_evaluation.py:ResponseEvaluationModel",
+      "ml/therapy/task_generator.py:_choose_task_type"
+    ],
+    "avg_complexity": 3.33
+  },
+  "ruff": {
+    "total": 0,
+    "by_code": {}
+  },
+  "mypy": {
+    "therapy_runtime_errors": 0,
+    "follow_imports": "silent",
+    "top_error_codes": {},
+    "exit_code": 0
+  },
+  "xenon": {
+    "passed": false,
+    "exit_code": 1
+  }
+}

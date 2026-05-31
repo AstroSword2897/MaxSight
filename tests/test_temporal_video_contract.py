@@ -40,4 +40,3 @@ def test_temporal_forward_accepts_5d_and_keeps_tensor_surface() -> None:
 
     # Forward keeps non-tensor text outputs disabled.
     assert "scene_description" not in outputs
-

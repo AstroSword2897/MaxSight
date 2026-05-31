@@ -1,0 +1,6 @@
+tier: silver
+model_tier: T2
+max_latency_ms: 120
+enable_temporal: false
+enable_rag: true
+enable_vit: true

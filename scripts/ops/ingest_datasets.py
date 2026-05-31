@@ -54,8 +54,8 @@ from ml.data.medallion_layout import (  # noqa: E402
     write_ingest_record,
 )
 
-
 # ── Per-dataset ingest probes ─────────────────────────────────────────────────
+
 
 def _probe_coco(path: Path) -> dict:
     ann_dir = path / "annotations"
@@ -87,12 +87,18 @@ def _probe_kinetics700(path: Path) -> dict:
 def _probe_youtube8m(path: Path) -> dict:
     has_tfrecord = any(path.rglob("*.tfrecord"))
     has_feature = any(path.rglob("*.pkl")) or any(path.rglob("*.npy"))
-    return {"has_tfrecord": has_tfrecord, "has_features": has_feature, "ready": has_tfrecord or has_feature}
+    return {
+        "has_tfrecord": has_tfrecord,
+        "has_features": has_feature,
+        "ready": has_tfrecord or has_feature,
+    }
 
 
 def _probe_howto100m(path: Path) -> dict:
     has_videos = any(path.rglob("*.mp4")) or any(path.rglob("*.mkv"))
-    has_subtitles = any(path.rglob("*.vtt")) or any(path.rglob("*.srt")) or any(path.rglob("*.json"))
+    has_subtitles = (
+        any(path.rglob("*.vtt")) or any(path.rglob("*.srt")) or any(path.rglob("*.json"))
+    )
     return {"has_videos": has_videos, "has_subtitles": has_subtitles, "ready": has_videos}
 
 
@@ -135,6 +141,7 @@ PROBES = {
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 
+
 def cmd_ingest(args: argparse.Namespace) -> int:
     path = Path(args.path).resolve()
     if not path.exists():
@@ -172,7 +179,13 @@ def cmd_list(args: argparse.Namespace) -> int:
     for key in DATASET_KEYS:
         try:
             rec = load_ingest_record(mroot, key)
-            rows.append({"dataset": key, "source": rec.get("source_path"), "ready": rec.get("probe", {}).get("ready", "?")})
+            rows.append(
+                {
+                    "dataset": key,
+                    "source": rec.get("source_path"),
+                    "ready": rec.get("probe", {}).get("ready", "?"),
+                }
+            )
         except FileNotFoundError:
             rows.append({"dataset": key, "source": None, "ready": False})
     print(json.dumps(rows, indent=2))
@@ -185,17 +198,24 @@ def cmd_show(args: argparse.Namespace) -> int:
         rec = load_ingest_record(mroot, args.dataset)
         print(json.dumps(rec, indent=2))
     except FileNotFoundError:
-        print(f"No ingest record for {args.dataset}. Run: python scripts/ops/ingest_datasets.py {args.dataset} --path ...", file=sys.stderr)
+        print(
+            f"No ingest record for {args.dataset}. Run: python scripts/ops/ingest_datasets.py {args.dataset} --path ...",
+            file=sys.stderr,
+        )
         return 1
     return 0
 
 
 # ── Parser ────────────────────────────────────────────────────────────────────
 
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
-        "--medallion-root", type=Path,
+        "--medallion-root",
+        type=Path,
         default=default_medallion_root(REPO),
         help="Medallion root dir (default: datasets/medallion)",
     )

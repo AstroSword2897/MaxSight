@@ -66,4 +66,53 @@ jobs:
         run: |
           echo "Running pytest..."
           pytest tests/ -v --tb=short --maxfail=5
+      - name: Validate train loop observability contracts
+        run: python scripts/infra/validate_train_loop_contracts.py
+
+  sagemaker_ops:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install minimal deps for ops dry-run
+        run: |
+          pip install --upgrade pip
+          pip install boto3 pyyaml pytest
+      - name: SageMaker integration tests (offline)
+        run: pytest tests/test_sagemaker_integration.py tests/test_production_remediation.py -v --tb=short
+      - name: Validate infra JSON stubs
+        run: python scripts/infra/validate_infra_stubs.py
+      - name: Validate train loop observability contracts
+        run: python scripts/infra/validate_train_loop_contracts.py
+      - name: SageMaker ops launcher tests (offline)
+        run: pytest tests/test_ops_launchers.py -v --tb=short
+      - name: Model package group script (dry-run)
+        run: |
+          python scripts/ops/create_model_package_group.py \
+            --name ci-placeholder-model-group \
+            --region us-east-1 \
+            --dry-run
+      - name: Ops launcher dry-run (no AWS submit)
+        env:
+          MAXSIGHT_S3_BUCKET: ci-dry-run-placeholder
+          SAGEMAKER_ROLE_ARN: arn:aws:iam::123456789012:role/CIPlaceholderSageMakerRole
+          MAXSIGHT_SKIP_ROLE_ASSERT: "1"
+          SM_SUBNET_IDS: subnet-aaa,subnet-bbb
+          SM_SECURITY_GROUP_IDS: sg-ccc
+        run: |
+          python scripts/ops/sagemaker_train.py \
+            --bucket "$MAXSIGHT_S3_BUCKET" \
+            --role "$SAGEMAKER_ROLE_ARN" \
+            --config ml/training/configs/t0_baseline.yaml \
+            --dry-run
+          python scripts/ops/sagemaker_deploy.py deploy \
+            --bucket "$MAXSIGHT_S3_BUCKET" \
+            --role "$SAGEMAKER_ROLE_ARN" \
+            --model-data s3://$MAXSIGHT_S3_BUCKET/maxsight/output/model.tar.gz \
+            --endpoint ci-dry-run \
+            --skip-registry-check \
+            --dry-run
 

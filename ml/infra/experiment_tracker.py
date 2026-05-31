@@ -25,13 +25,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +40,7 @@ DEFAULT_RUNS_DIR = REPO / "runs"
 
 # ── Run record ────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class RunRecord:
     run_id: str
@@ -48,14 +48,14 @@ class RunRecord:
     started_at: str = ""
     finished_at: str = ""
     status: str = "running"
-    params: Dict[str, Any] = field(default_factory=dict)
-    metrics: List[Dict[str, Any]] = field(default_factory=list)
-    artefacts: List[str] = field(default_factory=list)
-    tags: Dict[str, str] = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)
+    metrics: list[dict[str, Any]] = field(default_factory=list)
+    artefacts: list[str] = field(default_factory=list)
+    tags: dict[str, str] = field(default_factory=dict)
     git_sha: str = ""
     gold_index_hash: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
             "experiment": self.experiment,
@@ -73,12 +73,13 @@ class RunRecord:
 
 # ── Tracker ───────────────────────────────────────────────────────────────────
 
+
 class RunTracker:
     """Context-manager run tracker with local persistence and optional SM Experiments."""
 
     def __init__(
         self,
-        run_id: Optional[str] = None,
+        run_id: str | None = None,
         experiment: str = "maxsight",
         runs_dir: Path = DEFAULT_RUNS_DIR,
         *,
@@ -98,7 +99,7 @@ class RunTracker:
 
     # ── Context manager ───────────────────────────────────────────────────────
 
-    def __enter__(self) -> "RunTracker":
+    def __enter__(self) -> RunTracker:
         self.record.started_at = _now()
         self.record.git_sha = _git_sha()
         if self._sm_experiment:
@@ -119,7 +120,7 @@ class RunTracker:
 
     # ── Logging API ───────────────────────────────────────────────────────────
 
-    def log_params(self, params: Dict[str, Any]) -> None:
+    def log_params(self, params: dict[str, Any]) -> None:
         self.record.params.update(params)
         if self._sm_run:
             for k, v in params.items():
@@ -131,10 +132,10 @@ class RunTracker:
         name: str,
         value: float,
         *,
-        step: Optional[int] = None,
-        epoch: Optional[int] = None,
+        step: int | None = None,
+        epoch: int | None = None,
     ) -> None:
-        entry: Dict[str, Any] = {"name": name, "value": float(value), "ts": _now()}
+        entry: dict[str, Any] = {"name": name, "value": float(value), "ts": _now()}
         if step is not None:
             entry["step"] = step
         if epoch is not None:
@@ -156,6 +157,7 @@ class RunTracker:
 
     def log_dataset_provenance(self, gold_index_path: Path) -> None:
         import hashlib
+
         if gold_index_path.exists():
             h = hashlib.sha256(gold_index_path.read_bytes()).hexdigest()[:16]
             self.record.gold_index_hash = h
@@ -167,13 +169,13 @@ class RunTracker:
 
     # ── Summary helpers ───────────────────────────────────────────────────────
 
-    def best_metric(self, name: str, mode: str = "min") -> Optional[float]:
+    def best_metric(self, name: str, mode: str = "min") -> float | None:
         vals = [e["value"] for e in self.record.metrics if e["name"] == name]
         if not vals:
             return None
         return min(vals) if mode == "min" else max(vals)
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         return self.record.to_dict()
 
     # ── Internal ──────────────────────────────────────────────────────────────
@@ -191,6 +193,7 @@ class RunTracker:
     def _start_sm_run(self) -> None:
         try:
             from sagemaker.experiments.run import Run  # type: ignore
+
             self._sm_run = Run(
                 experiment_name=self.experiment,
                 run_name=self.run_id,
@@ -209,7 +212,8 @@ class RunTracker:
 
 # ── Leaderboard (local run comparison) ───────────────────────────────────────
 
-def load_all_runs(runs_dir: Path = DEFAULT_RUNS_DIR) -> List[Dict[str, Any]]:
+
+def load_all_runs(runs_dir: Path = DEFAULT_RUNS_DIR) -> list[dict[str, Any]]:
     """Load every run.json under runs_dir into a list, newest first."""
     records = []
     for p in sorted(runs_dir.rglob("run.json"), reverse=True):
@@ -225,10 +229,10 @@ def leaderboard(
     metric: str = "val_map",
     mode: str = "max",
     top_n: int = 10,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Return the top-N completed runs sorted by a metric."""
 
-    def _best(record: Dict[str, Any]) -> float:
+    def _best(record: dict[str, Any]) -> float:
         vals = [e["value"] for e in record.get("metrics", []) if e["name"] == metric]
         if not vals:
             return float("-inf") if mode == "max" else float("inf")
@@ -241,14 +245,16 @@ def leaderboard(
 
 # ── Convenience context manager ───────────────────────────────────────────────
 
+
 @contextmanager
-def track_run(run_id: Optional[str] = None, experiment: str = "maxsight", **kwargs):
+def track_run(run_id: str | None = None, experiment: str = "maxsight", **kwargs):
     """Shorthand context manager for quick usage."""
     with RunTracker(run_id=run_id, experiment=experiment, **kwargs) as run:
         yield run
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -257,9 +263,12 @@ def _now() -> str:
 def _git_sha() -> str:
     try:
         import subprocess
+
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         return result.stdout.strip()
     except Exception:
@@ -273,7 +282,7 @@ def _sm_log_param(run, key: str, value: str) -> None:
         pass
 
 
-def _sm_log_metric(run, name: str, value: float, step: Optional[int]) -> None:
+def _sm_log_metric(run, name: str, value: float, step: int | None) -> None:
     try:
         run.log_metric(name, value, step=step)
     except Exception:

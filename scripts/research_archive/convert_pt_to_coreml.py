@@ -11,12 +11,35 @@ if str(REPO) not in sys.path:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert a PyTorch .pt checkpoint to CoreML .mlpackage.")
-    parser.add_argument("checkpoint", type=Path, help="Path to best_model.pt (or other .pt checkpoint)")
-    parser.add_argument("output", type=Path, nargs="?", default=None, help="Output path (default: same dir as checkpoint, name with .mlpackage)")
-    parser.add_argument("--condition", type=str, default=None, help="Condition name if not inferrable from path (e.g. amblyopia)")
-    parser.add_argument("--device", type=str, choices=["cpu", "cuda"], default="cpu", help="Device for loading (export uses CPU)")
-    parser.add_argument("--no-validate", action="store_true", help="Skip CoreML validation after convert")
+    parser = argparse.ArgumentParser(
+        description="Convert a PyTorch .pt checkpoint to CoreML .mlpackage."
+    )
+    parser.add_argument(
+        "checkpoint", type=Path, help="Path to best_model.pt (or other .pt checkpoint)"
+    )
+    parser.add_argument(
+        "output",
+        type=Path,
+        nargs="?",
+        default=None,
+        help="Output path (default: same dir as checkpoint, name with .mlpackage)",
+    )
+    parser.add_argument(
+        "--condition",
+        type=str,
+        default=None,
+        help="Condition name if not inferrable from path (e.g. amblyopia)",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        choices=["cpu", "cuda"],
+        default="cpu",
+        help="Device for loading (export uses CPU)",
+    )
+    parser.add_argument(
+        "--no-validate", action="store_true", help="Skip CoreML validation after convert"
+    )
     args = parser.parse_args()
 
     ckpt_path = args.checkpoint.resolve()
@@ -40,6 +63,7 @@ def main():
         cond = "amblyopia"
 
     print("Loading model and checkpoint...", flush=True)
+    import torch
     from ml.models.maxsight_cnn import (
         COCO_CLASSES,
         CapabilityTier,
@@ -47,7 +71,6 @@ def main():
         create_model,
     )
     from ml.training.export import export_to_coreml
-    import torch
 
     # Create model architecture (empty/untrained)
     tier_config = TierConfig.for_tier(CapabilityTier.T5_TEMPORAL)
@@ -76,7 +99,10 @@ def main():
         validate=not args.no_validate,
     )
     if result is None:
-        print("CoreML export failed. Install coremltools if needed: pip install coremltools", file=sys.stderr)
+        print(
+            "CoreML export failed. Install coremltools if needed: pip install coremltools",
+            file=sys.stderr,
+        )
         return 1
     print(f"Done. Saved: {result}", flush=True)
     return 0

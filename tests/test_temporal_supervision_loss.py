@@ -82,7 +82,8 @@ def test_multihead_temporal_numeric_total() -> None:
 def _resolve(stem: str) -> ResolvedTrainingConfig:
     cfg_path = PROJECT_ROOT / "ml" / "training" / "configs" / f"{stem}.yaml"
     return ResolvedTrainingConfig.from_sources(
-        cfg_path, cli_overrides={"run_id": "test", "experiment": "ci"},
+        cfg_path,
+        cli_overrides={"run_id": "test", "experiment": "ci"},
     )
 
 

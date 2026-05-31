@@ -25,18 +25,19 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 # ImageNet normalisation (default for all model inputs).
-IMAGENET_MEAN: Tuple[float, float, float] = (0.485, 0.456, 0.406)
-IMAGENET_STD: Tuple[float, float, float] = (0.229, 0.224, 0.225)
+IMAGENET_MEAN: tuple[float, float, float] = (0.485, 0.456, 0.406)
+IMAGENET_STD: tuple[float, float, float] = (0.229, 0.224, 0.225)
 
 
 # ── Result dataclass ──────────────────────────────────────────────────────────
+
 
 @dataclass
 class PreprocessingReport:
@@ -47,9 +48,9 @@ class PreprocessingReport:
     processed: int = 0
     skipped_existing: int = 0
     errors: int = 0
-    error_samples: List[str] = field(default_factory=list)
+    error_samples: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "dataset_key": self.dataset_key,
             "stage": self.stage,
@@ -64,13 +65,14 @@ class PreprocessingReport:
 
 # ── Image preprocessing ───────────────────────────────────────────────────────
 
+
 class ImagePreprocessingPipeline:
     """Resize and optionally normalise images into a flat output directory."""
 
     def __init__(
         self,
         *,
-        target_size: Tuple[int, int] = (224, 224),
+        target_size: tuple[int, int] = (224, 224),
         normalise: bool = False,
         output_format: str = "JPEG",
         jpeg_quality: int = 95,
@@ -87,7 +89,7 @@ class ImagePreprocessingPipeline:
         src_dir: Path,
         out_dir: Path,
         *,
-        extensions: Optional[Set[str]] = None,
+        extensions: set[str] | None = None,
         force: bool = False,
     ) -> PreprocessingReport:
         from PIL import Image
@@ -114,7 +116,7 @@ class ImagePreprocessingPipeline:
                     # Clip back to [0,1] for saving as PIL.
                     arr = np.clip(arr, 0.0, 1.0)
                     img = Image.fromarray((arr * 255).astype(np.uint8))
-                save_kwargs: Dict[str, Any] = {}
+                save_kwargs: dict[str, Any] = {}
                 if self.output_format == "JPEG":
                     save_kwargs["quality"] = self.jpeg_quality
                 img.save(out_path, format=self.output_format, **save_kwargs)
@@ -127,12 +129,16 @@ class ImagePreprocessingPipeline:
         report.finished_at = _now()
         logger.info(
             "Image preprocess [%s]: processed=%d skipped=%d errors=%d",
-            self.dataset_key, report.processed, report.skipped_existing, report.errors,
+            self.dataset_key,
+            report.processed,
+            report.skipped_existing,
+            report.errors,
         )
         return report
 
 
 # ── Video frame extraction ────────────────────────────────────────────────────
+
 
 class VideoFrameExtractor:
     """Extract frames from video files at a target FPS into per-video subdirs."""
@@ -141,11 +147,11 @@ class VideoFrameExtractor:
         self,
         *,
         fps: float = 1.0,
-        target_size: Optional[Tuple[int, int]] = (224, 224),
+        target_size: tuple[int, int] | None = (224, 224),
         output_format: str = "JPEG",
         jpeg_quality: int = 95,
         dataset_key: str = "unknown",
-        max_frames_per_video: Optional[int] = None,
+        max_frames_per_video: int | None = None,
     ) -> None:
         self.fps = fps
         self.target_size = target_size
@@ -160,7 +166,7 @@ class VideoFrameExtractor:
         frames_dir: Path,
         *,
         force: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Extract frames from a single video; return frame paths and metadata."""
         try:
             import cv2  # type: ignore
@@ -177,7 +183,7 @@ class VideoFrameExtractor:
 
         src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
         step = max(1, round(src_fps / self.fps))
-        frame_paths: List[str] = []
+        frame_paths: list[str] = []
         frame_idx = 0
         saved = 0
 
@@ -199,7 +205,7 @@ class VideoFrameExtractor:
                 pil_img = Image.fromarray(img_rgb)
                 if self.target_size:
                     pil_img = pil_img.resize(self.target_size, Image.BILINEAR)
-                save_kwargs: Dict[str, Any] = {}
+                save_kwargs: dict[str, Any] = {}
                 if self.output_format == "JPEG":
                     save_kwargs["quality"] = self.jpeg_quality
                 pil_img.save(out_path, format=self.output_format, **save_kwargs)
@@ -221,7 +227,7 @@ class VideoFrameExtractor:
         src_dir: Path,
         frames_root: Path,
         *,
-        video_exts: Optional[Set[str]] = None,
+        video_exts: set[str] | None = None,
         force: bool = False,
     ) -> PreprocessingReport:
         """Extract frames from all videos under src_dir."""
@@ -245,19 +251,23 @@ class VideoFrameExtractor:
         report.finished_at = _now()
         logger.info(
             "Frame extraction [%s]: extracted=%d skipped=%d errors=%d",
-            self.dataset_key, report.processed, report.skipped_existing, report.errors,
+            self.dataset_key,
+            report.processed,
+            report.skipped_existing,
+            report.errors,
         )
         return report
 
 
 # ── COCO annotation adapter ───────────────────────────────────────────────────
 
+
 def adapt_bdd100k_to_coco(
     bdd_json_path: Path,
     out_coco_path: Path,
     *,
-    category_map: Optional[Dict[str, int]] = None,
-) -> Dict[str, Any]:
+    category_map: dict[str, int] | None = None,
+) -> dict[str, Any]:
     """Convert BDD100K detection JSON to COCO-format annotation file.
 
     BDD100K detection format has top-level list of frames each with
@@ -268,14 +278,22 @@ def adapt_bdd100k_to_coco(
 
     if category_map is None:
         category_map = {
-            "car": 3, "truck": 8, "bus": 6, "person": 1, "rider": 1,
-            "bicycle": 2, "motorcycle": 4, "traffic light": 10,
-            "traffic sign": 10, "train": 7,
+            "car": 3,
+            "truck": 8,
+            "bus": 6,
+            "person": 1,
+            "rider": 1,
+            "bicycle": 2,
+            "motorcycle": 4,
+            "traffic light": 10,
+            "traffic sign": 10,
+            "train": 7,
         }
 
-    categories = [{"id": v, "name": k} for k, v in sorted(set(
-        (k, v) for k, v in category_map.items()
-    ), key=lambda x: x[1])]
+    categories = [
+        {"id": v, "name": k}
+        for k, v in sorted(set((k, v) for k, v in category_map.items()), key=lambda x: x[1])
+    ]
 
     images, annotations = [], []
     img_id = 1
@@ -284,12 +302,14 @@ def adapt_bdd100k_to_coco(
     frames = bdd if isinstance(bdd, list) else bdd.get("frames", [])
     for frame in frames:
         fname = frame.get("name", f"{img_id:08d}.jpg")
-        images.append({
-            "id": img_id,
-            "file_name": fname,
-            "width": 1280,
-            "height": 720,
-        })
+        images.append(
+            {
+                "id": img_id,
+                "file_name": fname,
+                "width": 1280,
+                "height": 720,
+            }
+        )
         for label in frame.get("labels", []):
             cat = label.get("category", "")
             cat_id = category_map.get(cat.lower(), 0)
@@ -304,14 +324,16 @@ def adapt_bdd100k_to_coco(
             h = max(0.0, y2 - y1)
             if w < 1 or h < 1:
                 continue
-            annotations.append({
-                "id": ann_id,
-                "image_id": img_id,
-                "category_id": cat_id,
-                "bbox": [x1, y1, w, h],
-                "area": float(w * h),
-                "iscrowd": 0,
-            })
+            annotations.append(
+                {
+                    "id": ann_id,
+                    "image_id": img_id,
+                    "category_id": cat_id,
+                    "bbox": [x1, y1, w, h],
+                    "area": float(w * h),
+                    "iscrowd": 0,
+                }
+            )
             ann_id += 1
         img_id += 1
 
@@ -323,16 +345,21 @@ def adapt_bdd100k_to_coco(
     }
     out_coco_path.parent.mkdir(parents=True, exist_ok=True)
     out_coco_path.write_text(json.dumps(coco), encoding="utf-8")
-    logger.info("BDD100K → COCO: %d images, %d annotations → %s", len(images), len(annotations), out_coco_path)
+    logger.info(
+        "BDD100K → COCO: %d images, %d annotations → %s",
+        len(images),
+        len(annotations),
+        out_coco_path,
+    )
     return {"images": len(images), "annotations": len(annotations)}
 
 
 def build_vos_coco_annotation(
     frames_dir: Path,
-    masks_dir: Optional[Path],
+    masks_dir: Path | None,
     out_coco_path: Path,
     dataset_key: str = "vos",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build a minimal COCO-style JSON for VOS datasets (MOSE / YouTube-VOS).
 
     Each video's frames become images; mask presence is noted but not converted
@@ -344,14 +371,16 @@ def build_vos_coco_annotation(
         if not video_dir.is_dir():
             continue
         for frame in sorted(video_dir.glob("*.jpg")) + sorted(video_dir.glob("*.png")):
-            images.append({
-                "id": img_id,
-                "file_name": str(frame.relative_to(frames_dir)),
-                "video_id": video_dir.name,
-            })
+            images.append(
+                {
+                    "id": img_id,
+                    "file_name": str(frame.relative_to(frames_dir)),
+                    "video_id": video_dir.name,
+                }
+            )
             img_id += 1
 
-    coco: Dict[str, Any] = {
+    coco: dict[str, Any] = {
         "info": {"description": f"{dataset_key} frame scaffold", "source": str(frames_dir)},
         "categories": [{"id": 1, "name": "object"}],
         "images": images,
@@ -365,7 +394,8 @@ def build_vos_coco_annotation(
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _iter_files(root: Path, exts: Set[str]):
+
+def _iter_files(root: Path, exts: set[str]):
     for p in root.rglob("*"):
         if p.is_file() and p.suffix.lower().lstrip(".") in exts:
             yield p

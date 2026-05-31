@@ -3,12 +3,12 @@
   "num_detections": 5,
   "num_text_regions": 0,
   "processing_time_ms": 0,
-  "inference_time_ms": 138.33483296912163,
+  "inference_time_ms": 143.32499995362014,
   "scene_description": "No objects detected.",
   "urgency_scores": [],
   "stats": {
     "frames_processed": 1,
-    "avg_latency_ms": 138.33483296912163,
+    "avg_latency_ms": 143.32499995362014,
     "total_detections": 5
   }
 }

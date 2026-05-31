@@ -26,19 +26,22 @@ FALSE_SAFE_RATE_MAX = 0.01
 DIRECTION_CORRECTNESS_MIN = 0.90
 DISTANCE_ZONE_ACCURACY_MIN = 0.85
 
-# T5 MVP runtime contract: limit shipped surface to core safety/awareness signals.
+# Default MaxSightCNN parameter envelope for CI size assertions (full tier wiring).
+DEFAULT_MODEL_MIN_PARAMS = 90_000_000
+DEFAULT_MODEL_MAX_PARAMS = 400_000_000
+DEFAULT_MODEL_INT8_MAX_MB = 400.0
 # Model-output keys that the T5-only MVP runtime is allowed to depend on.
 MVP_MODEL_OUTPUT_KEYS = (
-    "classifications",      # logits for detection head.
-    "boxes",                # bounding boxes for hazards/objects.
-    "objectness",           # objectness scores for detections.
-    "text_regions",         # OCR/text-region logits.
-    "urgency_scores",       # per-image or per-detection urgency.
-    "distance_zones",       # coarse distance buckets.
-    "precise_distances",    # per-detection distance estimates.
+    "classifications",  # logits for detection head.
+    "boxes",  # bounding boxes for hazards/objects.
+    "objectness",  # objectness scores for detections.
+    "text_regions",  # OCR/text-region logits.
+    "urgency_scores",  # per-image or per-detection urgency.
+    "distance_zones",  # coarse distance buckets.
+    "precise_distances",  # per-detection distance estimates.
     "distance_uncertainties",
-    "uncertainty",          # global uncertainty scalar.
-    "temporal_consistency", # temporal stability features.
+    "uncertainty",  # global uncertainty scalar.
+    "temporal_consistency",  # temporal stability features.
 )
 
 

@@ -21,6 +21,8 @@ For a **curated list** that includes **COCO** and public sets such as **Kinetics
 
 - **`datasets/coco_raw/`** (or **`datasets/coco/`**): Raw COCO images and annotations (e.g. `train2017/`, `val2017/`, `annotations/`).
 - **`datasets/cleaned_splits/`** (or similar): Project-specific JSON annotations (e.g. COCO-format with `file_name`, `image_id`, boxes, categories) used by `MaxSightDataset` and the data pipeline.
+- **`datasets/raw/<dataset_key>/`**: Raw vendor drops for non-COCO datasets (Kinetics-700, BDD100K, Epic-Kitchens, YouTube-VOS, etc.). See `ml/data/medallion_layout.py::default_raw_dataset_dir`.
+- **`datasets/medallion/silver/<dataset_key>/manifests/clips.json`**: v1 clip manifest for video datasets once frames are extracted; build with `scripts/ops/build_video_manifest.py`.
 - **`checkpoints/`**: Model checkpoints (e.g. `checkpoints_<condition>/best_model.pt`). Not “downloaded” in the same sense but often synced from another machine or Drive.
 
 ## Verification

@@ -6,9 +6,10 @@ import hashlib
 import json
 import logging
 import math
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
 from ml.data.gold.label_mapper import LabelMapper
 from ml.data.gold.schema import (
@@ -18,6 +19,7 @@ from ml.data.gold.schema import (
     REQUIRED_LINE_KEYS,
 )
 from ml.data.medallion_layout import resolve_repo_path
+
 logger = logging.getLogger(__name__)
 
 _METADATA_REQUIRED = frozenset(
@@ -33,7 +35,7 @@ _METADATA_REQUIRED = frozenset(
 )
 
 
-def finalize_gold_record(partial: Dict[str, Any], mapper: LabelMapper) -> Dict[str, Any]:
+def finalize_gold_record(partial: dict[str, Any], mapper: LabelMapper) -> dict[str, Any]:
     """Apply label mapping; partial rows must contain ``label_names`` not ``labels``."""
 
     if "labels" in partial:
@@ -46,7 +48,7 @@ def finalize_gold_record(partial: Dict[str, Any], mapper: LabelMapper) -> Dict[s
     return rec
 
 
-def _stable_sort_key(record: Dict[str, Any]) -> Tuple[str, str, str]:
+def _stable_sort_key(record: dict[str, Any]) -> tuple[str, str, str]:
     meta = record.get("metadata") or {}
     return (
         str(record.get("image_path", "")),
@@ -55,12 +57,12 @@ def _stable_sort_key(record: Dict[str, Any]) -> Tuple[str, str, str]:
     )
 
 
-def _shard_ranges(n: int, num_shards: int) -> List[Tuple[int, int]]:
+def _shard_ranges(n: int, num_shards: int) -> list[tuple[int, int]]:
     if n == 0:
         return [(0, 0)] * max(1, num_shards)
     if num_shards <= 1:
         return [(0, n)]
-    ranges: List[Tuple[int, int]] = []
+    ranges: list[tuple[int, int]] = []
     base = n // num_shards
     rem = n % num_shards
     start = 0
@@ -73,14 +75,14 @@ def _shard_ranges(n: int, num_shards: int) -> List[Tuple[int, int]]:
 
 
 def validate_gold_line_in_memory(
-    record: Dict[str, Any],
+    record: dict[str, Any],
     *,
     expected_label_space: str,
     num_classes: int = 0,
-) -> List[str]:
+) -> list[str]:
     """Schema checks without touching disk (for DataLoader hot path)."""
 
-    errs: List[str] = []
+    errs: list[str] = []
     if not isinstance(record, dict):
         return ["record root must be an object"]
     missing = sorted(REQUIRED_LINE_KEYS - record.keys())
@@ -124,9 +126,7 @@ def validate_gold_line_in_memory(
     if len(boxes) != len(labels):
         errs.append(f"boxes length {len(boxes)} != labels length {len(labels)}")
     dists = record.get("distances")
-    if dists is not None and (
-        not isinstance(dists, list) or len(dists) != len(labels)
-    ):
+    if dists is not None and (not isinstance(dists, list) or len(dists) != len(labels)):
         errs.append("distances must be same length as labels when present")
     ou = record.get("object_urgencies")
     if ou is not None and (not isinstance(ou, list) or len(ou) != len(labels)):
@@ -158,16 +158,14 @@ def validate_gold_line_in_memory(
 
 
 def validate_gold_line(
-    record: Dict[str, Any],
+    record: dict[str, Any],
     repo_root: Path,
     *,
     expected_label_space: str = LABEL_SPACE_ACCESSIBILITY_622,
-) -> List[str]:
+) -> list[str]:
     """Full row validation including that the image file resolves on disk."""
 
-    errs = validate_gold_line_in_memory(
-        record, expected_label_space=expected_label_space
-    )
+    errs = validate_gold_line_in_memory(record, expected_label_space=expected_label_space)
     if errs:
         return errs
     ip = record.get("image_path")
@@ -178,7 +176,7 @@ def validate_gold_line(
     return errs
 
 
-def _dumps_line(record: Dict[str, Any]) -> str:
+def _dumps_line(record: dict[str, Any]) -> str:
     return json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
@@ -191,8 +189,8 @@ def build_gold_manifest(
     source_annotation: str,
     num_shards: int = 1,
     skip_invalid: bool = True,
-    log: Optional[Callable[[str], None]] = None,
-) -> Dict[str, Any]:
+    log: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
     """Collect, sort, map labels, validate, write shard JSONL files.
 
     When ``num_shards`` is 1, ``out`` is the output ``.jsonl`` file path.
@@ -214,14 +212,12 @@ def build_gold_manifest(
     if not hasattr(adapter, "load_partial"):
         raise TypeError("adapter must implement load_partial(idx)")
     n = len(adapter)
-    collected: List[Dict[str, Any]] = []
+    collected: list[dict[str, Any]] = []
     skipped = 0
     for idx in range(n):
         partial = adapter.load_partial(idx)
         record = finalize_gold_record(partial, mapper)
-        errs = validate_gold_line(
-            record, rr, expected_label_space=mapper.target_space
-        )
+        errs = validate_gold_line(record, rr, expected_label_space=mapper.target_space)
         if errs:
             skipped += 1
             msg = f"skip idx={idx}: " + "; ".join(errs)
@@ -234,7 +230,7 @@ def build_gold_manifest(
     collected.sort(key=_stable_sort_key)
     cmh = mapper.class_map_hash
 
-    def _write_shard(records: List[Dict[str, Any]], path: Path) -> str:
+    def _write_shard(records: list[dict[str, Any]], path: Path) -> str:
         """Write records to ``path`` and return its SHA-256.
 
         Encodes as UTF-8 with LF line endings — no CRLF; no BOM.
@@ -269,7 +265,7 @@ def build_gold_manifest(
     out_dir = Path(out)
     out_dir.mkdir(parents=True, exist_ok=True)
     ranges = _shard_ranges(len(collected), num_shards)
-    shard_infos: List[Dict[str, Any]] = []
+    shard_infos: list[dict[str, Any]] = []
     for si, (lo, hi) in enumerate(ranges):
         shard_path = out_dir / f"shard_{si:05d}.jsonl"
         chunk = collected[lo:hi]
@@ -296,11 +292,11 @@ def build_gold_jsonl_from_adapter(
     repo_root: Path,
     source_annotation: str,
     label_space: str = LABEL_SPACE_ACCESSIBILITY_622,
-    source_label_space: Optional[str] = None,
+    source_label_space: str | None = None,
     num_shards: int = 1,
     skip_invalid: bool = True,
-    log: Optional[Callable[[str], None]] = None,
-) -> Tuple[int, int, str]:
+    log: Callable[[str], None] | None = None,
+) -> tuple[int, int, str]:
     """Backward-compatible wrapper returning ``(written, skipped, sha256)`` for shard 0."""
 
     mapper = LabelMapper(source_label_space, label_space)
@@ -327,7 +323,7 @@ def write_manifest_meta(
     class_map_hash: str,
     lines_written: int,
     lines_skipped: int,
-    shards: Sequence[Dict[str, Any]],
+    shards: Sequence[dict[str, Any]],
     # ── Provenance (optional; never used for runtime branching) ────────────────
     dataset_id: str = "",
     version: str = "",
@@ -343,7 +339,7 @@ def write_manifest_meta(
     """
     meta_path = Path(meta_path)
     meta_path.parent.mkdir(parents=True, exist_ok=True)
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "meta_schema_version": GOLD_META_SCHEMA_VERSION,
         "line_schema_version": GOLD_LINE_SCHEMA_VERSION,
         "label_space": label_space,

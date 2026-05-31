@@ -10,14 +10,16 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any
 
 import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
 
+from ml.data.assistive_supervision import load_assistive_spec, object_distance_and_urgency
 from ml.data.gold.builder import validate_gold_line_in_memory
 from ml.data.gold.io import GoldIOError, ShardReader
 from ml.data.gold.schema import (
@@ -25,26 +27,29 @@ from ml.data.gold.schema import (
     LABEL_SPACE_ACCESSIBILITY_622,
     validate_meta,
 )
+from ml.models.maxsight_cnn import COCO_CLASSES
 from ml.utils.preprocessing import ImagePreprocessor
 
 logger = logging.getLogger(__name__)
+
+_GOLD_ASSISTIVE_SPEC = load_assistive_spec()
 
 # Shard URIs are strings; may be absolute local paths or s3:// URIs.
 _URI = str
 
 
 def _flatten_shard_index(
-    readers: Sequence["ShardReader"],
-) -> List[Tuple["ShardReader", int]]:
+    readers: Sequence[ShardReader],
+) -> list[tuple[ShardReader, int]]:
     """Build a flat ``(ShardReader, byte_offset)`` index across all shards."""
-    flat: List[Tuple[ShardReader, int]] = []
+    flat: list[tuple[ShardReader, int]] = []
     for reader in readers:
         for off in reader.index_line_starts():
             flat.append((reader, off))
     return flat
 
 
-def _resolve_image_path(image_path: str, repo_root: Optional[Path]) -> Path:
+def _resolve_image_path(image_path: str, repo_root: Path | None) -> Path:
     """Resolve a (possibly relative) image path against repo_root when needed."""
     p = Path(image_path)
     if p.is_absolute():
@@ -55,15 +60,13 @@ def _resolve_image_path(image_path: str, repo_root: Optional[Path]) -> Path:
     return p
 
 
-def load_gold_meta(meta_path: Union[str, Path]) -> Dict[str, Any]:
+def load_gold_meta(meta_path: str | Path) -> dict[str, Any]:
     """Load and validate a gold artifact meta.json; raise on schema errors."""
-    with open(meta_path, "r", encoding="utf-8") as f:
+    with open(meta_path, encoding="utf-8") as f:
         meta = json.load(f)
     errs = validate_meta(meta)
     if errs:
-        raise ValueError(
-            f"Invalid gold meta at {meta_path}: " + "; ".join(errs)
-        )
+        raise ValueError(f"Invalid gold meta at {meta_path}: " + "; ".join(errs))
     return meta
 
 
@@ -93,40 +96,38 @@ class GoldManifestDataset(Dataset):
 
     def __init__(
         self,
-        shard_uris: Union[str, Path, Sequence[Union[str, Path]]],
+        shard_uris: str | Path | Sequence[str | Path],
         *,
-        meta: Optional[Union[Dict[str, Any], str, Path]] = None,
-        repo_root: Optional[Path] = None,
+        meta: dict[str, Any] | str | Path | None = None,
+        repo_root: Path | None = None,
         max_objects: int = 10,
-        condition_mode: Optional[str] = None,
+        condition_mode: str | None = None,
         tag_lighting_metadata: bool = False,
         strict_images: bool = True,
         dataset_source_key: str = "",
         expected_label_space: str = LABEL_SPACE_ACCESSIBILITY_622,
         num_classes: int = 0,
-        expected_class_map_hash: Optional[str] = None,
+        expected_class_map_hash: str | None = None,
         verify_shards: bool = False,
     ) -> None:
         # Normalise shard_uris → tuple of URI strings.
         if isinstance(shard_uris, (str, Path)):
-            raw_seq: Sequence[Union[str, Path]] = (shard_uris,)
+            raw_seq: Sequence[str | Path] = (shard_uris,)
         else:
             raw_seq = shard_uris
-        uris: Tuple[_URI, ...] = tuple(str(u) for u in raw_seq)
+        uris: tuple[_URI, ...] = tuple(str(u) for u in raw_seq)
         if not uris:
             raise ValueError("GoldManifestDataset requires at least one shard URI")
 
         # Load + validate meta when given.
-        self._meta: Optional[Dict[str, Any]] = None
+        self._meta: dict[str, Any] | None = None
         if meta is not None:
             if isinstance(meta, (str, Path)):
                 self._meta = load_gold_meta(meta)
             else:
                 errs = validate_meta(meta)
                 if errs:
-                    raise ValueError(
-                        "GoldManifestDataset: invalid meta dict: " + "; ".join(errs)
-                    )
+                    raise ValueError("GoldManifestDataset: invalid meta dict: " + "; ".join(errs))
                 self._meta = dict(meta)
 
         # Derive dataset identity from meta when present; callers can override.
@@ -158,13 +159,13 @@ class GoldManifestDataset(Dataset):
         self.num_classes = int(num_classes)
 
         # Build per-shard SHA-256 lookup from meta for enriched error messages.
-        shard_sha_map: Dict[str, str] = {}
+        shard_sha_map: dict[str, str] = {}
         if self._meta:
             for s in self._meta.get("shards", []):
                 if "uri" in s and "sha256" in s:
                     shard_sha_map[s["uri"]] = s["sha256"]
 
-        self._readers: Tuple[ShardReader, ...] = tuple(
+        self._readers: tuple[ShardReader, ...] = tuple(
             ShardReader(
                 uri,
                 shard_sha256=shard_sha_map.get(uri),
@@ -176,10 +177,10 @@ class GoldManifestDataset(Dataset):
         if verify_shards and self._meta:
             self._verify_shard_integrity(shard_sha_map)
 
-        self._index: List[Tuple[ShardReader, int]] = _flatten_shard_index(self._readers)
+        self._index: list[tuple[ShardReader, int]] = _flatten_shard_index(self._readers)
         self._missing_warned = False
 
-    def _verify_shard_integrity(self, sha_map: Dict[str, str]) -> None:
+    def _verify_shard_integrity(self, sha_map: dict[str, str]) -> None:
         """Re-hash every shard against meta sha256; raises ``GoldIOError`` on mismatch."""
         for reader in self._readers:
             expected = sha_map.get(reader.uri)
@@ -194,7 +195,7 @@ class GoldManifestDataset(Dataset):
     def __len__(self) -> int:
         return len(self._index)
 
-    def _read_line_dict(self, idx: int) -> Dict[str, Any]:
+    def _read_line_dict(self, idx: int) -> dict[str, Any]:
         reader, off = self._index[idx]
         raw = reader.read_at(idx, off)
         try:
@@ -210,7 +211,7 @@ class GoldManifestDataset(Dataset):
                 line_schema_version=reader.line_schema_version,
             ) from exc
 
-    def __getitem__(self, idx: int) -> Dict[str, Any]:
+    def __getitem__(self, idx: int) -> dict[str, Any]:
         record = self._read_line_dict(idx)
 
         if record.get("schema_version") != GOLD_LINE_SCHEMA_VERSION:
@@ -230,8 +231,7 @@ class GoldManifestDataset(Dataset):
             reader, off = self._index[idx]
             raise ValueError(
                 f"GoldManifestDataset: invalid row | "
-                f"uri={reader.uri!r} idx={idx} offset={off} | "
-                + "; ".join(mem_errs)
+                f"uri={reader.uri!r} idx={idx} offset={off} | " + "; ".join(mem_errs)
             )
 
         reader, _off = self._index[idx]
@@ -244,13 +244,9 @@ class GoldManifestDataset(Dataset):
                     f"GoldManifestDataset strict_images=True: missing {abs_img}"
                 )
             if not self._missing_warned:
-                logger.warning(
-                    "GoldManifestDataset: missing image (random fill). path=%s", abs_img
-                )
+                logger.warning("GoldManifestDataset: missing image (random fill). path=%s", abs_img)
                 self._missing_warned = True
-            image = Image.fromarray(
-                np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8)
-            )
+            image = Image.fromarray(np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8))
         else:
             try:
                 image = Image.open(abs_img).convert("RGB")
@@ -266,9 +262,7 @@ class GoldManifestDataset(Dataset):
                         exc,
                     )
                     self._missing_warned = True
-                image = Image.fromarray(
-                    np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8)
-                )
+                image = Image.fromarray(np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8))
 
         meta = record.get("metadata") or {}
         conditions = meta.get("conditions") or {}
@@ -307,13 +301,11 @@ class GoldManifestDataset(Dataset):
             if isinstance(raw_dist, list) and i < len(raw_dist):
                 distance[i] = int(raw_dist[i])
             else:
-                area = float(box_tensor[2] * box_tensor[3])
-                if area > 0.1:
-                    distance[i] = 0
-                elif area > 0.05:
-                    distance[i] = 1
-                else:
-                    distance[i] = 2
+                li = int(labels[i])
+                cat = COCO_CLASSES[li] if 0 <= li < len(COCO_CLASSES) else "unknown"
+                cx, cy, bw, bh = (float(box_tensor[j]) for j in range(4))
+                dz, _ = object_distance_and_urgency(cx, cy, bw, bh, cat, _GOLD_ASSISTIVE_SPEC)
+                distance[i] = dz
 
         scene_urgency = int(record.get("scene_urgency", meta.get("urgency", 0)))
         object_urgencies = record.get("object_urgencies")

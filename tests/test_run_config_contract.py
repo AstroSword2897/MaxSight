@@ -18,9 +18,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from ml.models.maxsight_cnn import CapabilityTier  # noqa: E402
 from ml.training.run_config import (  # noqa: E402
+    _UNSET,
     ConfigValidationError,
     ResolvedTrainingConfig,
-    _UNSET,
     cli_overrides_from_namespace,
 )
 
@@ -43,9 +43,11 @@ def _config_path(stem: str) -> Path:
 
 # ── Tier enum coverage ────────────────────────────────────────────────────────
 
+
 def test_capability_tier_covers_all_live_configs() -> None:
     declared_tiers = set()
     import yaml
+
     for stem in CONFIGS:
         raw = yaml.safe_load(_config_path(stem).read_text()) or {}
         declared_tiers.add(raw["model"]["tier"])
@@ -57,7 +59,8 @@ def test_capability_tier_covers_all_live_configs() -> None:
 @pytest.mark.parametrize("stem", CONFIGS)
 def test_each_tier_yaml_resolves(stem: str) -> None:
     cfg = ResolvedTrainingConfig.from_sources(
-        _config_path(stem), cli_overrides=BASELINE_OVERRIDES,
+        _config_path(stem),
+        cli_overrides=BASELINE_OVERRIDES,
     )
     assert cfg.model.tier in {t.name for t in CapabilityTier}
     assert cfg.provenance.config_hash
@@ -65,6 +68,7 @@ def test_each_tier_yaml_resolves(stem: str) -> None:
 
 
 # ── Merge precedence ──────────────────────────────────────────────────────────
+
 
 def test_cli_overrides_take_precedence_over_yaml() -> None:
     cfg = ResolvedTrainingConfig.from_sources(
@@ -102,6 +106,7 @@ def test_unset_cli_flag_does_not_override_yaml() -> None:
 
 # ── Strict schema rejection ───────────────────────────────────────────────────
 
+
 def test_unknown_top_level_key_rejected(tmp_path: Path) -> None:
     src = _config_path("t5_temporal").read_text() + "\nbogus_field: 1\n"
     bad = tmp_path / "bad.yaml"
@@ -112,6 +117,7 @@ def test_unknown_top_level_key_rejected(tmp_path: Path) -> None:
 
 def test_unknown_section_key_rejected(tmp_path: Path) -> None:
     import yaml
+
     raw = yaml.safe_load(_config_path("t5_temporal").read_text())
     raw["training"]["bogus_inner"] = True
     bad = tmp_path / "bad.yaml"
@@ -122,6 +128,7 @@ def test_unknown_section_key_rejected(tmp_path: Path) -> None:
 
 def test_loss_weight_keys_must_match_active_heads(tmp_path: Path) -> None:
     import yaml
+
     raw = yaml.safe_load(_config_path("t5_temporal").read_text())
     raw["loss"]["loss_weights"]["motion"] = 0.5
     bad = tmp_path / "bad.yaml"
@@ -132,6 +139,7 @@ def test_loss_weight_keys_must_match_active_heads(tmp_path: Path) -> None:
 
 def test_temporal_supervision_must_match_model(tmp_path: Path) -> None:
     import yaml
+
     raw = yaml.safe_load(_config_path("t5_temporal").read_text())
     raw["loss"]["temporal_supervision"] = False
     bad = tmp_path / "bad.yaml"
@@ -142,6 +150,7 @@ def test_temporal_supervision_must_match_model(tmp_path: Path) -> None:
 
 def test_fp16_on_cpu_rejected(tmp_path: Path) -> None:
     import yaml
+
     raw = yaml.safe_load(_config_path("t5_temporal").read_text())
     raw["training"]["mixed_precision"] = True
     raw["device"] = "cpu"
@@ -153,6 +162,7 @@ def test_fp16_on_cpu_rejected(tmp_path: Path) -> None:
 
 def test_warmup_must_be_strictly_less_than_epochs(tmp_path: Path) -> None:
     import yaml
+
     raw = yaml.safe_load(_config_path("t5_temporal").read_text())
     raw["training"]["warmup_epochs"] = raw["training"]["num_epochs"]
     bad = tmp_path / "bad.yaml"
@@ -163,6 +173,7 @@ def test_warmup_must_be_strictly_less_than_epochs(tmp_path: Path) -> None:
 
 def test_dataset_section_required(tmp_path: Path) -> None:
     import yaml
+
     raw = yaml.safe_load(_config_path("t5_temporal").read_text())
     raw.pop("dataset")
     bad = tmp_path / "bad.yaml"
@@ -173,8 +184,10 @@ def test_dataset_section_required(tmp_path: Path) -> None:
 
 # ── Hidden-default regression guards ──────────────────────────────────────────
 
+
 def test_lighting_flags_must_be_explicit(tmp_path: Path) -> None:
     import yaml
+
     raw = yaml.safe_load(_config_path("t5_temporal").read_text())
     # Both lighting flags are required in data section; neither has a default.
     raw["data"].pop("tag_lighting_metadata")
@@ -186,6 +199,7 @@ def test_lighting_flags_must_be_explicit(tmp_path: Path) -> None:
 
 def test_loss_weights_must_be_present_and_nonempty(tmp_path: Path) -> None:
     import yaml
+
     raw = yaml.safe_load(_config_path("t5_temporal").read_text())
     raw["loss"]["loss_weights"] = {}
     bad = tmp_path / "bad.yaml"
@@ -196,9 +210,11 @@ def test_loss_weights_must_be_present_and_nonempty(tmp_path: Path) -> None:
 
 # ── Provenance ────────────────────────────────────────────────────────────────
 
+
 def test_config_hash_changes_with_meaningful_overrides() -> None:
     a = ResolvedTrainingConfig.from_sources(
-        _config_path("t5_temporal"), cli_overrides=BASELINE_OVERRIDES,
+        _config_path("t5_temporal"),
+        cli_overrides=BASELINE_OVERRIDES,
     )
     b = ResolvedTrainingConfig.from_sources(
         _config_path("t5_temporal"),
@@ -209,8 +225,10 @@ def test_config_hash_changes_with_meaningful_overrides() -> None:
 
 def test_canonical_dict_round_trip_is_jsonable() -> None:
     import json
+
     cfg = ResolvedTrainingConfig.from_sources(
-        _config_path("t5_temporal"), cli_overrides=BASELINE_OVERRIDES,
+        _config_path("t5_temporal"),
+        cli_overrides=BASELINE_OVERRIDES,
     )
     blob = json.dumps(cfg.to_canonical_dict(), sort_keys=True, default=str)
     parsed = json.loads(blob)

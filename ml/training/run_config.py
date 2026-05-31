@@ -17,6 +17,7 @@ linked across local, container, and SageMaker runs.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import logging
@@ -25,10 +26,10 @@ import platform
 import subprocess
 import sys
 import time
-import dataclasses
+from collections.abc import Mapping
 from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any
 
 from ml.data.dataset_registry import (
     DatasetRegistry,
@@ -48,6 +49,7 @@ _UNSET = object()
 
 
 # ── Errors ────────────────────────────────────────────────────────────────────
+
 
 class ConfigValidationError(ValueError):
     """Raised when the resolved config violates the schema contract."""
@@ -71,18 +73,31 @@ _ALLOWED_ES_METRICS = {"val_loss", "val_map"}
 _ALLOWED_DATA_PLANES = frozenset({"legacy", "gold"})
 _ALLOWED_TRAINING_LABEL_SPACES = frozenset({"accessibility_622"})
 _TIERS_REQUIRING_ACCESSIBILITY_LABEL_SPACE = {
-    "T3_MULTI_TASK", "T4_ADVANCED", "T5_TEMPORAL",
+    "T3_MULTI_TASK",
+    "T4_ADVANCED",
+    "T5_TEMPORAL",
 }
 _ALLOWED_CONDITION_MODES = {
     None,
-    "glaucoma", "amd", "cataracts", "color_blindness",
-    "diabetic_retinopathy", "retinitis_pigmentosa", "cvi",
-    "amblyopia", "strabismus",
-    "refractive_errors", "myopia", "hyperopia", "astigmatism", "presbyopia",
+    "glaucoma",
+    "amd",
+    "cataracts",
+    "color_blindness",
+    "diabetic_retinopathy",
+    "retinitis_pigmentosa",
+    "cvi",
+    "amblyopia",
+    "strabismus",
+    "refractive_errors",
+    "myopia",
+    "hyperopia",
+    "astigmatism",
+    "presbyopia",
 }
 
 
 # ── Schema sections ───────────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class ModelSection:
@@ -110,23 +125,23 @@ class DataSection:
     tag_lighting_metadata: bool
     lighting_pixel_augmentation: bool
     use_weighted_sampling: bool
-    test_annotation_file: Optional[str] = None
-    audio_dir: Optional[str] = None
-    condition_mode: Optional[str] = None
-    class_weights: Optional[Dict[int, float]] = None
+    test_annotation_file: str | None = None
+    audio_dir: str | None = None
+    condition_mode: str | None = None
+    class_weights: dict[int, float] | None = None
     shuffle_train: bool = True
     drop_last: bool = False
-    video_clip_manifest: Optional[str] = None
+    video_clip_manifest: str | None = None
     data_plane: str = "legacy"
-    gold_train_shard_paths: Optional[Tuple[str, ...]] = None
-    gold_val_shard_paths: Optional[Tuple[str, ...]] = None
-    gold_test_shard_paths: Optional[Tuple[str, ...]] = None
+    gold_train_shard_paths: tuple[str, ...] | None = None
+    gold_val_shard_paths: tuple[str, ...] | None = None
+    gold_test_shard_paths: tuple[str, ...] | None = None
     # Meta-driven gold mode: paths to artifact meta.json files.  When these are
     # set, num_classes and label_space are derived from the artifact — no registry
     # lookup is required at runtime.
-    gold_train_meta: Optional[str] = None
-    gold_val_meta: Optional[str] = None
-    gold_test_meta: Optional[str] = None
+    gold_train_meta: str | None = None
+    gold_val_meta: str | None = None
+    gold_test_meta: str | None = None
 
 
 @dataclass(frozen=True)
@@ -145,17 +160,28 @@ class TrainingSection:
     freeze_backbone_epochs: int
     early_stopping_patience: int
     early_stopping_metric: str
-    learning_rate_backbone: Optional[float] = None
-    learning_rate_head: Optional[float] = None
+    learning_rate_backbone: float | None = None
+    learning_rate_head: float | None = None
     ema_decay: float = 0.9999
     checkpoint_interval: int = 0
     label_space: str = "accessibility_622"
+    use_compile: bool = False
+    use_gradient_checkpointing: bool = False
+
+
+@dataclass(frozen=True)
+class DistributedSection:
+    """Distributed training configuration."""
+
+    backend: str = "none"
+    world_size: int = 1
+    local_rank: int = 0
 
 
 @dataclass(frozen=True)
 class LossSection:
     use_gradnorm: bool
-    loss_weights: Dict[str, float]
+    loss_weights: dict[str, float]
     temporal_supervision: bool
     gradnorm_alpha: float = 0.0
     gradnorm_update_interval: int = 0
@@ -185,13 +211,14 @@ class LoggingSection:
 
 @dataclass(frozen=True)
 class TargetMetricsSection:
-    mAP_50: Optional[float] = None
-    mAP_75: Optional[float] = None
+    mAP_50: float | None = None
+    mAP_75: float | None = None
 
 
 @dataclass(frozen=True)
 class DatasetSourceRef:
     """One weighted source in a multi-dataset training mix."""
+
     dataset_id: str
     dataset_version: str
     weight: float
@@ -205,25 +232,26 @@ class DatasetSection:
     set. When ``sources`` is non-empty, weights must sum to 1.0 and every source
     must share the same label_space and annotation_format.
     """
+
     require_match: bool
-    dataset_id: Optional[str] = None
-    dataset_version: Optional[str] = None
-    sources: Optional[Tuple[DatasetSourceRef, ...]] = None
-    content_hash: Optional[str] = None
-    manifest_uri: Optional[str] = None
+    dataset_id: str | None = None
+    dataset_version: str | None = None
+    sources: tuple[DatasetSourceRef, ...] | None = None
+    content_hash: str | None = None
+    manifest_uri: str | None = None
 
 
 @dataclass(frozen=True)
 class ProvenanceSection:
     config_hash: str
     yaml_source: str
-    cli_overrides: Dict[str, Any]
-    sm_overrides: Dict[str, Any]
-    git_commit: Optional[str]
+    cli_overrides: dict[str, Any]
+    sm_overrides: dict[str, Any]
+    git_commit: str | None
     git_dirty: bool
     resolved_at: str
     schema_version: str
-    runtime_env: Dict[str, str]
+    runtime_env: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -245,6 +273,7 @@ class ResolvedTrainingConfig:
     target_metrics: TargetMetricsSection
     dataset: DatasetSection
     provenance: ProvenanceSection
+    distributed: DistributedSection = field(default_factory=lambda: DistributedSection())
 
     # ── Construction ─────────────────────────────────────────────────────────
 
@@ -252,12 +281,12 @@ class ResolvedTrainingConfig:
     def from_sources(
         cls,
         yaml_path: Path,
-        cli_overrides: Optional[Mapping[str, Any]] = None,
-        sm_hyperparameters: Optional[Mapping[str, Any]] = None,
+        cli_overrides: Mapping[str, Any] | None = None,
+        sm_hyperparameters: Mapping[str, Any] | None = None,
         *,
-        registry_path: Optional[Path] = None,
+        registry_path: Path | None = None,
         verify_dataset_on_disk: bool = False,
-    ) -> "ResolvedTrainingConfig":
+    ) -> ResolvedTrainingConfig:
         """Load YAML, apply explicit-only overrides, validate, freeze, return.
 
         Raises ConfigValidationError if any required field is missing, any
@@ -305,6 +334,7 @@ class ResolvedTrainingConfig:
         logging_section = _build_logging_section(merged.get("logging", {}))
         target_metrics = _build_target_metrics_section(merged.get("target_metrics", {}))
         dataset_section = _build_dataset_section(merged.get("dataset", {}))
+        distributed = _build_distributed_section(merged.get("distributed", {}))
 
         seed = _required(merged, "seed", int)
         device = _required(merged, "device", str)
@@ -365,6 +395,7 @@ class ResolvedTrainingConfig:
             target_metrics=target_metrics,
             dataset=dataset_section,
             provenance=provenance,
+            distributed=distributed,
         )
         _validate_cross_fields(resolved)
         if _is_gold_meta_driven(resolved):
@@ -385,7 +416,7 @@ class ResolvedTrainingConfig:
 
     # ── Output / provenance ──────────────────────────────────────────────────
 
-    def to_canonical_dict(self) -> Dict[str, Any]:
+    def to_canonical_dict(self) -> dict[str, Any]:
         """Return a JSON-safe dict for logging, hashing, and checkpoint metadata."""
         return {
             "schema_version": self.schema_version,
@@ -402,10 +433,11 @@ class ResolvedTrainingConfig:
             "logging": _section_to_dict(self.logging_),
             "target_metrics": _section_to_dict(self.target_metrics),
             "dataset": _section_to_dict(self.dataset),
+            "distributed": _section_to_dict(self.distributed),
             "provenance": _section_to_dict(self.provenance),
         }
 
-    def log_at_startup(self, log: Optional[logging.Logger] = None) -> None:
+    def log_at_startup(self, log: logging.Logger | None = None) -> None:
         """Emit a single JSON line summarising the resolved config."""
         target = log or logger
         target.info(
@@ -416,7 +448,8 @@ class ResolvedTrainingConfig:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _strip_unset(mapping: Mapping[str, Any]) -> Dict[str, Any]:
+
+def _strip_unset(mapping: Mapping[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in mapping.items() if v is not _UNSET}
 
 
@@ -428,7 +461,7 @@ def _deep_copy_dict(d: Any) -> Any:
     return d
 
 
-def _set_dotted(target: Dict[str, Any], dotted: str, value: Any) -> None:
+def _set_dotted(target: dict[str, Any], dotted: str, value: Any) -> None:
     parts = dotted.split(".")
     cursor = target
     for key in parts[:-1]:
@@ -453,11 +486,23 @@ def _section_to_dict(obj: Any) -> Any:
 
 
 _KNOWN_TOP_LEVEL = {
-    "schema_version", "run_id", "experiment", "seed", "device",
-    "model", "data", "training", "loss", "validation",
-    "checkpoint", "logging", "target_metrics", "dataset",
+    "schema_version",
+    "run_id",
+    "experiment",
+    "seed",
+    "device",
+    "model",
+    "data",
+    "training",
+    "loss",
+    "validation",
+    "checkpoint",
+    "logging",
+    "target_metrics",
+    "dataset",
+    "distributed",
 }
-_KNOWN_KEYS_BY_SECTION: Dict[str, set] = {
+_KNOWN_KEYS_BY_SECTION: dict[str, set] = {
     "model": {f.name for f in fields(ModelSection)},
     "data": {f.name for f in fields(DataSection)},
     "training": {f.name for f in fields(TrainingSection)},
@@ -467,15 +512,14 @@ _KNOWN_KEYS_BY_SECTION: Dict[str, set] = {
     "logging": {f.name for f in fields(LoggingSection)},
     "target_metrics": {f.name for f in fields(TargetMetricsSection)},
     "dataset": {f.name for f in fields(DatasetSection)},
+    "distributed": {f.name for f in fields(DistributedSection)},
 }
 
 
-def _reject_unknown_keys(merged: Dict[str, Any]) -> None:
+def _reject_unknown_keys(merged: dict[str, Any]) -> None:
     extra_top = set(merged.keys()) - _KNOWN_TOP_LEVEL
     if extra_top:
-        raise ConfigValidationError(
-            f"Unknown top-level keys in config: {sorted(extra_top)}"
-        )
+        raise ConfigValidationError(f"Unknown top-level keys in config: {sorted(extra_top)}")
     for section, allowed in _KNOWN_KEYS_BY_SECTION.items():
         sec = merged.get(section, {})
         if not isinstance(sec, dict):
@@ -484,12 +528,10 @@ def _reject_unknown_keys(merged: Dict[str, Any]) -> None:
             )
         unknown = set(sec.keys()) - allowed
         if unknown:
-            raise ConfigValidationError(
-                f"Unknown keys in '{section}': {sorted(unknown)}"
-            )
+            raise ConfigValidationError(f"Unknown keys in '{section}': {sorted(unknown)}")
 
 
-def _required(d: Dict[str, Any], key: str, expected_type: type) -> Any:
+def _required(d: dict[str, Any], key: str, expected_type: type) -> Any:
     if key not in d:
         raise ConfigValidationError(f"Missing required field: {key!r}")
     value = d[key]
@@ -502,30 +544,26 @@ def _required(d: Dict[str, Any], key: str, expected_type: type) -> Any:
     return value
 
 
-def _required_section(name: str, raw: Dict[str, Any], schema_cls: type) -> Dict[str, Any]:
+def _required_section(name: str, raw: dict[str, Any], schema_cls: type) -> dict[str, Any]:
     if not raw:
         raise ConfigValidationError(f"Missing required section: {name!r}")
     if not isinstance(raw, dict):
-        raise ConfigValidationError(
-            f"Section {name!r} must be a mapping, got {type(raw).__name__}"
-        )
+        raise ConfigValidationError(f"Section {name!r} must be a mapping, got {type(raw).__name__}")
     return raw
 
 
-def _build_model_section(raw: Dict[str, Any]) -> ModelSection:
+def _build_model_section(raw: dict[str, Any]) -> ModelSection:
     raw = _required_section("model", raw, ModelSection)
     required = [f.name for f in fields(ModelSection)]
     missing = [k for k in required if k not in raw]
     if missing:
         raise ConfigValidationError(f"model section missing required keys: {missing}")
     if raw["tier"] not in _ALLOWED_TIERS:
-        raise ConfigValidationError(
-            f"model.tier {raw['tier']!r} not in {sorted(_ALLOWED_TIERS)}"
-        )
+        raise ConfigValidationError(f"model.tier {raw['tier']!r} not in {sorted(_ALLOWED_TIERS)}")
     return ModelSection(**{k: raw[k] for k in required})
 
 
-def _coerce_path_tuple(val: Any, field_name: str) -> Tuple[str, ...]:
+def _coerce_path_tuple(val: Any, field_name: str) -> tuple[str, ...]:
     if isinstance(val, str):
         return (val,)
     if isinstance(val, list):
@@ -537,7 +575,7 @@ def _coerce_path_tuple(val: Any, field_name: str) -> Tuple[str, ...]:
     )
 
 
-def _build_data_section(raw: Dict[str, Any]) -> DataSection:
+def _build_data_section(raw: dict[str, Any]) -> DataSection:
     raw = _required_section("data", raw, DataSection)
     cm = raw.get("condition_mode", None)
     if cm not in _ALLOWED_CONDITION_MODES:
@@ -545,13 +583,10 @@ def _build_data_section(raw: Dict[str, Any]) -> DataSection:
             f"data.condition_mode {cm!r} not in {sorted(str(x) for x in _ALLOWED_CONDITION_MODES)}"
         )
     for f in fields(DataSection):
-        no_default = (
-            f.default is dataclasses.MISSING
-            and f.default_factory is dataclasses.MISSING
-        )
+        no_default = f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING
         if no_default and f.name not in raw:
             raise ConfigValidationError(f"data section missing required key: {f.name!r}")
-    kwargs: Dict[str, Any] = {}
+    kwargs: dict[str, Any] = {}
     for f in fields(DataSection):
         if f.name in raw:
             kwargs[f.name] = raw[f.name]
@@ -574,14 +609,11 @@ def _build_data_section(raw: Dict[str, Any]) -> DataSection:
     return DataSection(**kwargs)
 
 
-def _build_training_section(raw: Dict[str, Any]) -> TrainingSection:
+def _build_training_section(raw: dict[str, Any]) -> TrainingSection:
     raw = dict(_required_section("training", raw, TrainingSection))
     raw.setdefault("label_space", "accessibility_622")
     for f in fields(TrainingSection):
-        no_default = (
-            f.default is dataclasses.MISSING
-            and f.default_factory is dataclasses.MISSING
-        )
+        no_default = f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING
         if no_default and f.name not in raw:
             raise ConfigValidationError(f"training section missing required key: {f.name!r}")
     if raw["optimizer"] not in _ALLOWED_OPTIMIZERS:
@@ -600,7 +632,7 @@ def _build_training_section(raw: Dict[str, Any]) -> TrainingSection:
         raise ConfigValidationError(
             f"training.label_space {raw['label_space']!r} not in {sorted(_ALLOWED_TRAINING_LABEL_SPACES)}"
         )
-    kwargs: Dict[str, Any] = {}
+    kwargs: dict[str, Any] = {}
     for f in fields(TrainingSection):
         if f.name in raw:
             kwargs[f.name] = raw[f.name]
@@ -611,7 +643,27 @@ def _build_training_section(raw: Dict[str, Any]) -> TrainingSection:
     return TrainingSection(**kwargs)
 
 
-def _build_loss_section(raw: Dict[str, Any]) -> LossSection:
+_ALLOWED_DISTRIBUTED_BACKENDS = frozenset({"none", "ddp", "fsdp"})
+
+
+def _build_distributed_section(raw: dict[str, Any]) -> DistributedSection:
+    raw = dict(raw or {})
+    kwargs: dict[str, Any] = {}
+    for f in fields(DistributedSection):
+        if f.name in raw:
+            kwargs[f.name] = raw[f.name]
+        elif f.default is not dataclasses.MISSING:
+            kwargs[f.name] = f.default
+        else:
+            kwargs[f.name] = f.default_factory()
+    if kwargs["backend"] not in _ALLOWED_DISTRIBUTED_BACKENDS:
+        raise ConfigValidationError(
+            f"distributed.backend {kwargs['backend']!r} not in {sorted(_ALLOWED_DISTRIBUTED_BACKENDS)}"
+        )
+    return DistributedSection(**kwargs)
+
+
+def _build_loss_section(raw: dict[str, Any]) -> LossSection:
     raw = _required_section("loss", raw, LossSection)
     required_keys = ["use_gradnorm", "loss_weights", "temporal_supervision"]
     missing = [k for k in required_keys if k not in raw]
@@ -622,14 +674,16 @@ def _build_loss_section(raw: Dict[str, Any]) -> LossSection:
         raise ConfigValidationError("loss.loss_weights must be a non-empty mapping")
     for k, v in weights.items():
         if not isinstance(k, str):
-            raise ConfigValidationError(f"loss.loss_weights key must be str, got {type(k).__name__}")
+            raise ConfigValidationError(
+                f"loss.loss_weights key must be str, got {type(k).__name__}"
+            )
         if not isinstance(v, (int, float)) or v < 0:
             raise ConfigValidationError(f"loss.loss_weights[{k}] must be non-negative number")
     accepted = {f.name for f in fields(LossSection)}
     return LossSection(**{k: raw[k] for k in raw.keys() if k in accepted})
 
 
-def _build_validation_section(raw: Dict[str, Any]) -> ValidationSection:
+def _build_validation_section(raw: dict[str, Any]) -> ValidationSection:
     raw = _required_section("validation", raw, ValidationSection)
     required_keys = ["val_check_interval", "monitor", "mode"]
     missing = [k for k in required_keys if k not in raw]
@@ -639,7 +693,7 @@ def _build_validation_section(raw: Dict[str, Any]) -> ValidationSection:
     return ValidationSection(**{k: raw[k] for k in raw.keys() if k in accepted})
 
 
-def _build_checkpoint_section(raw: Dict[str, Any]) -> CheckpointSection:
+def _build_checkpoint_section(raw: dict[str, Any]) -> CheckpointSection:
     raw = _required_section("checkpoint", raw, CheckpointSection)
     if "save_dir" not in raw:
         raise ConfigValidationError("checkpoint section missing required key: 'save_dir'")
@@ -647,7 +701,7 @@ def _build_checkpoint_section(raw: Dict[str, Any]) -> CheckpointSection:
     return CheckpointSection(**{k: raw[k] for k in raw.keys() if k in accepted})
 
 
-def _build_logging_section(raw: Dict[str, Any]) -> LoggingSection:
+def _build_logging_section(raw: dict[str, Any]) -> LoggingSection:
     raw = _required_section("logging", raw, LoggingSection)
     if "log_dir" not in raw:
         raise ConfigValidationError("logging section missing required key: 'log_dir'")
@@ -655,16 +709,14 @@ def _build_logging_section(raw: Dict[str, Any]) -> LoggingSection:
     return LoggingSection(**{k: raw[k] for k in raw.keys() if k in accepted})
 
 
-def _build_target_metrics_section(raw: Dict[str, Any]) -> TargetMetricsSection:
+def _build_target_metrics_section(raw: dict[str, Any]) -> TargetMetricsSection:
     if not isinstance(raw, dict):
-        raise ConfigValidationError(
-            f"target_metrics must be a mapping, got {type(raw).__name__}"
-        )
+        raise ConfigValidationError(f"target_metrics must be a mapping, got {type(raw).__name__}")
     accepted = {f.name for f in fields(TargetMetricsSection)}
-    return TargetMetricsSection(**{k: raw[k] for k in raw.keys() if k in accepted})
+    return TargetMetricsSection(**{k: raw[k] for k in raw if k in accepted})
 
 
-def _build_dataset_section(raw: Dict[str, Any]) -> DatasetSection:
+def _build_dataset_section(raw: dict[str, Any]) -> DatasetSection:
     raw = _required_section("dataset", raw, DatasetSection)
     if "require_match" not in raw:
         raise ConfigValidationError("dataset section missing required key: 'require_match'")
@@ -678,7 +730,7 @@ def _build_dataset_section(raw: Dict[str, Any]) -> DatasetSection:
     if src_raw is not None:
         if not isinstance(src_raw, list):
             raise ConfigValidationError("dataset.sources must be a list or null")
-        refs: List[DatasetSourceRef] = []
+        refs: list[DatasetSourceRef] = []
         for i, item in enumerate(src_raw):
             if not isinstance(item, dict):
                 raise ConfigValidationError(
@@ -691,17 +743,21 @@ def _build_dataset_section(raw: Dict[str, Any]) -> DatasetSection:
             dver = item["dataset_version"]
             w = item["weight"]
             if not isinstance(did, str) or not did.strip():
-                raise ConfigValidationError(f"dataset.sources[{i}].dataset_id must be a non-empty string")
+                raise ConfigValidationError(
+                    f"dataset.sources[{i}].dataset_id must be a non-empty string"
+                )
             if not isinstance(dver, str) or not dver.strip():
-                raise ConfigValidationError(f"dataset.sources[{i}].dataset_version must be a non-empty string")
+                raise ConfigValidationError(
+                    f"dataset.sources[{i}].dataset_version must be a non-empty string"
+                )
             if not isinstance(w, (int, float)) or w <= 0:
-                raise ConfigValidationError(f"dataset.sources[{i}].weight must be a positive number")
+                raise ConfigValidationError(
+                    f"dataset.sources[{i}].weight must be a positive number"
+                )
             refs.append(DatasetSourceRef(dataset_id=did, dataset_version=dver, weight=float(w)))
         wsum = sum(r.weight for r in refs)
         if abs(wsum - 1.0) > 1e-4:
-            raise ConfigValidationError(
-                f"dataset.sources weights must sum to 1.0, got {wsum}"
-            )
+            raise ConfigValidationError(f"dataset.sources weights must sum to 1.0, got {wsum}")
         accepted = {f.name for f in fields(DatasetSection)}
         base = {k: raw[k] for k in raw.keys() if k in accepted and k != "sources"}
         base["sources"] = tuple(refs)
@@ -709,18 +765,15 @@ def _build_dataset_section(raw: Dict[str, Any]) -> DatasetSection:
 
     for k in ("dataset_id", "dataset_version"):
         if k not in raw or raw[k] is None or (isinstance(raw[k], str) and not raw[k].strip()):
-            raise ConfigValidationError(
-                f"dataset.{k} is required when dataset.sources is absent"
-            )
+            raise ConfigValidationError(f"dataset.{k} is required when dataset.sources is absent")
     accepted = {f.name for f in fields(DatasetSection)}
     return DatasetSection(**{k: raw[k] for k in raw.keys() if k in accepted})
 
 
 def _is_gold_meta_driven(cfg: ResolvedTrainingConfig) -> bool:
     """True when gold mode is configured with artifact meta files (no registry needed)."""
-    return (
-        cfg.data.data_plane == "gold"
-        and bool(cfg.data.gold_train_meta or cfg.data.gold_val_meta)
+    return cfg.data.data_plane == "gold" and bool(
+        cfg.data.gold_train_meta or cfg.data.gold_val_meta
     )
 
 
@@ -731,7 +784,6 @@ def _validate_gold_artifact_meta(cfg: ResolvedTrainingConfig) -> None:
     does not touch the dataset registry.
     """
     from ml.data.gold.dataset import load_gold_meta
-    from ml.data.gold.schema import validate_meta
 
     meta_fields = [
         ("data.gold_train_meta", cfg.data.gold_train_meta),
@@ -774,16 +826,13 @@ def _validate_gold_artifact_meta(cfg: ResolvedTrainingConfig) -> None:
     if not cfg.data.gold_val_meta:
         if not cfg.data.gold_val_shard_paths:
             raise ConfigValidationError(
-                "data_plane=gold requires either data.gold_val_meta "
-                "or data.gold_val_shard_paths"
+                "data_plane=gold requires either data.gold_val_meta or data.gold_val_shard_paths"
             )
 
 
 def _validate_cross_fields(cfg: ResolvedTrainingConfig) -> None:
     if cfg.device not in _ALLOWED_DEVICES:
-        raise ConfigValidationError(
-            f"device {cfg.device!r} not in {sorted(_ALLOWED_DEVICES)}"
-        )
+        raise ConfigValidationError(f"device {cfg.device!r} not in {sorted(_ALLOWED_DEVICES)}")
     if cfg.training.mixed_precision and cfg.device == "cpu":
         raise ConfigValidationError("training.mixed_precision=True requires device in {cuda, auto}")
     if cfg.training.warmup_epochs >= cfg.training.num_epochs:
@@ -845,7 +894,7 @@ def _repo_root_from_registry(registry: DatasetRegistry) -> Path:
 def _validate_dataset_against_registry(
     cfg: ResolvedTrainingConfig,
     *,
-    registry_path: Optional[Path],
+    registry_path: Path | None,
     verify_on_disk: bool,
 ) -> None:
     """Resolve dataset(s) against the registry; raise on any mismatch.
@@ -884,7 +933,9 @@ def _validate_dataset_against_registry(
                     f"annotation_format, and num_classes; mismatch involving {e.key!r}"
                 )
         if ls0 is None:
-            raise ConfigValidationError("dataset.sources cannot mix raw datasets without a label_space")
+            raise ConfigValidationError(
+                "dataset.sources cannot mix raw datasets without a label_space"
+            )
         primary = entries[0]
     else:
         assert cfg.dataset.dataset_id is not None and cfg.dataset.dataset_version is not None
@@ -936,9 +987,7 @@ def _validate_dataset_against_registry(
             for rel in paths:
                 p = (repo_root / rel).resolve()
                 if not p.is_file():
-                    raise ConfigValidationError(
-                        f"{label} entry is not an existing file: {p}"
-                    )
+                    raise ConfigValidationError(f"{label} entry is not an existing file: {p}")
 
     if not cfg.dataset.sources and cfg.data.data_plane != "gold":
         train_rel = primary.annotation_path("train")
@@ -982,7 +1031,7 @@ def _validate_dataset_against_registry(
                 raise ConfigValidationError(str(exc)) from exc
 
 
-def _expected_loss_heads(cfg: ResolvedTrainingConfig) -> Optional[set]:
+def _expected_loss_heads(cfg: ResolvedTrainingConfig) -> set | None:
     """Return the head names required for the active model + temporal flag.
 
     Mirrors create_loss_fn() in scripts/ops/train_maxsight.py so YAML weights
@@ -996,7 +1045,7 @@ def _expected_loss_heads(cfg: ResolvedTrainingConfig) -> Optional[set]:
     return base
 
 
-def _git_state(start: Path) -> Tuple[Optional[str], bool]:
+def _git_state(start: Path) -> tuple[str | None, bool]:
     try:
         commit = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -1021,13 +1070,14 @@ def _git_state(start: Path) -> Tuple[Optional[str], bool]:
     return commit.stdout.strip() or None, bool(dirty.stdout.strip())
 
 
-def _runtime_env() -> Dict[str, str]:
-    env: Dict[str, str] = {
+def _runtime_env() -> dict[str, str]:
+    env: dict[str, str] = {
         "python": sys.version.split()[0],
         "platform": platform.platform(),
     }
     try:
         import torch
+
         env["torch"] = torch.__version__
         env["cuda_available"] = str(bool(torch.cuda.is_available()))
     except Exception:
@@ -1040,13 +1090,14 @@ def _runtime_env() -> Dict[str, str]:
 
 # ── CLI helpers (used by ops scripts) ─────────────────────────────────────────
 
-def cli_overrides_from_namespace(ns: Any, mapping: Mapping[str, str]) -> Dict[str, Any]:
+
+def cli_overrides_from_namespace(ns: Any, mapping: Mapping[str, str]) -> dict[str, Any]:
     """Build a dotted-key override dict from an argparse Namespace.
 
     mapping = {namespace_attr: dotted_config_path}. Values equal to _UNSET
     are dropped so YAML wins for any flag the operator did not pass.
     """
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     for attr, dotted in mapping.items():
         if not hasattr(ns, attr):
             continue

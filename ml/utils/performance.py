@@ -1,10 +1,11 @@
 """Performance monitoring utilities for MaxSight. Provides timing decorators and performance tracking for identifying bottlenecks."""
 
-import time
 import functools
 import logging
-from typing import Callable, Any
+import time
 from collections import defaultdict
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ _performance_stats: dict[str, list[float]] = defaultdict(list)
 
 def timed(threshold: float = 0.1, log_level: int = logging.WARNING):
     """Decorator to time function execution and log slow operations."""
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -24,14 +26,15 @@ def timed(threshold: float = 0.1, log_level: int = logging.WARNING):
             finally:
                 elapsed = time.perf_counter() - start
                 _performance_stats[func.__name__].append(elapsed)
-                
+
                 if elapsed > threshold:
                     logger.log(
                         log_level,
-                        f"{func.__name__} took {elapsed:.3f}s (threshold: {threshold:.3f}s)"
+                        f"{func.__name__} took {elapsed:.3f}s (threshold: {threshold:.3f}s)",
                     )
-        
+
         return wrapper
+
     return decorator
 
 
@@ -41,11 +44,11 @@ def get_performance_stats() -> dict[str, dict[str, float]]:
     for func_name, times in _performance_stats.items():
         if times:
             stats[func_name] = {
-                'mean': sum(times) / len(times),
-                'max': max(times),
-                'min': min(times),
-                'count': len(times),
-                'total': sum(times)
+                "mean": sum(times) / len(times),
+                "max": max(times),
+                "min": min(times),
+                "count": len(times),
+                "total": sum(times),
             }
     return stats
 
@@ -58,21 +61,11 @@ def reset_performance_stats() -> None:
 def log_slow_operations(threshold: float = 0.1) -> None:
     """Log summary of slow operations. Arguments: threshold: Minimum time to consider slow."""
     stats = get_performance_stats()
-    slow_ops = {
-        name: s for name, s in stats.items()
-        if s['mean'] > threshold
-    }
-    
+    slow_ops = {name: s for name, s in stats.items() if s["mean"] > threshold}
+
     if slow_ops:
         logger.warning(f"Slow operations (>{threshold}s):")
-        for name, s in sorted(slow_ops.items(), key=lambda x: x[1]['mean'], reverse=True):
+        for name, s in sorted(slow_ops.items(), key=lambda x: x[1]["mean"], reverse=True):
             logger.warning(
                 f"  {name}: mean={s['mean']:.3f}s, max={s['max']:.3f}s, count={s['count']}"
             )
-
-
-
-
-
-
-

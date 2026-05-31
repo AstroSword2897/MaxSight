@@ -7,8 +7,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from ml.data.video_panoptic import (  # noqa: E402
     AdaptiveTemporalConfig,
-    VideoSamplingConfig,
     PseudoPanopticQualityConfig,
+    VideoSamplingConfig,
     associate_tracks_multi_frame,
     build_adaptive_windows,
     build_fixed_stride_windows,
@@ -89,4 +89,3 @@ def test_build_adaptive_windows_basic() -> None:
     assert len(windows) >= 1
     for start, end in windows:
         assert 0 <= start < end <= len(frames)
-

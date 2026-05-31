@@ -11,8 +11,8 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from ml.data.gold.dataNormalizationLayer import COCOAdapter, MaxSightListAdapter  # noqa: E402
 from ml.data.gold.builder import build_gold_manifest, write_manifest_meta  # noqa: E402
+from ml.data.gold.dataNormalizationLayer import COCOAdapter, MaxSightListAdapter  # noqa: E402
 from ml.data.gold.label_mapper import LabelMapper  # noqa: E402
 
 
@@ -38,10 +38,14 @@ def _cmd_maxsight_list(ns: argparse.Namespace) -> int:
         num_shards=ns.num_shards,
         skip_invalid=not ns.fail_on_invalid,
     )
-    meta_path = Path(ns.meta_out) if ns.meta_out else (
-        out.parent / f"{out.name}_meta.json"
-        if ns.num_shards > 1
-        else out.parent / f"{out.stem}_meta.json"
+    meta_path = (
+        Path(ns.meta_out)
+        if ns.meta_out
+        else (
+            out.parent / f"{out.name}_meta.json"
+            if ns.num_shards > 1
+            else out.parent / f"{out.stem}_meta.json"
+        )
     )
     write_manifest_meta(
         meta_path,
@@ -86,10 +90,14 @@ def _cmd_coco_instances(ns: argparse.Namespace) -> int:
         num_shards=ns.num_shards,
         skip_invalid=not ns.fail_on_invalid,
     )
-    meta_path = Path(ns.meta_out) if ns.meta_out else (
-        out.parent / f"{out.name}_meta.json"
-        if ns.num_shards > 1
-        else out.parent / f"{out.stem}_meta.json"
+    meta_path = (
+        Path(ns.meta_out)
+        if ns.meta_out
+        else (
+            out.parent / f"{out.name}_meta.json"
+            if ns.num_shards > 1
+            else out.parent / f"{out.stem}_meta.json"
+        )
     )
     write_manifest_meta(
         meta_path,
@@ -142,7 +150,12 @@ def main() -> int:
             default=None,
             help="Reserved for future remaps; omit for name→622 mapping.",
         )
-        c.add_argument("--num-shards", type=int, default=1, help=">1 writes shard_00000.jsonl under --out directory")
+        c.add_argument(
+            "--num-shards",
+            type=int,
+            default=1,
+            help=">1 writes shard_00000.jsonl under --out directory",
+        )
         c.add_argument("--meta-out", type=Path, default=None)
         c.add_argument(
             "--fail-on-invalid",

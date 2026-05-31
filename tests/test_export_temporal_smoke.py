@@ -15,6 +15,7 @@ def test_temporal_5d_input_can_be_jit_exported_smoke() -> None:
     - JIT export must succeed with the same 5D input shape
     """
     import os
+
     import pytest
 
     # Hard-safety: temporal JIT tracing may segfault for some operator graphs.
@@ -68,4 +69,3 @@ def test_temporal_5d_input_can_be_jit_exported_smoke() -> None:
         assert isinstance(out_traced, dict)
     finally:
         Path(jit_path).unlink(missing_ok=True)
-

@@ -2,5 +2,4 @@
 
 from .personal_mode import PersonalMode
 
-__all__ = ['PersonalMode']
-
+__all__ = ["PersonalMode"]

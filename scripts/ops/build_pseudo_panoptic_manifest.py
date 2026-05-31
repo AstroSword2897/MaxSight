@@ -7,22 +7,25 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from ml.data.video_manifest import CONTRACT_FIXED_STRIDE_T8, MANIFEST_SCHEMA_VERSION, validate_manifest_v1
-from ml.data.video_preprocessing import PreprocessingConfig, VideoPanopticPreprocessor
+from ml.data.video_manifest import (
+    CONTRACT_FIXED_STRIDE_T8,
+    MANIFEST_SCHEMA_VERSION,
+    validate_manifest_v1,
+)
 from ml.data.video_panoptic import VideoSamplingConfig
+from ml.data.video_preprocessing import PreprocessingConfig, VideoPanopticPreprocessor
 
 
 class StubPanopticSegmenter:
     """Deterministic box for smoke tests when no real segmenter is available."""
 
-    def segment(self, frame: Any) -> List[dict]:
-        from PIL import Image
+    def segment(self, frame: Any) -> list[dict]:
 
         if hasattr(frame, "size"):
             w, h = frame.size
@@ -62,7 +65,9 @@ def main() -> None:
         default=None,
         help="Resolve relative frame_paths (default: sample manifest parent)",
     )
-    parser.add_argument("--use-stub-segmenter", action="store_true", help="Use centered box (no torch model)")
+    parser.add_argument(
+        "--use-stub-segmenter", action="store_true", help="Use centered box (no torch model)"
+    )
     parser.add_argument("--chunk-size", type=int, default=64)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--temporal-lookback", type=int, default=2)
@@ -75,18 +80,21 @@ def main() -> None:
     args = parser.parse_args()
 
     if not args.use_stub_segmenter:
-        print("Only --use-stub-segmenter is implemented in-repo; pass that flag for offline runs.", file=sys.stderr)
+        print(
+            "Only --use-stub-segmenter is implemented in-repo; pass that flag for offline runs.",
+            file=sys.stderr,
+        )
         raise SystemExit(2)
 
     root = args.manifest_root or args.sample_manifest.parent
-    with open(args.sample_manifest, "r", encoding="utf-8") as f:
+    with open(args.sample_manifest, encoding="utf-8") as f:
         sample = json.load(f)
 
     clips_in = sample.get("clips", [])
     if not isinstance(clips_in, list):
         raise SystemExit("sample manifest has no clips array")
 
-    all_clips: List[dict] = []
+    all_clips: list[dict] = []
     stats_frames = 0
     global_tw8 = True
     for clip in clips_in:

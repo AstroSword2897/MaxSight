@@ -3,30 +3,30 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
 class RetrievalResult:
     """Compact retrieval result used by advisory generation."""
 
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     score: float
 
 
 class AdvisoryRetriever(Protocol):
     """Retriever contract for production advisory enrichment."""
 
-    def retrieve(self, query: Dict[str, Any], top_k: int = 5) -> List[RetrievalResult]:
+    def retrieve(self, query: dict[str, Any], top_k: int = 5) -> list[RetrievalResult]:
         """Return ranked retrieval results without blocking critical path."""
 
 
 def generate_therapy_advisory(
-    clip_manifest: Dict[str, Any],
+    clip_manifest: dict[str, Any],
     temporal_reliability: float,
-    retriever: Optional[AdvisoryRetriever],
+    retriever: AdvisoryRetriever | None,
     top_k: int = 5,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create advisory payload from temporal reliability and retrieval context.
 
     This method is intentionally advisory-only and does not gate core hazards.
@@ -40,7 +40,7 @@ def generate_therapy_advisory(
         "temporal_reliability": reliability,
     }
 
-    retrieved: List[RetrievalResult] = []
+    retrieved: list[RetrievalResult] = []
     if retriever is not None:
         try:
             retrieved = retriever.retrieve(query, top_k=top_k)
@@ -61,9 +61,5 @@ def generate_therapy_advisory(
         "temporal_reliability": reliability,
         "advisory_score": float(advisory_score),
         "retrieved_count": len(retrieved),
-        "retrieved": [
-            {"payload": r.payload, "score": float(r.score)}
-            for r in retrieved
-        ],
+        "retrieved": [{"payload": r.payload, "score": float(r.score)} for r in retrieved],
     }
-

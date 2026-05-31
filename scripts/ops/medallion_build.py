@@ -46,7 +46,9 @@ def _find_coco_ann_and_images(bronze_coco: Path) -> tuple[Path, Path]:
     if not ann_file.exists():
         ann_file = bronze_coco / "annotations" / "instances_val2017.json"
     if not ann_file.exists():
-        raise FileNotFoundError(f"No instances_train2017.json / instances_val2017.json under {bronze_coco}/annotations")
+        raise FileNotFoundError(
+            f"No instances_train2017.json / instances_val2017.json under {bronze_coco}/annotations"
+        )
 
     image_dir = bronze_coco / "train2017"
     if not image_dir.exists():
@@ -65,8 +67,13 @@ def cmd_promote_coco(args: argparse.Namespace) -> int:
         return 1
 
     status = verify_coco_dataset(bronze_coco, check_coco_raw=(bronze_coco.name == "coco_raw"))
-    if not (status.get("train_images") or status.get("val_images")) or not status.get("annotations"):
-        print("COCO looks incomplete. Download/extract first (see docs/medallion_data.md).", file=sys.stderr)
+    if not (status.get("train_images") or status.get("val_images")) or not status.get(
+        "annotations"
+    ):
+        print(
+            "COCO looks incomplete. Download/extract first (see docs/medallion_data.md).",
+            file=sys.stderr,
+        )
         return 1
 
     ann_file, image_dir = _find_coco_ann_and_images(bronze_coco)
@@ -93,9 +100,17 @@ def cmd_promote_coco(args: argparse.Namespace) -> int:
         test_annotation=test_file,
         image_dir=bronze_coco,
     )
-    gold_path = Path(args.gold_index_out).resolve() if args.gold_index_out else default_gold_index_path(mroot)
+    gold_path = (
+        Path(args.gold_index_out).resolve()
+        if args.gold_index_out
+        else default_gold_index_path(mroot)
+    )
     write_training_index(gold_path, idx)
-    print(json.dumps({"gold_index": str(gold_path), "train": str(train_file), "val": str(val_file)}, indent=2))
+    print(
+        json.dumps(
+            {"gold_index": str(gold_path), "train": str(train_file), "val": str(val_file)}, indent=2
+        )
+    )
     return 0
 
 
@@ -105,7 +120,11 @@ def cmd_promote_video(args: argparse.Namespace) -> int:
     sv = silver_video_dir(mroot)
     sv.mkdir(parents=True, exist_ok=True)
 
-    gold_path = Path(args.gold_index_out).resolve() if args.gold_index_out else default_gold_index_path(mroot)
+    gold_path = (
+        Path(args.gold_index_out).resolve()
+        if args.gold_index_out
+        else default_gold_index_path(mroot)
+    )
     if gold_path.exists():
         base = load_training_index(gold_path)
     else:
@@ -141,7 +160,10 @@ def cmd_promote_video(args: argparse.Namespace) -> int:
         updates["manifest_root"] = path_relative_to_repo(mr, REPO)
 
     if not args.video_train_manifest and not args.video_val_manifest and mr is None:
-        print("Nothing to do: pass --video-train-manifest, --video-val-manifest, and/or --video-manifest-root.", file=sys.stderr)
+        print(
+            "Nothing to do: pass --video-train-manifest, --video-val-manifest, and/or --video-manifest-root.",
+            file=sys.stderr,
+        )
         return 1
 
     merged = merge_video_into_index(base, updates)
@@ -176,7 +198,9 @@ def main() -> int:
     p_init = sub.add_parser("init", help="Create bronze/silver/gold directory tree")
     p_init.set_defaults(func=cmd_init)
 
-    p_coco = sub.add_parser("promote-coco", help="Verify bronze COCO, write MaxSight splits to silver, gold index")
+    p_coco = sub.add_parser(
+        "promote-coco", help="Verify bronze COCO, write MaxSight splits to silver, gold index"
+    )
     p_coco.add_argument(
         "--bronze-coco",
         type=Path,
@@ -194,7 +218,9 @@ def main() -> int:
     )
     p_coco.set_defaults(func=cmd_promote_coco)
 
-    p_vid = sub.add_parser("promote-video", help="Validate and copy v1 manifests into silver/video; update gold index")
+    p_vid = sub.add_parser(
+        "promote-video", help="Validate and copy v1 manifests into silver/video; update gold index"
+    )
     p_vid.add_argument("--video-train-manifest", type=Path, default=None)
     p_vid.add_argument("--video-val-manifest", type=Path, default=None)
     p_vid.add_argument(

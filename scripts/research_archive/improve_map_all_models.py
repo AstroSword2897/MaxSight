@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Terminal script to improve mAP for all condition models (detection checkpoints) without retraining."""
+
 import argparse
 import itertools
 import json
@@ -32,19 +33,44 @@ def _find_checkpoints_base() -> Path | None:
             continue
         try:
             for d in base.iterdir():
-                if d.is_dir() and d.name.startswith("checkpoints_") and (d / "best_model.pt").exists():
+                if (
+                    d.is_dir()
+                    and d.name.startswith("checkpoints_")
+                    and (d / "best_model.pt").exists()
+                ):
                     return base.resolve()
         except OSError:
             continue
     return None
 
+
 CONDITIONS = [
-    "amblyopia", "amd", "astigmatism", "cataracts", "color_blindness",
-    "cvi", "diabetic_retinopathy", "glaucoma", "hyperopia", "myopia",
-    "presbyopia", "refractive_errors", "retinitis_pigmentosa", "strabismus",
+    "amblyopia",
+    "amd",
+    "astigmatism",
+    "cataracts",
+    "color_blindness",
+    "cvi",
+    "diabetic_retinopathy",
+    "glaucoma",
+    "hyperopia",
+    "myopia",
+    "presbyopia",
+    "refractive_errors",
+    "retinitis_pigmentosa",
+    "strabismus",
 ]
 
-CONF_CANDIDATES = [0.3, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001]  # Low values for weak/untrained checkpoints.
+CONF_CANDIDATES = [
+    0.3,
+    0.1,
+    0.05,
+    0.02,
+    0.01,
+    0.005,
+    0.002,
+    0.001,
+]  # Low values for weak/untrained checkpoints.
 # Fast grid when targeting mAP (fewer runs): try key conf + auto, two NMS values.
 CONF_FAST = [0.1, 0.05, 0.01, 0.001, "auto"]
 NMS_IOU_CANDIDATES = [0.5, 0.6, 0.7, 0.8]
@@ -79,21 +105,68 @@ def main():
     parser = argparse.ArgumentParser(
         description="Improve mAP for all condition models: sweep confidence/NMS, then run inference with best params."
     )
-    parser.add_argument("--checkpoints-base", type=Path, default=None, help="Base dir with checkpoints_<condition>/best_model.pt")
-    parser.add_argument("--val-annotation", type=Path, default=REPO / "datasets" / "cleaned_splits" / "maxsight_val.json")
+    parser.add_argument(
+        "--checkpoints-base",
+        type=Path,
+        default=None,
+        help="Base dir with checkpoints_<condition>/best_model.pt",
+    )
+    parser.add_argument(
+        "--val-annotation",
+        type=Path,
+        default=REPO / "datasets" / "cleaned_splits" / "maxsight_val.json",
+    )
     parser.add_argument("--image-dir", type=Path, default=REPO / "datasets")
     parser.add_argument("--output", type=Path, default=REPO / "inference_data.json")
-    parser.add_argument("--config-output", type=Path, default=REPO / "improved_inference_config.json", help="Save best confidence/nms per run")
-    parser.add_argument("--conditions", nargs="*", default=None, help="Limit to these conditions (default: all)")
-    parser.add_argument("--max-batches", type=int, default=None, help="Cap batches per sweep run (faster sweep)")
-    parser.add_argument("--batch-size", type=int, default=64, help="Validation batch size (passed to run_checkpoint_inference)")
-    parser.add_argument("--num-workers", type=int, default=0, help="DataLoader workers (passed to run_checkpoint_inference)")
-    parser.add_argument("--skip-sweep", action="store_true", help="Skip sweep; run inference once with --confidence and --nms-iou")
-    parser.add_argument("--confidence", type=str, default="0.05", help="Used if --skip-sweep: float or 'auto' for adaptive threshold")
+    parser.add_argument(
+        "--config-output",
+        type=Path,
+        default=REPO / "improved_inference_config.json",
+        help="Save best confidence/nms per run",
+    )
+    parser.add_argument(
+        "--conditions", nargs="*", default=None, help="Limit to these conditions (default: all)"
+    )
+    parser.add_argument(
+        "--max-batches", type=int, default=None, help="Cap batches per sweep run (faster sweep)"
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=64,
+        help="Validation batch size (passed to run_checkpoint_inference)",
+    )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=0,
+        help="DataLoader workers (passed to run_checkpoint_inference)",
+    )
+    parser.add_argument(
+        "--skip-sweep",
+        action="store_true",
+        help="Skip sweep; run inference once with --confidence and --nms-iou",
+    )
+    parser.add_argument(
+        "--confidence",
+        type=str,
+        default="0.05",
+        help="Used if --skip-sweep: float or 'auto' for adaptive threshold",
+    )
     parser.add_argument("--nms-iou", type=float, default=0.5, help="Used if --skip-sweep")
-    parser.add_argument("--target-map", type=float, default=None, metavar="F", help="When sweeping, try to reach at least this mAP@0.5; uses fast grid (fewer conf/nms combos)")
-    parser.add_argument("--fast-sweep", action="store_true", help="Use reduced conf/nms grid (fewer runs, faster)")
-    parser.add_argument("--quiet", action="store_true", help="Minimal output: only best params and final result.")
+    parser.add_argument(
+        "--target-map",
+        type=float,
+        default=None,
+        metavar="F",
+        help="When sweeping, try to reach at least this mAP@0.5; uses fast grid (fewer conf/nms combos)",
+    )
+    parser.add_argument(
+        "--fast-sweep", action="store_true", help="Use reduced conf/nms grid (fewer runs, faster)"
+    )
+    parser.add_argument(
+        "--quiet", action="store_true", help="Minimal output: only best params and final result."
+    )
     args = parser.parse_args()
 
     # Resolve checkpoint base.
@@ -103,7 +176,10 @@ def main():
     if base is None:
         base = Path(os.environ.get("CHECKPOINTS_BASE", ""))
     if not base or not base.exists():
-        print("No checkpoints base found. Set CHECKPOINTS_BASE or pass --checkpoints-base.", file=sys.stderr)
+        print(
+            "No checkpoints base found. Set CHECKPOINTS_BASE or pass --checkpoints-base.",
+            file=sys.stderr,
+        )
         return 1
     base = base.resolve()
 
@@ -136,11 +212,16 @@ def main():
             cmd = [
                 sys.executable,
                 str(script),
-                "--val-annotation", str(val_ann),
-                "--image-dir", str(image_dir),
-                "--checkpoints-base", str(base),
-                "--confidence", str(conf) if not isinstance(conf, str) else conf,
-                "--nms-iou", str(iou),
+                "--val-annotation",
+                str(val_ann),
+                "--image-dir",
+                str(image_dir),
+                "--checkpoints-base",
+                str(base),
+                "--confidence",
+                str(conf) if not isinstance(conf, str) else conf,
+                "--nms-iou",
+                str(iou),
             ]
             if conditions:
                 cmd += ["--conditions"] + conditions
@@ -175,14 +256,22 @@ def main():
     cmd = [
         sys.executable,
         str(script),
-        "--val-annotation", str(val_ann),
-        "--image-dir", str(image_dir),
-        "--checkpoints-base", str(base),
-        "--confidence", str(best_conf),
-        "--nms-iou", str(best_nms),
-        "--batch-size", str(args.batch_size),
-        "--num-workers", str(args.num_workers),
-        "--output", str(args.output),
+        "--val-annotation",
+        str(val_ann),
+        "--image-dir",
+        str(image_dir),
+        "--checkpoints-base",
+        str(base),
+        "--confidence",
+        str(best_conf),
+        "--nms-iou",
+        str(best_nms),
+        "--batch-size",
+        str(args.batch_size),
+        "--num-workers",
+        str(args.num_workers),
+        "--output",
+        str(args.output),
     ]
     if conditions:
         cmd += ["--conditions"] + conditions
@@ -190,7 +279,9 @@ def main():
         cmd += ["--max-batches", str(args.max_batches)]
     if args.quiet:
         cmd += ["--quiet"]
-    result = subprocess.run(cmd, cwd=str(REPO), capture_output=True if args.quiet else False, text=True)
+    result = subprocess.run(
+        cmd, cwd=str(REPO), capture_output=True if args.quiet else False, text=True
+    )
     if result.returncode != 0:
         if args.quiet and result.stderr:
             print(result.stderr, file=sys.stderr)
@@ -206,15 +297,11 @@ def main():
         json.dump(config, f, indent=2)
     print(f"Done. {args.output} | {args.config_output}")
     if best_map <= 0 and not args.quiet:
-        print("Note: mAP stayed 0. To reach 0.5 you need trained checkpoints. Run training first, e.g. scripts/train_t5_fast_colab.py or scripts/train_maxsight.py.")
+        print(
+            "Note: mAP stayed 0. To reach 0.5 you need trained checkpoints. Run training first, e.g. scripts/train_t5_fast_colab.py or scripts/train_maxsight.py."
+        )
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-
-
-
-

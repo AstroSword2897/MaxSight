@@ -1,36 +1,29 @@
 """Fusion modules for retrieval."""
 
 from .attention_fusion import AttentionFusion
-from .fusion_train import FusionMLP, FusionDataset
+from .fusion_train import FusionDataset, FusionMLP
 
 # Phase 6: Meta-learning fusion.
 try:
     from .meta_fusion import (
-        MetaFusionWeights,
         ActiveSceneExploration,
+        MetaFusionWeights,
         PredictiveNavigationGuidance,
-        UserProfile
+        UserProfile,
     )
+
     __all__ = [
-        'AttentionFusion',
-        'FusionMLP',
-        'FusionDataset',
-        'MetaFusionWeights',
-        'ActiveSceneExploration',
-        'PredictiveNavigationGuidance',
-        'UserProfile',
+        "AttentionFusion",
+        "FusionMLP",
+        "FusionDataset",
+        "MetaFusionWeights",
+        "ActiveSceneExploration",
+        "PredictiveNavigationGuidance",
+        "UserProfile",
     ]
 except ImportError:
     __all__ = [
-        'AttentionFusion',
-        'FusionMLP',
-        'FusionDataset',
+        "AttentionFusion",
+        "FusionMLP",
+        "FusionDataset",
     ]
-
-
-
-
-
-
-
-

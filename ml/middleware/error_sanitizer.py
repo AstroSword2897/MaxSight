@@ -35,9 +35,10 @@ import logging
 import os
 import traceback
 import uuid
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any, Dict, Generator, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ def _debug_level() -> str:
 # ── Correlation ID ─────────────────────────────────────────────────────────────
 # Stored in a ContextVar so each async task / thread has its own ID.
 
-_error_id_var: ContextVar[Optional[str]] = ContextVar("error_id", default=None)
+_error_id_var: ContextVar[str | None] = ContextVar("error_id", default=None)
 
 
 def generate_error_id() -> str:
@@ -76,13 +77,13 @@ def generate_error_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
-def current_error_id() -> Optional[str]:
+def current_error_id() -> str | None:
     """Return the correlation ID bound to the current execution context, if any."""
     return _error_id_var.get()
 
 
 @contextmanager
-def error_context(error_id: Optional[str] = None) -> Generator[str, None, None]:
+def error_context(error_id: str | None = None) -> Generator[str, None, None]:
     """Bind a correlation ID to the current context for the duration of a block.
 
     Usage::
@@ -103,15 +104,25 @@ def error_context(error_id: Optional[str] = None) -> Generator[str, None, None]:
 
 _REDACT_KEYS = frozenset(
     {
-        "password", "passwd", "secret", "token", "api_key", "apikey",
-        "authorization", "auth", "credential", "private_key",
-        "image_bytes", "image_b64",  # raw image data — large + potentially PII
-        "patient_id", "user_id",      # MaxSight-specific PII
+        "password",
+        "passwd",
+        "secret",
+        "token",
+        "api_key",
+        "apikey",
+        "authorization",
+        "auth",
+        "credential",
+        "private_key",
+        "image_bytes",
+        "image_b64",  # raw image data — large + potentially PII
+        "patient_id",
+        "user_id",  # MaxSight-specific PII
     }
 )
 
 
-def _sanitize_context(ctx: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _sanitize_context(ctx: dict[str, Any] | None) -> dict[str, Any]:
     """Return a copy of ``ctx`` with sensitive values replaced by ``[REDACTED]``.
 
     Keys are matched case-insensitively.  Values that are themselves dicts
@@ -119,7 +130,7 @@ def _sanitize_context(ctx: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """
     if not ctx:
         return {}
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     for k, v in ctx.items():
         if k.lower() in _REDACT_KEYS:
             out[k] = "[REDACTED]"
@@ -131,6 +142,7 @@ def _sanitize_context(ctx: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 # ── Error taxonomy ─────────────────────────────────────────────────────────────
+
 
 class AppError(Exception):
     """Base class for all MaxSight application errors.
@@ -208,12 +220,13 @@ class ConfigError(AppError):
 
 # ── Sanitize (user-facing response) ───────────────────────────────────────────
 
+
 def sanitize_error(
     error: Exception,
     *,
-    error_id: Optional[str] = None,
-    debug_level: Optional[str] = None,
-) -> Dict[str, Any]:
+    error_id: str | None = None,
+    debug_level: str | None = None,
+) -> dict[str, Any]:
     """Return a safe, structured error dict for inclusion in HTTP responses.
 
     Parameters
@@ -238,7 +251,7 @@ def sanitize_error(
     level = debug_level or _debug_level()
 
     if isinstance(error, AppError):
-        response: Dict[str, Any] = {
+        response: dict[str, Any] = {
             "error": error.safe_message,
             "code": error.code,
             "http_status": error.http_status,
@@ -272,12 +285,13 @@ def sanitize_error(
 
 # ── Structured logging ─────────────────────────────────────────────────────────
 
+
 def log_error(
     error: Exception,
     *,
-    context: Optional[Dict[str, Any]] = None,
-    error_id: Optional[str] = None,
-    logger_: Optional[logging.Logger] = None,
+    context: dict[str, Any] | None = None,
+    error_id: str | None = None,
+    logger_: logging.Logger | None = None,
 ) -> str:
     """Log a structured error record server-side and return the correlation ID.
 
@@ -308,7 +322,7 @@ def log_error(
 
     safe_ctx = _sanitize_context(context)
 
-    extra: Dict[str, Any] = {
+    extra: dict[str, Any] = {
         "error_id": eid,
         "error_type": type(error).__name__,
         "error_code": getattr(error, "code", "internal_error"),

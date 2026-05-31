@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from ml.data.gold.schema import LABEL_SPACE_ACCESSIBILITY_622
 from ml.models.maxsight_cnn import COCO_CLASSES
@@ -30,7 +30,7 @@ class LabelMapper:
             )
         self._name_to_idx = {name: i for i, name in enumerate(COCO_CLASSES)}
         # Stable ordered list guarantees hash is over identical structure.
-        self._ordered_classes: List[str] = list(COCO_CLASSES)
+        self._ordered_classes: list[str] = list(COCO_CLASSES)
 
     @property
     def num_classes(self) -> int:
@@ -52,10 +52,10 @@ class LabelMapper:
         ).encode("utf-8")
         return hashlib.sha256(payload).hexdigest()
 
-    def map_class_names(self, names: Sequence[str]) -> List[int]:
+    def map_class_names(self, names: Sequence[str]) -> list[int]:
         """Return integer labels aligned to ``names`` (unknown name → 0)."""
 
-        out: List[int] = []
+        out: list[int] = []
         for n in names:
             if not isinstance(n, str):
                 raise TypeError(f"LabelMapper expects str class names, got {type(n).__name__}")

@@ -9,24 +9,21 @@ from .uncertainty_head import UncertaintyHead
 
 # Head registry for dynamic head creation.
 HEAD_REGISTRY = {
-    'contrast': ContrastMapHead,
-    'depth': DepthHead,
-    'fatigue': FatigueHead,
-    'motion': MotionHead,
-    'roi_priority': ROIPriorityHead,
-    'uncertainty': UncertaintyHead,
+    "contrast": ContrastMapHead,
+    "depth": DepthHead,
+    "fatigue": FatigueHead,
+    "motion": MotionHead,
+    "roi_priority": ROIPriorityHead,
+    "uncertainty": UncertaintyHead,
 }
 
 
 def create_head(head_type: str, **kwargs):
     """Create a head by type name."""
     if head_type not in HEAD_REGISTRY:
-        available = ', '.join(HEAD_REGISTRY.keys())
-        raise ValueError(
-            f"Unknown head type: '{head_type}'. "
-            f"Available types: {available}"
-        )
-    
+        available = ", ".join(HEAD_REGISTRY.keys())
+        raise ValueError(f"Unknown head type: '{head_type}'. Available types: {available}")
+
     return HEAD_REGISTRY[head_type](**kwargs)
 
 
@@ -36,19 +33,13 @@ def list_available_heads() -> list:
 
 
 __all__ = [
-    'ContrastMapHead',
-    'DepthHead',
-    'FatigueHead',
-    'MotionHead',
-    'ROIPriorityHead',
-    'UncertaintyHead',
-    'HEAD_REGISTRY',
-    'create_head',
-    'list_available_heads',
+    "ContrastMapHead",
+    "DepthHead",
+    "FatigueHead",
+    "MotionHead",
+    "ROIPriorityHead",
+    "UncertaintyHead",
+    "HEAD_REGISTRY",
+    "create_head",
+    "list_available_heads",
 ]
-
-
-
-
-
-

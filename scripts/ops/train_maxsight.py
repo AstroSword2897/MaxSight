@@ -14,14 +14,14 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ml.training.run_config import (
+    _UNSET,
     ConfigValidationError,
     ResolvedTrainingConfig,
-    _UNSET,
     cli_overrides_from_namespace,
 )
 from ml.training.runner import run_training
@@ -68,8 +68,12 @@ _OVERRIDE_MAP = {
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser("Train MaxSight CNN (config-resolved)")
-    p.add_argument("--config", type=Path, required=True,
-                   help="YAML config (e.g. ml/training/configs/t5_temporal.yaml)")
+    p.add_argument(
+        "--config",
+        type=Path,
+        required=True,
+        help="YAML config (e.g. ml/training/configs/t5_temporal.yaml)",
+    )
     p.add_argument("--run-id", default=_UNSET, help="Override resolved.run_id")
     p.add_argument("--experiment", default=_UNSET, help="Override resolved.experiment")
 
@@ -80,7 +84,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--num-workers", type=int, default=_UNSET)
     p.add_argument("--grad-clip", type=float, default=_UNSET)
     p.add_argument("--grad-accumulation-steps", type=int, default=_UNSET)
-    p.add_argument("--scheduler-type", choices=["cosine", "onecycle", "cosine_restarts"], default=_UNSET)
+    p.add_argument(
+        "--scheduler-type", choices=["cosine", "onecycle", "cosine_restarts"], default=_UNSET
+    )
     p.add_argument("--warmup-epochs", type=int, default=_UNSET)
     p.add_argument("--lr-backbone", type=float, default=_UNSET)
     p.add_argument("--lr-head", type=float, default=_UNSET)
@@ -89,12 +95,32 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--checkpoint-interval", type=int, default=_UNSET)
     p.add_argument("--batch-size", type=int, default=_UNSET)
 
-    p.add_argument("--freeze-backbone", dest="freeze_backbone", action="store_const", const=True, default=_UNSET)
+    p.add_argument(
+        "--freeze-backbone",
+        dest="freeze_backbone",
+        action="store_const",
+        const=True,
+        default=_UNSET,
+    )
     p.add_argument("--freeze-backbone-epochs", type=int, default=_UNSET)
-    p.add_argument("--use-amp", dest="use_amp", action="store_const", const=True, default=_UNSET,
-                   help="Enable mixed precision (training.mixed_precision=true)")
-    p.add_argument("--use-gradnorm", dest="use_gradnorm", action="store_const", const=True, default=_UNSET)
-    p.add_argument("--temporal-supervision", dest="temporal_supervision", action="store_const", const=True, default=_UNSET)
+    p.add_argument(
+        "--use-amp",
+        dest="use_amp",
+        action="store_const",
+        const=True,
+        default=_UNSET,
+        help="Enable mixed precision (training.mixed_precision=true)",
+    )
+    p.add_argument(
+        "--use-gradnorm", dest="use_gradnorm", action="store_const", const=True, default=_UNSET
+    )
+    p.add_argument(
+        "--temporal-supervision",
+        dest="temporal_supervision",
+        action="store_const",
+        const=True,
+        default=_UNSET,
+    )
 
     p.add_argument("--device", choices=["cpu", "cuda", "auto"], default=_UNSET)
     p.add_argument("--checkpoint-dir", default=_UNSET, help="Override checkpoint.save_dir")
@@ -109,8 +135,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--compile", action="store_true", help="torch.compile (CUDA only)")
     p.add_argument("--use-audio", action="store_true")
     p.add_argument("--backup", action="store_true")
-    p.add_argument("--print-config", action="store_true",
-                   help="Resolve config + print canonical JSON, then exit (dry-run)")
+    p.add_argument(
+        "--print-config",
+        action="store_true",
+        help="Resolve config + print canonical JSON, then exit (dry-run)",
+    )
     p.add_argument(
         "--hyperparameters",
         type=Path,
@@ -120,12 +149,12 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _hp_overrides(path: Path) -> Dict[str, Any]:
+def _hp_overrides(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Hyperparameters file not found: {path}")
     blob = json.loads(path.read_text())
     params = blob.get("hyperparameters", blob)
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     if "learning_rate" in params:
         out["training.learning_rate"] = float(params["learning_rate"])
     if "weight_decay" in params:
@@ -142,10 +171,15 @@ def main() -> None:
     cli_overrides = cli_overrides_from_namespace(args, _OVERRIDE_MAP)
     if args.hyperparameters is not None:
         cli_overrides.update(_hp_overrides(args.hyperparameters))
-        logger.info("merged_hyperparameters source=%s keys=%s", args.hyperparameters, sorted(cli_overrides.keys()))
+        logger.info(
+            "merged_hyperparameters source=%s keys=%s",
+            args.hyperparameters,
+            sorted(cli_overrides.keys()),
+        )
 
     if "run_id" not in cli_overrides:
         from datetime import datetime, timezone
+
         cli_overrides["run_id"] = datetime.now(timezone.utc).strftime("local-%Y%m%dT%H%M%SZ")
     if "experiment" not in cli_overrides:
         cli_overrides["experiment"] = "maxsight"

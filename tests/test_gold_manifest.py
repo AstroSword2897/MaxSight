@@ -2,20 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
 import pytest
-from PIL import Image
-
-from ml.data.gold.dataNormalizationLayer import MaxSightListAdapter
 from ml.data.gold.builder import (
     build_gold_jsonl_from_adapter,
     build_gold_manifest,
     validate_gold_line,
     write_manifest_meta,
 )
+from ml.data.gold.dataNormalizationLayer import MaxSightListAdapter
 from ml.data.gold.dataset import GoldManifestDataset, load_gold_meta
 from ml.data.gold.io import GoldIOError, ShardReader
 from ml.data.gold.label_mapper import LabelMapper
@@ -25,9 +22,10 @@ from ml.data.gold.schema import (
     LABEL_SPACE_ACCESSIBILITY_622,
     validate_meta,
 )
-
+from PIL import Image
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 def _make_image(path: Path, size=(32, 24)):
     Image.new("RGB", size, color=(1, 2, 3)).save(path)
@@ -70,9 +68,14 @@ def _build_simple_manifest(tmp_path: Path, names=("a.jpg",), split="train"):
 
 # ── Schema / validate_meta ─────────────────────────────────────────────────────
 
+
 def _valid_meta(num_samples=1, *, n_shards=1):
     shards = [
-        {"uri": f"shard_{i:05d}.jsonl", "num_lines": num_samples if i == 0 else 0, "sha256": "a" * 64}
+        {
+            "uri": f"shard_{i:05d}.jsonl",
+            "num_lines": num_samples if i == 0 else 0,
+            "sha256": "a" * 64,
+        }
         for i in range(n_shards)
     ]
     total = sum(s["num_lines"] for s in shards)
@@ -122,6 +125,7 @@ def test_validate_meta_empty_shards():
 
 
 # ── Builder ────────────────────────────────────────────────────────────────────
+
 
 def test_build_and_load_gold_manifest(tmp_path: Path) -> None:
     out_jsonl, repo = _build_simple_manifest(tmp_path)
@@ -355,6 +359,7 @@ def test_invalid_row_raises_valueerror(tmp_path: Path) -> None:
 
 # ── class_map_hash ─────────────────────────────────────────────────────────────
 
+
 def test_label_mapper_class_map_hash_stable() -> None:
     """Same mapper config → same hash across calls; deterministic."""
     from ml.data.gold.label_mapper import LabelMapper
@@ -373,7 +378,9 @@ def test_label_mapper_class_map_hash_in_build_summary(tmp_path: Path) -> None:
     ann_path = repo / "t.json"
     ann_path.write_text(json.dumps(_minimal_ann(["a.jpg"])), encoding="utf-8")
     mapper = LabelMapper(None, LABEL_SPACE_ACCESSIBILITY_622)
-    adapter = MaxSightListAdapter(ann_path, img_dir, repo, dataset_id="d", version="v1", split="train")
+    adapter = MaxSightListAdapter(
+        ann_path, img_dir, repo, dataset_id="d", version="v1", split="train"
+    )
     summary = build_gold_manifest(
         adapter,
         mapper=mapper,
@@ -393,7 +400,9 @@ def test_class_map_hash_mismatch_raises(tmp_path: Path) -> None:
     ann_path = repo / "t.json"
     ann_path.write_text(json.dumps(_minimal_ann(["a.jpg"])), encoding="utf-8")
     mapper = LabelMapper(None, LABEL_SPACE_ACCESSIBILITY_622)
-    adapter = MaxSightListAdapter(ann_path, img_dir, repo, dataset_id="d", version="v1", split="train")
+    adapter = MaxSightListAdapter(
+        ann_path, img_dir, repo, dataset_id="d", version="v1", split="train"
+    )
     summary = build_gold_manifest(
         adapter,
         mapper=mapper,
@@ -426,12 +435,12 @@ def test_class_map_hash_mismatch_raises(tmp_path: Path) -> None:
 
 # ── Registry independence ──────────────────────────────────────────────────────
 
+
 def test_gold_dataset_loads_without_registry(tmp_path: Path) -> None:
     """GoldManifestDataset must load successfully when the dataset registry
     module is absent from sys.modules (proves zero registry dependency).
     """
     import sys
-    import importlib
 
     # Build a valid artifact first (registry not needed for build either).
     repo = tmp_path
@@ -441,7 +450,9 @@ def test_gold_dataset_loads_without_registry(tmp_path: Path) -> None:
     ann_path = repo / "t.json"
     ann_path.write_text(json.dumps(_minimal_ann(["a.jpg"])), encoding="utf-8")
     mapper = LabelMapper(None, LABEL_SPACE_ACCESSIBILITY_622)
-    adapter = MaxSightListAdapter(ann_path, img_dir, repo, dataset_id="d", version="v1", split="train")
+    adapter = MaxSightListAdapter(
+        ann_path, img_dir, repo, dataset_id="d", version="v1", split="train"
+    )
     summary = build_gold_manifest(
         adapter,
         mapper=mapper,
@@ -513,7 +524,6 @@ def test_validate_meta_missing_class_map_hash() -> None:
 
 def test_shard_reader_enriches_goldioeror(tmp_path: Path) -> None:
     """ShardReader.read_at must embed shard_sha256 in GoldIOError context."""
-    from ml.data.gold.io import ShardReader, GoldIOError
 
     shard = tmp_path / "s.jsonl"
     shard.write_text("{}\n", encoding="utf-8")

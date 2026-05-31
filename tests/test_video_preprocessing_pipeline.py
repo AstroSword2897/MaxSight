@@ -1,25 +1,25 @@
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from ml.data.video_preprocessing import (  # noqa: E402
-    PanopticSegmenter,
-    PreprocessingConfig,
-    VideoPanopticPreprocessor,
-)
 from ml.data.video_panoptic import (  # noqa: E402
     AdaptiveTemporalConfig,
     PseudoPanopticQualityConfig,
     VideoSamplingConfig,
 )
+from ml.data.video_preprocessing import (  # noqa: E402
+    PanopticSegmenter,
+    PreprocessingConfig,
+    VideoPanopticPreprocessor,
+)
 
 
 class DummySegmenter(PanopticSegmenter):
-    def segment(self, frame: Any) -> List[Dict[str, Any]]:
+    def segment(self, frame: Any) -> list[dict[str, Any]]:
         idx = int(frame)
         return [
             {"bbox": [idx, 0, 10, 10], "score": 0.9, "area": 100},
@@ -37,7 +37,9 @@ def test_video_panoptic_preprocessor_builds_clips() -> None:
         temporal_iou_threshold=0.2,
     )
     loader = lambda p: p  # noqa: E731
-    pipeline = VideoPanopticPreprocessor(segmenter=DummySegmenter(), frame_loader=loader, config=cfg)
+    pipeline = VideoPanopticPreprocessor(
+        segmenter=DummySegmenter(), frame_loader=loader, config=cfg
+    )
     frame_paths = [str(i) for i in range(10)]
     out = pipeline.process_video("vid-1", frame_paths)
 
@@ -64,10 +66,11 @@ def test_video_panoptic_preprocessor_adaptive_windows() -> None:
         adaptive=AdaptiveTemporalConfig(t_min=3, t_max=6, smooth_factor=0.0, overlap_ratio=0.0),
     )
     loader = lambda p: p  # noqa: E731
-    pipeline = VideoPanopticPreprocessor(segmenter=DummySegmenter(), frame_loader=loader, config=cfg)
+    pipeline = VideoPanopticPreprocessor(
+        segmenter=DummySegmenter(), frame_loader=loader, config=cfg
+    )
     out = pipeline.process_video("vid-adaptive", [str(i) for i in range(12)])
     assert out["stats"]["num_clips"] > 0
     for clip in out["clips"]:
         t = len(clip["frame_paths"])
         assert 1 <= t <= 6
-

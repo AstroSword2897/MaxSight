@@ -26,8 +26,8 @@ def _tensor_only_dict(obj: Any) -> Optional[Dict[str, torch.Tensor]]:
         elif isinstance(v, (list, tuple)) and len(v) > 0 and isinstance(v[0], torch.Tensor):
             try:
                 out[k] = torch.stack(v) if isinstance(v, tuple) else torch.stack(v)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Failed to stack tensor list for key '%s': %s", k, exc)
     return out if out else None
 
 
@@ -47,7 +47,7 @@ class _JITTraceWrapper(nn.Module):
             return {k: v for k, v in out.items() if isinstance(v, torch.Tensor)}
         if isinstance(out, torch.Tensor):
             return {"output": out}
-        return {"output": torch.empty(0)}
+        raise TypeError(f"Unsupported forward output type for tracing: {type(out)}")
 
 
 def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input_size: tuple = (1, 3, 224, 224), device: Optional[str] = None, validate: bool = True, use_fp16: bool = False) -> Path:
@@ -105,8 +105,8 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
             original_tier = model.tier_config
             model.tier_config = dataclasses.replace(original_tier, use_cross_task_attention=False)  # type: ignore[arg-type]
             logger.debug("Disabled scene graph (use_cross_task_attention=False) for JIT trace.")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Could not disable scene graph before JIT export: %s", exc)
 
     # Trace wrapper first for tensor-only outputs; ignore TracerWarnings so the real failure is visible.
     import warnings
@@ -135,8 +135,11 @@ def export_to_jit(model: nn.Module, save_path: str = 'maxsight_traced.pt', input
         try:
             test_output = traced_model(dummy_input)  # type: ignore
             logger.debug("Validation: Exported model forward pass successful")
-        except Exception:
-            pass
+            if isinstance(test_output, dict) and "output" in test_output and test_output["output"].numel() == 0:
+                raise RuntimeError("JIT validation produced empty output tensor.")
+        except Exception as exc:
+            logger.exception("JIT validation failed")
+            raise RuntimeError(f"JIT validation failed: {exc}") from exc
     traced_model.cpu()
     save_path_obj = Path(save_path)
     traced_model.save(str(save_path_obj))
@@ -158,7 +161,6 @@ def export_to_executorch(
         # ExecuTorch import paths vary by version; attempt multiple.
         try:
             from executorch.exir import to_edge  # type: ignore
-            from executorch.extension.pybind11.portable import to_edge as to_edge_legacy  # type: ignore
             USE_EXIR = True
         except ImportError:
             try:
@@ -210,19 +212,27 @@ def export_to_executorch(
         # Build ExecuTorch program from Edge.
         executorch_program = edge_program.to_executorch()
         
-        # Optionally validate that the program loads.
-        if validate:
-            try:
-                # Basic load check.
-                logger.debug("Validation: ExecuTorch program created successfully")
-            except Exception as e:
-                logger.warning(f"Validation warning: {e}")
-        
         save_path_obj = Path(save_path)
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
         
         with open(save_path_obj, 'wb') as f:
             f.write(executorch_program.buffer)
+        if validate:
+            if save_path_obj.stat().st_size == 0:
+                raise RuntimeError("ExecuTorch artifact validation failed: empty file.")
+            try:
+                probe = wrapped_model(dummy_input)
+                if isinstance(probe, torch.Tensor):
+                    if probe.numel() == 0:
+                        raise RuntimeError("ExecuTorch validation probe produced empty tensor.")
+                elif isinstance(probe, tuple):
+                    if not any(isinstance(item, torch.Tensor) and item.numel() > 0 for item in probe):
+                        raise RuntimeError("ExecuTorch validation probe produced no non-empty tensors.")
+                else:
+                    raise RuntimeError(f"ExecuTorch validation probe returned unsupported type: {type(probe)}")
+            except Exception as exc:
+                logger.exception("ExecuTorch validation failed")
+                raise RuntimeError(f"ExecuTorch validation failed: {exc}") from exc
         
         size_mb = save_path_obj.stat().st_size / (1024 * 1024)
         logger.info(f"Saved: {save_path}, Size: {size_mb:.1f} MB")
@@ -285,8 +295,8 @@ def export_to_coreml(model: nn.Module, save_path: str = 'maxsight.mlpackage', in
                 from ml.models.maxsight_cnn import TierConfig
                 original_tier = model.tier_config
                 model.tier_config = dataclasses.replace(original_tier, use_cross_task_attention=False)  # type: ignore[arg-type]
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Could not disable scene graph before CoreML export: %s", exc)
         
         dummy_input = torch.randn(*input_size)
         if export_device.startswith('cuda'):
@@ -620,6 +630,8 @@ def export_ios_bundle(
     
     bundle_path = Path(output_dir)
     bundle_path.mkdir(exist_ok=True, parents=True)
+    model.eval()
+    model.cpu()
     
     pte_path = None
     if not jit_only:
@@ -636,8 +648,28 @@ def export_ios_bundle(
         logger.info("Exporting JIT model (quick path)...")
         jit_path = export_to_jit(model, str(bundle_path / 'maxsight_traced.pt'), input_size, device='cpu', validate=False)
         pte_size_mb = jit_path.stat().st_size / (1024 * 1024)
+        exported_model_name = jit_path.name
     else:
         pte_size_mb = pte_path.stat().st_size / (1024 * 1024)
+        exported_model_name = pte_path.name
+
+    dummy_input = torch.randn(*input_size)
+    with torch.no_grad():
+        sample_output = model(dummy_input)
+    if not isinstance(sample_output, dict):
+        raise RuntimeError("iOS bundle export expects dict model outputs.")
+    num_classes = int(sample_output.get('classifications', torch.empty(input_size[0], 0)).shape[-1])
+    num_urgency_levels = int(sample_output.get('urgency_scores', torch.empty(input_size[0], 0, 0)).shape[-1])
+    num_distance_zones = int(sample_output.get('distance_zones', torch.empty(input_size[0], 0, 0)).shape[-1])
+    output_shapes = {
+        key: list(value.shape)
+        for key, value in sample_output.items()
+        if isinstance(value, torch.Tensor)
+    }
+    if num_classes <= 0 or num_urgency_levels <= 0 or num_distance_zones <= 0:
+        raise RuntimeError(
+            "Derived output metadata is invalid. Ensure model returns classifications, urgency_scores, and distance_zones."
+        )
     
     # 2. Export model config (minimal)
     model_params = sum(p.numel() for p in model.parameters())
@@ -645,22 +677,19 @@ def export_ios_bundle(
         'version': '1.0.0',
         'export_timestamp': datetime.now().isoformat(),
         'input_size': list(input_size),
-        'num_classes': 80,
-        'num_urgency_levels': 4,
-        'num_distance_zones': 3,
+        'num_classes': num_classes,
+        'num_urgency_levels': num_urgency_levels,
+        'num_distance_zones': num_distance_zones,
         'detection_threshold': 0.5,
         'nms_threshold': 0.5,
         'model_params': model_params,
         'model_size_mb': round(pte_size_mb, 2),
         'quantization': 'INT8' if hasattr(model, '_quantized') else 'FP32',
-        'output_shapes': {
-            'classifications': [input_size[0], 80],  # [B, num_classes].
-            'boxes': [input_size[0], 100, 4],  # [B, max_detections, 4].
-            'objectness': [input_size[0], 100],  # [B, max_detections].
-            'urgency_scores': [input_size[0], 100, 4],  # [B, max_detections, urgency_levels].
-            'distance_zones': [input_size[0], 100, 3],  # [B, max_detections, zones].
-        }
+        'output_shapes': output_shapes,
     }
+    assert model_config['num_classes'] == output_shapes.get('classifications', [None, None])[-1], (
+        "num_classes metadata must match classifications output shape."
+    )
     with open(bundle_path / 'model_config.json', 'w') as f:
         json.dump(model_config, f, indent=2)
     
@@ -697,7 +726,7 @@ def export_ios_bundle(
 
 # Files.
 
-- `maxsight.pte` - ExecuTorch model (add to Xcode project)
+- `{exported_model_name}` - exported model artifact (add to Xcode project)
 - `model_config.json` - Model parameters and thresholds
 - `runtime_config.json` - Runtime settings and toggles
 - `processing_reference.py` - Reference implementation (port to Swift)
@@ -706,7 +735,7 @@ def export_ios_bundle(
 
 # 1. Add Model to Project.
 
-1. Drag `maxsight.pte` into your Xcode project
+1. Drag `{exported_model_name}` into your Xcode project
 2. Ensure it's added to your app target
 3. Add to "Copy Bundle Resources" in Build Phases
 
@@ -883,11 +912,11 @@ func loadModelConfig() throws -> ModelConfig {{
 
 See `model_config.json` for exact shapes. Typical outputs:
 
-- `classifications`: [{input_size[0]}, 80] - Class logits
-- `boxes`: [{input_size[0]}, 100, 4] - Bounding boxes (center format)
-- `objectness`: [{input_size[0]}, 100] - Object confidence
-- `urgency_scores`: [{input_size[0]}, 100, 4] - Urgency level scores
-- `distance_zones`: [{input_size[0]}, 100, 3] - Distance zone probabilities
+- `classifications`: {output_shapes.get('classifications')} - Class logits
+- `boxes`: {output_shapes.get('boxes')} - Bounding boxes (center format)
+- `objectness`: {output_shapes.get('objectness')} - Object confidence
+- `urgency_scores`: {output_shapes.get('urgency_scores')} - Urgency level scores
+- `distance_zones`: {output_shapes.get('distance_zones')} - Distance zone probabilities
 
 # Reference Implementation.
 
@@ -926,7 +955,7 @@ See `processing_reference.py` for complete reference:
         f.write(readme)
     
     logger.info(f"iOS bundle exported to: {bundle_path}")
-    logger.info(f"  - maxsight.pte ({pte_size_mb:.1f} MB)")
+    logger.info(f"  - {exported_model_name} ({pte_size_mb:.1f} MB)")
     logger.info(f"  - model_config.json")
     logger.info(f"  - runtime_config.json")
     logger.info(f"  - processing_reference.py")

@@ -3,7 +3,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Optional, Union, List
 
 
 class MotionHead(nn.Module):
@@ -18,7 +17,7 @@ class MotionHead(nn.Module):
         use_temporal_stacking: bool = True,  # NEW: temporal 3D convs.
         temporal_frames: int = 3,  # NEW: T frames for temporal stack.
         use_multi_scale: bool = True,  # NEW: coarse-to-fine.
-        use_attention: bool = False  # NEW: optional attention in refinement.
+        use_attention: bool = False,  # NEW: optional attention in refinement.
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -43,7 +42,7 @@ class MotionHead(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv2d(hidden_channels, hidden_channels // 2, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(hidden_channels // 2),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
         )
 
         # NEW: Temporal stacking with 3D convolutions.
@@ -55,7 +54,7 @@ class MotionHead(nn.Module):
                     out_channels=hidden_channels,
                     kernel_size=(temporal_frames, 3, 3),
                     padding=(temporal_frames // 2, 1, 1),
-                    bias=False
+                    bias=False,
                 ),
                 nn.BatchNorm3d(hidden_channels),
                 nn.ReLU(inplace=True),
@@ -64,14 +63,14 @@ class MotionHead(nn.Module):
                     out_channels=hidden_channels,
                     kernel_size=(1, 3, 3),
                     padding=(0, 1, 1),
-                    bias=False
+                    bias=False,
                 ),
                 nn.BatchNorm3d(hidden_channels),
-                nn.ReLU(inplace=True)
+                nn.ReLU(inplace=True),
             )
             # Project temporal output to hidden_channels (for unified coarse_net)
             self.temporal_proj = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=1)
-        
+
         # Always create input_proj for standard 4D input path.
         self.input_proj = nn.Conv2d(in_channels, hidden_channels, kernel_size=1)
 
@@ -79,15 +78,19 @@ class MotionHead(nn.Module):
         if use_multi_scale:
             # Coarse network at H/2 resolution.
             self.coarse_scale_net = nn.Sequential(
-                nn.Conv2d(hidden_channels // 2, hidden_channels // 2, kernel_size=3, padding=1, bias=False),
+                nn.Conv2d(
+                    hidden_channels // 2, hidden_channels // 2, kernel_size=3, padding=1, bias=False
+                ),
                 nn.BatchNorm2d(hidden_channels // 2),
-                nn.ReLU(inplace=True)
+                nn.ReLU(inplace=True),
             )
             # Upsample and refine.
             self.upsample_refine = nn.Sequential(
-                nn.Conv2d(hidden_channels // 2, hidden_channels // 2, kernel_size=3, padding=1, bias=False),
+                nn.Conv2d(
+                    hidden_channels // 2, hidden_channels // 2, kernel_size=3, padding=1, bias=False
+                ),
                 nn.BatchNorm2d(hidden_channels // 2),
-                nn.ReLU(inplace=True)
+                nn.ReLU(inplace=True),
             )
 
         # Initial flow prediction (u, v)
@@ -104,14 +107,20 @@ class MotionHead(nn.Module):
                         hidden_channels // 2,
                         kernel_size=3,
                         padding=1,
-                        bias=False
+                        bias=False,
                     ),
                     nn.BatchNorm2d(hidden_channels // 2),
                     nn.ReLU(inplace=True),
-                    nn.Conv2d(hidden_channels // 2, hidden_channels // 2, kernel_size=3, padding=1, bias=False),
+                    nn.Conv2d(
+                        hidden_channels // 2,
+                        hidden_channels // 2,
+                        kernel_size=3,
+                        padding=1,
+                        bias=False,
+                    ),
                     nn.BatchNorm2d(hidden_channels // 2),
                     nn.ReLU(inplace=True),
-                    nn.Conv2d(hidden_channels // 2, 2, kernel_size=1)  # Flow residual.
+                    nn.Conv2d(hidden_channels // 2, 2, kernel_size=1),  # Flow residual.
                 )
                 self.refinement_stages.append(refinement_block)
 
@@ -130,16 +139,16 @@ class MotionHead(nn.Module):
         self,
         temporal_features: torch.Tensor,
         return_features: bool = False,
-        return_multi_scale: bool = False
-    ) -> Union[torch.Tensor, Dict[str, Union[torch.Tensor, None]]]:
+        return_multi_scale: bool = False,
+    ) -> torch.Tensor | dict[str, torch.Tensor | None]:
         """Forward pass to generate motion flow with scaled-up computation."""
         # Unified processing path; no layer skipping or special-case hacks.
         # Process input to always produce [B, hidden_channels, H, W] for coarse_net.
-        
+
         if temporal_features.dim() == 5 and self.use_temporal_stacking:
             # [B, T, C, H, W] -> process with 3D convs.
             B, T, C, H, W = temporal_features.shape
-            if C != self.in_channels:
+            if self.in_channels != C:
                 raise ValueError(f"Expected {self.in_channels} channels, got {C}")
             # Reshape for 3D conv: [B, C, T, H, W].
             temporal_3d = temporal_features.permute(0, 2, 1, 3, 4)  # [B, C, T, H, W].
@@ -152,7 +161,7 @@ class MotionHead(nn.Module):
         elif temporal_features.dim() == 4:
             # [B, C, H, W] - standard case.
             B, C, H, W = temporal_features.shape
-            if C != self.in_channels:
+            if self.in_channels != C:
                 raise ValueError(f"Expected {self.in_channels} channels, got {C}")
             # Project to hidden_channels for unified coarse_net.
             features_input = self.input_proj(temporal_features)  # [B, hidden_channels, H, W].
@@ -167,17 +176,14 @@ class MotionHead(nn.Module):
             # Downsample to H/2.
             features_coarse = F.avg_pool2d(features, kernel_size=2, stride=2)  # [B, C, H/2, W/2].
             features_coarse = self.coarse_scale_net(features_coarse)
-            
+
             # Predict coarse flow.
             coarse_flow_half = self.flow_head_half(features_coarse)  # [B, 2, H/2, W/2].
-            multi_scale_flows['half'] = coarse_flow_half
-            
+            multi_scale_flows["half"] = coarse_flow_half
+
             # Upsample and refine.
             features_fine = F.interpolate(
-                features_coarse,
-                size=(H, W),
-                mode='bilinear',
-                align_corners=False
+                features_coarse, size=(H, W), mode="bilinear", align_corners=False
             )
             features_fine = self.upsample_refine(features_fine)
             # Combine with original features.
@@ -192,16 +198,16 @@ class MotionHead(nn.Module):
             for stage_idx, refinement_stage in enumerate(self.refinement_stages):
                 # Concatenate features with current flow estimate.
                 refinement_input = torch.cat([features, motion], dim=1)
-                
+
                 # Apply attention if enabled.
                 if self.use_attention and stage_idx == len(self.refinement_stages) - 1:
                     # Apply attention on last stage.
                     features_attended = self.attention(features)
                     refinement_input = torch.cat([features_attended, motion], dim=1)
-                
+
                 # Compute flow residual.
                 flow_residual = refinement_stage(refinement_input)  # [B, 2, H, W].
-                
+
                 # Residual connection: add to previous flow.
                 motion = motion + flow_residual  # [B, 2, H, W].
 
@@ -213,39 +219,37 @@ class MotionHead(nn.Module):
             raise RuntimeError("NaN/Inf detected in motion flow")
 
         # Motion magnitude.
-        flow_magnitude = torch.sqrt(motion[:, 0]**2 + motion[:, 1]**2)
+        flow_magnitude = torch.sqrt(motion[:, 0] ** 2 + motion[:, 1] ** 2)
 
         # NEW: Multi-resolution supervision (for training)
         if return_multi_scale or self.training:
             # Full resolution (already computed)
-            multi_scale_flows['full'] = motion
-            
+            multi_scale_flows["full"] = motion
+
             # Half resolution.
-            if 'half' not in multi_scale_flows:
+            if "half" not in multi_scale_flows:
                 features_half = F.avg_pool2d(features, kernel_size=2, stride=2)
-                multi_scale_flows['half'] = self.flow_head_half(features_half)
-            
+                multi_scale_flows["half"] = self.flow_head_half(features_half)
+
             # Quarter resolution.
             features_quarter = F.avg_pool2d(features, kernel_size=4, stride=4)
-            multi_scale_flows['quarter'] = self.flow_head_quarter(features_quarter)
+            multi_scale_flows["quarter"] = self.flow_head_quarter(features_quarter)
 
         if return_features or return_multi_scale:
             result = {
-                'flow': motion,
-                'flow_magnitude': flow_magnitude,
-                'features': features,
-                'coarse_flow': coarse_flow
+                "flow": motion,
+                "flow_magnitude": flow_magnitude,
+                "features": features,
+                "coarse_flow": coarse_flow,
             }
             if return_multi_scale:
-                result['multi_scale_flows'] = multi_scale_flows
+                result["multi_scale_flows"] = multi_scale_flows
             return result
 
         return motion
 
     def compute_smoothness_loss(
-        self,
-        flow: torch.Tensor,
-        image: Optional[torch.Tensor] = None
+        self, flow: torch.Tensor, image: torch.Tensor | None = None
     ) -> torch.Tensor:
         """Edge-aware smoothness loss."""
         # Flow gradients.
@@ -267,6 +271,7 @@ class MotionHead(nn.Module):
 
 class ChannelSpatialAttention(nn.Module):
     """CBAM-style attention for refinement stages. Channel attention + Spatial attention."""
+
     def __init__(self, channels: int, reduction: int = 16):
         super().__init__()
         # Channel attention.
@@ -276,32 +281,25 @@ class ChannelSpatialAttention(nn.Module):
             nn.Conv2d(channels, channels // reduction, 1, bias=False),
             nn.ReLU(inplace=True),
             nn.Conv2d(channels // reduction, channels, 1, bias=False),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
-        
+
         # Spatial attention.
         self.spatial_attention = nn.Sequential(
-            nn.Conv2d(2, 1, kernel_size=7, padding=3, bias=False),
-            nn.Sigmoid()
+            nn.Conv2d(2, 1, kernel_size=7, padding=3, bias=False), nn.Sigmoid()
         )
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Channel attention.
         avg_out = self.channel_attention(self.avg_pool(x))
         max_out = self.channel_attention(self.max_pool(x))
         channel_att = avg_out + max_out
         x = x * channel_att
-        
+
         # Spatial attention.
         avg_out = torch.mean(x, dim=1, keepdim=True)
         max_out, _ = torch.max(x, dim=1, keepdim=True)
         spatial_att = self.spatial_attention(torch.cat([avg_out, max_out], dim=1))
         x = x * spatial_att
-        
+
         return x
-
-
-
-
-
-

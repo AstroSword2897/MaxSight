@@ -2,4 +2,4 @@
 
 from .retrieval_integration import RetrievalIntegration
 
-__all__ = ['RetrievalIntegration']
+__all__ = ["RetrievalIntegration"]

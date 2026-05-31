@@ -1,6 +1,7 @@
 """Per-frame priority budget filter for MaxSight. Caps alerts per frame to avoid user overload in crowded scenes."""
-from typing import List, Dict, Any
+
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -8,14 +9,14 @@ logger = logging.getLogger(__name__)
 DISTANCE_ORDINAL = {"near": 0, "medium": 1, "far": 2}
 
 
-def _distance_ordinal(d: Dict[str, Any]) -> int:
+def _distance_ordinal(d: dict[str, Any]) -> int:
     dist = d.get("distance", "medium")
     if isinstance(dist, str):
         return DISTANCE_ORDINAL.get(dist.lower(), 1)
     return 1
 
 
-def _priority_score(det: Dict[str, Any]) -> float:
+def _priority_score(det: dict[str, Any]) -> float:
     """Priority = urgency * confidence * (1 / (distance_ordinal + 1))."""
     urgency = int(det.get("urgency", 0)) + 1  # 0-3 -> 1-4.
     confidence = float(det.get("confidence", 0.5))
@@ -29,7 +30,7 @@ class PriorityBudgetFilter:
     def __init__(self, max_alerts_per_frame: int = 5):
         self.max_alerts_per_frame = max_alerts_per_frame
 
-    def filter_alerts(self, detections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def filter_alerts(self, detections: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Return top max_alerts_per_frame detections by priority score. Handles empty list and lists shorter than N."""
         if not detections:
             return []
@@ -47,9 +48,3 @@ class PriorityBudgetFilter:
                 self.max_alerts_per_frame,
             )
         return result
-
-
-
-
-
-

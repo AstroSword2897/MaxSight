@@ -1,6 +1,5 @@
 """Gold training plane: canonical JSONL manifests + lazy tensor materialization."""
 
-from ml.data.gold.dataNormalizationLayer import COCOAdapter, MaxSightListAdapter, VideoManifestAdapter
 from ml.data.gold.builder import (
     build_gold_jsonl_from_adapter,
     build_gold_manifest,
@@ -8,6 +7,11 @@ from ml.data.gold.builder import (
     validate_gold_line,
     validate_gold_line_in_memory,
     write_manifest_meta,
+)
+from ml.data.gold.dataNormalizationLayer import (
+    COCOAdapter,
+    MaxSightListAdapter,
+    VideoManifestAdapter,
 )
 from ml.data.gold.dataset import GoldManifestDataset, load_gold_meta
 from ml.data.gold.errors import GoldConfigError

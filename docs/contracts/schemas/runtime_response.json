@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.dev/schemas/runtime_response.json",
+  "title": "RuntimeResponse",
+  "type": "object",
+  "required": [
+    "frame_id",
+    "tier",
+    "degraded_mode",
+    "classifications",
+    "critical_events",
+    "secondary_events",
+    "therapy",
+    "latency_ms"
+  ],
+  "properties": {
+    "frame_id": { "type": "string" },
+    "tier": { "enum": ["bronze", "silver", "gold"] },
+    "degraded_mode": { "enum": ["D0", "D1", "D2", "D3"] },
+    "classifications": { "type": "array" },
+    "critical_events": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/CriticalEvent" }
+    },
+    "secondary_events": { "type": "array" },
+    "therapy": { "type": "array" },
+    "rag": { "type": ["object", "null"] },
+    "latency_ms": { "type": "number", "minimum": 0 },
+    "trace": { "type": "object" }
+  },
+  "$defs": {
+    "CriticalEvent": {
+      "type": "object",
+      "required": [
+        "event_type",
+        "urgency",
+        "direction",
+        "distance_zone",
+        "confidence",
+        "uncertainty",
+        "timestamp_source",
+        "timestamp_emit"
+      ],
+      "properties": {
+        "event_type": { "type": "string" },
+        "urgency": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "direction": { "type": "string" },
+        "distance_zone": { "type": "string" },
+        "confidence": { "type": "number" },
+        "uncertainty": { "type": "number" },
+        "timestamp_source": { "type": "number" },
+        "timestamp_emit": { "type": "number" },
+        "distance_meters": { "type": ["number", "null"] }
+      }
+    }
+  }
+}
