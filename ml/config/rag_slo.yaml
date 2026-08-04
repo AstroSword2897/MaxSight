@@ -1,0 +1,18 @@
+# RAG SLO contract loaded by ml.retrieval.rag_reliability.RAGSLO.load().
+# Window-based enforcement uses rolling request counts (default 100).
+
+version: "1.0.0"
+
+slo:
+  retrieval_latency_ms_p95: 120.0
+  retrieval_success_rate_min: 0.95
+  fallback_rate_max: 0.10
+  empty_retrieval_rate_max: 0.05
+  hallucination_risk_score_max: 0.2
+
+window:
+  max_requests: 100
+
+thresholds:
+  low_relevance_score: 0.2
+  offline_relevance_score: 0.1

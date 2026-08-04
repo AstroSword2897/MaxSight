@@ -20,10 +20,12 @@ from ml.training.loss_weighting import build_temporal_weight_updates
 try:
     from ml.retrieval.rag_hardening import HardenedRagPipeline
     from ml.retrieval.rag_hardening import RetrievalResult as HardenedRetrievalResult
+    from ml.retrieval.rag_reliability import wrap_rag_pipeline
 
     _HARDENED_RAG_AVAILABLE = True
 except ImportError:
     _HARDENED_RAG_AVAILABLE = False
+    wrap_rag_pipeline = None  # type: ignore[misc, assignment]
 
 
 def _make_hardened_retriever(base_retriever: AdvisoryRetriever | None) -> Any | None:
@@ -45,7 +47,8 @@ def _make_hardened_retriever(base_retriever: AdvisoryRetriever | None) -> Any | 
             results = self._inner.retrieve(query, top_k=top_k)
             return [HardenedRetrievalResult(payload=r.payload, score=r.score) for r in results]
 
-    return HardenedRagPipeline(_AdaptedRetriever(base_retriever))
+    base = HardenedRagPipeline(_AdaptedRetriever(base_retriever))
+    return wrap_rag_pipeline(base) if wrap_rag_pipeline is not None else base
 
 
 @dataclass(frozen=True)

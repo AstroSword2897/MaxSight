@@ -102,8 +102,10 @@ class RuntimeOrchestrator:
     def _get_rag_pipeline(self) -> Any:
         if self._rag_pipeline is None:
             from ml.retrieval.rag_hardening import HardenedRagPipeline
+            from ml.retrieval.rag_reliability import wrap_rag_pipeline
 
             class _NullRetriever:
+                is_null_retriever = True
                 _warned = False
 
                 def retrieve(self, query: dict[str, Any], top_k: int = 5) -> list:
@@ -114,7 +116,7 @@ class RuntimeOrchestrator:
                         _NullRetriever._warned = True
                     return []
 
-            self._rag_pipeline = HardenedRagPipeline(_NullRetriever())
+            self._rag_pipeline = wrap_rag_pipeline(HardenedRagPipeline(_NullRetriever()))
         return self._rag_pipeline
 
     def _get_tier_router(self) -> Any:
@@ -215,12 +217,15 @@ class RuntimeOrchestrator:
                 pipeline = self._get_rag_pipeline()
                 temporal_reliability = float(perception.get("temporal_consistency", 1.0))
                 rag_result = pipeline.query(perception, temporal_reliability)
+                reliability = rag_result.reliability or {}
                 rag_context = RagContext(
                     guidance=rag_result.guidance,
                     advisory_score=rag_result.advisory_score,
                     retrieved_count=len(rag_result.retrieved),
                     grounded=rag_result.grounded,
                     guard_reason=rag_result.guard_reason,
+                    failure_type=str(reliability.get("failure_type", "")),
+                    fallback_mode=str(reliability.get("fallback_mode", "none")),
                 )
             except Exception as exc:
                 logger.error("rag_pipeline_error: %s", exc)
