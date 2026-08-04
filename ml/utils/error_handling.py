@@ -175,7 +175,9 @@ class HeadExecutionManager:
                 }
             )
 
-            return result
+            if isinstance(result, dict):
+                return result
+            return {head_name: result}
 
         except Exception as e:
             logger.error(f"{head_name} execution failed: {e}")
@@ -517,7 +519,10 @@ class UncertaintySuppressor:
             if torch.is_tensor(suppressed["urgency"]):
                 suppressed["urgency"] = torch.zeros_like(suppressed["urgency"])
             else:
-                suppressed["urgency"] = 0
+                suppressed["urgency"] = torch.tensor(0.0, device=next(
+                    (t.device for t in suppressed.values() if torch.is_tensor(t)),
+                    torch.device("cpu"),
+                ))
         return suppressed
 
     def _soft_suppress(
@@ -534,7 +539,13 @@ class UncertaintySuppressor:
             if torch.is_tensor(suppressed["urgency"]):
                 suppressed["urgency"] = (suppressed["urgency"] * scale_factor).clamp(0, 3)
             else:
-                suppressed["urgency"] = max(0, int(suppressed["urgency"] * scale_factor))
+                suppressed["urgency"] = torch.tensor(
+                    max(0.0, float(suppressed["urgency"]) * scale_factor),
+                    device=next(
+                        (t.device for t in suppressed.values() if torch.is_tensor(t)),
+                        torch.device("cpu"),
+                    ),
+                )
         return suppressed
 
     def _graded_suppress(

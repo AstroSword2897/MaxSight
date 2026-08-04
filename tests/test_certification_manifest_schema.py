@@ -16,7 +16,7 @@ SCHEMA = (
 
 def _validate(instance: dict) -> None:
     try:
-        import jsonschema
+        import jsonschema  # type: ignore[import-untyped]  # optional dep stubs missing in CI venv
     except ImportError:
         # Fallback: required keys only when jsonschema is unavailable.
         required = {"schema_version", "artifact_hash", "platform", "cells", "all_passed", "summary"}
@@ -57,7 +57,7 @@ def test_valid_manifest_example() -> None:
 
 def test_invalid_status_rejected_when_jsonschema_present() -> None:
     try:
-        import jsonschema
+        import jsonschema  # type: ignore[import-untyped]  # optional dep stubs missing in CI venv
     except ImportError:
         return
     instance = {

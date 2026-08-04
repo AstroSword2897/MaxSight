@@ -593,7 +593,9 @@ def _build_data_section(raw: dict[str, Any]) -> DataSection:
         elif f.default is not dataclasses.MISSING:
             kwargs[f.name] = f.default
         else:
-            kwargs[f.name] = f.default_factory()
+            factory = f.default_factory
+            assert callable(factory)
+            kwargs[f.name] = factory()
     if kwargs["data_plane"] not in _ALLOWED_DATA_PLANES:
         raise ConfigValidationError(
             f"data.data_plane must be one of {sorted(_ALLOWED_DATA_PLANES)}, got {kwargs['data_plane']!r}"
@@ -639,7 +641,9 @@ def _build_training_section(raw: dict[str, Any]) -> TrainingSection:
         elif f.default is not dataclasses.MISSING:
             kwargs[f.name] = f.default
         else:
-            kwargs[f.name] = f.default_factory()
+            factory = f.default_factory
+            assert callable(factory)
+            kwargs[f.name] = factory()
     return TrainingSection(**kwargs)
 
 
@@ -655,7 +659,9 @@ def _build_distributed_section(raw: dict[str, Any]) -> DistributedSection:
         elif f.default is not dataclasses.MISSING:
             kwargs[f.name] = f.default
         else:
-            kwargs[f.name] = f.default_factory()
+            factory = f.default_factory
+            assert callable(factory)
+            kwargs[f.name] = factory()
     if kwargs["backend"] not in _ALLOWED_DISTRIBUTED_BACKENDS:
         raise ConfigValidationError(
             f"distributed.backend {kwargs['backend']!r} not in {sorted(_ALLOWED_DISTRIBUTED_BACKENDS)}"

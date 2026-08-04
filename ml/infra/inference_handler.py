@@ -108,7 +108,8 @@ def model_fn(model_dir: str) -> dict[str, Any]:
         tier_name = meta.get("tier", "T2_DETECTOR")
         tier = CapabilityTier[tier_name]
         cfg = TierConfig.for_tier(tier)
-        model = create_model(tier=tier, config=cfg)
+        # create_model takes tier_config=; tier=/config= raise TypeError at load time.
+        model = create_model(tier_config=cfg)
     except (KeyError, Exception) as exc:
         raise ModelLoadError(f"Failed to initialise model architecture: {exc}") from exc
 

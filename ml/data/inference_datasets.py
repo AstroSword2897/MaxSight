@@ -500,7 +500,10 @@ def _inference_collate_fn(batch: list[dict[str, Any]]) -> dict[str, Any]:
     from torch.utils.data._utils.collate import default_collate
 
     cleaned = [_replace_none_for_collate(b) for b in batch]
-    return default_collate(cleaned)
+    collated = default_collate(cleaned)
+    if not isinstance(collated, dict):
+        raise TypeError(f"Expected dict batch from default_collate, got {type(collated)!r}")
+    return collated
 
 
 def create_inference_dataloader(

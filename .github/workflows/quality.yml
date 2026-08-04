@@ -219,8 +219,9 @@ jobs:
           mkdir -p artifacts
           # Fail-closed on errors. Stage A excluded via pyproject.toml [tool.pyright] exclude.
           # reportMissingImports stays warning for optional deps (e.g. torch stubs in slim CI).
+          # Wave 2A: ml/data joins Tier-1 owned paths after package cleanup.
           set +e
-          python -m basedpyright ml/therapy ml/runtime app/personal_mode.py \
+          python -m basedpyright ml/therapy ml/runtime ml/data app/personal_mode.py \
             > artifacts/pyright-tier1.txt 2>&1
           rc=$?
           set -e

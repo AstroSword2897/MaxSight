@@ -67,7 +67,7 @@ def sign_artifact(
     digest = _artifact_digest(artifact)
 
     if mode == "kms":
-        import boto3
+        import boto3  # type: ignore[import-not-found]  # optional AWS dep stubs missing in CI venv
 
         key_id = os.environ.get("MAXSIGHT_KMS_SIGNING_KEY_ID", "")
         if not key_id:

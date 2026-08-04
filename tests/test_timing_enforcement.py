@@ -40,14 +40,14 @@ def test_timing_flag():
         model = create_model(num_classes=10)
 
         # Test setting the flag.
-        model._enable_timing = True
+        object.__setattr__(model, "_enable_timing", True)
         assert hasattr(model, "_enable_timing")
         assert model._enable_timing == True
 
         # Test default value.
         model2 = create_model(num_classes=10)
         if not hasattr(model2, "_enable_timing"):
-            model2._enable_timing = False
+            object.__setattr__(model2, "_enable_timing", False)
 
         print("OK _enable_timing flag can be set")
         print(f"   - Default value: {getattr(model2, '_enable_timing', False)}")
@@ -67,7 +67,7 @@ def test_timing_tracking():
     try:
         model = create_model(num_classes=10)
         model.eval()
-        model._enable_timing = True
+        object.__setattr__(model, "_enable_timing", True)
 
         # Create dummy input.
         images = torch.randn(1, 3, 224, 224)
@@ -105,7 +105,7 @@ def test_timing_enforcement():
     try:
         model = create_model(num_classes=10)
         model.eval()
-        model._enable_timing = True
+        object.__setattr__(model, "_enable_timing", True)
 
         # Create dummy input.
         images = torch.randn(1, 3, 224, 224)
@@ -150,7 +150,7 @@ def test_timing_disabled():
     try:
         model = create_model(num_classes=10)
         model.eval()
-        model._enable_timing = False  # Disable timing.
+        object.__setattr__(model, "_enable_timing", False)  # Disable timing.
 
         # Create dummy input.
         images = torch.randn(1, 3, 224, 224)
@@ -182,7 +182,7 @@ def test_actual_latency():
     try:
         model = create_model(num_classes=10)
         model.eval()
-        model._enable_timing = True
+        object.__setattr__(model, "_enable_timing", True)
 
         # Create dummy input.
         images = torch.randn(1, 3, 224, 224)

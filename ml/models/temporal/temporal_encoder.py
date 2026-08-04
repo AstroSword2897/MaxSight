@@ -5,12 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .conv_lstm import ConvLSTM
-
-# Optional TimeSformer import (only used if use_timesformer=True)
-try:
-    from .temporal_transformer import TimeSformer
-except ImportError:
-    TimeSformer = None  # Will be None if module doesn't exist.
+from .temporal_transformer import TimeSformer
 
 
 class TemporalEncoder(nn.Module):
@@ -40,10 +35,6 @@ class TemporalEncoder(nn.Module):
 
         # TimeSformer for long-range temporal dependencies.
         if use_timesformer:
-            if TimeSformer is None:
-                raise ImportError(
-                    "TimeSformer module not found. Set use_timesformer=False or install temporal_transformer module."
-                )
             self.timesformer = TimeSformer(
                 embed_dim=vit_embed_dim, num_heads=12, num_layers=12, num_frames=num_frames
             )

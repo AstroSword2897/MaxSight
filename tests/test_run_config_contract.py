@@ -41,15 +41,30 @@ def _config_path(stem: str) -> Path:
     return PROJECT_ROOT / "ml" / "training" / "configs" / f"{stem}.yaml"
 
 
+def _load_yaml_dict(path: Path) -> dict:
+    import yaml
+
+    raw = yaml.safe_load(path.read_text())
+    assert isinstance(raw, dict)
+    return raw
+
+
+def _dump_yaml(data: dict) -> str:
+    import yaml
+
+    text = yaml.safe_dump(data)
+    assert isinstance(text, str)
+    return text
+
+
 # ── Tier enum coverage ────────────────────────────────────────────────────────
 
 
 def test_capability_tier_covers_all_live_configs() -> None:
     declared_tiers = set()
-    import yaml
 
     for stem in CONFIGS:
-        raw = yaml.safe_load(_config_path(stem).read_text()) or {}
+        raw = _load_yaml_dict(_config_path(stem))
         declared_tiers.add(raw["model"]["tier"])
     enum_names = {t.name for t in CapabilityTier}
     missing = declared_tiers - enum_names
@@ -116,68 +131,56 @@ def test_unknown_top_level_key_rejected(tmp_path: Path) -> None:
 
 
 def test_unknown_section_key_rejected(tmp_path: Path) -> None:
-    import yaml
-
-    raw = yaml.safe_load(_config_path("t5_temporal").read_text())
+    raw = _load_yaml_dict(_config_path("t5_temporal"))
     raw["training"]["bogus_inner"] = True
     bad = tmp_path / "bad.yaml"
-    bad.write_text(yaml.safe_dump(raw))
+    bad.write_text(_dump_yaml(raw))
     with pytest.raises(ConfigValidationError, match="Unknown keys in 'training'"):
         ResolvedTrainingConfig.from_sources(bad, cli_overrides=BASELINE_OVERRIDES)
 
 
 def test_loss_weight_keys_must_match_active_heads(tmp_path: Path) -> None:
-    import yaml
-
-    raw = yaml.safe_load(_config_path("t5_temporal").read_text())
+    raw = _load_yaml_dict(_config_path("t5_temporal"))
     raw["loss"]["loss_weights"]["motion"] = 0.5
     bad = tmp_path / "bad.yaml"
-    bad.write_text(yaml.safe_dump(raw))
+    bad.write_text(_dump_yaml(raw))
     with pytest.raises(ConfigValidationError, match="loss.loss_weights mismatch"):
         ResolvedTrainingConfig.from_sources(bad, cli_overrides=BASELINE_OVERRIDES)
 
 
 def test_temporal_supervision_must_match_model(tmp_path: Path) -> None:
-    import yaml
-
-    raw = yaml.safe_load(_config_path("t5_temporal").read_text())
+    raw = _load_yaml_dict(_config_path("t5_temporal"))
     raw["loss"]["temporal_supervision"] = False
     bad = tmp_path / "bad.yaml"
-    bad.write_text(yaml.safe_dump(raw))
+    bad.write_text(_dump_yaml(raw))
     with pytest.raises(ConfigValidationError, match="temporal_supervision must equal"):
         ResolvedTrainingConfig.from_sources(bad, cli_overrides=BASELINE_OVERRIDES)
 
 
 def test_fp16_on_cpu_rejected(tmp_path: Path) -> None:
-    import yaml
-
-    raw = yaml.safe_load(_config_path("t5_temporal").read_text())
+    raw = _load_yaml_dict(_config_path("t5_temporal"))
     raw["training"]["mixed_precision"] = True
     raw["device"] = "cpu"
     bad = tmp_path / "bad.yaml"
-    bad.write_text(yaml.safe_dump(raw))
+    bad.write_text(_dump_yaml(raw))
     with pytest.raises(ConfigValidationError, match="mixed_precision=True"):
         ResolvedTrainingConfig.from_sources(bad, cli_overrides=BASELINE_OVERRIDES)
 
 
 def test_warmup_must_be_strictly_less_than_epochs(tmp_path: Path) -> None:
-    import yaml
-
-    raw = yaml.safe_load(_config_path("t5_temporal").read_text())
+    raw = _load_yaml_dict(_config_path("t5_temporal"))
     raw["training"]["warmup_epochs"] = raw["training"]["num_epochs"]
     bad = tmp_path / "bad.yaml"
-    bad.write_text(yaml.safe_dump(raw))
+    bad.write_text(_dump_yaml(raw))
     with pytest.raises(ConfigValidationError, match="warmup_epochs"):
         ResolvedTrainingConfig.from_sources(bad, cli_overrides=BASELINE_OVERRIDES)
 
 
 def test_dataset_section_required(tmp_path: Path) -> None:
-    import yaml
-
-    raw = yaml.safe_load(_config_path("t5_temporal").read_text())
+    raw = _load_yaml_dict(_config_path("t5_temporal"))
     raw.pop("dataset")
     bad = tmp_path / "bad.yaml"
-    bad.write_text(yaml.safe_dump(raw))
+    bad.write_text(_dump_yaml(raw))
     with pytest.raises(ConfigValidationError, match="dataset"):
         ResolvedTrainingConfig.from_sources(bad, cli_overrides=BASELINE_OVERRIDES)
 
@@ -186,24 +189,20 @@ def test_dataset_section_required(tmp_path: Path) -> None:
 
 
 def test_lighting_flags_must_be_explicit(tmp_path: Path) -> None:
-    import yaml
-
-    raw = yaml.safe_load(_config_path("t5_temporal").read_text())
+    raw = _load_yaml_dict(_config_path("t5_temporal"))
     # Both lighting flags are required in data section; neither has a default.
     raw["data"].pop("tag_lighting_metadata")
     bad = tmp_path / "bad.yaml"
-    bad.write_text(yaml.safe_dump(raw))
+    bad.write_text(_dump_yaml(raw))
     with pytest.raises(ConfigValidationError, match="tag_lighting_metadata"):
         ResolvedTrainingConfig.from_sources(bad, cli_overrides=BASELINE_OVERRIDES)
 
 
 def test_loss_weights_must_be_present_and_nonempty(tmp_path: Path) -> None:
-    import yaml
-
-    raw = yaml.safe_load(_config_path("t5_temporal").read_text())
+    raw = _load_yaml_dict(_config_path("t5_temporal"))
     raw["loss"]["loss_weights"] = {}
     bad = tmp_path / "bad.yaml"
-    bad.write_text(yaml.safe_dump(raw))
+    bad.write_text(_dump_yaml(raw))
     with pytest.raises(ConfigValidationError, match="loss_weights"):
         ResolvedTrainingConfig.from_sources(bad, cli_overrides=BASELINE_OVERRIDES)
 

@@ -174,7 +174,12 @@ class HeadIsolationStressTest:
             test_name=f"Head Isolation: {variant_name}",
             passed=passed,
             metrics={
-                k: v[-1] if isinstance(v, list) and len(v) > 0 else v for k, v in metrics.items()
+                k: float(v[-1])
+                if isinstance(v, list) and len(v) > 0
+                else float(v)
+                if isinstance(v, (int, float))
+                else 0.0
+                for k, v in metrics.items()
             },
             notes="; ".join(notes),
             red_flags=red_flags,
@@ -270,8 +275,10 @@ class LossScalingStressTest:
             test_name=f"Loss Scaling: {head_name} x{scale_factor}",
             passed=passed,
             metrics={
-                "final_loss": losses[-1] if len(losses) > 0 else 0.0,
-                "avg_uncertainty": np.mean(uncertainties) if len(uncertainties) > 0 else 0.0,
+                "final_loss": float(losses[-1] if len(losses) > 0 else 0.0),
+                "avg_uncertainty": float(
+                    np.mean(uncertainties) if len(uncertainties) > 0 else 0.0
+                ),
             },
             red_flags=red_flags,
         )
@@ -345,7 +352,7 @@ class InputCorruptionStressTest:
         return StressTestResult(
             test_name=f"Input Corruption: {corruption_type}",
             passed=passed,
-            metrics={k: np.mean(v) if len(v) > 0 else 0.0 for k, v in metrics.items()},
+            metrics={k: float(np.mean(v)) if len(v) > 0 else 0.0 for k, v in metrics.items()},
             red_flags=red_flags,
         )
 
@@ -355,7 +362,7 @@ class InputCorruptionStressTest:
             # Apply Gaussian blur.
             kernel_size = 5
             sigma = 2.0
-            kernel = self._gaussian_kernel(kernel_size, sigma, images.device)
+            kernel = self._gaussian_kernel(kernel_size, sigma, str(images.device))
             # Simplified: would need proper convolution.
             return images
 
@@ -464,8 +471,8 @@ class TemporalStressTest:
             test_name="Temporal Stability",
             passed=passed,
             metrics={
-                "urgency_variance": urgency_variance if len(urgency_values) > 10 else 0.0,
-                "distance_variance": distance_variance if len(distance_values) > 10 else 0.0,
+                "urgency_variance": float(urgency_variance if len(urgency_values) > 10 else 0.0),
+                "distance_variance": float(distance_variance if len(distance_values) > 10 else 0.0),
             },
             red_flags=red_flags,
         )

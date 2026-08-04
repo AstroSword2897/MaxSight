@@ -239,7 +239,7 @@ def generate_edge_case_transforms() -> dict[str, Callable]:
         ).unsqueeze(0)
         if x.dim() == 3:
             x = x.unsqueeze(0)
-        grid = F.affine_grid(theta, x.size(), align_corners=False)
+        grid = F.affine_grid(theta, list(x.size()), align_corners=False)
         out = F.grid_sample(x, grid, align_corners=False, mode="bilinear", padding_mode="zeros")
         return out.squeeze(0) if out.dim() == 4 and out.size(0) == 1 else out
 
@@ -290,6 +290,7 @@ class StressTestEvaluator:
                 else:
                     images, targets = batch[0], batch[1]
 
+                assert images is not None
                 images = images.to(self.device)
 
                 # Apply stress transform.
@@ -495,11 +496,11 @@ class InferenceBenchmarker:
             model_name=self.model.__class__.__name__,
             device=self.device,
             batch_size=batch_size,
-            avg_latency_ms=np.mean(latencies),
-            std_latency_ms=np.std(latencies),
+            avg_latency_ms=float(np.mean(latencies)),
+            std_latency_ms=float(np.std(latencies)),
             min_latency_ms=min(latencies),
             max_latency_ms=max(latencies),
-            throughput_fps=1000 / np.mean(latencies) * batch_size,
+            throughput_fps=float(1000 / np.mean(latencies) * batch_size),
             memory_mb=memory_mb,
             num_parameters=num_params,
             warmup_iterations=warmup_iterations,
@@ -588,7 +589,7 @@ class PredictionFallbackSystem:
             return self._trigger_fallback(
                 f"Low confidence: {confidence:.3f}",
                 image,
-                initial_pred=pred.item(),
+                initial_pred=int(pred.item()),
                 initial_conf=confidence,
             )
 
@@ -596,7 +597,7 @@ class PredictionFallbackSystem:
             return self._trigger_fallback(
                 f"High uncertainty: {normalized_entropy:.3f}",
                 image,
-                initial_pred=pred.item(),
+                initial_pred=int(pred.item()),
                 initial_conf=confidence,
             )
 

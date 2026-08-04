@@ -144,6 +144,8 @@ class ElasticWeightConsolidation:
                 inputs = batch
                 targets = None
 
+            if inputs is None:
+                continue
             inputs = inputs.to(device)
             if targets is not None:
                 targets = targets.to(device)

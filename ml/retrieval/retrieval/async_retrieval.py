@@ -332,7 +332,10 @@ class AsyncRetrievalSystem:
                 return None
 
         # Async mode.
-        result = self.worker.submit_request(
+        worker = self.worker
+        if worker is None:
+            return None
+        result = worker.submit_request(
             query_embeddings=query_embeddings, request_id=request_id, blocking=blocking
         )
 

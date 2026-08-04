@@ -28,13 +28,7 @@ try:
 except ImportError:
     pass
 
-HAS_TEMPORAL_TRANSFORMER = False
-try:
-    from ml.models.temporal.temporal_transformer import TimeSformer
-
-    HAS_TEMPORAL_TRANSFORMER = True
-except (ImportError, ModuleNotFoundError):
-    pass
+from ml.models.temporal.temporal_transformer import TimeSformer
 
 # Mock flask for testing.
 import unittest.mock
@@ -81,23 +75,24 @@ def test_depth_uncertainty_encapsulated():
     assert hasattr(depth_head, "uncertainty_conv"), "Uncertainty must be a module"
 
 
-@pytest.mark.skipif(
-    not HAS_TEMPORAL_TRANSFORMER, reason="temporal_transformer module not available"
-)
+def test_temporal_transformer_exports_timesformer():
+    """TimeSformer is available from the public temporal_transformer module."""
+    assert issubclass(TimeSformer, torch.nn.Module)
+
+
 def test_temporal_spatial_alignment():
     """Assert temporal features match spatial resolution."""
     from ml.models.temporal.temporal_encoder import TemporalEncoder
 
-    # Use ConvLSTM only (no TimeSformer) to avoid missing dependency.
     temporal_encoder = TemporalEncoder(
         in_channels=256,
         num_frames=8,
         hidden_dim=256,
         use_conv_lstm=True,
-        use_timesformer=False,  # Skip TimeSformer if not available.
+        use_timesformer=False,
     )
-    features = torch.randn(2, 256, 14, 14)
     temporal_features = torch.randn(2, 8, 256, 14, 14)
+    features = torch.randn(2, 256, 14, 14)
 
     temporal_outputs = temporal_encoder(temporal_features)
     motion_features = temporal_outputs.get("motion_features")

@@ -20,21 +20,26 @@ class IndexManager:
         self.metadata = {}
 
     def load_index(
-        self, index_path: str | None = None, metadata_path: str | None = None
+        self, index_path: str | Path | None = None, metadata_path: str | Path | None = None
     ) -> faiss.Index:
         """Load index and metadata. Args: index_path: Path to index file metadata_path: Path to metadata file Returns: FAISS index."""
-        if index_path is None:
-            index_path = self.index_dir / f"{self.index_name}.faiss"
-
-        if metadata_path is None:
-            metadata_path = self.index_dir / f"{self.index_name}_metadata.json"
+        resolved_index_path = (
+            Path(index_path)
+            if index_path is not None
+            else self.index_dir / f"{self.index_name}.faiss"
+        )
+        resolved_metadata_path = (
+            Path(metadata_path)
+            if metadata_path is not None
+            else self.index_dir / f"{self.index_name}_metadata.json"
+        )
 
         # Load index.
-        self.index = faiss.read_index(str(index_path))
+        self.index = faiss.read_index(str(resolved_index_path))
 
         # Load metadata.
-        if Path(metadata_path).exists():
-            with open(metadata_path) as f:
+        if resolved_metadata_path.exists():
+            with open(resolved_metadata_path) as f:
                 self.metadata = json.load(f)
 
         return self.index
@@ -43,25 +48,30 @@ class IndexManager:
         self,
         index: faiss.Index,
         metadata: dict | None = None,
-        index_path: str | None = None,
-        metadata_path: str | None = None,
+        index_path: str | Path | None = None,
+        metadata_path: str | Path | None = None,
     ):
         """Save index and metadata."""
-        if index_path is None:
-            index_path = self.index_dir / f"{self.index_name}.faiss"
-
-        if metadata_path is None:
-            metadata_path = self.index_dir / f"{self.index_name}_metadata.json"
+        resolved_index_path = (
+            Path(index_path)
+            if index_path is not None
+            else self.index_dir / f"{self.index_name}.faiss"
+        )
+        resolved_metadata_path = (
+            Path(metadata_path)
+            if metadata_path is not None
+            else self.index_dir / f"{self.index_name}_metadata.json"
+        )
 
         # Move to CPU if on GPU.
         if faiss.get_num_gpus() > 0:
             try:
                 cpu_index = faiss.index_gpu_to_cpu(index)
-                faiss.write_index(cpu_index, str(index_path))
+                faiss.write_index(cpu_index, str(resolved_index_path))
             except Exception:
-                faiss.write_index(index, str(index_path))
+                faiss.write_index(index, str(resolved_index_path))
         else:
-            faiss.write_index(index, str(index_path))
+            faiss.write_index(index, str(resolved_index_path))
 
         # Save metadata.
         if metadata is None:
@@ -72,7 +82,7 @@ class IndexManager:
                 "dimension": index.d,
             }
 
-        with open(metadata_path, "w") as f:
+        with open(resolved_metadata_path, "w") as f:
             json.dump(metadata, f, indent=2)
 
     def add_vectors(self, vectors: np.ndarray, ids: list[int] | None = None):

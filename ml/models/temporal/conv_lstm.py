@@ -148,9 +148,9 @@ class TimeSformer(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, N, D = x.shape
-        # Add temporal embedding: [1, T, 1, D] -> [B, T, N, D].
-        temporal_embed = self.temporal_embed.unsqueeze(0).unsqueeze(2)  # [1, T, 1, D].
-        x = x + temporal_embed  # Broadcast to [B, T, N, D].
+        # temporal_embed is [1, T, D] -> [1, T, 1, D] to broadcast over batch and patches.
+        temporal_embed = self.temporal_embed.unsqueeze(2)
+        x = x + temporal_embed
         for block in self.blocks:
             x = block(x)
         x = self.norm(x)
