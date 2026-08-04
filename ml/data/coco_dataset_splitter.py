@@ -264,22 +264,27 @@ def create_maxsight_splits_from_coco(
     total = len(maxsight_annotations)
 
     if use_absolute_counts:
-        # Use absolute sample counts.
-        train_end = min(train_samples, total)
-        val_end = min(train_end + val_samples, total)
+        # Narrowed by the absolute-count branch above; assert for the type checker.
+        assert train_samples is not None and val_samples is not None
+        train_count = train_samples
+        val_count = val_samples
+        train_end = min(train_count, total)
+        val_end = min(train_end + val_count, total)
 
         train_annotations = maxsight_annotations[:train_end]
         val_annotations = maxsight_annotations[train_end:val_end]
         test_annotations = maxsight_annotations[val_end:]
 
         print("\nSplit sizes (absolute counts):")
-        print(f"  Train: {len(train_annotations):,} samples (requested: {train_samples:,})")
-        print(f"  Val:   {len(val_annotations):,} samples (requested: {val_samples:,})")
+        print(f"  Train: {len(train_annotations):,} samples (requested: {train_count:,})")
+        print(f"  Val:   {len(val_annotations):,} samples (requested: {val_count:,})")
         print(f"  Test:  {len(test_annotations):,} samples (remaining)")
     else:
-        # Use ratios.
-        train_end = int(total * train_split)
-        val_end = train_end + int(total * val_split)
+        # Defaults / validation above always leave concrete ratios here.
+        train_ratio = 0.7 if train_split is None else train_split
+        val_ratio = 0.15 if val_split is None else val_split
+        train_end = int(total * train_ratio)
+        val_end = train_end + int(total * val_ratio)
 
         train_annotations = maxsight_annotations[:train_end]
         val_annotations = maxsight_annotations[train_end:val_end]

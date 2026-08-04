@@ -4,12 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-try:
-    from midas.model_loader import load_model
-
-    MIDAS_AVAILABLE = True
-except ImportError:
-    MIDAS_AVAILABLE = False
+from ml.retrieval.encoders.midas_loader import load_model
 
 
 class DepthExtractor(nn.Module):
@@ -19,7 +14,7 @@ class DepthExtractor(nn.Module):
         super().__init__()
 
         self.embed_dim = embed_dim
-        self.use_midas = use_midas and MIDAS_AVAILABLE
+        self.use_midas = use_midas
 
         # MiDaS model (loaded on demand)
         self.midas_model = None
@@ -41,7 +36,7 @@ class DepthExtractor(nn.Module):
         )
 
     def _load_midas(self):
-        """Load MiDaS model on demand."""
+        """Load MiDaS model on demand; fall back to synthetic depth on failure."""
         if self.midas_model is None and self.use_midas:
             try:
                 self.midas_model = load_model("DPT_Large")

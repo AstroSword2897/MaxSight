@@ -185,8 +185,11 @@ class RunTracker:
         out.write_text(json.dumps(self.record.to_dict(), indent=2), encoding="utf-8")
 
     def _upload_run_dir(self) -> None:
+        s3_client = self._s3_client
+        if s3_client is None:
+            return
         try:
-            self._s3_client.upload_run_artefacts(self._run_dir, self.run_id)
+            s3_client.upload_run_artefacts(self._run_dir, self.run_id)
         except Exception as exc:
             logger.warning("Run upload failed: %s", exc)
 
@@ -204,8 +207,11 @@ class RunTracker:
             self._sm_run = None
 
     def _end_sm_run(self) -> None:
+        sm_run = self._sm_run
+        if sm_run is None:
+            return
         try:
-            self._sm_run.__exit__(None, None, None)
+            sm_run.__exit__(None, None, None)
         except Exception:
             pass
 

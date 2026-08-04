@@ -13,6 +13,7 @@ import logging
 import random
 import shutil
 import subprocess
+from collections.abc import Sized
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -179,8 +180,10 @@ def run_training(
         repo_root=repo_root,
         device=device,
     )
-    n_train = len(train_loader.dataset) if getattr(train_loader, "dataset", None) is not None else 0
-    n_val = len(val_loader.dataset) if getattr(val_loader, "dataset", None) is not None else 0
+    train_ds = getattr(train_loader, "dataset", None)
+    val_ds = getattr(val_loader, "dataset", None)
+    n_train = len(train_ds) if isinstance(train_ds, Sized) else 0
+    n_val = len(val_ds) if isinstance(val_ds, Sized) else 0
     logger.info(
         "data train=%d val=%d batch=%d batches=train:%d/val:%d",
         n_train,
@@ -213,10 +216,12 @@ def run_training(
     if dist_backend == "ddp" and world_size > 1:
         from ml.training.distributed import wrap_ddp
 
+        assert isinstance(model, Module)
         model = wrap_ddp(model, local_rank)
     elif dist_backend == "fsdp" and world_size > 1:
         from ml.training.distributed import wrap_fsdp
 
+        assert isinstance(model, Module)
         model = wrap_fsdp(model)
 
     loss_fn = _build_loss(resolved)

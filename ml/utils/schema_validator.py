@@ -3,7 +3,7 @@
 import json
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -315,17 +315,9 @@ class SchemaStressTestResult:
 
     test_name: str
     passed: bool
-    metrics: dict[str, Any] = None
-    errors: list[str] = None
-    warnings: list[str] = None
-
-    def __post_init__(self):
-        if self.metrics is None:
-            self.metrics = {}
-        if self.errors is None:
-            self.errors = []
-        if self.warnings is None:
-            self.warnings = []
+    metrics: dict[str, Any] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 class SchemaStressTester:

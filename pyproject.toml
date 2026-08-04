@@ -1,5 +1,6 @@
 [tool.pyright]
 # IDE keeps broad include; CI Tier-1 gate passes explicit paths (see quality.yml pyright-tier1).
+# Owned paths currently gated: ml/therapy, ml/runtime (excl. stage_a), ml/data, app/personal_mode.py.
 include = ["ml", "app", "tests"]
 exclude = [
     "**/__pycache__",

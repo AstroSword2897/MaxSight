@@ -88,7 +88,9 @@ def wrap_fsdp(model: nn.Module) -> nn.Module:
     try:
         from ml.models.backbone.hybrid_backbone import HybridBlock
 
-        auto_wrap_policy = transformer_auto_wrap_policy({HybridBlock: set()})
+        auto_wrap_policy = transformer_auto_wrap_policy(  # type: ignore[call-arg]  # stub lists required kwargs; runtime accepts layer map
+            {HybridBlock: set()}
+        )
     except Exception:
         logger.warning("fsdp_auto_wrap_unavailable — wrapping root module only")
     return FSDP(model, auto_wrap_policy=auto_wrap_policy)

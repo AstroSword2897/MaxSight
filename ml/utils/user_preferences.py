@@ -2,7 +2,7 @@
 
 import json
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
@@ -28,21 +28,17 @@ class UserPreferences:
     condition_mode: str | None = None  # Vision condition (glaucoma, AMD, etc.)
 
     # Custom labels.
-    custom_labels: dict[str, str] = None  # {object_id: "custom_name"}.
+    custom_labels: dict[str, str] = field(default_factory=dict)
 
     # Adaptive assistance.
     enable_adaptive_assistance: bool = True
-    adaptive_thresholds: dict[str, float] = None  # Custom thresholds.
+    adaptive_thresholds: dict[str, float] = field(default_factory=dict)
 
     # Timestamp.
     last_updated: float = 0.0
 
     def __post_init__(self):
-        """Initialize default values for mutable fields."""
-        if self.custom_labels is None:
-            self.custom_labels = {}
-        if self.adaptive_thresholds is None:
-            self.adaptive_thresholds = {}
+        """Stamp first-use time when caller leaves last_updated unset."""
         if self.last_updated == 0.0:
             self.last_updated = time.time()
 
@@ -115,6 +111,7 @@ class UserPreferencesManager:
         """Update verbosity levels."""
         if self.preferences is None:
             self.load_preferences()
+        assert self.preferences is not None
 
         if level is not None:
             self.preferences.verbosity_level = max(0, min(3, level))
@@ -131,6 +128,7 @@ class UserPreferencesManager:
         """Add or update a custom label for an object."""
         if self.preferences is None:
             self.load_preferences()
+        assert self.preferences is not None
 
         self.preferences.custom_labels[object_id] = custom_name
         return self.save_preferences()
@@ -139,6 +137,7 @@ class UserPreferencesManager:
         """Remove a custom label. Arguments: object_id: Object identifier to remove Returns: True if removed successfully."""
         if self.preferences is None:
             self.load_preferences()
+        assert self.preferences is not None
 
         if object_id in self.preferences.custom_labels:
             del self.preferences.custom_labels[object_id]
@@ -149,6 +148,7 @@ class UserPreferencesManager:
         """Get custom label for an object. Arguments: object_id: Object identifier Returns: Custom label if exists, None otherwise."""
         if self.preferences is None:
             self.load_preferences()
+        assert self.preferences is not None
 
         return self.preferences.custom_labels.get(object_id)
 
@@ -156,6 +156,7 @@ class UserPreferencesManager:
         """Update adaptive assistance thresholds. Arguments: thresholds: Dictionary of threshold name -> value Returns: True if updated successfully."""
         if self.preferences is None:
             self.load_preferences()
+        assert self.preferences is not None
 
         self.preferences.adaptive_thresholds.update(thresholds)
         return self.save_preferences()
@@ -164,4 +165,5 @@ class UserPreferencesManager:
         """Get current preferences (loads if not already loaded). Returns: UserPreferences object."""
         if self.preferences is None:
             self.load_preferences()
+        assert self.preferences is not None
         return self.preferences

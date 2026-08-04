@@ -122,7 +122,7 @@ class SMConfig:
 
 def get_session(region: str | None = None):
     """Return a SageMaker Session (creates boto3 Session internally)."""
-    import boto3
+    import boto3  # type: ignore[import-not-found]  # optional AWS dep stubs missing in CI venv
     import sagemaker  # type: ignore
 
     boto_session = boto3.Session(region_name=region)
@@ -144,7 +144,7 @@ def _assert_role_matches_caller(role_arn: str) -> None:
         return
     role_account = match.group(1)
     try:
-        import boto3
+        import boto3  # type: ignore[import-not-found]  # optional AWS dep stubs missing in CI venv
 
         caller = boto3.client("sts").get_caller_identity()
         caller_account = caller["Account"]
@@ -357,7 +357,7 @@ def deploy_model(
 
 def get_latest_training_job_output(job_name: str, cfg: SMConfig) -> str:
     """Return the S3 URI for the model.tar.gz from a completed training job."""
-    import boto3
+    import boto3  # type: ignore[import-not-found]  # optional AWS dep stubs missing in CI venv
 
     sm = boto3.client("sagemaker", region_name=cfg.region)
     resp = sm.describe_training_job(TrainingJobName=job_name)
