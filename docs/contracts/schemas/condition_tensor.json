@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.local/schemas/condition_tensor.json",
+  "title": "ConditionTensorContract",
+  "type": "object",
+  "required": ["schema_version", "encoding", "num_modes", "mode_ids"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "encoding": {
+      "type": "string",
+      "const": "one_hot",
+      "description": "Distinct inspectable input tensor; not a shared learned embedding."
+    },
+    "tensor_name": { "type": "string", "const": "condition_tensor" },
+    "shape": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "description": "[batch, num_modes]"
+    },
+    "num_modes": { "type": "integer", "minimum": 1 },
+    "mode_ids": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    }
+  }
+}

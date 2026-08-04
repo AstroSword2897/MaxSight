@@ -153,6 +153,7 @@ def cmd_gate(args) -> int:
     gates = {
         "train_loop": REPO / "scripts" / "infra" / "validate_train_loop_contracts.py",
         "runtime": REPO / "scripts" / "infra" / "validate_runtime_contracts.py",
+        "stage_a_isolation": REPO / "scripts" / "infra" / "validate_stage_a_isolation.py",
         "pre_sagemaker": REPO / "scripts" / "infra" / "pre_sagemaker_gate.py",
     }
     targets = getattr(args, "checks", None) or list(gates.keys())
@@ -173,6 +174,48 @@ def cmd_gate(args) -> int:
         else:
             print(f"Gate OK: {name}")
     return overall
+
+
+def cmd_certify(args) -> int:
+    """Run safety-gate CI and optionally sign only when all_passed."""
+    script = REPO / "scripts" / "infra" / "run_safety_gate_ci.py"
+    out = Path(args.output)
+    cmd = [
+        sys.executable,
+        str(script),
+        "--output",
+        str(out),
+        "--platform",
+        args.platform,
+    ]
+    if getattr(args, "artifact", None):
+        cmd += ["--artifact", args.artifact]
+    if getattr(args, "hazard_gt", False):
+        cmd.append("--hazard-gt")
+    if getattr(args, "tools_missing", False):
+        cmd.append("--tools-missing")
+    code = _run(cmd)
+    if code != 0:
+        print("certify: manifest not all_passed — refuse to sign", file=sys.stderr)
+        return code
+    if not getattr(args, "sign", False):
+        return 0
+    import json
+
+    from ml.infra.artifact_signing import ManifestNotAllPassedError, sign_artifact
+
+    manifest = json.loads(out.read_text(encoding="utf-8"))
+    artifact = Path(args.artifact) if args.artifact else None
+    if artifact is None or not artifact.is_file():
+        print("certify: --artifact required to sign", file=sys.stderr)
+        return 1
+    try:
+        sig = sign_artifact(artifact, manifest, output_dir=out.parent)
+    except ManifestNotAllPassedError as exc:
+        print(f"certify: {exc}", file=sys.stderr)
+        return 1
+    print(f"certify: signed {sig}")
+    return 0
 
 
 def cmd_smoke(args) -> int:
@@ -248,6 +291,18 @@ def main():
     )
     p_xfer.add_argument("--config", help="Path to t2_to_t5_transfer.yaml (optional)")
 
+    # certify
+    p_cert = sub.add_parser(
+        "certify",
+        help="Run fail-closed safety-gate CI; optional sign only if all_passed",
+    )
+    p_cert.add_argument("--output", required=True, help="Manifest JSON path")
+    p_cert.add_argument("--platform", default="torch_ref")
+    p_cert.add_argument("--artifact", help="Artifact path for hashing/signing")
+    p_cert.add_argument("--hazard-gt", action="store_true")
+    p_cert.add_argument("--tools-missing", action="store_true")
+    p_cert.add_argument("--sign", action="store_true", help="Sign only when all_passed")
+
     # smoke
     p_smoke = sub.add_parser("smoke", help="Short training + inference sanity")
     p_smoke.add_argument("--epochs", type=int, default=2)
@@ -259,7 +314,7 @@ def main():
     p_gate.add_argument(
         "--checks",
         nargs="*",
-        choices=["train_loop", "runtime", "pre_sagemaker"],
+        choices=["train_loop", "runtime", "stage_a_isolation", "pre_sagemaker"],
         help="Gates to run (default: all)",
     )
 
@@ -274,6 +329,8 @@ def main():
         return cmd_package(args)
     if args.command == "transfer":
         return cmd_transfer(args)
+    if args.command == "certify":
+        return cmd_certify(args)
     if args.command == "smoke":
         return cmd_smoke(args)
     if args.command == "gate":

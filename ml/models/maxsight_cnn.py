@@ -888,6 +888,15 @@ class MaxSightCNN(nn.Module):
         self.detection_threshold = detection_threshold
         self.enable_accessibility_features = enable_accessibility_features
 
+        # Explicit inspectable condition one-hot gate (MAXS-302); not a shared embedding.
+        from ml.runtime_constants import CONDITION_TENSOR_WIDTH
+
+        self.condition_tensor_width = CONDITION_TENSOR_WIDTH
+        self.condition_gate = nn.Sequential(
+            nn.Linear(CONDITION_TENSOR_WIDTH, fpn_channels),
+            nn.Sigmoid(),
+        )
+
         # Tier configuration (T5 only: hybrid, temporal, cross-task, cross-modal)
         if tier_config is None:
             from ml.models.maxsight_cnn import CapabilityTier, TierConfig
@@ -1617,6 +1626,7 @@ class MaxSightCNN(nn.Module):
         prev_temporal_state: dict | None = None,
         use_temporal: bool = False,
         frame_id: int | None = None,  # For feature caching.
+        condition_tensor: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
         """Forward pass with Stage A then Stage B. prev_temporal_state is passed to Stage B; TemporalEncoder does not use it yet."""
         # Input: preprocessing and temporal handling.
@@ -1738,6 +1748,19 @@ class MaxSightCNN(nn.Module):
 
         # Single contiguous for CUDA/cpu before detection head.
         fused_features = fused_features.contiguous()
+
+        # Apply explicit condition one-hot gate when provided (or derive from condition_mode string).
+        if condition_tensor is None and self.condition_mode:
+            from ml.runtime_constants import CONDITION_TENSOR_WIDTH, condition_mode_to_tensor_index
+
+            idx = condition_mode_to_tensor_index(self.condition_mode)
+            condition_tensor = torch.zeros(
+                batch_size, CONDITION_TENSOR_WIDTH, device=fused_features.device
+            )
+            condition_tensor[:, idx] = 1.0
+        if condition_tensor is not None:
+            gate = self.condition_gate(condition_tensor.float())  # [B, C]
+            fused_features = fused_features * gate.unsqueeze(-1).unsqueeze(-1)
         det_feats = self.detection_head(fused_features)
         det_feats = det_feats.contiguous()  # Required for downstream heads on CUDA/cpu.
 

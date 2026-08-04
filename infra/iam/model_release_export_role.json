@@ -1,0 +1,80 @@
+{
+  "_comment": [
+    "CI export role for MaxSight model-release prefix only.",
+    "Replace {{ACCOUNT_ID}}, {{RELEASE_BUCKET}}, and {{REGION}} before applying.",
+    "Least privilege: PutObject/GetObject on model-release/* only."
+  ],
+  "trust_policy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "AllowCiExportAssumeRole",
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "sagemaker.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  },
+  "inline_permissions": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "ModelReleasePutGet",
+        "Effect": "Allow",
+        "Action": [
+          "s3:PutObject",
+          "s3:GetObject"
+        ],
+        "Resource": [
+          "arn:aws:s3:::{{RELEASE_BUCKET}}/model-release/*"
+        ]
+      },
+      {
+        "Sid": "ModelReleaseListPrefix",
+        "Effect": "Allow",
+        "Action": [
+          "s3:ListBucket"
+        ],
+        "Resource": [
+          "arn:aws:s3:::{{RELEASE_BUCKET}}"
+        ],
+        "Condition": {
+          "StringLike": {
+            "s3:prefix": [
+              "model-release/*"
+            ]
+          }
+        }
+      },
+      {
+        "Sid": "DenyTrainingDataBucket",
+        "Effect": "Deny",
+        "Action": "s3:*",
+        "Resource": [
+          "arn:aws:s3:::{{TRAINING_BUCKET}}",
+          "arn:aws:s3:::{{TRAINING_BUCKET}}/*"
+        ]
+      },
+      {
+        "Sid": "DenyTelemetryBucket",
+        "Effect": "Deny",
+        "Action": "s3:*",
+        "Resource": [
+          "arn:aws:s3:::{{TELEMETRY_BUCKET}}",
+          "arn:aws:s3:::{{TELEMETRY_BUCKET}}/*"
+        ]
+      },
+      {
+        "Sid": "DenyTherapyStateBucket",
+        "Effect": "Deny",
+        "Action": "s3:*",
+        "Resource": [
+          "arn:aws:s3:::{{THERAPY_BUCKET}}",
+          "arn:aws:s3:::{{THERAPY_BUCKET}}/*"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "_comment": [
+    "Phone download role: read-only GetObject on model-release/*.",
+    "Replace {{ACCOUNT_ID}}, {{RELEASE_BUCKET}}, and {{REGION}} before applying.",
+    "No write permissions; explicit Deny on training/telemetry/therapy buckets."
+  ],
+  "trust_policy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "AllowPhoneIdentityAssume",
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": "arn:aws:iam::{{ACCOUNT_ID}}:root"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  },
+  "inline_permissions": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "ModelReleaseGetOnly",
+        "Effect": "Allow",
+        "Action": [
+          "s3:GetObject"
+        ],
+        "Resource": [
+          "arn:aws:s3:::{{RELEASE_BUCKET}}/model-release/*"
+        ]
+      },
+      {
+        "Sid": "ModelReleaseListPrefix",
+        "Effect": "Allow",
+        "Action": [
+          "s3:ListBucket"
+        ],
+        "Resource": [
+          "arn:aws:s3:::{{RELEASE_BUCKET}}"
+        ],
+        "Condition": {
+          "StringLike": {
+            "s3:prefix": [
+              "model-release/*"
+            ]
+          }
+        }
+      },
+      {
+        "Sid": "DenyWritesOnReleaseBucket",
+        "Effect": "Deny",
+        "Action": [
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ],
+        "Resource": [
+          "arn:aws:s3:::{{RELEASE_BUCKET}}",
+          "arn:aws:s3:::{{RELEASE_BUCKET}}/*"
+        ]
+      },
+      {
+        "Sid": "DenyTrainingDataBucket",
+        "Effect": "Deny",
+        "Action": "s3:*",
+        "Resource": [
+          "arn:aws:s3:::{{TRAINING_BUCKET}}",
+          "arn:aws:s3:::{{TRAINING_BUCKET}}/*"
+        ]
+      },
+      {
+        "Sid": "DenyTelemetryBucket",
+        "Effect": "Deny",
+        "Action": "s3:*",
+        "Resource": [
+          "arn:aws:s3:::{{TELEMETRY_BUCKET}}",
+          "arn:aws:s3:::{{TELEMETRY_BUCKET}}/*"
+        ]
+      },
+      {
+        "Sid": "DenyTherapyStateBucket",
+        "Effect": "Deny",
+        "Action": "s3:*",
+        "Resource": [
+          "arn:aws:s3:::{{THERAPY_BUCKET}}",
+          "arn:aws:s3:::{{THERAPY_BUCKET}}/*"
+        ]
+      }
+    ]
+  }
+}

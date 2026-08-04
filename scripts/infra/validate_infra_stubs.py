@@ -64,10 +64,82 @@ def validate_sagemaker_role_shape() -> list[str]:
     return []
 
 
+MODEL_RELEASE_ROLE_FILES = (
+    "infra/iam/model_release_export_role.json",
+    "infra/iam/model_release_phone_readonly_role.json",
+)
+
+
+def _statement_resources(stmt: object) -> list[str]:
+    if not isinstance(stmt, dict):
+        return []
+    resource = stmt.get("Resource", [])
+    if isinstance(resource, str):
+        return [resource]
+    if isinstance(resource, list):
+        return [r for r in resource if isinstance(r, str)]
+    return []
+
+
+def validate_model_release_iam_scope() -> list[str]:
+    """Fail if model-release roles allow S3 outside model-release/* (except Deny)."""
+    errors: list[str] = []
+    for rel in MODEL_RELEASE_ROLE_FILES:
+        path = REPO_ROOT / rel
+        if not path.exists():
+            errors.append(f"{rel}: missing model-release IAM stub")
+            continue
+        data = _load_json(path)
+        if not isinstance(data, dict):
+            errors.append(f"{rel}: root must be an object")
+            continue
+        perms = data.get("inline_permissions")
+        if not isinstance(perms, dict):
+            errors.append(f"{rel}: missing inline_permissions")
+            continue
+        statements = perms.get("Statement", [])
+        if not isinstance(statements, list):
+            errors.append(f"{rel}: Statement must be a list")
+            continue
+        for stmt in statements:
+            if not isinstance(stmt, dict):
+                continue
+            if stmt.get("Effect") == "Deny":
+                continue
+            for resource in _statement_resources(stmt):
+                if resource.endswith(":{{RELEASE_BUCKET}}") or resource.endswith(
+                    ":{{RELEASE_BUCKET}}/"
+                ):
+                    # ListBucket on bucket ARN is allowed when Condition scopes prefix.
+                    continue
+                if "/model-release/" not in resource and not resource.endswith(
+                    "/model-release/*"
+                ):
+                    if "s3:::" in resource and "{{RELEASE_BUCKET}}" in resource:
+                        # Bucket-level ListBucket without object path is OK.
+                        if resource.rstrip("/").endswith("{{RELEASE_BUCKET}}"):
+                            continue
+                    errors.append(
+                        f"{rel}: Allow resource widens beyond model-release/*: {resource}"
+                    )
+        # Phone role must not allow PutObject.
+        if rel.endswith("phone_readonly_role.json"):
+            for stmt in statements:
+                if not isinstance(stmt, dict) or stmt.get("Effect") != "Allow":
+                    continue
+                actions = stmt.get("Action", [])
+                if isinstance(actions, str):
+                    actions = [actions]
+                if any(a in {"s3:PutObject", "s3:*"} for a in actions):
+                    errors.append(f"{rel}: phone role must not Allow PutObject/s3:*")
+    return errors
+
+
 def main() -> int:
     strict = os.environ.get("MAXSIGHT_INFRA_STRICT_PLACEHOLDERS", "").strip() == "1"
     errors = validate_parse_only()
     errors.extend(validate_sagemaker_role_shape())
+    errors.extend(validate_model_release_iam_scope())
     if strict:
         errors.extend(validate_no_placeholders())
     if errors:
