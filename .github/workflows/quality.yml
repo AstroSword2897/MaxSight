@@ -46,5 +46,10 @@ jobs:
             --cov=ml/therapy --cov=ml/runtime \
             --cov-report=term-missing -q
 
+      - name: Stage A isolation gate
+        run: |
+          python scripts/infra/validate_stage_a_isolation.py --self-test
+          python scripts/infra/validate_stage_a_isolation.py
+
       - name: Pre-SageMaker gate
         run: python scripts/infra/pre_sagemaker_gate.py
