@@ -198,3 +198,35 @@ class TestRAGReliabilityWrapper:
         wrapper = RAGReliabilityWrapper(
             stub,
             slo=RAGSLO(
+                fallback_rate_max=0.01,
+                empty_retrieval_rate_max=0.01,
+                window_max_requests=50,
+            ),
+        )
+        with patch("ml.retrieval.rag_reliability.emit_event") as mock_emit:
+            for _ in range(20):
+                wrapper.query({"k": "v"})
+            alert_calls = [c for c in mock_emit.call_args_list if c.args and c.args[0] == "rag.alert"]
+            assert alert_calls
+            assert alert_calls[-1].kwargs["level"] in ("warning", "critical")
+
+    def test_wrap_rag_pipeline_factory(self) -> None:
+        stub = _StubPipeline([_hardened_result()])
+        wrapped = wrap_rag_pipeline(stub, slo=RAGSLO(window_max_requests=10))
+        assert isinstance(wrapped, RAGReliabilityWrapper)
+        out = wrapped.query({})
+        assert out.reliability is not None
+        assert "fallback_mode" in out.reliability
+
+
+class TestMetricsFromHardenedResult:
+    def test_scores_from_retrieved(self) -> None:
+        result = _hardened_result(
+            retrieved=[
+                RetrievalResult(payload={}, score=0.3),
+                RetrievalResult(payload={}, score=0.9),
+            ]
+        )
+        m = metrics_from_hardened_result(result)
+        assert m.retrieval_score_max == 0.9
+        assert m.retrieved_docs == 2
