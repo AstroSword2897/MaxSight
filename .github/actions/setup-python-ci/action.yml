@@ -1,0 +1,75 @@
+name: setup-python-ci
+description: Set up Python with pip cache and install a named CI dependency profile.
+
+inputs:
+  python-version:
+    description: Python version
+    required: false
+    default: "3.10"
+  profile:
+    description: "Dependency profile: lint|contracts|drift|ops|torch-cpu|torch-cpu-full"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      # actions/setup-python@v5.6.0
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+        cache-dependency-path: |
+          requirements.txt
+          requirements-ci/lint.txt
+          requirements-ci/contracts.txt
+          requirements-ci/drift.txt
+          requirements-ci/ops.txt
+          requirements-ci/torch-cpu.txt
+          .github/actions/setup-python-ci/action.yml
+
+    - name: Upgrade pip
+      shell: bash
+      run: |
+        set -euo pipefail
+        python -m pip install --upgrade pip
+        echo "profile=${{ inputs.profile }}" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Install profile dependencies
+      shell: bash
+      env:
+        PROFILE: ${{ inputs.profile }}
+      run: |
+        set -euo pipefail
+        case "$PROFILE" in
+          lint)
+            pip install -r requirements-ci/lint.txt
+            ;;
+          contracts)
+            pip install -r requirements-ci/contracts.txt
+            ;;
+          drift)
+            pip install -r requirements-ci/drift.txt
+            ;;
+          ops)
+            pip install -r requirements-ci/ops.txt
+            ;;
+          torch-cpu)
+            pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+            pip install -r requirements-ci/torch-cpu.txt
+            ;;
+          torch-cpu-full)
+            pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+            pip install --no-deps -r requirements.txt || pip install -r requirements.txt
+            pip install -r requirements-ci/torch-cpu.txt
+            pip install pytest pytest-cov
+            ;;
+          *)
+            echo "Unknown profile: $PROFILE" >&2
+            exit 1
+            ;;
+        esac
+        {
+          echo "## Disk after pip ($PROFILE)"
+          df -h
+        } >> "$GITHUB_STEP_SUMMARY"

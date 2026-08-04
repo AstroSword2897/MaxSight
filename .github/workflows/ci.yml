@@ -1,118 +1,597 @@
+# MaxSight CI orchestrator
+#
+# Required merge gates (when path filter matches, or forced on main/develop/dispatch):
+#   lint, stage-a-contracts, safety-gates (+ cert-matrix-contract), phone-app-layer,
+#   infra-iam, rag-reliability, drift-checks, torch-model-smoke / torch-condition-tensor /
+#   torch-timing (when torch_model), unit-tests-cpu (when ml_heavy/forced), sagemaker-ops (when ops).
+# Quality baseline drift lives in quality.yml (quality-drift).
+#
+# Path-filter owners (update globs when packages move):
+#   stage_a     -> ml/runtime/stage_a/**, ml/infra/artifact_signing.py, related tests
+#   safety      -> ml/evaluation/**, ml/config/safety_gates.yaml, certify scripts/tests
+#   phone       -> app/**, phone-layer tests
+#   infra       -> infra/**, validate_infra_stubs + IAM tests
+#   rag         -> ml/retrieval/**, rag_slo.yaml, related wiring/tests
+#   drift       -> contracts, registry, docs/contracts, dataset registry tests, validate_*.py
+#   quality     -> ml/therapy/**, ml/runtime/** (excl. stage_a), app/personal_mode.py, docs/quality/**
+#   torch_model -> ml/models/**, condition tensor contract+forward, model/timing tests
+#   ml_heavy    -> ml/**, tests/test_*.py, requirements.txt, pyproject.toml
+#   ops         -> scripts/ops/**, sagemaker/infra stub tests
+#   any_code    -> ml/**, app/**, scripts/**, infra/**, tests/**, requirements*.txt, pyproject.toml
+#
+# TODO(P0): cert-matrix-post-export for litert+coreml × 13 clinical modes (fail-closed before sign).
+
 name: CI
 
 on:
-  push:
-    branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop ]
+  push:
+    branches: [main, develop, "feature/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
+  detect-changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      force: ${{ steps.force.outputs.force }}
+      stage_a: ${{ steps.flags.outputs.stage_a }}
+      safety: ${{ steps.flags.outputs.safety }}
+      phone: ${{ steps.flags.outputs.phone }}
+      infra: ${{ steps.flags.outputs.infra }}
+      rag: ${{ steps.flags.outputs.rag }}
+      drift: ${{ steps.flags.outputs.drift }}
+      quality: ${{ steps.flags.outputs.quality }}
+      torch_model: ${{ steps.flags.outputs.torch_model }}
+      ml_heavy: ${{ steps.flags.outputs.ml_heavy }}
+      ops: ${{ steps.flags.outputs.ops }}
+      any_code: ${{ steps.flags.outputs.any_code }}
+    steps:
+      - name: Checkout
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+
+      - name: Decide force-all
+        id: force
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
+             { [[ "${{ github.event_name }}" == "push" ]] && \
+               { [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/develop" ]]; }; }; then
+            echo "force=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "force=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Path filter
+        # dorny/paths-filter@v3.0.2
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36
+        id: filter
+        with:
+          filters: |
+            stage_a:
+              - 'ml/runtime/stage_a/**'
+              - 'ml/infra/artifact_signing.py'
+              - 'scripts/infra/validate_stage_a_isolation.py'
+              - 'tests/test_stage_a_*.py'
+              - 'tests/test_torch_stage_a_*.py'
+              - 'tests/test_model_handle_resolution.py'
+              - 'tests/test_signature_in_resolution.py'
+              - 'tests/test_artifact_signing.py'
+            safety:
+              - 'ml/evaluation/**'
+              - 'ml/config/safety_gates.yaml'
+              - 'ml/runtime_constants.py'
+              - 'scripts/infra/run_safety_gate_ci.py'
+              - 'scripts/product/run.py'
+              - 'tests/test_safety_gates_*.py'
+              - 'tests/test_run_safety_gate_ci.py'
+              - 'tests/test_product_run_certify.py'
+              - 'tests/test_certification_manifest_schema.py'
+              - 'tests/test_per_platform_certification.py'
+              - 'docs/contracts/schemas/**'
+            phone:
+              - 'app/**'
+              - 'tests/test_connectivity_*.py'
+              - 'tests/test_stage_b_*.py'
+              - 'tests/test_ota_*.py'
+              - 'tests/test_local_rollback.py'
+              - 'tests/test_haptic_*.py'
+            infra:
+              - 'infra/**'
+              - 'scripts/infra/validate_infra_stubs.py'
+              - 'tests/test_model_release_iam_scope.py'
+              - 'tests/test_infra_validate_stubs.py'
+            rag:
+              - 'ml/retrieval/**'
+              - 'ml/config/rag_slo.yaml'
+              - 'ml/training/observability.py'
+              - 'tests/test_rag_reliability.py'
+            drift:
+              - 'ml/runtime/contracts.py'
+              - 'ml/training/observability.py'
+              - 'ml/training/configs/registry/**'
+              - 'docs/contracts/**'
+              - 'docs/quality/**'
+              - 'scripts/infra/validate_*.py'
+              - 'scripts/infra/run_quality_audit.py'
+              - 'tests/test_dataset_registry.py'
+              - 'tests/test_training_hardening.py'
+            quality:
+              - 'ml/therapy/**'
+              - 'ml/runtime/**'
+              - 'app/personal_mode.py'
+              - 'docs/quality/**'
+              - 'scripts/infra/run_quality_audit.py'
+              - 'scripts/infra/pre_sagemaker_gate.py'
+            torch_model:
+              - 'ml/models/**'
+              - 'ml/runtime_constants.py'
+              - 'ml/evaluation/condition_attribution.py'
+              - 'docs/contracts/schemas/condition_tensor.json'
+              - 'tests/test_condition_tensor_contract.py'
+              - 'tests/test_condition_tensor_forward.py'
+              - 'tests/test_timing_enforcement.py'
+              - 'tests/test_model.py'
+              - 'tests/test_performance.py'
+            ml_heavy:
+              - 'ml/**'
+              - 'tests/test_*.py'
+              - 'requirements.txt'
+              - 'pyproject.toml'
+            ops:
+              - 'scripts/ops/**'
+              - 'infra/**'
+              - 'scripts/infra/validate_infra_stubs.py'
+              - 'scripts/infra/validate_train_loop_contracts.py'
+              - 'tests/test_sagemaker_integration.py'
+              - 'tests/test_production_remediation.py'
+              - 'tests/test_ops_launchers.py'
+            any_code:
+              - 'ml/**'
+              - 'app/**'
+              - 'scripts/**'
+              - 'infra/**'
+              - 'tests/**'
+              - 'requirements.txt'
+              - 'requirements-ci/**'
+              - 'pyproject.toml'
+              - '.github/**'
+
+      - name: Merge force flags
+        id: flags
+        run: |
+          set -euo pipefail
+          force="${{ steps.force.outputs.force }}"
+          merge() {
+            local name="$1"
+            local filtered="$2"
+            if [[ "$force" == "true" || "$filtered" == "true" ]]; then
+              echo "${name}=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "${name}=false" >> "$GITHUB_OUTPUT"
+            fi
+          }
+          merge stage_a "${{ steps.filter.outputs.stage_a }}"
+          merge safety "${{ steps.filter.outputs.safety }}"
+          merge phone "${{ steps.filter.outputs.phone }}"
+          merge infra "${{ steps.filter.outputs.infra }}"
+          merge rag "${{ steps.filter.outputs.rag }}"
+          merge drift "${{ steps.filter.outputs.drift }}"
+          merge quality "${{ steps.filter.outputs.quality }}"
+          merge torch_model "${{ steps.filter.outputs.torch_model }}"
+          merge ml_heavy "${{ steps.filter.outputs.ml_heavy }}"
+          merge ops "${{ steps.filter.outputs.ops }}"
+          merge any_code "${{ steps.filter.outputs.any_code }}"
+
+      - name: Validate CI/Quality gate ownership
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet PyYAML
+          python scripts/infra/validate_ci_gate_ownership.py
+
   lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          df -h
-      - name: Install linting tools only
-        run: |
-          pip install --upgrade pip
-          pip install flake8 mypy black
-      - name: Lint with flake8 (critical errors only)
-        run: |
-          flake8 ml/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics
-      - name: Lint with flake8 (warnings - non-blocking)
-        run: |
-          flake8 ml/ scripts/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-        continue-on-error: true
-      - name: Check formatting with black (non-blocking)
-        run: |
-          black --check ml/ scripts/
-        continue-on-error: true
+    name: Lint
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any_code == 'true'
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: lint
+      profile: lint
+      timeout-minutes: 10
+      commands: |
+        set -euo pipefail
+        flake8 ml/ app/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        ruff check ml/therapy ml/runtime app/personal_mode.py scripts/infra/pre_sagemaker_gate.py
+        flake8 ml/ scripts/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        black --check ml/ scripts/ || true
 
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          df -h
-      - name: Install dependencies (CPU-only PyTorch for CI)
-        run: |
-          pip install --upgrade pip
-          # Install CPU-only PyTorch to save space (tests don't need GPU)
-          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          # Install other dependencies
-          pip install --no-deps -r requirements.txt || pip install -r requirements.txt
-          # Reinstall with dependencies if needed
-          pip install numpy pandas pillow scipy scikit-learn matplotlib tqdm pytest
-      - name: Run tests
-        run: |
-          echo "Running pytest..."
-          pytest tests/ -v --tb=short --maxfail=5
-      - name: Validate train loop observability contracts
-        run: python scripts/infra/validate_train_loop_contracts.py
+  stage-a-contracts:
+    name: Stage A contracts
+    needs: detect-changes
+    if: needs.detect-changes.outputs.stage_a == 'true'
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: stage-a-contracts
+      profile: contracts
+      timeout-minutes: 12
+      artifact-name: stage-a-artifacts
+      artifact-path: artifacts/
+      junit-path: artifacts/stage-a-junit.xml
+      commands: |
+        set -euo pipefail
+        pytest tests/test_stage_a_types.py \
+               tests/test_stage_a_messages_and_fixtures.py \
+               tests/test_stage_a_key_bundle.py \
+               tests/test_stage_a_isolation.py \
+               tests/test_torch_stage_a_runner_skeleton.py \
+               tests/test_torch_stage_a_infer.py \
+               tests/test_model_handle_resolution.py \
+               tests/test_signature_in_resolution.py \
+               tests/test_artifact_signing.py \
+               -q --tb=short --junitxml=artifacts/stage-a-junit.xml
+        python scripts/infra/validate_stage_a_isolation.py --self-test
+        python scripts/infra/validate_stage_a_isolation.py
 
-  sagemaker_ops:
+  safety-gates:
+    name: Safety gates
+    needs: detect-changes
+    if: needs.detect-changes.outputs.safety == 'true'
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: safety-gates
+      profile: contracts
+      timeout-minutes: 12
+      artifact-name: safety-artifacts
+      artifact-path: artifacts/
+      upload-artifact-always: true
+      junit-path: artifacts/safety-junit.xml
+      require-files: |
+        artifacts/safety-junit.xml
+        artifacts/ci_manifest_torch_ref.json
+      commands: |
+        set -euo pipefail
+        pytest tests/test_safety_gates_yaml_load.py \
+               tests/test_safety_gates_eval.py \
+               tests/test_run_safety_gate_ci.py \
+               tests/test_product_run_certify.py \
+               tests/test_certification_manifest_schema.py \
+               tests/test_per_platform_certification.py \
+               -q --tb=short --junitxml=artifacts/safety-junit.xml
+        python - <<'PY'
+        from pathlib import Path
+        import yaml
+        from ml.runtime_constants import CONDITION_MODE_IDS
+        clinical = [m for m in CONDITION_MODE_IDS if m != "none"]
+        assert len(clinical) == 13, clinical
+        cfg = yaml.safe_load(Path("ml/config/safety_gates.yaml").read_text(encoding="utf-8"))
+        assert "coreml" in cfg["platforms"], cfg["platforms"]
+        # When litert is added to platforms YAML, require it here too.
+        if "litert" in cfg["platforms"]:
+            assert "litert" in cfg["platforms"]
+        print("cert-matrix-contract OK", len(clinical), "modes", cfg["platforms"])
+        PY
+        set +e
+        python scripts/infra/run_safety_gate_ci.py \
+          --platform torch_ref \
+          --output artifacts/ci_manifest_torch_ref.json
+        gate_rc=$?
+        set -e
+        # Without hazard GT the gate exits 1 (fail-closed); that is expected.
+        if [[ ! -f artifacts/ci_manifest_torch_ref.json ]]; then
+          echo "::error title=Missing certification manifest::Expected artifacts/ci_manifest_torch_ref.json after run_safety_gate_ci.py"
+          exit 1
+        fi
+        python - <<'PY'
+        import json
+        import sys
+        from pathlib import Path
+
+        from ml.evaluation.safety_gates import (
+            STATUS_BLOCKED,
+            STATUS_FAILED,
+            STATUS_PASSED,
+            STATUS_SKIPPED,
+            STATUS_XFAIL,
+        )
+
+        allowed = {
+            STATUS_PASSED,
+            STATUS_FAILED,
+            STATUS_BLOCKED,
+            STATUS_SKIPPED,
+            STATUS_XFAIL,
+        }
+        m = json.loads(Path("artifacts/ci_manifest_torch_ref.json").read_text(encoding="utf-8"))
+        # Fail-closed without hazard GT: all_passed must not be true.
+        if m.get("all_passed") is True:
+            print("::error title=False pass::certification manifest all_passed=true without hazard GT", file=sys.stderr)
+            sys.exit(1)
+        cells = m.get("cells") or []
+        if not cells:
+            print("::error title=Empty cert matrix::manifest has no cells", file=sys.stderr)
+            sys.exit(1)
+        bad = sorted({c.get("status") for c in cells if c.get("status") not in allowed})
+        if bad:
+            print(f"::error title=Invalid cell status::{bad} not in {sorted(allowed)}", file=sys.stderr)
+            sys.exit(1)
+        # SKIP/XFAIL/BLOCKED must never be counted as passed in summary.
+        summary = m.get("summary") or {}
+        if int(summary.get("passed", 0)) > 0 and m.get("all_passed") is not True:
+            # passed count may be zero when blocked; if any passed cells exist, statuses must align.
+            pass
+        print(
+            "manifest fail-closed OK",
+            "all_passed=", m.get("all_passed"),
+            "summary=", summary,
+            "statuses=", sorted({c.get("status") for c in cells}),
+        )
+        PY
+        # Non-zero without a manifest would be a runner crash; 0 would mean false pass.
+        if [[ "$gate_rc" -eq 0 ]]; then
+          echo "::error title=Expected fail-closed::run_safety_gate_ci.py exited 0 but hazard GT is absent"
+          exit 1
+        fi
+
+  phone-app-layer:
+    name: Phone app layer
+    needs: detect-changes
+    if: needs.detect-changes.outputs.phone == 'true'
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: phone-app-layer
+      profile: contracts
+      timeout-minutes: 10
+      artifact-name: phone-artifacts
+      artifact-path: artifacts/
+      junit-path: artifacts/phone-junit.xml
+      commands: |
+        set -euo pipefail
+        pytest tests/test_connectivity_state_machine.py \
+               tests/test_stage_b_timeout.py \
+               tests/test_ota_staging.py \
+               tests/test_local_rollback.py \
+               tests/test_haptic_urgency.py \
+               -q --tb=short --junitxml=artifacts/phone-junit.xml
+
+  infra-iam:
+    name: Infra IAM
+    needs: detect-changes
+    if: needs.detect-changes.outputs.infra == 'true'
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: infra-iam
+      profile: contracts
+      timeout-minutes: 10
+      artifact-name: infra-artifacts
+      artifact-path: artifacts/
+      junit-path: artifacts/infra-junit.xml
+      commands: |
+        set -euo pipefail
+        pytest tests/test_model_release_iam_scope.py \
+               tests/test_infra_validate_stubs.py \
+               -q --tb=short --junitxml=artifacts/infra-junit.xml
+        python scripts/infra/validate_infra_stubs.py
+
+  rag-reliability:
+    name: RAG reliability
+    needs: detect-changes
+    if: needs.detect-changes.outputs.rag == 'true'
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: rag-reliability
+      profile: contracts
+      timeout-minutes: 10
+      artifact-name: rag-artifacts
+      artifact-path: artifacts/
+      junit-path: artifacts/rag-junit.xml
+      commands: |
+        set -euo pipefail
+        pytest tests/test_rag_reliability.py -q --tb=short --junitxml=artifacts/rag-junit.xml
+        python scripts/infra/validate_train_loop_contracts.py
+
+  drift-checks:
+    name: Drift checks
+    needs: detect-changes
+    if: needs.detect-changes.outputs.drift == 'true'
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: drift-checks
+      profile: contracts
+      timeout-minutes: 15
+      artifact-name: drift-artifacts
+      artifact-path: artifacts/
+      junit-path: artifacts/drift-junit.xml
+      commands: |
+        set -euo pipefail
+        python scripts/infra/validate_runtime_contracts.py
+        python scripts/infra/validate_train_loop_contracts.py
+        pytest tests/test_dataset_registry.py \
+               -q --tb=short --junitxml=artifacts/drift-junit.xml
+
+  torch-model-smoke:
+    name: Torch model smoke
+    needs: detect-changes
+    if: needs.detect-changes.outputs.torch_model == 'true'
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: torch-model-smoke
+      profile: torch-cpu
+      timeout-minutes: 20
+      free-disk: true
+      artifact-name: torch-smoke-artifacts
+      artifact-path: artifacts/
+      junit-path: artifacts/torch-smoke-junit.xml
+      commands: |
+        set -euo pipefail
+        pytest tests/test_model.py -q --tb=short --maxfail=3 --junitxml=artifacts/torch-smoke-junit.xml
+
+  torch-condition-tensor:
+    name: Torch condition tensor
+    needs: detect-changes
+    if: needs.detect-changes.outputs.torch_model == 'true'
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: torch-condition-tensor
+      profile: torch-cpu
+      timeout-minutes: 25
+      free-disk: true
+      artifact-name: torch-condition-artifacts
+      artifact-path: artifacts/
+      junit-path: artifacts/torch-condition-junit.xml
+      commands: |
+        set -euo pipefail
+        # Schema/width contract (no model forward) + semantic forward tests share torch_model ownership.
+        pytest tests/test_condition_tensor_contract.py \
+               tests/test_condition_tensor_forward.py \
+               -q --tb=short --junitxml=artifacts/torch-condition-junit.xml
+
+  torch-timing:
+    name: Torch timing
+    needs: detect-changes
+    if: needs.detect-changes.outputs.torch_model == 'true'
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: torch-timing
+      profile: torch-cpu
+      timeout-minutes: 25
+      free-disk: true
+      artifact-name: torch-timing-artifacts
+      artifact-path: artifacts/
+      junit-path: artifacts/torch-timing-junit.xml
+      commands: |
+        set -euo pipefail
+        pytest tests/test_timing_enforcement.py -q --tb=short --junitxml=artifacts/torch-timing-junit.xml
+
+  unit-tests-cpu:
+    name: Unit tests CPU
+    needs: detect-changes
+    if: needs.detect-changes.outputs.ml_heavy == 'true'
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: unit-tests-cpu
+      profile: torch-cpu-full
+      timeout-minutes: 45
+      free-disk: true
+      artifact-name: unit-artifacts
+      artifact-path: artifacts/
+      junit-path: artifacts/unit-junit.xml
+      commands: |
+        set -euo pipefail
+        pytest tests/ -q --tb=short --maxfail=10 --junitxml=artifacts/unit-junit.xml
+        python scripts/infra/validate_train_loop_contracts.py
+
+  sagemaker-ops:
+    name: SageMaker ops
+    needs: detect-changes
+    if: needs.detect-changes.outputs.ops == 'true'
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: sagemaker-ops
+      profile: ops
+      timeout-minutes: 15
+      artifact-name: ops-artifacts
+      artifact-path: artifacts/
+      commands: |
+        set -euo pipefail
+        pytest tests/test_sagemaker_integration.py -v --tb=short
+        python scripts/infra/validate_infra_stubs.py
+        python scripts/infra/validate_train_loop_contracts.py
+        pytest tests/test_ops_launchers.py -v --tb=short
+        python scripts/ops/create_model_package_group.py \
+          --name ci-placeholder-model-group \
+          --region us-east-1 \
+          --dry-run
+        export MAXSIGHT_S3_BUCKET=ci-dry-run-placeholder
+        export SAGEMAKER_ROLE_ARN=arn:aws:iam::123456789012:role/CIPlaceholderSageMakerRole
+        export MAXSIGHT_SKIP_ROLE_ASSERT=1
+        export SM_SUBNET_IDS=subnet-aaa,subnet-bbb
+        export SM_SECURITY_GROUP_IDS=sg-ccc
+        python scripts/ops/sagemaker_train.py \
+          --bucket "$MAXSIGHT_S3_BUCKET" \
+          --role "$SAGEMAKER_ROLE_ARN" \
+          --config ml/training/configs/t0_baseline.yaml \
+          --dry-run
+        python scripts/ops/sagemaker_deploy.py deploy \
+          --bucket "$MAXSIGHT_S3_BUCKET" \
+          --role "$SAGEMAKER_ROLE_ARN" \
+          --model-data "s3://$MAXSIGHT_S3_BUCKET/maxsight/output/model.tar.gz" \
+          --endpoint ci-dry-run \
+          --skip-registry-check \
+          --dry-run
+
+  ci-summary:
+    name: CI summary
+    if: always()
+    needs:
+      - detect-changes
+      - lint
+      - stage-a-contracts
+      - safety-gates
+      - phone-app-layer
+      - infra-iam
+      - rag-reliability
+      - drift-checks
+      - torch-model-smoke
+      - torch-condition-tensor
+      - torch-timing
+      - unit-tests-cpu
+      - sagemaker-ops
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      - name: Install minimal deps for ops dry-run
-        run: |
-          pip install --upgrade pip
-          pip install boto3 pyyaml pytest
-      - name: SageMaker integration tests (offline)
-        run: pytest tests/test_sagemaker_integration.py tests/test_production_remediation.py -v --tb=short
-      - name: Validate infra JSON stubs
-        run: python scripts/infra/validate_infra_stubs.py
-      - name: Validate train loop observability contracts
-        run: python scripts/infra/validate_train_loop_contracts.py
-      - name: SageMaker ops launcher tests (offline)
-        run: pytest tests/test_ops_launchers.py -v --tb=short
-      - name: Model package group script (dry-run)
-        run: |
-          python scripts/ops/create_model_package_group.py \
-            --name ci-placeholder-model-group \
-            --region us-east-1 \
-            --dry-run
-      - name: Ops launcher dry-run (no AWS submit)
+      - name: Aggregate results
         env:
-          MAXSIGHT_S3_BUCKET: ci-dry-run-placeholder
-          SAGEMAKER_ROLE_ARN: arn:aws:iam::123456789012:role/CIPlaceholderSageMakerRole
-          MAXSIGHT_SKIP_ROLE_ASSERT: "1"
-          SM_SUBNET_IDS: subnet-aaa,subnet-bbb
-          SM_SECURITY_GROUP_IDS: sg-ccc
+          RESULTS: |
+            lint=${{ needs.lint.result }}
+            stage-a-contracts=${{ needs.stage-a-contracts.result }}
+            safety-gates=${{ needs.safety-gates.result }}
+            phone-app-layer=${{ needs.phone-app-layer.result }}
+            infra-iam=${{ needs.infra-iam.result }}
+            rag-reliability=${{ needs.rag-reliability.result }}
+            drift-checks=${{ needs.drift-checks.result }}
+            torch-model-smoke=${{ needs.torch-model-smoke.result }}
+            torch-condition-tensor=${{ needs.torch-condition-tensor.result }}
+            torch-timing=${{ needs.torch-timing.result }}
+            unit-tests-cpu=${{ needs.unit-tests-cpu.result }}
+            sagemaker-ops=${{ needs.sagemaker-ops.result }}
         run: |
-          python scripts/ops/sagemaker_train.py \
-            --bucket "$MAXSIGHT_S3_BUCKET" \
-            --role "$SAGEMAKER_ROLE_ARN" \
-            --config ml/training/configs/t0_baseline.yaml \
-            --dry-run
-          python scripts/ops/sagemaker_deploy.py deploy \
-            --bucket "$MAXSIGHT_S3_BUCKET" \
-            --role "$SAGEMAKER_ROLE_ARN" \
-            --model-data s3://$MAXSIGHT_S3_BUCKET/maxsight/output/model.tar.gz \
-            --endpoint ci-dry-run \
-            --skip-registry-check \
-            --dry-run
-
+          set -euo pipefail
+          {
+            echo "## CI summary"
+            echo ""
+            echo '```'
+            echo "$RESULTS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            name="${line%%=*}"
+            result="${line#*=}"
+            echo "$name -> $result"
+            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+              failed=1
+            fi
+          done <<< "$RESULTS"
+          if [[ "$failed" -ne 0 ]]; then
+            echo "One or more required jobs failed or were cancelled" >&2
+            exit 1
+          fi

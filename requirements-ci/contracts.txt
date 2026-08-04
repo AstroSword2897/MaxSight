@@ -1,0 +1,6 @@
+# Slim CI profile: First Wave contracts / Stage A / safety (no torch).
+pytest>=8.0.0
+PyYAML>=6.0
+jsonschema>=4.0.0
+numpy>=1.24.0
+Pillow>=10.0.0

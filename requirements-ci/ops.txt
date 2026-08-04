@@ -1,0 +1,4 @@
+# Offline SageMaker / infra ops dry-runs.
+boto3>=1.28.0
+PyYAML>=6.0
+pytest>=8.0.0
