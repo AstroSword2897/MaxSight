@@ -1,6 +1,14 @@
 [tool.pyright]
-include = ["ml", "tests"]
-exclude = ["**/__pycache__", "**/node_modules", "**/venv", "**/.venv"]
+# IDE keeps broad include; CI Tier-1 gate passes explicit paths (see quality.yml pyright-tier1).
+include = ["ml", "app", "tests"]
+exclude = [
+    "**/__pycache__",
+    "**/node_modules",
+    "**/venv",
+    "**/.venv",
+    # Stage A isolation surface is owned by ci.yml stage-a-contracts, not the Tier-1 type gate.
+    "ml/runtime/stage_a",
+]
 pythonVersion = "3.10"
 pythonPlatform = "Darwin"
 extraPaths = ["../2026/venv/lib/python3.10/site-packages"]

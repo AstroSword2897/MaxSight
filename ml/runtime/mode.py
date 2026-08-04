@@ -202,7 +202,11 @@ class RuntimeOrchestrator:
                             channel=action.channel,
                             content=action.content,
                             intensity=action.intensity,
-                            score=score_trace.get("final_score", action.intensity),
+                            score=float(
+                                action.intensity
+                                if (raw := score_trace.get("final_score")) is None
+                                else raw
+                            ),
                             score_trace=score_trace,
                         )
                     )
