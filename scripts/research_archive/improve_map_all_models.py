@@ -302,7 +302,8 @@ def main():
     print(f"Done. {args.output} | {args.config_output}")
     if best_map <= 0 and not args.quiet:
         print(
-            "Note: mAP stayed 0. To reach 0.5 you need trained checkpoints. Run training first, e.g. scripts/train_t5_fast_colab.py or scripts/train_maxsight.py."
+            "Note: mAP stayed 0. To reach 0.5 you need trained checkpoints. "
+            "Run training first, e.g. scripts/train_maxsight.py."
         )
     return 0
 
