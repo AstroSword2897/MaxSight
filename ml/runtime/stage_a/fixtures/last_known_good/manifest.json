@@ -1,0 +1,6 @@
+{
+  "model_version": "lkg-v0",
+  "model_hash": "placeholder-lkg-hash",
+  "artifact": "weights.stub",
+  "immutable": true
+}
