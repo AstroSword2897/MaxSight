@@ -1,55 +1,313 @@
+# Quality gates: baseline drift (blocking), ruff (blocking), mypy (advisory),
+# therapy coverage, pre-SageMaker gate.
+# Stage A isolation is owned by ci.yml (stage-a-contracts) — do not duplicate here.
+
 name: Quality
 
 on:
-  push:
-    branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+  push:
+    branches: [main, develop, "feature/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PYTHONPATH: .
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_PYTHON_VERSION_WARNING: "1"
 
 jobs:
-  quality:
+  quality-drift:
+    name: Quality baseline drift
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Python CI
+        uses: ./.github/actions/setup-python-ci
         with:
           python-version: "3.10"
+          profile: drift
 
-      - name: Install quality tools
+      - name: Capture committed baseline
         run: |
-          pip install --upgrade pip
-          pip install ruff mypy radon xenon pytest pytest-cov
+          set -euo pipefail
+          mkdir -p /tmp/quality-prior artifacts/quality-snapshot
+          required=(
+            docs/quality/baseline.json
+            docs/quality/baseline_cc.txt
+            docs/quality/baseline_ruff.txt
+            docs/quality/mypy_baseline.txt
+          )
+          for f in "${required[@]}"; do
+            if [[ ! -f "$f" ]]; then
+              echo "::error title=Missing quality baseline::$f is required for quality-drift (owned by quality.yml only)."
+              exit 1
+            fi
+            if [[ ! -s "$f" ]]; then
+              echo "::error title=Empty quality baseline::$f exists but is empty."
+              exit 1
+            fi
+          done
+          cp -a docs/quality/. /tmp/quality-prior/
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          prior = json.loads(Path("docs/quality/baseline.json").read_text(encoding="utf-8"))
+          assert "ruff" in prior and "radon" in prior, sorted(prior)
+          print("quality baseline preflight OK keys=", sorted(prior))
+          PY
 
-      - name: Baseline quality audit
-        run: python scripts/infra/run_quality_audit.py
-        continue-on-error: true
-
-      - name: Ruff lint (therapy + runtime)
+      - name: Run quality audit
+        id: audit
         run: |
-          ruff check ml/therapy ml/runtime app/personal_mode.py scripts/infra/pre_sagemaker_gate.py
+          set +e
+          python scripts/infra/run_quality_audit.py
+          audit_rc=$?
+          set -e
+          echo "audit_rc=${audit_rc}" >> "$GITHUB_OUTPUT"
+          mkdir -p artifacts/quality-snapshot
+          cp -a docs/quality/. artifacts/quality-snapshot/ || true
+          if [[ -f ruff_baseline.json ]]; then
+            cp ruff_baseline.json artifacts/quality-snapshot/
+          fi
+          AUDIT_RC="$audit_rc" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          prior_path = Path("/tmp/quality-prior/baseline.json")
+          new_path = Path("docs/quality/baseline.json")
+          prior = json.loads(prior_path.read_text(encoding="utf-8")) if prior_path.exists() else {}
+          new = json.loads(new_path.read_text(encoding="utf-8")) if new_path.exists() else {}
+          prior_ruff = prior.get("ruff", {}).get("total", 0)
+          new_ruff = new.get("ruff", {}).get("total", 0)
+          prior_d = set(prior.get("radon", {}).get("d_rated", []))
+          new_d = set(new.get("radon", {}).get("d_rated", []))
+          added_d = sorted(new_d - prior_d)
+          lines = [
+              "## Quality drift",
+              f"- ruff: {prior_ruff} -> {new_ruff}",
+              f"- new D-rated: {added_d or 'none'}",
+              f"- mypy errors (advisory): {new.get('mypy', {}).get('therapy_runtime_errors', 'n/a')}",
+              f"- audit_rc: {os.environ.get('AUDIT_RC', '')}",
+          ]
+          summary = "\n".join(lines) + "\n"
+          print(summary)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
+              fh.write(summary)
+          PY
+          exit "$audit_rc"
 
-      - name: Mypy (Tier 1 production core)
+      - name: Upload quality snapshot
+        if: always()
+        # actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: quality-snapshot-${{ github.sha }}
+          path: artifacts/quality-snapshot/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Restore committed baselines
+        if: always()
         run: |
+          set -euo pipefail
+          git checkout -- docs/quality/
+          git checkout -- ruff_baseline.json 2>/dev/null || rm -f ruff_baseline.json
+          echo "Restored docs/quality/ to committed state" >> "$GITHUB_STEP_SUMMARY"
+
+  ruff-tier1:
+    name: Ruff Tier 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python CI
+        uses: ./.github/actions/setup-python-ci
+        with:
+          python-version: "3.10"
+          profile: lint
+
+      - name: Ruff check (blocking)
+        # Non-isolation Tier-1 only. Stage A / phone app modules are owned by ci.yml.
+        run: |
+          set -euo pipefail
+          ruff check ml/therapy ml/runtime app/personal_mode.py \
+            scripts/infra/pre_sagemaker_gate.py \
+            --extend-exclude ml/runtime/stage_a
+
+  mypy-tier1:
+    name: Mypy Tier 1 (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python CI
+        uses: ./.github/actions/setup-python-ci
+        with:
+          python-version: "3.10"
+          profile: drift
+
+      - name: Mypy
+        # Advisory by design: always exit 0 so type debt does not block merges.
+        # Job also has continue-on-error: true as a belt-and-suspenders guard.
+        run: |
+          set +e
+          mkdir -p artifacts
           mypy ml/therapy ml/runtime app/personal_mode.py \
             --follow-imports=silent \
-            --ignore-missing-imports
-        continue-on-error: true
+            --ignore-missing-imports \
+            --exclude 'ml/runtime/stage_a' > artifacts/mypy.txt 2>&1
+          rc=$?
+          set -e
+          cat artifacts/mypy.txt
+          {
+            echo "## Mypy Tier 1 (advisory)"
+            echo "Intentional non-blocking gate: exit forced to 0 (mypy_rc=${rc})."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
 
-      - name: Safety-adjacent test coverage
-        env:
-          PYTHONPATH: .
+  pyright-tier1:
+    name: Pyright Tier 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python CI
+        uses: ./.github/actions/setup-python-ci
+        with:
+          python-version: "3.10"
+          profile: contracts
+
+      - name: Install basedpyright
+        run: pip install basedpyright
+
+      - name: Basedpyright Tier 1 (blocking)
         run: |
-          pytest tests/test_therapy_safety.py tests/test_phase0_contracts.py \
-            tests/test_production_remediation.py \
+          set -euo pipefail
+          mkdir -p artifacts
+          # Fail-closed on errors. Stage A excluded via pyproject.toml [tool.pyright] exclude.
+          # reportMissingImports stays warning for optional deps (e.g. torch stubs in slim CI).
+          set +e
+          python -m basedpyright ml/therapy ml/runtime app/personal_mode.py \
+            > artifacts/pyright-tier1.txt 2>&1
+          rc=$?
+          set -e
+          cat artifacts/pyright-tier1.txt
+          {
+            echo "## Pyright Tier 1"
+            echo ""
+            echo "Exit code: ${rc}"
+            echo ""
+            echo '```'
+            tail -n 40 artifacts/pyright-tier1.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+  therapy-coverage:
+    name: Therapy safety coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python CI
+        uses: ./.github/actions/setup-python-ci
+        with:
+          python-version: "3.10"
+          profile: contracts
+
+      - name: Install coverage
+        run: pip install pytest-cov
+
+      - name: Therapy safety tests
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          # phase0 / production_remediation live under ci.yml (drift / unit / ops).
+          pytest tests/test_therapy_safety.py \
             --cov=ml/therapy --cov=ml/runtime \
-            --cov-report=term-missing -q
+            --cov-report=term-missing \
+            --cov-report=xml:artifacts/coverage.xml \
+            -q --junitxml=artifacts/therapy-junit.xml
+          if [[ ! -s artifacts/therapy-junit.xml ]]; then
+            echo "::error title=Missing therapy JUnit::Expected non-empty artifacts/therapy-junit.xml"
+            exit 1
+          fi
+          python - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          root = ET.parse("artifacts/therapy-junit.xml").getroot()
+          suites = [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
+          tests = sum(int(s.attrib.get("tests", 0)) for s in suites)
+          if tests == 0:
+              print("::error title=Discovery regression::therapy-coverage collected 0 tests", file=sys.stderr)
+              sys.exit(1)
+          print(f"therapy JUnit OK tests={tests}")
+          PY
 
-      - name: Stage A isolation gate
-        run: |
-          python scripts/infra/validate_stage_a_isolation.py --self-test
-          python scripts/infra/validate_stage_a_isolation.py
+      - name: Upload coverage artifact
+        if: always()
+        # actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: therapy-coverage-${{ github.sha }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: ignore
 
-      - name: Pre-SageMaker gate
+  pre-sagemaker-gate:
+    name: Pre-SageMaker gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python CI
+        uses: ./.github/actions/setup-python-ci
+        with:
+          python-version: "3.10"
+          profile: contracts
+
+      - name: Run pre-SageMaker gate
         run: python scripts/infra/pre_sagemaker_gate.py

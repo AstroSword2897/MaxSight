@@ -1,0 +1,22 @@
+name: free-disk
+description: Strip unused GitHub-hosted runner toolcaches to free space for torch installs.
+
+runs:
+  using: composite
+  steps:
+    - name: Free disk space
+      shell: bash
+      run: |
+        set -euo pipefail
+        {
+          echo "## Disk before free"
+          df -h
+        } >> "$GITHUB_STEP_SUMMARY"
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        {
+          echo "## Disk after free"
+          df -h
+        } >> "$GITHUB_STEP_SUMMARY"

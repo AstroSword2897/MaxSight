@@ -27,7 +27,9 @@ class TierProfile:
     @classmethod
     def from_yaml(cls, path: Path) -> TierProfile:
         """Load tier profile from YAML."""
-        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError(f"tier profile must be a mapping: {path}")
         return cls(
             tier=ComputeTier(raw["tier"]),
             model_tier=str(raw.get("model_tier", "T0")),

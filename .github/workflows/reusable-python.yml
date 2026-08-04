@@ -1,0 +1,248 @@
+# Reusable Python CI job: checkout → optional free-disk → profile setup →
+# validate gate script → run → validate JUnit/required files → artifacts.
+name: Reusable Python Job
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: Gate name for job summary
+        type: string
+        required: true
+      python-version:
+        type: string
+        required: false
+        default: "3.10"
+      profile:
+        description: "lint|contracts|drift|ops|torch-cpu|torch-cpu-full"
+        type: string
+        required: true
+      timeout-minutes:
+        type: number
+        required: false
+        default: 15
+      commands:
+        description: Multiline bash commands to run
+        type: string
+        required: true
+      free-disk:
+        type: boolean
+        required: false
+        default: false
+      artifact-name:
+        type: string
+        required: false
+        default: ""
+      artifact-path:
+        type: string
+        required: false
+        default: artifacts/
+      upload-artifact-always:
+        description: Upload artifacts even on success (e.g. quality snapshots, manifests)
+        type: boolean
+        required: false
+        default: false
+      junit-path:
+        description: Optional JUnit XML path to summarize (fail if missing/empty/zero tests)
+        type: string
+        required: false
+        default: ""
+      require-files:
+        description: Newline-separated paths that must exist and be non-empty after a successful gate
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: .
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_PYTHON_VERSION_WARNING: "1"
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  TOKENIZERS_PARALLELISM: "false"
+
+jobs:
+  run:
+    name: ${{ inputs.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+
+      - name: Validate profile input
+        env:
+          PROFILE: ${{ inputs.profile }}
+        run: |
+          set -euo pipefail
+          case "$PROFILE" in
+            lint|contracts|drift|ops|torch-cpu|torch-cpu-full) ;;
+            *)
+              echo "::error title=Invalid profile::profile='$PROFILE' is not in {lint,contracts,drift,ops,torch-cpu,torch-cpu-full}"
+              exit 1
+              ;;
+          esac
+
+      - name: Free disk
+        if: inputs.free-disk
+        uses: ./.github/actions/free-disk
+
+      - name: Set up Python CI
+        uses: ./.github/actions/setup-python-ci
+        with:
+          python-version: ${{ inputs.python-version }}
+          profile: ${{ inputs.profile }}
+
+      - name: Prepare artifacts directory
+        run: mkdir -p artifacts
+
+      - name: Materialize and validate gate script
+        env:
+          GATE_COMMANDS: ${{ inputs.commands }}
+          GATE_NAME: ${{ inputs.name }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$GATE_COMMANDS" > /tmp/gate-commands.sh
+          if [[ ! -s /tmp/gate-commands.sh ]]; then
+            echo "::error title=Empty gate commands::Gate '$GATE_NAME' received an empty commands block. Fix the workflow_call inputs.commands value."
+            exit 1
+          fi
+          # Fail on whitespace-only scripts (no non-space bytes).
+          if ! grep -q '[^[:space:]]' /tmp/gate-commands.sh; then
+            echo "::error title=Whitespace-only gate commands::Gate '$GATE_NAME' commands contain only whitespace."
+            exit 1
+          fi
+          {
+            echo "## ${GATE_NAME}"
+            echo ""
+            echo "- profile: \`${{ inputs.profile }}\`"
+            echo "- junit: \`${{ inputs.junit-path }}\`"
+            echo ""
+            echo '```bash'
+            cat /tmp/gate-commands.sh
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run gate commands
+        id: gate
+        run: |
+          set -euo pipefail
+          bash /tmp/gate-commands.sh
+
+      - name: Validate required output files
+        if: always() && inputs.require-files != ''
+        env:
+          REQUIRE_FILES: ${{ inputs.require-files }}
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
+          GATE_NAME: ${{ inputs.name }}
+        run: |
+          set -euo pipefail
+          missing=0
+          while IFS= read -r path; do
+            [[ -z "${path// }" ]] && continue
+            if [[ ! -f "$path" ]]; then
+              echo "::error title=Missing required output::Gate '$GATE_NAME' expected file '$path' but it was not created."
+              missing=1
+              continue
+            fi
+            if [[ ! -s "$path" ]]; then
+              echo "::error title=Empty required output::Gate '$GATE_NAME' expected non-empty file '$path'."
+              missing=1
+            fi
+          done <<< "$REQUIRE_FILES"
+          # Always require files when gate succeeded; on failure still report missing paths as errors.
+          if [[ "$missing" -ne 0 ]]; then
+            echo "Required output validation failed for gate '$GATE_NAME' (gate_outcome=$GATE_OUTCOME)" >&2
+            exit 1
+          fi
+
+      - name: Summarize and validate JUnit results
+        if: always() && inputs.junit-path != ''
+        env:
+          JUNIT_PATH: ${{ inputs.junit-path }}
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
+          GATE_NAME: ${{ inputs.name }}
+        run: |
+          set -euo pipefail
+          if [[ ! -f "$JUNIT_PATH" ]]; then
+            echo "::error title=Missing JUnit XML::Gate '$GATE_NAME' expected JUnit at '$JUNIT_PATH'."
+            echo "JUnit file missing: $JUNIT_PATH" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if [[ ! -s "$JUNIT_PATH" ]]; then
+            echo "::error title=Empty JUnit XML::Gate '$GATE_NAME' wrote an empty JUnit file at '$JUNIT_PATH' (discovery or runner failure)."
+            exit 1
+          fi
+          python - <<'PY'
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          path = os.environ["JUNIT_PATH"]
+          gate = os.environ["GATE_NAME"]
+          try:
+              root = ET.parse(path).getroot()
+          except ET.ParseError as exc:
+              print(
+                  f"::error title=Invalid JUnit XML::Gate '{gate}' JUnit at '{path}' failed to parse: {exc}",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          suites = [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
+          if not suites and root.tag != "testsuite":
+              suites = [root]
+          tests = failures = errors = skipped = 0
+          for s in suites:
+              tests += int(s.attrib.get("tests", 0))
+              failures += int(s.attrib.get("failures", 0))
+              errors += int(s.attrib.get("errors", 0))
+              skipped += int(s.attrib.get("skipped", 0) or s.attrib.get("skip", 0))
+          line = f"JUnit: tests={tests} failures={failures} errors={errors} skipped={skipped}"
+          print(line)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
+              fh.write(f"\n{line}\n")
+          if tests == 0:
+              print(
+                  f"::error title=Discovery regression::Gate '{gate}' collected 0 tests "
+                  f"(JUnit at '{path}'). Check pytest paths / markers / collection errors.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          if failures + errors > 0 and os.environ.get("GATE_OUTCOME") == "success":
+              print(
+                  f"::error title=JUnit/gate mismatch::Gate '{gate}' step succeeded but JUnit reports "
+                  f"failures={failures} errors={errors}.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          PY
+
+      - name: Upload artifacts on failure
+        if: failure() && inputs.artifact-name != '' && inputs.artifact-path != ''
+        # actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ inputs.artifact-name }}-failure
+          path: ${{ inputs.artifact-path }}
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload artifacts (always)
+        if: always() && inputs.upload-artifact-always && inputs.artifact-name != '' && inputs.artifact-path != ''
+        # actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-path }}
+          retention-days: 14
+          if-no-files-found: ignore
