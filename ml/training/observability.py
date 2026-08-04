@@ -30,6 +30,12 @@ STRUCTURED_EVENT_SCHEMAS: dict[str, frozenset[str]] = {
     "training.health_summary": frozenset(HEALTH_SUMMARY_REQUIRED_FIELDS),
     "therapy.suppressed": frozenset({"reason", "count", "module", "function"}),
     "rag.degraded": frozenset({"guard_reason", "latency_ms"}),
+    "rag.failure": frozenset(
+        {"failure_type", "latency_ms", "retrieved_docs", "retrieval_score_max"}
+    ),
+    "rag.alert": frozenset(
+        {"system", "level", "violations", "severity", "explanation"}
+    ),
     "runtime.tier_resolved": frozenset({"tier", "enable_rag", "enable_therapy"}),
 }
 

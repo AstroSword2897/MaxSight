@@ -102,6 +102,8 @@ def _errors() -> list[str]:
         "training.health_summary",
         "therapy.suppressed",
         "rag.degraded",
+        "rag.failure",
+        "rag.alert",
         "runtime.tier_resolved",
     }
     missing_events = required_events - set(STRUCTURED_EVENT_SCHEMAS.keys())

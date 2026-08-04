@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.local/schemas/model_certification_manifest.json",
+  "title": "ModelCertificationManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_hash",
+    "platform",
+    "cells",
+    "all_passed",
+    "summary"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "artifact_hash": { "type": "string", "minLength": 1 },
+    "platform": {
+      "type": "string",
+      "enum": ["torch_ref", "onnx", "coreml", "litert"]
+    },
+    "model_version": { "type": "string" },
+    "cells": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/cell" }
+    },
+    "all_passed": { "type": "boolean" },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "failed", "blocked", "skipped", "xfailed"],
+      "properties": {
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "blocked": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "xfailed": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "cellStatus": {
+      "type": "string",
+      "enum": [
+        "passed",
+        "failed",
+        "blocked_missing_hazard_labels",
+        "skipped_tools_missing",
+        "xfail_known_issue"
+      ]
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "condition_mode",
+        "platform",
+        "status",
+        "metrics",
+        "gates_failed"
+      ],
+      "properties": {
+        "condition_mode": { "type": "string", "minLength": 1 },
+        "platform": {
+          "type": "string",
+          "enum": ["torch_ref", "onnx", "coreml", "litert"]
+        },
+        "status": { "$ref": "#/$defs/cellStatus" },
+        "metrics": { "type": "object" },
+        "gates_failed": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status_label": {
+          "type": "string",
+          "description": "Human-facing token such as SKIP or XFAIL"
+        }
+      }
+    }
+  }
+}

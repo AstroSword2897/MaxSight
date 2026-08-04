@@ -102,6 +102,8 @@ class RagContext:
     retrieved_count: int
     grounded: bool
     guard_reason: str = ""
+    failure_type: str = ""
+    fallback_mode: str = "none"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

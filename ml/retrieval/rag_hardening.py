@@ -36,9 +36,10 @@ class HardenedRagResult:
     guard_reason: str
     latency_ms: float
     cache_hit: bool
+    reliability: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out = {
             "guidance": self.guidance,
             "advisory_score": self.advisory_score,
             "retrieved_count": len(self.retrieved),
@@ -47,6 +48,9 @@ class HardenedRagResult:
             "latency_ms": round(self.latency_ms, 2),
             "cache_hit": self.cache_hit,
         }
+        if self.reliability:
+            out["reliability"] = self.reliability
+        return out
 
 
 @dataclass
@@ -68,6 +72,7 @@ class RagSloStats:
         return self.grounded / max(1, self.total)
 
     def record(self, result: HardenedRagResult) -> None:
+        """Increment counters; prefer window metrics from RAGReliabilityWrapper long term."""
         self.total += 1
         if result.latency_ms <= self.slo_latency_ms:
             self.within_latency += 1
@@ -144,11 +149,37 @@ class HardenedRagPipeline:
         self.top_k = top_k
         self.slo = RagSloStats(slo_latency_ms=timeout_s * 1000)
 
+    def _classify_retriever_error(self, exc: Exception) -> str:
+        """Map exception types to RAG failure taxonomy error_type strings."""
+        name = type(exc).__name__.lower()
+        msg = str(exc).lower()
+        if "timeout" in name or "timeout" in msg:
+            return "timeout"
+        if "embedding" in name or "embedding" in msg:
+            return "embedding_failure"
+        return "vector_db_error"
+
+    def _attach_query_metrics(
+        self,
+        result: HardenedRagResult,
+        *,
+        fallback_used: bool,
+        error_type: str | None,
+    ) -> HardenedRagResult:
+        """Embed per-request metrics for RAGReliabilityWrapper consumption."""
+        from ml.retrieval.rag_reliability import metrics_from_hardened_result
+
+        metrics = metrics_from_hardened_result(
+            result, fallback_used=fallback_used, error_type=error_type
+        )
+        result.reliability = {"metrics": metrics.to_dict()}
+        return result
+
     def query(self, query: dict[str, Any], temporal_reliability: float = 1.0) -> HardenedRagResult:
         """Execute hardened RAG with debounce, guard, timeout, and SLO tracking."""
         cached = self.debouncer.get(query)
         if cached is not None:
-            return HardenedRagResult(
+            hit = HardenedRagResult(
                 guidance=cached.guidance,
                 advisory_score=cached.advisory_score,
                 retrieved=cached.retrieved,
@@ -157,25 +188,26 @@ class HardenedRagPipeline:
                 latency_ms=0.0,
                 cache_hit=True,
             )
+            return self._attach_query_metrics(hit, fallback_used=False, error_type=None)
 
         t0 = time.perf_counter()
         raw_results: list[RetrievalResult] = []
+        error_type: str | None = None
+        fallback_used = bool(getattr(self.retriever, "is_null_retriever", False))
         try:
             raw_results = self.retriever.retrieve(query, top_k=self.top_k)
         except Exception as exc:
+            error_type = self._classify_retriever_error(exc)
+            fallback_used = True
             logger.error("rag_retriever_error: %s", exc)
 
         filtered, guard_reason = self.guard.filter(raw_results)
         elapsed_ms = (time.perf_counter() - t0) * 1000
+        if elapsed_ms > self.timeout_s * 1000:
+            error_type = error_type or "timeout"
 
         if not raw_results:
-            from ml.training.observability import emit_event
-
-            emit_event(
-                "rag.degraded",
-                guard_reason=guard_reason or "no_results",
-                latency_ms=round(elapsed_ms, 2),
-            )
+            fallback_used = True
 
         reliability = max(0.0, min(1.0, float(temporal_reliability)))
         top_score = max((r.score for r in filtered), default=0.0)
@@ -183,6 +215,7 @@ class HardenedRagPipeline:
 
         if reliability < 0.45:
             guidance = "advisory_only_unstable_perception"
+            fallback_used = True
         elif advisory_score > 0.7:
             guidance = "therapy_prompt_high_confidence"
         else:
@@ -199,4 +232,6 @@ class HardenedRagPipeline:
         )
         self.debouncer.store(query, result)
         self.slo.record(result)
-        return result
+        return self._attach_query_metrics(
+            result, fallback_used=fallback_used, error_type=error_type
+        )

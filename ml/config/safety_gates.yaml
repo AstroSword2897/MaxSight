@@ -1,0 +1,23 @@
+# Safety-gate thresholds (placeholders until ADR-02 sets values from real eval).
+# Sourced from ml/runtime_constants.py numeric defaults.
+
+version: "1.0.0"
+
+thresholds:
+  hazard_recall_min: 0.95
+  false_safe_rate_max: 0.01
+  direction_correctness_min: 0.90
+  distance_zone_accuracy_min: 0.85
+  time_to_alert_p95_ms: 80
+  time_to_alert_median_ms: 80
+  overload_alerts_per_minute_max: 12
+
+platforms:
+  - torch_ref
+  - onnx
+  - coreml
+
+# SG-01/02 require hazard-labeled Ground Truth. Until present, cells are blocked.
+require_hazard_ground_truth_for:
+  - SG-01
+  - SG-02

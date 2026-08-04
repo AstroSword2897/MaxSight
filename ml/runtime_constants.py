@@ -26,6 +26,25 @@ FALSE_SAFE_RATE_MAX = 0.01
 DIRECTION_CORRECTNESS_MIN = 0.90
 DISTANCE_ZONE_ACCURACY_MIN = 0.85
 
+# Explicit condition-mode one-hot tensor contract (MAXS-302). Inspectable input, not a shared embedding.
+CONDITION_MODE_IDS: dict[str, int] = {
+    "none": 0,
+    "glaucoma": 1,
+    "amd": 2,
+    "cataracts": 3,
+    "diabetic_retinopathy": 4,
+    "retinitis_pigmentosa": 5,
+    "cvi": 6,
+    "amblyopia": 7,
+    "strabismus": 8,
+    "color_blindness": 9,
+    "myopia": 10,
+    "hyperopia": 11,
+    "presbyopia": 12,
+    "astigmatism": 13,
+}
+CONDITION_TENSOR_WIDTH = len(CONDITION_MODE_IDS)
+
 # Default MaxSightCNN parameter envelope for CI size assertions (full tier wiring).
 DEFAULT_MODEL_MIN_PARAMS = 90_000_000
 DEFAULT_MODEL_MAX_PARAMS = 400_000_000
@@ -43,6 +62,14 @@ MVP_MODEL_OUTPUT_KEYS = (
     "uncertainty",  # global uncertainty scalar.
     "temporal_consistency",  # temporal stability features.
 )
+
+
+def condition_mode_to_tensor_index(mode: str | None) -> int:
+    """Map a condition mode string to its one-hot index."""
+    if not mode:
+        return CONDITION_MODE_IDS["none"]
+    key = mode.strip().lower().replace(" ", "_").replace("-", "_")
+    return CONDITION_MODE_IDS.get(key, CONDITION_MODE_IDS["none"])
 
 
 def check_safety_gate_report(metrics: dict) -> tuple[bool, list[str]]:
