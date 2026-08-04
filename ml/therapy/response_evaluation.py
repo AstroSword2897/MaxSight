@@ -19,6 +19,18 @@ class ResponseEvaluationModel:
     can be replaced by a small MLP for learned evaluation later.
     """
 
+    @staticmethod
+    def _as_float(value: Any, default: float = 0.5) -> float:
+        """Coerce nested/list stress proxies to a scalar float."""
+        if isinstance(value, (list, tuple)):
+            if not value:
+                return default
+            value = value[-1]
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
     def evaluate(
         self,
         before_state: dict[str, Any],
@@ -28,13 +40,9 @@ class ResponseEvaluationModel:
         """
         Compare stress/cognitive load before vs after. Positive delta → effectiveness.
         """
-        stress_before = before_state.get("environment_stress_level", 0.5)
-        stress_after = after_state.get("environment_stress_level", 0.5)
-        if isinstance(stress_before, (list, tuple)) and stress_before:
-            stress_before = float(stress_before[-1]) if stress_before else 0.5
-        if isinstance(stress_after, (list, tuple)) and stress_after:
-            stress_after = float(stress_after[-1]) if stress_after else 0.5
-        stress_reduction = float(stress_before - stress_after)
+        stress_before = self._as_float(before_state.get("environment_stress_level", 0.5))
+        stress_after = self._as_float(after_state.get("environment_stress_level", 0.5))
+        stress_reduction = stress_before - stress_after
 
         if stress_reduction > 0.15:
             effectiveness = min(1.0, 0.5 + stress_reduction * 2.0)

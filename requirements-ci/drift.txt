@@ -1,0 +1,8 @@
+# Drift + quality audit tooling (no torch).
+pytest>=8.0.0
+PyYAML>=6.0
+jsonschema>=4.0.0
+radon>=6.0.0
+ruff>=0.6.0
+mypy>=1.8.0
+xenon>=0.9.0

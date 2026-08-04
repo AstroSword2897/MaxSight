@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ml.retrieval.encoders.audio_encoder import AudioEncoder
 from ml.retrieval.encoders.depth_extractor import DepthExtractor
