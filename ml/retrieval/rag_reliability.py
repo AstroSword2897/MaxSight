@@ -398,3 +398,5 @@ class RAGReliabilityWrapper:
 
 
 def wrap_rag_pipeline(base: Any, slo: RAGSLO | None = None) -> RAGReliabilityWrapper:
+    """Factory for RAGReliabilityWrapper with default SLO from YAML."""
+    return RAGReliabilityWrapper(base, slo=slo or RAGSLO.load())
