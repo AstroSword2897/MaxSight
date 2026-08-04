@@ -212,12 +212,10 @@ def enable_patient_mode():
 
 def disable_patient_mode():
     """Disable patient mode globally."""
-    global _global_guard
     if _global_guard:
         _global_guard.disable()
 
 
 def is_patient_mode_enabled() -> bool:
     """Check if patient mode is currently enabled."""
-    global _global_guard
     return _global_guard is not None and _global_guard._enabled

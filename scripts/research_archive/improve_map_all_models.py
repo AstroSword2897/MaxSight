@@ -198,12 +198,16 @@ def main():
     best_nms = args.nms_iou
     best_map = -1.0
 
-    conf_candidates = list(CONF_CANDIDATES)
-    if getattr(args, "target_map", None) is not None:
-        conf_candidates = list(conf_candidates) + list(CONF_CANDIDATES_TARGET_MAP) + ["auto"]
+    # Fast/target sweeps use the reduced grids; full sweeps use the full conf/NMS product.
+    if args.fast_sweep or getattr(args, "target_map", None) is not None:
+        conf_candidates = list(CONF_FAST)
+        nms_candidates = list(NMS_FAST)
+    else:
+        conf_candidates = list(CONF_CANDIDATES)
+        nms_candidates = list(NMS_IOU_CANDIDATES)
 
     if not args.skip_sweep:
-        total = len(conf_candidates) * len(NMS_IOU_CANDIDATES)
+        total = len(conf_candidates) * len(nms_candidates)
         n = 0
         for conf, iou in itertools.product(conf_candidates, nms_candidates):
             n += 1

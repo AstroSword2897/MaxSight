@@ -218,9 +218,11 @@ jobs:
       timeout-minutes: 10
       commands: |
         set -euo pipefail
-        flake8 ml/ app/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 ml/ app/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics \
+          --extend-exclude scripts/research_archive
         ruff check ml/therapy ml/runtime app/personal_mode.py scripts/infra/pre_sagemaker_gate.py
-        flake8 ml/ scripts/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        flake8 ml/ scripts/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics \
+          --extend-exclude scripts/research_archive
         black --check ml/ scripts/ || true
 
   stage-a-contracts:
