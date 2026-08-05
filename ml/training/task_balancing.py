@@ -310,10 +310,10 @@ class GradNormMultiHeadLoss(nn.Module):
         for head_name, loss_fn in self.head_losses.items():
             try:
                 pred, targ = None, None
-                if head_name == "objectness" and aligned_pred is not None:
+                if head_name == "objectness" and aligned_pred is not None and aligned_target is not None:
                     pred = aligned_pred.get("objectness")
                     targ = aligned_target.get("objectness")
-                elif head_name == "classification" and aligned_pred is not None:
+                elif head_name == "classification" and aligned_pred is not None and aligned_target is not None:
                     pred = aligned_pred.get("classification")
                     targ = aligned_target.get("labels")
                     if pred is not None and pred.numel() == 0:
@@ -325,7 +325,7 @@ class GradNormMultiHeadLoss(nn.Module):
                     if pred is not None and targ is not None and pred.dim() == 2:
                         pred = pred.unsqueeze(0)
                         targ = targ.unsqueeze(0)
-                elif head_name == "box" and aligned_pred is not None:
+                elif head_name == "box" and aligned_pred is not None and aligned_target is not None:
                     pred = aligned_pred.get("box")
                     targ = aligned_target.get("boxes")
                     if pred is not None and pred.numel() == 0:
@@ -333,7 +333,7 @@ class GradNormMultiHeadLoss(nn.Module):
                         zero_loss = torch.tensor(0.0, device=device, requires_grad=True)
                         head_loss_dicts[head_name] = {"loss": zero_loss}
                         continue
-                elif head_name == "distance" and aligned_pred is not None:
+                elif head_name == "distance" and aligned_pred is not None and aligned_target is not None:
                     pred = aligned_pred.get("distance")
                     targ = aligned_target.get("distance")
                     if pred is not None and pred.numel() == 0:

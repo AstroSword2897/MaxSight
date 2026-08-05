@@ -24,6 +24,7 @@ class PanopticSegmenter(Protocol):
 
     def segment(self, frame: Any) -> list[dict[str, Any]]:
         """Return pseudo-panoptic segments for one frame."""
+        ...
 
 
 @dataclass(frozen=True)

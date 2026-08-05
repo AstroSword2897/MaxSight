@@ -17,8 +17,14 @@ opencv-python>=4.8.0
 # Audio Processing (optional, for MFCC)
 # librosa>=0.10.0  # Uncomment if using librosa for MFCC
 
-# Text Encoding (optional, for OCR encoder)
-# sentence-transformers>=2.0.0  # Uncomment if using OCR encoder with sentence-transformers
+# Text Encoding (OCR encoder)
+sentence-transformers>=2.0.0
+
+# Caching
+redis>=5.0.0
+
+# Scene-graph GNN path
+torch-geometric>=2.4.0
 
 # Testing
 pytest>=9.0.1

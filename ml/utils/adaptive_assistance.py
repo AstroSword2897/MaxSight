@@ -193,7 +193,7 @@ class AdaptiveAssistance:
 
         return 1  # Default: caution and above.
 
-    def get_adaptive_config(self) -> dict[str, any]:
+    def get_adaptive_config(self) -> dict[str, Any]:
         """Get complete adaptive configuration."""
         return {
             "verbosity": self.get_adaptive_verbosity(),

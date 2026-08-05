@@ -1,6 +1,7 @@
 """Ultra-Optimized Hybrid CNN + Vision Transformer Backbone for MaxSight 3.0."""
 
 import math
+from typing import Any, cast
 
 import torch
 import torch.nn as nn
@@ -10,7 +11,7 @@ from torchvision.ops.feature_pyramid_network import FeaturePyramidNetwork
 
 # Import xformers for memory-efficient attention when available.
 try:
-    import xformers.ops as xops
+    import xformers.ops as xops  # type: ignore[import-not-found]  # optional dep stubs missing in CI venv
 
     XFORMERS_AVAILABLE = True
 except ImportError:
@@ -413,11 +414,14 @@ class FeatureCache:
     def get(self, key: str):
         return self.cache.get(key, None)
 
-    def set(self, key: str, value: torch.Tensor):
+    def set(self, key: str, value: torch.Tensor | tuple[torch.Tensor, ...]):
         if len(self.keys) >= self.max_size:
             old_key = self.keys.pop(0)
             del self.cache[old_key]
-        self.cache[key] = value.detach()
+        if isinstance(value, tuple):
+            self.cache[key] = tuple(v.detach() for v in value)
+        else:
+            self.cache[key] = value.detach()
         self.keys.append(key)
 
     def clear(self):
@@ -616,7 +620,9 @@ class HybridCNNViTBackbone(nn.Module):
             print("Compiling model components with torch.compile...")
             self.cnn_stem = torch.compile(self.cnn_stem, mode="max-autotune")
             for key in self.cnn_layers:
-                self.cnn_layers[key] = torch.compile(self.cnn_layers[key], mode="max-autotune")
+                self.cnn_layers[key] = cast(
+                    nn.Module, torch.compile(self.cnn_layers[key], mode="max-autotune")
+                )
             self.fpn = torch.compile(self.fpn, mode="max-autotune")
 
     def _init_weights(self, m):
@@ -643,7 +649,7 @@ class HybridCNNViTBackbone(nn.Module):
             cache_key = self.cache._make_cache_key(x, frame_id)
             cached = self.cache.get(cache_key)
             if cached is not None:
-                return cached
+                return list(cached) if isinstance(cached, tuple) else [cached]
 
         def run_cnn():
             features = []
@@ -687,9 +693,14 @@ class HybridCNNViTBackbone(nn.Module):
 
         enhanced_cnn = []
         if hasattr(self, "cross_layer_alpha_raw"):
-            alpha = torch.sigmoid(self.cross_layer_alpha_raw)
+            alpha_raw = self.cross_layer_alpha_raw
+            alpha = (
+                torch.sigmoid(alpha_raw)
+                if isinstance(alpha_raw, torch.Tensor)
+                else torch.tensor(0.1, device=vit_patches.device, dtype=vit_patches.dtype)
+            )
         else:
-            alpha = 0.1  # Default fallback.
+            alpha = torch.tensor(0.1, device=vit_patches.device, dtype=vit_patches.dtype)
 
         for cnn_feat, proj_layer in zip(cnn_features, self.cnn_to_vit_proj):
             # CNN → ViT.
@@ -711,7 +722,7 @@ class HybridCNNViTBackbone(nn.Module):
 
     def forward(
         self, images: torch.Tensor, return_all_features: bool = False
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor] | None]:
+    ) -> tuple[torch.Tensor, dict[str, Any] | None]:
         """Ultra-optimized forward pass."""
 
         B, _, H, W = images.shape

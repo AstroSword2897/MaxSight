@@ -41,6 +41,18 @@ TIER_CONFIGS = sorted(
 BASELINE_OVERRIDES = {"run_id": "test-run", "experiment": "ci"}
 
 
+def _load_yaml_dict(path: Path) -> dict[str, Any]:
+    raw = yaml.safe_load(path.read_text())
+    assert isinstance(raw, dict)
+    return raw
+
+
+def _dump_yaml(data: dict[str, Any]) -> str:
+    text = yaml.safe_dump(data)
+    assert isinstance(text, str)
+    return text
+
+
 # ── Registry file: shape + invariants ─────────────────────────────────────────
 
 
@@ -137,31 +149,31 @@ def test_every_tier_yaml_resolves_through_registry(config_path: Path) -> None:
 
 
 def test_unknown_dataset_id_in_yaml_fails_resolution(tmp_path: Path) -> None:
-    base = yaml.safe_load((CONFIG_DIR / "t0_baseline.yaml").read_text())
+    base = _load_yaml_dict(CONFIG_DIR / "t0_baseline.yaml")
     base["dataset"]["dataset_id"] = "ghost-dataset"
     bad = tmp_path / "bad.yaml"
-    bad.write_text(yaml.safe_dump(base))
+    bad.write_text(_dump_yaml(base))
     with pytest.raises(ConfigValidationError, match="unknown dataset_id"):
         ResolvedTrainingConfig.from_sources(bad, cli_overrides=BASELINE_OVERRIDES)
 
 
 def test_tier_outside_compat_list_fails_resolution(tmp_path: Path) -> None:
-    base = yaml.safe_load((CONFIG_DIR / "t5_temporal.yaml").read_text())
+    base = _load_yaml_dict(CONFIG_DIR / "t5_temporal.yaml")
     base["dataset"]["dataset_id"] = "coco-bronze"
     base["dataset"]["dataset_version"] = "2017"
     bad = tmp_path / "bad.yaml"
-    bad.write_text(yaml.safe_dump(base))
+    bad.write_text(_dump_yaml(base))
     with pytest.raises(ConfigValidationError, match="not certified for tier 'T5_TEMPORAL'"):
         ResolvedTrainingConfig.from_sources(bad, cli_overrides=BASELINE_OVERRIDES)
 
 
 def test_inactive_registered_dataset_fails_resolution(tmp_path: Path) -> None:
     """Reserved medallion keys (status=registered) must not be trainable yet."""
-    base = yaml.safe_load((CONFIG_DIR / "t5_temporal.yaml").read_text())
+    base = _load_yaml_dict(CONFIG_DIR / "t5_temporal.yaml")
     base["dataset"]["dataset_id"] = "kinetics700"
     base["dataset"]["dataset_version"] = "v0"
     bad = tmp_path / "bad.yaml"
-    bad.write_text(yaml.safe_dump(base))
+    bad.write_text(_dump_yaml(base))
     with pytest.raises(ConfigValidationError, match="not 'active'"):
         ResolvedTrainingConfig.from_sources(bad, cli_overrides=BASELINE_OVERRIDES)
 
@@ -175,7 +187,7 @@ def _write_registry(tmp_path: Path, entries: list[dict[str, Any]]) -> Path:
     (tmp_path / "label_spaces.yaml").write_text(ls_src.read_text())
     p = tmp_path / "registry.yaml"
     p.write_text(
-        yaml.safe_dump(
+        _dump_yaml(
             {
                 "schema_version": REGISTRY_SCHEMA_VERSION,
                 "datasets": entries,
@@ -295,8 +307,14 @@ def test_per_split_image_dir_resolves_correctly(tmp_path: Path) -> None:
     )
     reg = load_registry(p)
     entry = reg.resolve("test-ds", "v1")
-    assert entry.splits.train.image_dir == "custom/train"
-    assert entry.splits.val.image_dir == "custom/val"
+    splits = entry.splits
+    assert splits is not None
+    train_split = splits.train
+    val_split = splits.val
+    assert train_split is not None
+    assert val_split is not None
+    assert train_split.image_dir == "custom/train"
+    assert val_split.image_dir == "custom/val"
     assert entry.resolved_image_dir("train") == "custom/train"
     assert entry.resolved_image_dir("val") == "custom/val"
     # annotation_path helper
@@ -316,7 +334,11 @@ def test_per_split_image_dir_falls_back_to_entry_level(tmp_path: Path) -> None:
     )
     reg = load_registry(p)
     entry = reg.resolve("test-ds", "v1")
-    assert entry.splits.train.image_dir is None
+    splits = entry.splits
+    assert splits is not None
+    train_split = splits.train
+    assert train_split is not None
+    assert train_split.image_dir is None
     assert entry.resolved_image_dir("train") == "shared/images"
 
 

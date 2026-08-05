@@ -596,11 +596,15 @@ def compute_class_weights(annotation_file: Path) -> dict[int, float]:
 
 def get_data_info(loader: DataLoader) -> dict[str, Any]:
     """Get information about a data loader (dataset size, batch count, etc.). Returns: Dictionary with dataset statistics."""
+    from collections.abc import Sized
+
     dataset = loader.dataset
     batch_size = loader.batch_size
+    # Dataset protocol is not Sized; only report length when __len__ exists.
+    dataset_size: int | str = len(dataset) if isinstance(dataset, Sized) else "unknown"
 
     info = {
-        "dataset_size": len(dataset),
+        "dataset_size": dataset_size,
         "batch_size": batch_size,
         "num_batches": len(loader),
         "num_workers": loader.num_workers,

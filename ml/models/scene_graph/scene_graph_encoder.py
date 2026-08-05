@@ -87,11 +87,11 @@ class SceneGraphEncoder(nn.Module):
             relations.append(
                 SceneRelation(
                     subject=f"object_{idx_i[k].item()}",
-                    predicate=self.spatial_predicates[pred_idx[k].item()],
+                    predicate=self.spatial_predicates[int(pred_idx[k].item())],
                     object=f"object_{idx_j[k].item()}",
                     confidence=probs[k, pred_idx[k]].item(),
-                    src=idx_i[k].item(),
-                    dst=idx_j[k].item(),
+                    src=int(idx_i[k].item()),
+                    dst=int(idx_j[k].item()),
                 )
             )
 
@@ -116,8 +116,8 @@ class SceneGraphEncoder(nn.Module):
 
         relations = []
         for k in range(pred_idx.shape[0]):
-            subj = object_classes[idx_i[k].item()]
-            obj = object_classes[idx_j[k].item()]
+            subj = object_classes[int(idx_i[k].item())]
+            obj = object_classes[int(idx_j[k].item())]
             # Check rule override.
             rule_pred = self.semantic_rules.get((subj, obj), None)
             predicate = rule_pred if rule_pred else f"semantic_{pred_idx[k].item()}"
@@ -128,8 +128,8 @@ class SceneGraphEncoder(nn.Module):
                     predicate=predicate,
                     object=obj,
                     confidence=confidence,
-                    src=idx_i[k].item(),
-                    dst=idx_j[k].item(),
+                    src=int(idx_i[k].item()),
+                    dst=int(idx_j[k].item()),
                 )
             )
 
@@ -210,8 +210,13 @@ class SceneGraphEncoder(nn.Module):
             for b in range(batch_size):
                 scene_boxes = boxes[b]  # [K, 4].
                 scene_embeddings = object_embeddings[b]  # [K, C].
-                scene_classes = (
+                scene_classes_raw = (
                     object_classes[b] if isinstance(object_classes[0], list) else object_classes
+                )
+                scene_classes: list[str] = (
+                    list(scene_classes_raw)
+                    if isinstance(scene_classes_raw, list)
+                    else [str(scene_classes_raw)]
                 )
 
                 spatial_rels = self.extract_spatial_relations(scene_boxes, scene_embeddings)
@@ -330,9 +335,11 @@ if TORCH_GEOMETRIC_AVAILABLE:
 
 else:
 
-    class GNNEncoder(nn.Module):
+    class _GNNEncoderStub(nn.Module):
         def __init__(self, *args, **kwargs):
             super().__init__()
 
         def forward(self, *args, **kwargs):
             raise ImportError("torch-geometric is required for GNNEncoder")
+
+    GNNEncoder = _GNNEncoderStub  # type: ignore[misc,assignment]  # stub when torch_geometric is absent

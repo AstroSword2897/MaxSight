@@ -36,7 +36,6 @@ def check_tier_configs() -> str:
     from ml.runtime.tier_router import TierRouter
 
     router = TierRouter()
-    missing = [t.value for t in router._profiles if router._profiles.get(t) is None]
     loaded = list(router._profiles.keys())
     if len(loaded) < 3:
         raise RuntimeError(f"Only {len(loaded)}/3 tier configs loaded; missing profiles")

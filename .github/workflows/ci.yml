@@ -232,8 +232,9 @@ jobs:
     uses: ./.github/workflows/reusable-python.yml
     with:
       name: stage-a-contracts
-      profile: contracts
-      timeout-minutes: 12
+      profile: torch-cpu
+      timeout-minutes: 20
+      free-disk: true
       artifact-name: stage-a-artifacts
       artifact-path: artifacts/
       junit-path: artifacts/stage-a-junit.xml

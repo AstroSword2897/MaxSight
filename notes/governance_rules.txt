@@ -1,0 +1,19 @@
+# TB system governance rules (from README.md § TB system governance)
+
+Extracted as short enforceable boundary rules for Block 2.4 checks.
+
+1. Single source: Do not add parallel governance markdown trees under docs/ for the same L1–L9 / AWS / gold-vs-medallion rules; deep-link to README instead.
+2. Do not collapse layers (e.g. no event semantics inside gold IR; no therapy policy inside the SageMaker estimator builder).
+3. L1 ownership: ml/models, ml/data (incl. gold), ml/training, ml/evaluation, ml/training/export.py are the trainable stack.
+4. L1 hard boundary: Do not add boto3 or the SageMaker SDK under ml/training/, ml/models/, or ml/data/; push AWS to ml/infra/* and scripts/ops/*.
+5. L1 hard boundary: Do not embed C1 event semantics or therapy copy policy into datasets or gold IR.
+6. Gold Layer A: fixed keys in ml/data/gold/schema.py; Layer B fields (distance, urgency, …) may come from collate/model—never require registry resolution inside meta-driven gold loading.
+7. Training batches use images only (ml/data/sample_contract.py); gold data_plane uses gold meta + shards only.
+8. L2 inference: ml/infra/inference_handler.py may call TherapyTaskIntegrator; must not import ml/pipeline/sagemaker_entrypoint.py or other offline-only mains.
+9. L2 offline: pipeline_runner / sagemaker_entrypoint are Processing jobs—not the realtime inference contract.
+10. RAG/retrieval is advisory-only; must not override hazard / urgency / distance authority; no writes to gold shard schema from therapy or retrieval.
+11. L3/L4: scripts/ops and scripts/product are thin wrappers; ml/infra owns sessions, roles, estimator, deploy, S3, registry.
+12. Deploy registry gate is default; --skip-registry-check is break-glass (forbidden when MAXSIGHT_ENV=production).
+13. L6–L7 downstream export/on-device must not change L1 gold IR or batch keys without explicit L1 review.
+14. L8 simulation/runtime keep payload/error shapes aligned with production where practical; L9 infra stubs/docs are not runtime imports for training.
+15. Canonical training data plane is gold JSONL + meta.json; medallion training_index.json is legacy.

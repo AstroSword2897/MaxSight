@@ -2,6 +2,7 @@
 
 import faiss
 import numpy as np
+from typing import Any, cast
 
 
 class NeuralIndexBuilder:
@@ -67,7 +68,8 @@ class NeuralIndexBuilder:
             if n_train < nlist:
                 n_train = nlist  # Need at least nlist samples.
             train_embeddings = embeddings[:n_train]
-            self.index.train(train_embeddings)
+            # faiss stubs require keyword-only x= for train/add/search.
+            cast(Any, self.index).train(x=train_embeddings)
 
         elif index_type_upper == "FLAT":
             # Flat: Exact search.
@@ -92,7 +94,7 @@ class NeuralIndexBuilder:
                 self.use_gpu = False
 
         # Add embeddings.
-        self.index.add(embeddings)
+        cast(Any, self.index).add(x=embeddings)
 
         # Save if path provided.
         if index_path:
@@ -135,6 +137,6 @@ class NeuralIndexBuilder:
         query = query.astype("float32")
 
         # Search.
-        distances, indices = self.index.search(query, k)
+        distances, indices = cast(Any, self.index).search(x=query, k=k)
 
         return distances, indices

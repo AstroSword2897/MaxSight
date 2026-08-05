@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import inspect
 import re
 import sys
 from pathlib import Path
@@ -14,14 +13,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from ml.infra.sagemaker_utils import TRAINING_METRIC_DEFINITIONS  # noqa: E402
 from ml.training.observability import (  # noqa: E402
-    DEFAULT_MAX_SKIPPED_BATCH_RATIO,
     EVENT_LOG_PREFIX,
     HEALTH_SUMMARY_LOG_PREFIX,
     HEALTH_SUMMARY_REQUIRED_FIELDS,
     STRUCTURED_EVENT_SCHEMAS,
     parse_health_summary_line,
 )
-from ml.training.train_loop import ProductionTrainLoop  # noqa: E402
 
 
 def _errors() -> list[str]:
@@ -35,15 +32,22 @@ def _errors() -> list[str]:
     if "max_skipped_batch_ratio" not in source:
         errors.append("train_loop.py must define/use max_skipped_batch_ratio.")
 
-    init_sig = inspect.signature(ProductionTrainLoop.__init__)
-    if "max_skipped_batch_ratio" not in init_sig.parameters:
-        errors.append("ProductionTrainLoop.__init__ missing max_skipped_batch_ratio parameter.")
-
-    default_ratio = init_sig.parameters["max_skipped_batch_ratio"].default
-    if default_ratio != DEFAULT_MAX_SKIPPED_BATCH_RATIO:
-        errors.append(
-            "ProductionTrainLoop max_skipped_batch_ratio default must match observability constant."
-        )
+    # Source-check ProductionTrainLoop.__init__ so contracts CI need not import torch.
+    init_match = re.search(
+        r"class ProductionTrainLoop\b[\s\S]*?def __init__\((.*?)\)\s*->",
+        source,
+        re.DOTALL,
+    )
+    if init_match is None:
+        errors.append("Could not locate ProductionTrainLoop.__init__ signature in train_loop.py.")
+    else:
+        init_sig = init_match.group(1)
+        if "max_skipped_batch_ratio" not in init_sig:
+            errors.append("ProductionTrainLoop.__init__ missing max_skipped_batch_ratio parameter.")
+        if "DEFAULT_MAX_SKIPPED_BATCH_RATIO" not in init_sig:
+            errors.append(
+                "ProductionTrainLoop max_skipped_batch_ratio default must match observability constant."
+            )
 
     sample_with_val = (
         "health_summary epoch=1 processed_batches=10 skipped_batches=1 skip_ratio=9.09% "
