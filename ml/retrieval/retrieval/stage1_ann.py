@@ -1,18 +1,31 @@
 """Stage 1: Fast Approximate Nearest Neighbor Search Fast ANN search on fused embeddings for candidate retrieval."""
 
-import time
+from __future__ import annotations
 
-import faiss
+import time
+from typing import Any
+
 import numpy as np
+
+
+def _get_faiss() -> Any:
+    try:
+        import faiss
+    except ModuleNotFoundError as exc:
+        raise ImportError(
+            "faiss is required for Stage1ANN. Install with: pip install faiss-cpu"
+        ) from exc
+    return faiss
 
 
 class Stage1ANN:
     """Stage 1 ANN search for fast candidate retrieval. Uses FAISS index for approximate nearest neighbor search. Target latency: <20ms for HNSW, <50ms for IVF-PQ."""
 
-    def __init__(self, index: faiss.Index | None = None, index_path: str | None = None):
+    def __init__(self, index: Any = None, index_path: str | None = None):
         self.index = index
 
         if index is None and index_path:
+            faiss = _get_faiss()
             self.index = faiss.read_index(index_path)
 
     def search(

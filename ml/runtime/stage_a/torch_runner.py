@@ -6,7 +6,6 @@ import hashlib
 import time
 from pathlib import Path
 
-import numpy as np
 import torch
 
 from ml.runtime.stage_a.preprocess import frame_to_nchw_float
