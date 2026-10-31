@@ -1,7 +1,7 @@
 ### MaxSight ###
 
-**Production-Grade Accessibility System** | **Multi-Task Deep Learning for Environmental Understanding**
-
+**Mission**
+Helps users better navigate their environment and, over time, helps them learn from their environment and help improve their vision and spatial awareness.
 **Last Updated**: 2026-05-30  
 **Status**: Production-ready training and data pipeline. Use `python scripts/product/run.py` for canonical `train/validate/export/package/smoke/gate` (or call ops scripts directly under `scripts/ops/`). See **docs/status.md** and **docs/ops/production_remediation.md** for current contracts and remediation details.  
 **Setup:** **[docs/DOWNLOAD_AND_START.md](docs/DOWNLOAD_AND_START.md)** (clone, install, data, simulator, train).
