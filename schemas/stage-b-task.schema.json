@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.dev/schemas/stage-b-task.schema.json",
+  "title": "StageBTaskRequest",
+  "description": "Stage B request (docs/architecture/v1/04-stage-b-specification.md, D4.2). Images are blocked pending DR-201.",
+  "type": "object",
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "task_type": {
+      "enum": [
+        "ocr",
+        "find",
+        "scene",
+        "vqa",
+        "know"
+      ]
+    },
+    "client_ts": {
+      "type": "string"
+    },
+    "frame_ref": {
+      "type": "object",
+      "properties": {
+        "frame_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "t_mono_ns": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "frame_id",
+        "t_mono_ns"
+      ],
+      "additionalProperties": false
+    },
+    "deadline_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4000,
+      "description": "Client hard deadline, 4 s (DR-040)."
+    },
+    "inputs": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "ocr": {
+          "type": "object"
+        },
+        "scene": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Allow-list under egress policy v1: no image, crop, thumbnail or embedding fields."
+    },
+    "fvp_hints": {
+      "type": "object",
+      "properties": {
+        "verbosity": {
+          "enum": [
+            "brief",
+            "standard",
+            "detailed"
+          ]
+        },
+        "language": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "app_version": {
+      "type": "string"
+    },
+    "model_version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "session_id",
+    "task_type",
+    "client_ts",
+    "frame_ref",
+    "deadline_ms",
+    "inputs"
+  ],
+  "additionalProperties": false
+}

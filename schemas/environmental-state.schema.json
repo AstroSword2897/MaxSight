@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.dev/schemas/environmental-state.schema.json",
+  "title": "EnvironmentalState",
+  "description": "An empty hazards list is meaningful only when perception_state is CLEAR_VALID.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "maxsight.stage_a/2.0"
+    },
+    "frame_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "t_mono_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "model_version": {
+      "type": "string"
+    },
+    "system_status": {
+      "enum": [
+        "READY",
+        "DEGRADED",
+        "OFFLINE",
+        "UNAVAILABLE"
+      ]
+    },
+    "perception_state": {
+      "enum": [
+        "CLEAR_VALID",
+        "POTENTIAL_HAZARD_UNCERTAIN",
+        "INSUFFICIENT_EVIDENCE",
+        "PERCEPTION_UNAVAILABLE"
+      ]
+    },
+    "processing_latency_ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "quality": {
+      "$ref": "frame-quality.schema.json"
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "$ref": "tracked-object.schema.json"
+      }
+    },
+    "spatial": {
+      "type": "array",
+      "items": {
+        "$ref": "spatial-estimate.schema.json"
+      }
+    },
+    "uncertainty": {
+      "type": "array",
+      "items": {
+        "$ref": "uncertainty-assessment.schema.json"
+      }
+    },
+    "hazards": {
+      "type": "array",
+      "items": {
+        "$ref": "hazard-assessment.schema.json"
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "hazard-event.schema.json"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "alert-decision.schema.json"
+      }
+    },
+    "platform": {
+      "enum": [
+        "ios",
+        "android",
+        "reference"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "frame_id",
+    "t_mono_ns",
+    "model_version",
+    "system_status",
+    "perception_state",
+    "processing_latency_ms",
+    "quality",
+    "tracks",
+    "spatial",
+    "uncertainty",
+    "hazards",
+    "events",
+    "decisions",
+    "platform"
+  ],
+  "additionalProperties": false
+}

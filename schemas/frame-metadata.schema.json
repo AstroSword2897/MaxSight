@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.dev/schemas/frame-metadata.schema.json",
+  "title": "FrameMetadata",
+  "description": "FrameMetadata (see docs/architecture/v1/03-stage-a-specification.md, D3.3).",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "maxsight.stage_a/2.0"
+    },
+    "frame_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "t_mono_ns": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "ns, monotonic capture clock"
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "orientation": {
+      "enum": [
+        "portrait",
+        "portraitUpsideDown",
+        "landscapeLeft",
+        "landscapeRight"
+      ]
+    },
+    "camera_id": {
+      "type": "string"
+    },
+    "exposure_ms": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "iso": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "frame_id",
+    "t_mono_ns",
+    "width",
+    "height",
+    "orientation",
+    "camera_id"
+  ],
+  "additionalProperties": false
+}
