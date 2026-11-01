@@ -1,0 +1,23 @@
+{
+  "_comment": [
+    "SageMaker training execution role stub. Replace {{ACCOUNT_ID}}, {{DATA_BUCKET}}, {{ARTIFACT_BUCKET}}, {{REGION}} before applying.",
+    "Least privilege: read datasets, write training artifacts, write job logs."
+  ],
+  "trust_policy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {"Sid": "AllowSageMakerAssume", "Effect": "Allow", "Principal": {"Service": "sagemaker.amazonaws.com"}, "Action": "sts:AssumeRole"}
+    ]
+  },
+  "inline_permissions": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {"Sid": "ReadDatasets", "Effect": "Allow", "Action": ["s3:GetObject", "s3:ListBucket"],
+       "Resource": ["arn:aws:s3:::{{DATA_BUCKET}}", "arn:aws:s3:::{{DATA_BUCKET}}/*"]},
+      {"Sid": "WriteArtifacts", "Effect": "Allow", "Action": ["s3:PutObject", "s3:GetObject"],
+       "Resource": ["arn:aws:s3:::{{ARTIFACT_BUCKET}}/*"]},
+      {"Sid": "JobLogs", "Effect": "Allow", "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+       "Resource": ["arn:aws:logs:{{REGION}}:{{ACCOUNT_ID}}:log-group:/aws/sagemaker/*"]}
+    ]
+  }
+}

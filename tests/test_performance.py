@@ -1,5 +1,6 @@
 """Performance Benchmark Tests for MaxSight Model Tests latency, throughput, and memory usage for production deployment."""
 
+import pytest
 import sys
 import time
 from pathlib import Path
@@ -14,6 +15,7 @@ from ml.runtime_constants import DEFAULT_MODEL_INT8_MAX_MB
 from ml.training.benchmark import benchmark_inference
 
 
+@pytest.mark.benchmark
 def test_inference_latency():
     """Test inference latency meets <500ms target for mobile deployment."""
     print("Performance Test 1: Inference Latency")
@@ -73,6 +75,7 @@ def test_inference_latency():
     print("  PASSED: Latency within target")
 
 
+@pytest.mark.benchmark
 def test_throughput():
     """Test throughput (FPS) for real-time processing."""
     print("\nPerformance Test 2: Throughput (FPS)")
@@ -138,6 +141,7 @@ def test_memory_usage():
     print("  PASSED: Memory usage within target")
 
 
+@pytest.mark.benchmark
 def test_batch_processing():
     """Test performance with different batch sizes."""
     print("\nPerformance Test 4: Batch Processing Performance")
@@ -178,6 +182,7 @@ def test_batch_processing():
     print("  PASSED: Batch processing performance acceptable")
 
 
+@pytest.mark.benchmark
 def test_benchmark_integration():
     """Test integration with ml.training.benchmark module."""
     print("\nPerformance Test 5: Benchmark Module Integration")

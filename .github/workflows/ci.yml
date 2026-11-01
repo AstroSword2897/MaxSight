@@ -1,7 +1,7 @@
 # MaxSight CI orchestrator
 #
 # Required merge gates (when path filter matches, or forced on main/develop/dispatch):
-#   lint, stage-a-contracts, safety-gates (+ cert-matrix-contract), phone-app-layer,
+#   lint, regression-guards, stage-a-contracts, safety-gates (+ cert-matrix-contract), phone-app-layer,
 #   infra-iam, rag-reliability, drift-checks, torch-model-smoke / torch-condition-tensor /
 #   torch-timing (when torch_model), unit-tests-cpu (when ml_heavy/forced), sagemaker-ops (when ops).
 # Quality baseline drift lives in quality.yml (quality-drift).
@@ -353,6 +353,26 @@ jobs:
           exit 1
         fi
 
+  regression-guards:
+    # Slim (torch-free) regression guards: lazy package imports, IAM stubs, ontology,
+    # gitignore hygiene, pyright config, workflow wiring. Cheap, so it runs on every change.
+    name: Regression guards
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      name: regression-guards
+      profile: contracts
+      timeout-minutes: 10
+      artifact-name: regression-artifacts
+      artifact-path: artifacts/
+      junit-path: artifacts/regression-junit.xml
+      commands: |
+        set -euo pipefail
+        python - <<'PY'
+        import importlib.util, sys
+        sys.exit("torch must not be installed in the contracts profile" if importlib.util.find_spec("torch") else 0)
+        PY
+        pytest tests/unit -q --tb=short --junitxml=artifacts/regression-junit.xml
+
   phone-app-layer:
     name: Phone app layer
     needs: detect-changes
@@ -498,7 +518,7 @@ jobs:
       junit-path: artifacts/unit-junit.xml
       commands: |
         set -euo pipefail
-        pytest tests/ -q --tb=short --maxfail=10 --junitxml=artifacts/unit-junit.xml
+        pytest tests/ -q --tb=short --maxfail=10 -m "not benchmark" --junitxml=artifacts/unit-junit.xml
         python scripts/infra/validate_train_loop_contracts.py
 
   sagemaker-ops:
@@ -546,6 +566,7 @@ jobs:
     needs:
       - detect-changes
       - lint
+      - regression-guards
       - stage-a-contracts
       - safety-gates
       - phone-app-layer
@@ -564,6 +585,7 @@ jobs:
         env:
           RESULTS: |
             lint=${{ needs.lint.result }}
+            regression-guards=${{ needs.regression-guards.result }}
             stage-a-contracts=${{ needs.stage-a-contracts.result }}
             safety-gates=${{ needs.safety-gates.result }}
             phone-app-layer=${{ needs.phone-app-layer.result }}
