@@ -310,5 +310,10 @@ jobs:
           python-version: "3.10"
           profile: contracts
 
+      - name: Assert slim profile is torch-free
+        run: |
+          python -c "import importlib.util,sys; sys.exit(1 if importlib.util.find_spec('torch') else 0)" \
+            || { echo 'torch must not be installed here: the gate has to pass without it' >&2; exit 1; }
+
       - name: Run pre-SageMaker gate
         run: python scripts/infra/pre_sagemaker_gate.py
