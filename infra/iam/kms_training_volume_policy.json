@@ -1,0 +1,13 @@
+{
+  "_comment": [
+    "KMS key policy stub for SageMaker training volume encryption. Replace {{ACCOUNT_ID}} and {{ROLE_NAME}}.",
+    "Only the training execution role may use the key for volume encryption."
+  ],
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "AllowTrainingRoleUse", "Effect": "Allow",
+     "Principal": {"AWS": "arn:aws:iam::{{ACCOUNT_ID}}:role/{{ROLE_NAME}}"},
+     "Action": ["kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey*", "kms:DescribeKey"],
+     "Resource": "*"}
+  ]
+}

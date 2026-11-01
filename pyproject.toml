@@ -12,7 +12,6 @@ exclude = [
 ]
 pythonVersion = "3.10"
 pythonPlatform = "Darwin"
-extraPaths = ["../2026/venv/lib/python3.10/site-packages"]
 reportMissingImports = "warning"
 reportMissingTypeStubs = false
 reportAttributeAccessIssue = "none"
@@ -21,13 +20,12 @@ reportOptionalMemberAccess = "warning"
 reportOptionalSubscript = "warning"
 reportPrivateImportUsage = "none"
 typeCheckingMode = "basic"
-venvPath = "../2026"
-venv = "venv"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
 python_files = ["test_*.py"]
+markers = ["benchmark: hardware-dependent latency/throughput tests; deselected in CI with -m \"not benchmark\""]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 

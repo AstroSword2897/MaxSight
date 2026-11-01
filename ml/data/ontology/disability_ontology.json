@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "disabilities": [
+    {"id": "amblyopia", "name": "Amblyopia", "category": "binocular",
+     "feature_tags": ["depth", "binocular"], "therapy_focus": ["depth_shift", "gaze_stabilization"], "model_condition_key": "amblyopia"},
+    {"id": "cvi", "name": "Cerebral visual impairment", "category": "cortical",
+     "feature_tags": ["clutter", "motion"], "therapy_focus": ["gaze_stabilization", "fatigue_rest"], "model_condition_key": "cvi"},
+    {"id": "color_vision_deficiency", "name": "Color vision deficiency", "category": "color",
+     "feature_tags": ["color", "contrast"], "therapy_focus": ["contrast_micro", "roi_findability"], "model_condition_key": "color_blindness"},
+    {"id": "low_vision_amd", "name": "Low vision (AMD)", "category": "central_field",
+     "feature_tags": ["central_loss", "contrast"], "therapy_focus": ["contrast_micro", "roi_findability"], "model_condition_key": "amd"},
+    {"id": "low_vision_diabetic_retinopathy", "name": "Low vision (diabetic retinopathy)", "category": "retinal",
+     "feature_tags": ["blur", "contrast"], "therapy_focus": ["contrast_micro", "depth_shift"], "model_condition_key": "diabetic_retinopathy"},
+    {"id": "low_vision_glaucoma", "name": "Low vision (glaucoma)", "category": "peripheral_field",
+     "feature_tags": ["peripheral_loss"], "therapy_focus": ["motion_tracking", "roi_findability"], "model_condition_key": "glaucoma"},
+    {"id": "retinitis_pigmentosa", "name": "Retinitis pigmentosa", "category": "peripheral_field",
+     "feature_tags": ["night", "peripheral_loss"], "therapy_focus": ["motion_tracking", "warning_recognition"], "model_condition_key": "retinitis_pigmentosa"}
+  ],
+  "edges": []
+}

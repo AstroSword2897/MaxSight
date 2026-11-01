@@ -138,14 +138,14 @@ class TestAttentionModules:
 
     def test_cbam_import(self):
         """Test that CBAM can be imported."""
-        from ml.models.attention.cbam_attention import CBAM, SEBlock
+        from ml.models.attention import CBAM, SEBlock
 
         assert CBAM is not None
         assert SEBlock is not None
 
     def test_cbam_forward(self):
         """Test CBAM forward pass."""
-        from ml.models.attention.cbam_attention import CBAM
+        from ml.models.attention import CBAM
 
         cbam = CBAM(channels=256, reduction=16)
         cbam.eval()
@@ -157,7 +157,7 @@ class TestAttentionModules:
 
     def test_se_block_forward(self):
         """Test SE Block forward pass."""
-        from ml.models.attention.cbam_attention import SEBlock
+        from ml.models.attention import SEBlock
 
         se = SEBlock(channels=256, reduction=16)
         se.eval()
@@ -173,13 +173,13 @@ class TestCrossModalAttention:
 
     def test_cross_modal_import(self):
         """Test that Cross-Modal Attention can be imported."""
-        from ml.models.attention.cross_modal_attention import CrossModalAttention
+        from ml.models.attention import CrossModalAttention
 
         assert CrossModalAttention is not None
 
     def test_cross_modal_forward(self):
         """Test Cross-Modal Attention forward pass."""
-        from ml.models.attention.cross_modal_attention import CrossModalAttention
+        from ml.models.attention import CrossModalAttention
 
         attn = CrossModalAttention(vision_dim=256, audio_dim=128, embed_dim=512)
         attn.eval()

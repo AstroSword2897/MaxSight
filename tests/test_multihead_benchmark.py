@@ -1,5 +1,6 @@
 """Multi-Head Latency Benchmark Tests Tests latency for different head combinations to identify bottlenecks."""
 
+import pytest
 import sys
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from ml.models.maxsight_cnn import create_model
 from ml.utils.multihead_benchmark import MultiHeadBenchmark
 
 
+@pytest.mark.benchmark
 def test_multihead_latency():
     """Test latency for different head combinations."""
     print("Multi-Head Latency Benchmark Test")

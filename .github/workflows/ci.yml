@@ -498,7 +498,7 @@ jobs:
       junit-path: artifacts/unit-junit.xml
       commands: |
         set -euo pipefail
-        pytest tests/ -q --tb=short --maxfail=10 --junitxml=artifacts/unit-junit.xml
+        pytest tests/ -q --tb=short --maxfail=10 -m "not benchmark" --junitxml=artifacts/unit-junit.xml
         python scripts/infra/validate_train_loop_contracts.py
 
   sagemaker-ops:
