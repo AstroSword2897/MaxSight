@@ -56,6 +56,10 @@ datasets/
 !datasets/.gitkeep
 !docs/quality/baseline.json
 !docs/contracts/schemas/*.json
+!schemas/*.json
+!infra/iam/*.json
+!ml/data/ontology/*.json
+!configs/**/*.json
 !requirements.txt
 !pyproject.toml
 !README.md

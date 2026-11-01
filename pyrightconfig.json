@@ -13,10 +13,7 @@
     {
       "root": ".",
       "pythonVersion": "3.10",
-      "pythonPlatform": "Darwin",
-      "extraPaths": [
-        "../2026/venv/lib/python3.10/site-packages"
-      ]
+      "pythonPlatform": "Darwin"
     }
   ],
   "reportMissingImports": "warning",
@@ -27,8 +24,5 @@
   "reportOptionalSubscript": "warning",
   "reportPrivateImportUsage": "none",
   "typeCheckingMode": "basic",
-  "pythonVersion": "3.10",
-  "venvPath": "../2026",
-  "venv": "venv"
+  "pythonVersion": "3.10"
 }
-
