@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.dev/schemas/uncertainty-assessment.schema.json",
+  "title": "UncertaintyAssessment",
+  "description": "UncertaintyAssessment (see docs/architecture/v1/03-stage-a-specification.md, D3.3).",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "maxsight.stage_a/2.0"
+    },
+    "track_id": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "detector": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "localization": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "tracking": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "spatial": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "evidence": {
+      "enum": [
+        "sufficient",
+        "partial",
+        "insufficient"
+      ]
+    },
+    "calibrated": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "track_id",
+    "detector",
+    "tracking",
+    "evidence",
+    "calibrated"
+  ],
+  "additionalProperties": false
+}
