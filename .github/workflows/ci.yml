@@ -134,6 +134,14 @@ jobs:
               - 'scripts/infra/run_quality_audit.py'
               - 'tests/test_dataset_registry.py'
               - 'tests/test_training_hardening.py'
+              - 'schemas/**'
+              - 'configs/data/**'
+              - 'ml/datasets/**'
+              - 'scripts/data_sources.py'
+              - 'scripts/acquire_data.py'
+              - 'scripts/validate_data.py'
+              - 'tests/contract/**'
+              - 'tests/unit/**'
             quality:
               - 'ml/therapy/**'
               - 'ml/runtime/**'
@@ -446,7 +454,9 @@ jobs:
         set -euo pipefail
         python scripts/infra/validate_runtime_contracts.py
         python scripts/infra/validate_train_loop_contracts.py
-        pytest tests/test_dataset_registry.py \
+        # A missing dependency must fail loudly, never skip the schema contract tests.
+        python -c "import jsonschema, referencing"
+        pytest tests/contract tests/unit tests/test_dataset_registry.py \
                -q --tb=short --junitxml=artifacts/drift-junit.xml
 
   torch-model-smoke:
