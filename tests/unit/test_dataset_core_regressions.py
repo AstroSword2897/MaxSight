@@ -83,3 +83,11 @@ def test_manifest_rejects_unknown_version(tmp_path):
     path.write_text(json.dumps({"manifest_version": "other/9"}) + "\n")
     with pytest.raises(ValueError, match="unsupported manifest version"):
         list(read_manifest(path))
+
+
+def test_assign_splits_preserves_eval_only_records():
+    """BDD100K records are tagged split='eval'; a hash split must not move them into train."""
+    recs = [_rec(i, split="eval") for i in range(200)] + [_rec(1000 + i) for i in range(200)]
+    out = assign_splits(recs)
+    assert {r.split for r in out[:200]} == {"eval"}
+    assert {r.split for r in out[200:]} <= {"train", "val", "test"}
