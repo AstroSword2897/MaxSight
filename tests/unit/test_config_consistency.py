@@ -102,3 +102,21 @@ def test_training_registry_num_classes_match_label_spaces():
     for ds in _load("ml/training/configs/registry/datasets.yaml")["datasets"]:
         if ds.get("label_space"):
             assert ds["num_classes"] == spaces[ds["label_space"]], ds["id"]
+
+
+COCO_2017 = {
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
+    "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+    "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+    "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
+    "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+    "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
+    "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
+    "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
+    "hair drier", "toothbrush",
+}
+
+
+def test_coco_names_in_the_label_map_are_real_coco_2017_categories():
+    names = set(LABEL_MAP["sources"]["coco"]) | set(LABEL_MAP["ignore"]["coco"])
+    assert len(COCO_2017) == 80 and not names - COCO_2017, sorted(names - COCO_2017)
