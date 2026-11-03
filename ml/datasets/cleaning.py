@@ -61,10 +61,13 @@ def clean(
 
     for rec in records:
         boxes = []
+        ignores = list(rec.ignore_regions)
         for b in rec.boxes:
             x1, y1, x2, y2 = b.bbox_xyxy
             if min(x2 - x1, y2 - y1) < min_box_px or x2 <= x1 or y2 <= y1:
                 report.boxes_dropped_small += 1
+                if x2 > x1 and y2 > y1:  # a real but tiny object: ignore it, never leave it as background
+                    ignores.append(b.bbox_xyxy)
                 continue
             boxes.append(b)
         if not boxes:
@@ -99,7 +102,7 @@ def clean(
             for key in _chunk_keys(h):
                 index[key].append(len(seen_hashes))
             seen_hashes.append(h)
-        kept.append(rec.with_(boxes=tuple(boxes), sha256=digest, dhash=f"{h:016x}" if h is not None else ""))
+        kept.append(rec.with_(boxes=tuple(boxes), ignore_regions=tuple(ignores), sha256=digest, dhash=f"{h:016x}" if h is not None else ""))
 
     if per_class_cap is not None:
         kept = cap_per_class(kept, per_class_cap, report)

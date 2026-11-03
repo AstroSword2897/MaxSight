@@ -91,3 +91,13 @@ def test_assign_splits_preserves_eval_only_records():
     out = assign_splits(recs)
     assert {r.split for r in out[:200]} == {"eval"}
     assert {r.split for r in out[200:]} <= {"train", "val", "test"}
+
+
+def test_clean_turns_small_boxes_into_ignore_regions_not_false_background(tmp_path):
+    """Found on real Open Images data: 8 small boxes vanished, leaving real objects labelled as background."""
+    big = BoxRecord("person", (0.0, 0.0, 50.0, 50.0))
+    tiny = BoxRecord("person", (60.0, 60.0, 64.0, 64.0))
+    (out,), rep = clean([_rec(1, boxes=(big, tiny))], tmp_path, verify_files=False)
+    assert out.boxes == (big,)
+    assert (60.0, 60.0, 64.0, 64.0) in out.ignore_regions
+    assert rep.boxes_dropped_small == 1
