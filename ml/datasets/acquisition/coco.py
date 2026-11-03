@@ -135,16 +135,23 @@ def _download_one(rec: ImageRecord, root: Path, retries: int = 3) -> tuple[Image
 def download_images(
     records: list[ImageRecord], root: Path, max_gb: float, workers: int = 8
 ) -> tuple[list[ImageRecord], list[tuple[str, str]]]:
-    """Download until the byte budget is reached. Returns (downloaded records, failures)."""
+    """Download until the byte budget is reached. Returns (downloaded records, failures).
+
+    Records left undownloaded when the budget runs out are returned as failures ("byte budget reached"),
+    so a truncated subset never looks complete. The budget is checked per batch of ``workers * 4``
+    images, so a run may overshoot it by at most one batch.
+    """
     budget = int(max_gb * 1024**3)
     used = 0
     ok: list[ImageRecord] = []
     failed: list[tuple[str, str]] = []
+    batch = workers * 4
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        for i in range(0, len(records), workers * 4):
+        for i in range(0, len(records), batch):
             if used >= budget:
+                failed.extend((rec.image_id, "byte budget reached") for rec in records[i:])
                 break
-            for rec, size, err in pool.map(lambda r: _download_one(r, root), records[i : i + workers * 4]):
+            for rec, size, err in pool.map(lambda r: _download_one(r, root), records[i : i + batch]):
                 if err:
                     failed.append((rec.image_id, err))
                 else:

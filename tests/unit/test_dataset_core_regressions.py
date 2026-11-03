@@ -124,3 +124,12 @@ def test_audit_finds_cross_split_near_duplicates_at_realistic_size():
 def test_clean_rejects_a_dup_threshold_its_index_cannot_honour(tmp_path):
     with pytest.raises(ValueError, match="dup_hamming"):
         clean([_rec(1)], tmp_path, dup_hamming=8, verify_files=False)
+
+
+def test_coco_byte_budget_reports_the_images_it_did_not_download(tmp_path, monkeypatch):
+    from ml.datasets.acquisition import coco
+
+    monkeypatch.setattr(coco, "_download_one", lambda rec, root, retries=3: (rec, 2 * 1024**3, ""))
+    ok, failed = coco.download_images([_rec(i) for i in range(100)], tmp_path, max_gb=1, workers=1)
+    assert len(ok) + len(failed) == 100
+    assert failed and all(reason == "byte budget reached" for _, reason in failed)
