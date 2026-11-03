@@ -1,0 +1,10 @@
+name: model-evaluation
+# Placeholder: manual trigger only until the corresponding gate is implemented
+# (see docs/architecture/v1/08-safety-validation.md).
+on:
+  workflow_dispatch:
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "model-evaluation is not implemented yet"
