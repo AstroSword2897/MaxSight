@@ -8,6 +8,7 @@ import logging
 import subprocess
 import tarfile
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -62,6 +63,18 @@ def download_resumable(url: str, dest: Path, retries: int = 4) -> Path:
                 raise OSError(f"truncated download: got {size} of {expected} bytes")
             part.replace(dest)
             return dest
+        except urllib.error.HTTPError as exc:
+            if exc.code == 416 and part.exists():
+                # Range starts past the end: the .part is already complete (killed before the rename),
+                # or the remote shrank. Promote a complete file; otherwise restart from zero.
+                content_range = exc.headers.get("Content-Range", "")
+                total = content_range.rsplit("/", 1)[-1]
+                if total.isdigit() and part.stat().st_size == int(total):
+                    part.replace(dest)
+                    return dest
+                part.unlink()
+            log.warning("download attempt %d failed: %s", attempt + 1, exc)
+            time.sleep(2 * (attempt + 1))
         except Exception as exc:  # noqa: BLE001 - retried then raised
             log.warning("download attempt %d failed: %s", attempt + 1, exc)
             time.sleep(2 * (attempt + 1))

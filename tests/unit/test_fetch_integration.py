@@ -33,6 +33,12 @@ class _Handler(BaseHTTPRequestHandler):
         self._log.append((self.path, rng))
         if rng:
             start = int(rng.split("=")[1].split("-")[0])
+            if start >= len(body):
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{len(body)}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             self.send_response(206)
             self.send_header("Content-Range", f"bytes {start}-{len(body) - 1}/{len(body)}")
             body = body[start:]
@@ -205,3 +211,23 @@ def test_truncated_download_resumes_from_the_partial_file(server, tmp_path, monk
     fetch.download_resumable(f"{base}/big.bin", tmp_path / "big.bin")
     assert (tmp_path / "big.bin").read_bytes() == body
     assert log[1][1] and log[1][1].startswith("bytes=")  # the retry resumed with a Range request
+
+
+def test_complete_part_file_is_promoted_instead_of_failing_on_416(server, tmp_path, monkeypatch):
+    """Killed after the last chunk but before the rename: the Range request gets 416 on every retry."""
+    base, files, _, _ = server
+    monkeypatch.setattr(fetch.time, "sleep", lambda _s: None)
+    body = b"x" * 5000
+    files["done.bin"] = body
+    (tmp_path / "done.bin.part").write_bytes(body)
+    fetch.download_resumable(f"{base}/done.bin", tmp_path / "done.bin", retries=2)
+    assert (tmp_path / "done.bin").read_bytes() == body and not (tmp_path / "done.bin.part").exists()
+
+
+def test_part_file_longer_than_the_remote_restarts_the_download(server, tmp_path, monkeypatch):
+    base, files, _, _ = server
+    monkeypatch.setattr(fetch.time, "sleep", lambda _s: None)
+    files["shrunk.bin"] = b"new"
+    (tmp_path / "shrunk.bin.part").write_bytes(b"old content that is longer")
+    fetch.download_resumable(f"{base}/shrunk.bin", tmp_path / "shrunk.bin", retries=2)
+    assert (tmp_path / "shrunk.bin").read_bytes() == b"new"
