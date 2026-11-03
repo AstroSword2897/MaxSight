@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.dev/schemas/fvp.schema.json",
+  "title": "FunctionalVisionProfile",
+  "description": "FunctionalVisionProfile (see docs/architecture/v1/03-stage-a-specification.md, D3.3).",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "maxsight.fvp/1.0"
+    },
+    "profile_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "preferred_modality": {
+      "enum": [
+        "speech",
+        "haptic",
+        "both"
+      ]
+    },
+    "alert_verbosity": {
+      "enum": [
+        "minimal",
+        "standard",
+        "detailed"
+      ]
+    },
+    "speech": {
+      "type": "object",
+      "properties": {
+        "rate_wpm": {
+          "type": "integer",
+          "minimum": 120,
+          "maximum": 300
+        },
+        "voice_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "volume": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "rate_wpm",
+        "volume"
+      ],
+      "additionalProperties": false
+    },
+    "haptic": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "intensity": {
+          "type": "number",
+          "minimum": 0.2,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "enabled",
+        "intensity"
+      ],
+      "additionalProperties": false
+    },
+    "assistance": {
+      "type": "object",
+      "properties": {
+        "proactive_context": {
+          "type": "boolean"
+        },
+        "repeat_on_request": {
+          "type": "boolean"
+        },
+        "describe_on_degraded": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "proactive_context",
+        "repeat_on_request",
+        "describe_on_degraded"
+      ],
+      "additionalProperties": false
+    },
+    "accessibility": {
+      "type": "object",
+      "properties": {
+        "voiceover_aware": {
+          "type": "boolean"
+        },
+        "large_text": {
+          "type": "boolean"
+        },
+        "high_contrast": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "functional_needs": {
+      "type": "object",
+      "properties": {
+        "central_vision_difficulty": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "enum": [
+                "none",
+                "some",
+                "severe",
+                "unknown"
+              ]
+            },
+            "source": {
+              "enum": [
+                "user_reported",
+                "professional"
+              ]
+            },
+            "updated_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "source"
+          ],
+          "additionalProperties": false
+        },
+        "peripheral_vision_difficulty": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "enum": [
+                "none",
+                "some",
+                "severe",
+                "unknown"
+              ]
+            },
+            "source": {
+              "enum": [
+                "user_reported",
+                "professional"
+              ]
+            },
+            "updated_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "source"
+          ],
+          "additionalProperties": false
+        },
+        "light_sensitivity": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "enum": [
+                "none",
+                "some",
+                "severe",
+                "unknown"
+              ]
+            },
+            "source": {
+              "enum": [
+                "user_reported",
+                "professional"
+              ]
+            },
+            "updated_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "source"
+          ],
+          "additionalProperties": false
+        },
+        "low_light_difficulty": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "enum": [
+                "none",
+                "some",
+                "severe",
+                "unknown"
+              ]
+            },
+            "source": {
+              "enum": [
+                "user_reported",
+                "professional"
+              ]
+            },
+            "updated_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "source"
+          ],
+          "additionalProperties": false
+        },
+        "contrast_difficulty": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "enum": [
+                "none",
+                "some",
+                "severe",
+                "unknown"
+              ]
+            },
+            "source": {
+              "enum": [
+                "user_reported",
+                "professional"
+              ]
+            },
+            "updated_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "source"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "assessments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "assessed_at": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "assessed_at"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "condition_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Evaluation/compatibility only; never a perception input (DR-013)."
+    },
+    "consent": {
+      "type": "object",
+      "properties": {
+        "c1": {
+          "type": "boolean"
+        },
+        "c2": {
+          "type": "boolean"
+        },
+        "c3": {
+          "type": "boolean"
+        },
+        "sync": {
+          "type": "boolean"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "c1",
+        "c2",
+        "c3",
+        "sync"
+      ],
+      "additionalProperties": false
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "profile_id",
+    "preferred_modality",
+    "alert_verbosity",
+    "speech",
+    "haptic",
+    "assistance",
+    "consent",
+    "updated_at"
+  ],
+  "additionalProperties": false
+}
