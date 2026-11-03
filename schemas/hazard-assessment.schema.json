@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.dev/schemas/hazard-assessment.schema.json",
+  "title": "HazardAssessment",
+  "description": "HazardAssessment (see docs/architecture/v1/03-stage-a-specification.md, D3.3).",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "maxsight.stage_a/2.0"
+    },
+    "hazard_id": {
+      "type": "string"
+    },
+    "track_id": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "category": {
+      "enum": [
+        "dynamic",
+        "static",
+        "environmental",
+        "context_dependent"
+      ]
+    },
+    "path_relevance": {
+      "enum": [
+        "confirmed",
+        "possible",
+        "none"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "low",
+        "moderate",
+        "high"
+      ]
+    },
+    "urgency": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "qualified": {
+      "type": "boolean"
+    },
+    "rule_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "hazard_id",
+    "track_id",
+    "category",
+    "path_relevance",
+    "severity",
+    "urgency",
+    "qualified",
+    "rule_ids"
+  ],
+  "additionalProperties": false
+}
