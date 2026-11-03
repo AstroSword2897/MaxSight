@@ -96,28 +96,35 @@ def iter_bbox_rows(path: Path, wanted: dict[str, str]) -> Iterable[tuple[str, Bo
 
 def select_images(
     rows: Iterable[tuple[str, BoxRow]], per_class_cap: int, seed: int = 0, max_images: int | None = None,
+    ignore_ids: frozenset[str] = frozenset(),
 ) -> Selection:
     """Pick images so each class reaches ``per_class_cap`` instances; rare classes are visited first.
 
     An accepted image keeps all its wanted boxes (dropping some would create false background). ``max_images``
     stops selection early in the same seeded, rare-first order, so class counts always match the images kept.
+    Only trainable boxes count toward the cap: group-of, depiction and ``ignore_ids`` boxes become ignore
+    regions later, so an image with no trainable box is never selected.
     """
+    def trainable(b: BoxRow) -> bool:
+        return not (b.is_group_of or b.is_depiction or b.label_id in ignore_ids)
+
     by_image: dict[str, list[BoxRow]] = defaultdict(list)
     for image_id, box in rows:
         by_image[image_id].append(box)
+    counted = {i: [b for b in boxes if trainable(b)] for i, boxes in by_image.items()}
+    counted = {i: c for i, c in counted.items() if c}
     freq: Counter = Counter()
-    for boxes in by_image.values():
+    for boxes in counted.values():
         freq.update({b.label_id for b in boxes})
-    ids = sorted(by_image)
+    ids = sorted(counted)
     random.Random(seed).shuffle(ids)
-    ids.sort(key=lambda i: min(freq[b.label_id] for b in by_image[i]))
+    ids.sort(key=lambda i: min(freq[b.label_id] for b in counted[i]))
     sel = Selection()
     for image_id in ids:
-        boxes = by_image[image_id]
-        if all(sel.class_counts[b.label_id] >= per_class_cap for b in boxes):
+        if all(sel.class_counts[b.label_id] >= per_class_cap for b in counted[image_id]):
             continue
-        sel.class_counts.update(b.label_id for b in boxes)
-        sel.images[image_id] = boxes
+        sel.class_counts.update(b.label_id for b in counted[image_id])
+        sel.images[image_id] = by_image[image_id]
         if max_images is not None and len(sel.images) >= max_images:
             break
     return sel
@@ -190,7 +197,7 @@ def to_records(
     selection: Selection, wanted: dict[str, str], split: str, root: Path, label_map: LabelMap,
     images_subdir: str = "images",
 ) -> list[ImageRecord]:
-    """Manifest records for downloaded images. Group-of and depiction boxes become ignore regions."""
+    """Manifest records for downloaded images. Group-of, depiction and label-map ignored boxes become ignore regions."""
     out: list[ImageRecord] = []
     for image_id, boxes in selection.images.items():
         rel = f"{images_subdir}/{split}/{image_id}.jpg"
@@ -203,6 +210,9 @@ def to_records(
         for b in boxes:
             xyxy = (b.xmin * w, b.ymin * h, b.xmax * w, b.ymax * h)
             name = wanted[b.label_id]
+            if label_map.is_ignored(SOURCE, name):
+                ignores.append(xyxy)
+                continue
             target = label_map.map(SOURCE, name)
             if target is None:
                 continue

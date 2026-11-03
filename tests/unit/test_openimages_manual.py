@@ -169,3 +169,23 @@ def test_cli_refuses_the_large_train_csv_without_approval(tmp_path):
                           "openimages", "--split", "train", "--root", str(tmp_path)],
                          capture_output=True, text=True, timeout=60, check=False)
     assert out.returncode == 2 and "Refusing" in out.stdout and not (tmp_path / "annotations").exists()
+
+
+def test_group_of_and_depiction_boxes_do_not_count_toward_the_cap(tmp_path):
+    rows = [("crowd", "/m/door", True, False), ("drawing", "/m/door", False, True), ("real", "/m/door", False, False)]
+    sel = oim.select_images(oim.iter_bbox_rows(_bbox(tmp_path / "b.csv", rows), {"/m/door": "Door"}), 10)
+    assert set(sel.images) == {"real"} and sel.class_counts["/m/door"] == 1
+
+
+def test_label_map_ignore_list_becomes_ignore_regions_and_is_not_counted(tmp_path):
+    lm = LabelMap.load()
+    assert lm.is_ignored("openimages", "Desk")
+    rows = [("img1", "/m/door", False, False), ("img1", "/m/desk", False, False), ("desk_only", "/m/desk", False, False)]
+    wanted = {"/m/door": "Door", "/m/desk": "Desk"}
+    sel = oim.select_images(oim.iter_bbox_rows(_bbox(tmp_path / "b.csv", rows), wanted), 10,
+                            ignore_ids=frozenset({"/m/desk"}))
+    assert set(sel.images) == {"img1"} and "/m/desk" not in sel.class_counts
+    (tmp_path / "images" / "validation").mkdir(parents=True)
+    Image.new("RGB", (200, 100)).save(tmp_path / "images" / "validation" / "img1.jpg")
+    (rec,) = oim.to_records(sel, wanted, "validation", tmp_path, lm)
+    assert [b.cls for b in rec.boxes] == ["door"] and len(rec.ignore_regions) == 1
