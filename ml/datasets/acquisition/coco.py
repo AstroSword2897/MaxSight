@@ -1,0 +1,156 @@
+"""COCO 2017 subset acquisition: select by class, cap per class, download only those images.
+
+Avoids the 19 GB train2017 download. Annotations (~250 MB zip) are fetched once;
+images come from each record's ``coco_url`` with a hard byte budget.
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import random
+import time
+import urllib.request
+import zipfile
+from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+from ml.datasets.label_map import LabelMap
+from ml.datasets.manifest import BoxRecord, ImageRecord
+
+ANNOTATIONS_URL = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
+SOURCE = "coco"
+LICENSE = "annotations CC BY 4.0; images per Flickr terms"
+_UA = {"User-Agent": "maxsight-data/1.0"}
+
+
+def fetch_annotations(dest: Path, split: str = "train2017", url: str = ANNOTATIONS_URL) -> Path:
+    """Download the annotations zip and extract instances_<split>.json (skips if present)."""
+    target = dest / f"instances_{split}.json"
+    if target.exists():
+        return target
+    dest.mkdir(parents=True, exist_ok=True)
+    req = urllib.request.Request(url, headers=_UA)
+    with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310 - fixed https/http COCO host
+        blob = resp.read()
+    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+        target.write_bytes(zf.read(f"annotations/instances_{split}.json"))
+    return target
+
+
+def select_records(
+    annotations: dict,
+    label_map: LabelMap,
+    per_class_cap: int,
+    seed: int = 0,
+    min_box_px: float = 8.0,
+) -> list[ImageRecord]:
+    """Pick images so every class is represented up to ``per_class_cap`` instances.
+
+    An image is accepted if at least one of its classes is still under the cap, and then keeps
+    *all* of its mapped boxes (dropping boxes would create false background). Rare classes are
+    visited first so common ones (person) cannot crowd them out.
+    """
+    cats = {c["id"]: c["name"] for c in annotations["categories"]}
+    images = {im["id"]: im for im in annotations["images"]}
+    by_image: dict[int, list[dict]] = defaultdict(list)
+    for ann in annotations["annotations"]:
+        by_image[ann["image_id"]].append(ann)
+
+    mapped: dict[int, tuple[list[BoxRecord], list[tuple[float, float, float, float]]]] = {}
+    freq: Counter[str] = Counter()
+    for image_id, anns in by_image.items():
+        boxes: list[BoxRecord] = []
+        ignores: list[tuple[float, float, float, float]] = []
+        for ann in anns:
+            name = cats[ann["category_id"]]
+            x, y, w, h = ann["bbox"]
+            xyxy = (float(x), float(y), float(x + w), float(y + h))
+            target = label_map.map(SOURCE, name)
+            if ann.get("iscrowd") or target is None:
+                if ann.get("iscrowd") or label_map.is_ignored(SOURCE, name):
+                    ignores.append(xyxy)
+                continue
+            if w < min_box_px or h < min_box_px:
+                continue
+            boxes.append(BoxRecord(target, xyxy, name))
+        if boxes:
+            mapped[image_id] = (boxes, ignores)
+            freq.update({b.cls for b in boxes})
+
+    rarity = {c: freq.get(c, 0) for c in label_map.classes}
+    ids = sorted(mapped)
+    random.Random(seed).shuffle(ids)
+    # Visit images holding the rarest class first.
+    ids.sort(key=lambda i: min(rarity[b.cls] for b in mapped[i][0]))
+
+    counts: Counter[str] = Counter()
+    out: list[ImageRecord] = []
+    for image_id in ids:
+        boxes, ignores = mapped[image_id]
+        if all(counts[b.cls] >= per_class_cap for b in boxes):
+            continue
+        counts.update(b.cls for b in boxes)
+        im = images[image_id]
+        out.append(
+            ImageRecord(
+                image_id=f"coco:{image_id}",
+                source=SOURCE,
+                path=f"images/{im['file_name']}",
+                width=int(im["width"]),
+                height=int(im["height"]),
+                group_id=f"coco:{image_id}",
+                boxes=tuple(boxes),
+                ignore_regions=tuple(ignores),
+                url=im.get("coco_url", ""),
+                license=LICENSE,
+            )
+        )
+    return out
+
+
+def _download_one(rec: ImageRecord, root: Path, retries: int = 3) -> tuple[ImageRecord, int, str]:
+    dest = root / rec.path
+    if dest.exists() and dest.stat().st_size > 0:
+        return rec, dest.stat().st_size, ""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    last = ""
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(rec.url, headers=_UA)
+            with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+                data = resp.read()
+            tmp = dest.with_suffix(dest.suffix + ".part")
+            tmp.write_bytes(data)
+            tmp.replace(dest)
+            return rec, len(data), ""
+        except Exception as exc:  # noqa: BLE001 - retried, then reported
+            last = f"{type(exc).__name__}: {exc}"
+            time.sleep(1.5 * (attempt + 1))
+    return rec, 0, last
+
+
+def download_images(
+    records: list[ImageRecord], root: Path, max_gb: float, workers: int = 8
+) -> tuple[list[ImageRecord], list[tuple[str, str]]]:
+    """Download until the byte budget is reached. Returns (downloaded records, failures)."""
+    budget = int(max_gb * 1024**3)
+    used = 0
+    ok: list[ImageRecord] = []
+    failed: list[tuple[str, str]] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for i in range(0, len(records), workers * 4):
+            if used >= budget:
+                break
+            for rec, size, err in pool.map(lambda r: _download_one(r, root), records[i : i + workers * 4]):
+                if err:
+                    failed.append((rec.image_id, err))
+                else:
+                    ok.append(rec)
+                    used += size
+    return ok, failed
+
+
+def load_annotations(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
