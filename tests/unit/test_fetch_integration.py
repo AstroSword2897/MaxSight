@@ -231,3 +231,14 @@ def test_part_file_longer_than_the_remote_restarts_the_download(server, tmp_path
     (tmp_path / "shrunk.bin.part").write_bytes(b"old content that is longer")
     fetch.download_resumable(f"{base}/shrunk.bin", tmp_path / "shrunk.bin", retries=2)
     assert (tmp_path / "shrunk.bin").read_bytes() == b"new"
+
+
+def test_coco_annotations_zip_is_kept_on_disk_and_downloaded_once(server, tmp_path):
+    from ml.datasets.acquisition import coco
+
+    base, files, log, _ = server
+    files["ann.zip"] = _zip({"annotations/instances_val2017.json": b"{}", "annotations/instances_train2017.json": b"[]"})
+    dest = tmp_path / "annotations"
+    assert coco.fetch_annotations(dest, "val2017", url=f"{base}/ann.zip").read_bytes() == b"{}"
+    assert coco.fetch_annotations(dest, "train2017", url=f"{base}/ann.zip").read_bytes() == b"[]"
+    assert len(log) == 1
