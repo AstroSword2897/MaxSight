@@ -101,3 +101,26 @@ def test_clean_turns_small_boxes_into_ignore_regions_not_false_background(tmp_pa
     assert out.boxes == (big,)
     assert (60.0, 60.0, 64.0, 64.0) in out.ignore_regions
     assert rep.boxes_dropped_small == 1
+
+
+def test_audit_finds_cross_split_near_duplicates_at_realistic_size():
+    """Above 3000 images the audit used to skip this check and still pass (seen on the real Open Images run)."""
+    import random
+
+    from ml.datasets.audit import audit
+    from ml.datasets.label_map import LabelMap
+
+    rng = random.Random(0)
+    classes = LabelMap.load().classes
+    recs = [_rec(i, split="train" if i % 2 else "test", dhash=f"{rng.getrandbits(64):016x}",
+                 boxes=(BoxRecord(classes[i % len(classes)], (0.0, 0.0, 50.0, 50.0)),)) for i in range(4000)]
+    twin = int(recs[0].dhash, 16) ^ 1  # one bit away from a test image, placed in train
+    recs.append(_rec(9999, split="train", dhash=f"{twin:016x}"))
+    res = audit(recs, LabelMap.load(), max_class_share=1.0)
+    assert any(e.startswith("near_duplicate_across_splits") for e in res.errors)
+    assert not any("skipped" in w for w in res.warnings)
+
+
+def test_clean_rejects_a_dup_threshold_its_index_cannot_honour(tmp_path):
+    with pytest.raises(ValueError, match="dup_hamming"):
+        clean([_rec(1)], tmp_path, dup_hamming=8, verify_files=False)

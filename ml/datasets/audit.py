@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ml.datasets.cleaning import hamming
+from ml.datasets.cleaning import NEAR_DUP_MAX_HAMMING, _chunk_keys, hamming
 from ml.datasets.label_map import LabelMap
 from ml.datasets.manifest import ImageRecord
 
@@ -66,12 +66,16 @@ def audit(
             groups[r.group_id].add(r.split)
     res.errors += [f"group_leak:{g}:{sorted(s)}" for g, s in groups.items() if len(s) > 1]
 
+    # Chunk index (same pigeonhole trick as cleaning): exact for Hamming <= 4 at any dataset size, so the
+    # check is never skipped. It used to be skipped above 3000 images while the audit still passed.
     hashed = [(r, int(r.dhash, 16)) for r in records if r.dhash and r.split]
-    if len(hashed) <= 3000:  # exact pairwise check only where it is cheap
-        for i, (a, ha) in enumerate(hashed):
-            for b, hb in hashed[i + 1 :]:
-                if a.split != b.split and hamming(ha, hb) <= 4:
-                    res.errors.append(f"near_duplicate_across_splits:{a.image_id}:{b.image_id}")
-    else:
-        res.warnings.append("near-duplicate cross-split check skipped (>3000 images); re-run clean() before splitting")
+    index: dict[tuple[int, int], list[int]] = defaultdict(list)
+    for i, (a, ha) in enumerate(hashed):
+        candidates = {j for key in _chunk_keys(ha) for j in index[key]}
+        for j in sorted(candidates):
+            b, hb = hashed[j]
+            if a.split != b.split and hamming(ha, hb) <= NEAR_DUP_MAX_HAMMING:
+                res.errors.append(f"near_duplicate_across_splits:{b.image_id}:{a.image_id}")
+        for key in _chunk_keys(ha):
+            index[key].append(i)
     return res

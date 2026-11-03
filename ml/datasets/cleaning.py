@@ -13,6 +13,7 @@ from ml.datasets.manifest import ImageRecord
 
 HASH_BITS = 64
 _CHUNKS = 5  # pigeonhole: Hamming <= 4 over 5 chunks leaves one chunk identical
+NEAR_DUP_MAX_HAMMING = _CHUNKS - 1  # largest threshold the chunk index can honour exactly
 
 
 def dhash(img: Image.Image) -> int:
@@ -54,6 +55,8 @@ def clean(
     verify_files: bool = True,
 ) -> tuple[list[ImageRecord], CleanReport]:
     """Return cleaned records and a report. Records keep a fixed order (input order)."""
+    if not 0 <= dup_hamming <= NEAR_DUP_MAX_HAMMING:
+        raise ValueError(f"dup_hamming must be 0..{NEAR_DUP_MAX_HAMMING}: the chunk index misses larger distances")
     report = CleanReport()
     index: dict[tuple[int, int], list[int]] = defaultdict(list)
     seen_hashes: list[int] = []
