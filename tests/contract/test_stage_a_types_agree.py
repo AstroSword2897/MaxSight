@@ -7,14 +7,17 @@ of the restructure plan must flip to passes.
 from __future__ import annotations
 
 import dataclasses
+import typing
 
 import pytest
 
 types = pytest.importorskip("ml.runtime.stage_a.types")
 
 
-def _fields(cls) -> dict[str, str]:
-    return {f.name: str(f.type) for f in dataclasses.fields(cls)}
+def _fields(cls) -> dict[str, object]:
+    """Field name -> resolved type (string annotations from `from __future__ import annotations` are evaluated)."""
+    hints = typing.get_type_hints(cls)
+    return {f.name: hints[f.name] for f in dataclasses.fields(cls)}
 
 
 def test_camera_frame_keeps_image_and_timestamp():
@@ -23,7 +26,7 @@ def test_camera_frame_keeps_image_and_timestamp():
 
 @pytest.mark.xfail(strict=True, reason="schema frame_id is an integer >= 1; legacy CameraFrame uses str")
 def test_camera_frame_id_is_integer():
-    assert _fields(types.CameraFrame)["frame_id"] == "int"
+    assert _fields(types.CameraFrame)["frame_id"] is int
 
 
 @pytest.mark.xfail(strict=True, reason="perception is condition-independent; HazardResult still has condition_mode")
