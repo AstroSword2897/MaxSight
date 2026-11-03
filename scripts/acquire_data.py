@@ -64,10 +64,8 @@ def cmd_openimages(args: argparse.Namespace) -> int:
     wanted, missing = oim.resolve_classes(display_to_id, requested)
     for name in missing:
         print(f"  UNAVAILABLE (not an Open Images boxable class): {name}")
-    sel = oim.select_images(oim.iter_bbox_rows(bbox, wanted), args.per_class, seed=args.seed)
-    if len(sel.images) > args.max_images:
-        keep = sorted(sel.images)[: args.max_images]
-        sel = oim.Selection({i: sel.images[i] for i in keep}, sel.class_counts)
+    sel = oim.select_images(oim.iter_bbox_rows(bbox, wanted), args.per_class, seed=args.seed,
+                            max_images=args.max_images)
     print(f"selected {len(sel.images)} {args.split} images")
     for label_id, name in sorted(wanted.items(), key=lambda kv: kv[1]):
         print(f"  {name:18s} {sel.class_counts.get(label_id, 0):7d}")
