@@ -6,14 +6,13 @@ import random
 from pathlib import Path
 
 import pytest
-from PIL import Image
-
 from ml.datasets.acquisition.coco import select_records
 from ml.datasets.audit import audit
 from ml.datasets.cleaning import clean, dhash, hamming
 from ml.datasets.label_map import LabelMap
 from ml.datasets.manifest import BoxRecord, ImageRecord, read_manifest, write_manifest
 from ml.datasets.splits import assign_splits
+from PIL import Image
 
 LM = LabelMap.load()
 
@@ -31,12 +30,16 @@ def _coco(n_person_only: int, n_chair: int, n_hydrant: int) -> dict:
 
     i = 0
     for _ in range(n_person_only):
-        i += 1; add(i, 1)
+        i += 1
+        add(i, 1)
     for _ in range(n_chair):
-        i += 1; add(i, 62, extra=(1,))
+        i += 1
+        add(i, 62, extra=(1,))
     for _ in range(n_hydrant):
-        i += 1; add(i, 10)
-    i += 1; add(i, 65)  # bed only -> unmapped, no boxes
+        i += 1
+        add(i, 10)
+    i += 1
+    add(i, 65)  # bed only -> unmapped, no boxes
     return {"categories": cats, "images": images, "annotations": anns}
 
 
