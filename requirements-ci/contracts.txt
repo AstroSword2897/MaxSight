@@ -5,3 +5,4 @@ numpy>=1.24.0
 Pillow>=10.0.0
 jsonschema>=4.18,<5
 referencing>=0.30
+rfc3339-validator>=0.1.4

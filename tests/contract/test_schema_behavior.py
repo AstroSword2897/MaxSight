@@ -214,3 +214,12 @@ def test_gap_class_name_is_taxonomy_enum(validator, payloads):
 @_xfail("stage-b-task has no schema_version (spec: maxsight.stageb/1.0)")
 def test_gap_stage_b_request_pins_version():
     assert "schema_version" in RAW["stage-b-task"]["properties"]
+
+
+def test_date_time_format_is_actually_enforced():
+    """Without rfc3339-validator jsonschema silently skips date-time, so the date-time xfails could never flip."""
+    from jsonschema import FormatChecker
+
+    checker = FormatChecker()
+    assert checker.conforms("2026-11-02T00:00:00Z", "date-time")
+    assert not checker.conforms("yesterday-ish", "date-time"), "install rfc3339-validator (contracts profile)"
