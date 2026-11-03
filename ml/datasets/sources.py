@@ -7,6 +7,7 @@ only configured can never be reported as downloaded.
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -78,6 +79,33 @@ def current_state(src: Source, data_root: Path = DEFAULT_DATA_ROOT) -> State:
         info = json.loads(marker.read_text(encoding="utf-8"))
         return State.VERIFIED if info.get("verified") else State.DOWNLOADED
     return State.CONFIGURED
+
+
+def write_acquired_marker(raw: Path, *, verified: bool, **info) -> Path:
+    """Record that files are on disk. ``verified`` is True only when published checksums were checked."""
+    raw.mkdir(parents=True, exist_ok=True)
+    marker = raw / ACQUIRED_MARKER
+    payload = {"verified": verified, "acquired_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **info}
+    marker.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return marker
+
+
+def write_validated_marker(data_root: Path, source_id: str, summary: dict) -> Path:
+    """Record a passing audit. Callers must clear it when an audit fails (see clear_validated_marker)."""
+    marker = data_root / "processed" / source_id / VALIDATED_MARKER
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    payload = {**summary, "validated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    marker.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return marker
+
+
+def clear_validated_marker(data_root: Path, source_id: str) -> bool:
+    """Remove a stale VALIDATED marker so a failed re-audit can never keep an old pass."""
+    marker = data_root / "processed" / source_id / VALIDATED_MARKER
+    if marker.exists():
+        marker.unlink()
+        return True
+    return False
 
 
 def assert_detector_training_sources(source_ids: set[str], registry: dict[str, Source]) -> None:

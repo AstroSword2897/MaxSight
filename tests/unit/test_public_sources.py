@@ -133,3 +133,13 @@ def test_diode_scan_accepts_matched_triplets_and_flags_breakage(tmp_path):
     assert "missing_depth_mask:nomask.png" in probs
     _diode_item(tmp_path, "neg", depth_val=-1.0)
     assert any(p.startswith("invalid_depth_in_valid_region:neg") for p in diode.scan(tmp_path))
+
+
+def test_acquired_marker_records_download_without_claiming_verification(tmp_path):
+    from ml.datasets.sources import write_acquired_marker
+
+    raw = tmp_path / "raw" / "open_images_v7"
+    write_acquired_marker(raw, verified=False, reason="no published per-image checksum", images=300, failures=0)
+    info = json.loads((raw / ACQUIRED_MARKER).read_text())
+    assert info["verified"] is False and info["images"] == 300 and info["acquired_at"].endswith("Z")
+    assert current_state(REG["open_images_v7"], tmp_path) is State.DOWNLOADED

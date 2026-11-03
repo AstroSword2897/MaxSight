@@ -23,6 +23,7 @@ from ml.datasets.acquisition import openimages_manual as oim  # noqa: E402
 from ml.datasets.label_map import DEFAULT_PATH as DEFAULT_LABEL_MAP  # noqa: E402
 from ml.datasets.label_map import LabelMap  # noqa: E402
 from ml.datasets.manifest import write_manifest  # noqa: E402
+from ml.datasets.sources import write_acquired_marker  # noqa: E402
 
 
 def cmd_coco(args: argparse.Namespace) -> int:
@@ -40,6 +41,8 @@ def cmd_coco(args: argparse.Namespace) -> int:
     ok, failed = coco.download_images(records, root, max_gb=args.max_gb, workers=args.workers)
     out = Path(args.manifest or root / "manifest.jsonl")
     write_manifest(ok, out)
+    write_acquired_marker(root, verified=False, reason="COCO publishes no per-image checksum",
+                          images=len(ok), failures=len(failed), manifest=str(out))
     print(f"downloaded {len(ok)} images, {len(failed)} failures -> {out}")
     for image_id, err in failed[:10]:
         print(f"  FAILED {image_id}: {err}")
@@ -78,6 +81,9 @@ def cmd_openimages(args: argparse.Namespace) -> int:
     records = oim.to_records(sel, wanted, args.split, root, lm)
     out = Path(args.manifest or root / f"manifest_{args.split}.jsonl")
     write_manifest(records, out)
+    write_acquired_marker(root, verified=False, reason="Open Images S3 publishes no per-image checksum",
+                          split=args.split, images=len(ok), failures=len(failed), records=len(records),
+                          manifest=str(out))
     print(f"downloaded {len(ok)} images, {len(failed)} failures, {len(records)} records -> {out}")
     for key, err in failed[:10]:
         print(f"  FAILED {key}: {err}")
@@ -88,7 +94,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("coco", help="COCO 2017 class-capped subset")
-    c.add_argument("--root", default="data/raw/coco")
+    c.add_argument("--root", default="datasets/raw/coco2017")
     c.add_argument("--split", default="train2017", choices=["train2017", "val2017"])
     c.add_argument("--per-class", type=int, default=4000)
     c.add_argument("--max-gb", type=float, default=4.0, help="hard download budget")

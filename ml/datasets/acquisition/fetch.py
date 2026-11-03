@@ -13,7 +13,7 @@ import zipfile
 from pathlib import Path
 
 from ml.datasets.acquisition.plan import Plan
-from ml.datasets.sources import ACQUIRED_MARKER
+from ml.datasets.sources import write_acquired_marker
 
 log = logging.getLogger(__name__)
 _UA = {"User-Agent": "maxsight-data/1.0"}
@@ -109,9 +109,8 @@ def fetch_diode(src_raw: dict, raw: Path, include: tuple[str, ...] = ("val", "da
                             "md5_verified": spec.get("md5") is not None}
         extractor = safe_extract_tar if dest.name.endswith(".tar.gz") else safe_extract_zip
         extractor(dest, raw / "extracted")
-    info = {"verified": all_verified, "files": files, "acquired_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-    (raw / ACQUIRED_MARKER).write_text(json.dumps(info, indent=2), encoding="utf-8")
-    return info
+    marker = write_acquired_marker(raw, verified=all_verified, files=files)
+    return json.loads(marker.read_text(encoding="utf-8"))
 
 
 def run_plan(plan: Plan, dry_run: bool = True) -> int:
