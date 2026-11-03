@@ -62,8 +62,11 @@ class Selection:
 
 
 def parse_class_descriptions(text: str) -> dict[str, str]:
-    """``LabelName,DisplayName`` CSV -> {display name: label id}."""
-    return {row["DisplayName"]: row["LabelName"] for row in csv.DictReader(text.splitlines())}
+    """``LabelName,DisplayName`` CSV -> {display name: label id}. The v7 file has a header; older ones do not."""
+    rows = [r for r in csv.reader(text.splitlines()) if len(r) >= 2]
+    if rows and rows[0][0] == "LabelName":
+        rows = rows[1:]
+    return {name: label for label, name in rows}
 
 
 def resolve_classes(display_to_id: dict[str, str], requested: Iterable[str]) -> tuple[dict[str, str], list[str]]:
@@ -91,10 +94,13 @@ def iter_bbox_rows(path: Path, wanted: dict[str, str]) -> Iterable[tuple[str, Bo
                 )
 
 
-def select_images(rows: Iterable[tuple[str, BoxRow]], per_class_cap: int, seed: int = 0) -> Selection:
+def select_images(
+    rows: Iterable[tuple[str, BoxRow]], per_class_cap: int, seed: int = 0, max_images: int | None = None,
+) -> Selection:
     """Pick images so each class reaches ``per_class_cap`` instances; rare classes are visited first.
 
-    An accepted image keeps all its wanted boxes (dropping some would create false background).
+    An accepted image keeps all its wanted boxes (dropping some would create false background). ``max_images``
+    stops selection early in the same seeded, rare-first order, so class counts always match the images kept.
     """
     by_image: dict[str, list[BoxRow]] = defaultdict(list)
     for image_id, box in rows:
@@ -112,6 +118,8 @@ def select_images(rows: Iterable[tuple[str, BoxRow]], per_class_cap: int, seed: 
             continue
         sel.class_counts.update(b.label_id for b in boxes)
         sel.images[image_id] = boxes
+        if max_images is not None and len(sel.images) >= max_images:
+            break
     return sel
 
 
@@ -125,7 +133,7 @@ def write_image_list(split: str, image_ids: Iterable[str], path: Path) -> int:
 
 def read_image_list(path: Path) -> list[tuple[str, str]]:
     pairs = []
-    for n, raw in enumerate(path.read_text(encoding="utf-8").splitlines()):
+    for n, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         line = raw.strip().removesuffix(".jpg")
         if not line:
             continue

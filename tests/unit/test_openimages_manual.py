@@ -31,6 +31,13 @@ def test_registry_urls_match_the_module_constants():
     assert load_registry()["open_images_v7"].raw["s3_bucket"] == oim.BUCKET
 
 
+def test_class_descriptions_parse_with_or_without_a_header_row():
+    headerless = "/m/door,Door\n/m/stairs,Stairs\n"
+    assert oim.parse_class_descriptions(CLASSES)["Door"] == "/m/door"
+    assert oim.parse_class_descriptions(headerless) == {"Door": "/m/door", "Stairs": "/m/stairs"}
+    assert "LabelName" not in oim.parse_class_descriptions(CLASSES).values()
+
+
 def test_resolve_classes_flags_non_boxable_names_case_insensitively():
     found, missing = oim.resolve_classes(oim.parse_class_descriptions(CLASSES), ["door", "Traffic cone", "Pole", "Box"])
     assert found == {"/m/door": "Door", "/m/box": "Box"}
@@ -55,6 +62,17 @@ def test_selection_is_deterministic_per_seed(tmp_path):
     assert list(a.images) == list(b.images) and set(a.images) != set(c.images)
 
 
+def test_max_images_stops_selection_and_class_counts_match_the_selected_images(tmp_path):
+    rows = [(f"i{n:03d}", "/m/door", False, False) for n in range(100)]
+    p = _bbox(tmp_path / "b.csv", rows)
+    wanted = {"/m/door": "Door"}
+    a = oim.select_images(oim.iter_bbox_rows(p, wanted), 1000, seed=1, max_images=10)
+    b = oim.select_images(oim.iter_bbox_rows(p, wanted), 1000, seed=2, max_images=10)
+    assert len(a.images) == 10 and a.class_counts["/m/door"] == sum(len(v) for v in a.images.values())
+    assert set(a.images) != set(sorted(a.images)[:0]) and set(a.images) != set(b.images)  # not id-ordered, seed-driven
+    assert set(a.images) != {f"i{n:03d}" for n in range(10)}
+
+
 def test_unwanted_labels_are_never_loaded(tmp_path):
     p = _bbox(tmp_path / "b.csv", [("a", "/m/cat", False, False), ("b", "/m/door", False, False)])
     assert [i for i, _ in oim.iter_bbox_rows(p, {"/m/door": "Door"})] == ["b"]
@@ -71,7 +89,7 @@ def test_image_list_round_trips_in_the_official_format(tmp_path):
 def test_image_list_rejects_malformed_lines_with_the_line_number(tmp_path, bad):
     p = tmp_path / "list.txt"
     p.write_text(f"train/abc123\n{bad}\n")
-    with pytest.raises(ValueError, match="line 1"):
+    with pytest.raises(ValueError, match="line 2"):
         oim.read_image_list(p)
 
 
