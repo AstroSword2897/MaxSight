@@ -61,6 +61,21 @@ def test_yaml_parses_and_is_not_empty(rel):
     assert yaml.safe_load((REPO / rel).read_text(encoding="utf-8"))
 
 
+def names_a_sensor(key: str) -> bool:
+    """True when a config key contains a forbidden sensor as a whole token (`imu_enabled`, `use-gps`, `Lidar`)."""
+    return bool(set(re.split(r"[^a-z0-9]+", key.lower())) & set(FORBIDDEN_SENSORS))
+
+
+@pytest.mark.parametrize("key", ["imu", "imu_enabled", "use_gps", "gps-lat", "Lidar", "enable.accelerometer.rate"])
+def test_sensor_detector_catches_snake_kebab_and_dotted_keys(key):
+    assert names_a_sensor(key)
+
+
+@pytest.mark.parametrize("key", ["simulation", "imutable_flag", "gpsx", "rate_limits", "camera_id"])
+def test_sensor_detector_ignores_lookalike_substrings(key):
+    assert not names_a_sensor(key)
+
+
 def _keys(node):
     if isinstance(node, dict):
         for k, v in node.items():
@@ -74,7 +89,7 @@ def _keys(node):
 @pytest.mark.parametrize("rel", [r for r in _files() if "therapy" not in r])
 def test_no_config_key_names_a_sensor_outside_the_camera_only_product(rel):
     doc = yaml.safe_load((REPO / rel).read_text(encoding="utf-8"))
-    hits = [k for k in _keys(doc) if any(re.search(rf"\b{w}\b", k.lower()) for w in FORBIDDEN_SENSORS)]
+    hits = [k for k in _keys(doc) if names_a_sensor(k)]
     assert not hits, hits
 
 
