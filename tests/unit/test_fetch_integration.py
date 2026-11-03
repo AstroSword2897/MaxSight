@@ -17,8 +17,8 @@ from ml.datasets.sources import ACQUIRED_MARKER, load_registry
 
 
 class _Handler(BaseHTTPRequestHandler):
-    def __init__(self, *args, files: dict[str, bytes], log: list, **kwargs):
-        self._files, self._log = files, log
+    def __init__(self, *args, files: dict[str, bytes], log: list, faults: dict[str, int], **kwargs):
+        self._files, self._log, self._faults = files, log, faults
         super().__init__(*args, **kwargs)
 
     def log_message(self, *args):  # silence
@@ -40,6 +40,11 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
+        if self._faults.get(self.path.lstrip("/"), 0) > 0:  # promise the full body, send half, hang up
+            self._faults[self.path.lstrip("/")] -= 1
+            self.wfile.write(body[: len(body) // 2])
+            self.close_connection = True
+            return
         self.wfile.write(body)
 
 
@@ -47,10 +52,11 @@ class _Handler(BaseHTTPRequestHandler):
 def server():
     files: dict[str, bytes] = {}
     log: list = []
-    httpd = HTTPServer(("127.0.0.1", 0), partial(_Handler, files=files, log=log))
+    faults: dict[str, int] = {}
+    httpd = HTTPServer(("127.0.0.1", 0), partial(_Handler, files=files, log=log, faults=faults))
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
-    yield f"http://127.0.0.1:{httpd.server_port}", files, log
+    yield f"http://127.0.0.1:{httpd.server_port}", files, log, faults
     httpd.shutdown()
     httpd.server_close()
 
@@ -81,7 +87,7 @@ def _spec(base, val: bytes, md5: str | None):
 
 
 def test_diode_fetch_downloads_verifies_extracts_and_marks_verified(server, tmp_path):
-    base, files, _ = server
+    base, files, _, _ = server
     val = _tar_gz({"val/indoors/scene_1/scan_1/a.png": b"png", "val/indoors/scene_1/scan_1/a_depth.npy": b"d"})
     files["val.tar.gz"] = val
     files["data_list.zip"] = _zip({"val.csv": b"a\n"})
@@ -93,7 +99,7 @@ def test_diode_fetch_downloads_verifies_extracts_and_marks_verified(server, tmp_
 
 
 def test_diode_fetch_without_published_checksum_is_downloaded_but_not_verified(server, tmp_path):
-    base, files, _ = server
+    base, files, _, _ = server
     val = _tar_gz({"val/x.png": b"1"})
     files["val.tar.gz"] = val
     files["data_list.zip"] = _zip({"val.csv": b"a\n"})
@@ -102,16 +108,29 @@ def test_diode_fetch_without_published_checksum_is_downloaded_but_not_verified(s
 
 
 def test_diode_fetch_refuses_md5_mismatch_and_writes_no_marker(server, tmp_path):
-    base, files, _ = server
+    base, files, _, _ = server
     files["val.tar.gz"] = _tar_gz({"val/x.png": b"1"})
     with pytest.raises(RuntimeError, match="MD5 mismatch"):
         fetch.fetch_diode(_spec(base, b"", "0" * 32), tmp_path, include=("val",))
     assert not (tmp_path / ACQUIRED_MARKER).exists()
-    assert (tmp_path / "archives" / "val.tar.gz").exists()  # kept for inspection
+    # the bad file is moved aside (kept for inspection) so the next run downloads again instead of reusing it
+    assert not (tmp_path / "archives" / "val.tar.gz").exists()
+    assert (tmp_path / "archives" / "val.tar.gz.md5-mismatch").exists()
+
+
+def test_diode_fetch_recovers_after_a_corrupt_download(server, tmp_path):
+    base, files, _, _ = server
+    good = _tar_gz({"val/x.png": b"1"})
+    files["val.tar.gz"] = _tar_gz({"val/x.png": b"corrupt"})
+    with pytest.raises(RuntimeError, match="MD5 mismatch"):
+        fetch.fetch_diode(_spec(base, good, hashlib.md5(good).hexdigest()), tmp_path, include=("val",))
+    files["val.tar.gz"] = good  # server fixed
+    info = fetch.fetch_diode(_spec(base, good, hashlib.md5(good).hexdigest()), tmp_path, include=("val",))
+    assert info["verified"] is True
 
 
 def test_download_resumes_a_partial_file_with_a_range_request(server, tmp_path):
-    base, files, log = server
+    base, files, log, _ = server
     body = bytes(range(256)) * 400
     files["big.bin"] = body
     dest = tmp_path / "big.bin"
@@ -122,7 +141,7 @@ def test_download_resumes_a_partial_file_with_a_range_request(server, tmp_path):
 
 
 def test_download_never_replaces_a_finished_file(server, tmp_path):
-    base, files, log = server
+    base, files, log, _ = server
     files["a.bin"] = b"new"
     dest = tmp_path / "a.bin"
     dest.write_bytes(b"original")
@@ -131,7 +150,7 @@ def test_download_never_replaces_a_finished_file(server, tmp_path):
 
 
 def test_download_raises_after_bounded_retries(server, tmp_path, monkeypatch):
-    base, _, _ = server
+    base, _, _, _ = server
     monkeypatch.setattr(fetch.time, "sleep", lambda _s: None)
     with pytest.raises(RuntimeError, match="after 2 attempts"):
         fetch.download_resumable(f"{base}/missing.bin", tmp_path / "m.bin", retries=2)
@@ -165,3 +184,24 @@ def test_run_plan_stops_at_first_failing_step(monkeypatch):
     pl = plan.sanpo_plan(load_registry()["sanpo"], ["s1", "s2"])
     assert fetch.run_plan(pl, dry_run=False) == 3
     assert len(calls) == 1
+
+
+def test_truncated_download_is_never_renamed_to_the_final_file(server, tmp_path, monkeypatch):
+    base, files, _, faults = server
+    monkeypatch.setattr(fetch.time, "sleep", lambda _s: None)
+    files["big.bin"] = bytes(range(256)) * 400
+    faults["big.bin"] = 99  # every response is cut short
+    with pytest.raises(RuntimeError, match="after 2 attempts"):
+        fetch.download_resumable(f"{base}/big.bin", tmp_path / "big.bin", retries=2)
+    assert not (tmp_path / "big.bin").exists()
+
+
+def test_truncated_download_resumes_from_the_partial_file(server, tmp_path, monkeypatch):
+    base, files, log, faults = server
+    monkeypatch.setattr(fetch.time, "sleep", lambda _s: None)
+    body = bytes(range(256)) * 400
+    files["big.bin"] = body
+    faults["big.bin"] = 1  # first response is cut short, the retry is complete
+    fetch.download_resumable(f"{base}/big.bin", tmp_path / "big.bin")
+    assert (tmp_path / "big.bin").read_bytes() == body
+    assert log[1][1] and log[1][1].startswith("bytes=")  # the retry resumed with a Range request

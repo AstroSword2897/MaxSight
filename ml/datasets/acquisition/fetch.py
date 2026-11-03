@@ -28,6 +28,17 @@ def file_hash(path: Path, algo: str) -> str:
     return h.hexdigest()
 
 
+def _expected_total(resp, have: int) -> int | None:
+    """Total body size promised by the server, or None when it did not say (chunked)."""
+    content_range = resp.headers.get("Content-Range")
+    if content_range and "/" in content_range:
+        total = content_range.rsplit("/", 1)[1]
+        if total.isdigit():
+            return int(total)
+    length = resp.headers.get("Content-Length")
+    return have + int(length) if length and length.isdigit() else None
+
+
 def download_resumable(url: str, dest: Path, retries: int = 4) -> Path:
     """Download ``url`` to ``dest`` using a ``.part`` file and HTTP Range resume. Never replaces a finished file."""
     if dest.exists():
@@ -45,6 +56,10 @@ def download_resumable(url: str, dest: Path, retries: int = 4) -> Path:
                 with part.open("ab" if have else "wb") as out:
                     while chunk := resp.read(_CHUNK):
                         out.write(chunk)
+                expected = _expected_total(resp, have)
+            size = part.stat().st_size
+            if expected is not None and size != expected:  # a closed connection also ends the read loop
+                raise OSError(f"truncated download: got {size} of {expected} bytes")
             part.replace(dest)
             return dest
         except Exception as exc:  # noqa: BLE001 - retried then raised
@@ -85,7 +100,10 @@ def fetch_diode(src_raw: dict, raw: Path, include: tuple[str, ...] = ("val", "da
         dest = download_resumable(spec["url"], raw / "archives" / Path(spec["url"]).name)
         ok = verify_md5(dest, spec.get("md5"))
         if not ok:
-            raise RuntimeError(f"MD5 mismatch for {dest.name}; leaving file in place for inspection")
+            # Move it aside (kept for inspection) so the next run downloads again instead of reusing a bad file.
+            bad = dest.with_name(dest.name + ".md5-mismatch")
+            dest.replace(bad)
+            raise RuntimeError(f"MD5 mismatch for {dest.name}; moved to {bad.name}, re-run to download again")
         all_verified &= spec.get("md5") is not None
         files[dest.name] = {"size": dest.stat().st_size, "sha256": file_hash(dest, "sha256"),
                             "md5_verified": spec.get("md5") is not None}
