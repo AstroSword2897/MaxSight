@@ -1,3 +1,8 @@
+# Compute tier profile: gold. Loaded by ml/runtime/tier_router.py (TierProfile.from_yaml).
+# Owner: Stage A runtime. Tier switching is by device budget only, never by user condition.
+
+schema_version: "1.0.0"
+
 tier: gold
 model_tier: T5
 max_latency_ms: 200
