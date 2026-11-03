@@ -8,6 +8,8 @@
 # - GradNorm scaling stabilized
 
 # Source Model (T2)
+schema_version: "1.0.0"
+
 source:
   checkpoint: "checkpoints/t2_hybrid_vit/best_model.pth"
   tier: "T2_HYBRID_VIT"
