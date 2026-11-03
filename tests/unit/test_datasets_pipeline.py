@@ -145,3 +145,14 @@ def test_manifest_roundtrip(tmp_path):
     recs = [_rec(1, "a.png").with_(dhash="00ff", split="train", extra={"environment": "hall"})]
     write_manifest(recs, tmp_path / "m.jsonl")
     assert list(read_manifest(tmp_path / "m.jsonl")) == recs
+
+
+def test_small_mapped_boxes_become_ignore_regions_not_false_background():
+    """A real but tiny person must not be silently dropped: unlabelled it would train as background."""
+    ann = {"categories": [{"id": 1, "name": "person"}, {"id": 62, "name": "chair"}],
+           "images": [{"id": 1, "file_name": "1.jpg", "width": 640, "height": 480, "coco_url": "http://x/1.jpg"}],
+           "annotations": [{"image_id": 1, "category_id": 62, "bbox": [10, 10, 100, 100], "iscrowd": 0},
+                           {"image_id": 1, "category_id": 1, "bbox": [300, 300, 4, 4], "iscrowd": 0}]}
+    (rec,) = select_records(ann, LM, per_class_cap=10)
+    assert [b.cls for b in rec.boxes] == ["chair"]
+    assert (300.0, 300.0, 304.0, 304.0) in rec.ignore_regions

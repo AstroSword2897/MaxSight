@@ -73,6 +73,7 @@ def select_records(
                     ignores.append(xyxy)
                 continue
             if w < min_box_px or h < min_box_px:
+                ignores.append(xyxy)  # real but too small to train on: ignore it, never leave it as background
                 continue
             boxes.append(BoxRecord(target, xyxy, name))
         if boxes:
