@@ -102,7 +102,8 @@ def diode_plan(src: Source, data_root: Path = DEFAULT_DATA_ROOT, include_train: 
 def manual_plan(src: Source) -> Plan:
     steps = {
         "coco2017": ("python scripts/acquire_data.py coco --dry-run  (then without --dry-run with --max-gb)",),
-        "open_images_v7": ("pip install fiftyone; python scripts/acquire_data.py openimages",
+        "open_images_v7": ("pip install boto3; python scripts/acquire_data.py openimages --split validation --dry-run, "
+                           "then without --dry-run (the train CSV is 2.3 GB and needs --approve-gb 3)",
                            "Pole and Traffic cone are not Open Images boxable classes; they yield no images."),
         "mapillary_vistas_v2": (f"Register and accept the licence at {src.homepage}, download v2.0, unpack to "
                                 "datasets/raw/mapillary_vistas_v2/. Treat as CC BY-NC-SA 4.0 (non-commercial).",),

@@ -45,7 +45,7 @@ sources:
       commercial_use: unverified
     access:
       kind: automatic
-      note: "Via FiftyOne (pip install fiftyone); downloads only requested classes."
+      note: "Official CSVs plus the anonymous open-images-dataset S3 bucket via scripts/acquire_data.py openimages (pip install boto3); downloads only selected images."
     # Verified against oidv7-class-descriptions-boxable.csv: Pole and Traffic cone are NOT boxable classes.
     requested_classes: [Door, Stairs, Waste container, Traffic cone, Box, Street light, Pole]
     unavailable_classes: [Traffic cone, Pole]

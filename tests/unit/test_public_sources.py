@@ -143,3 +143,9 @@ def test_acquired_marker_records_download_without_claiming_verification(tmp_path
     info = json.loads((raw / ACQUIRED_MARKER).read_text())
     assert info["verified"] is False and info["images"] == 300 and info["acquired_at"].endswith("Z")
     assert current_state(REG["open_images_v7"], tmp_path) is State.DOWNLOADED
+
+
+def test_open_images_instructions_match_the_manual_boto3_route():
+    text = " ".join(acq_plan.manual_plan(REG["open_images_v7"]).manual) + " " + REG["open_images_v7"].access_note
+    assert "boto3" in text and "acquire_data.py openimages" in text
+    assert "fiftyone" not in text.lower()
