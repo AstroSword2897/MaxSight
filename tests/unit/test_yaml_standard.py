@@ -16,7 +16,6 @@ yaml = pytest.importorskip("yaml")
 
 REPO = Path(__file__).resolve().parents[2]
 SCOPES = ("configs", "ml/config", "ml/training/configs")
-EXTRA = ("scripts/product/deprecations.yaml",)
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 SNAKE = re.compile(r"^[a-z][a-z0-9_]*$")
 FORBIDDEN_SENSORS = ("imu", "lidar", "gps", "accelerometer", "gyroscope")
@@ -25,8 +24,26 @@ KNOWN_GAPS: dict[str, str] = {}  # file -> reason; add an entry only for a delib
 
 
 def _files() -> list[str]:
-    found = {p.relative_to(REPO).as_posix() for s in SCOPES for p in (REPO / s).rglob("*.yaml")}
-    return sorted(found | set(EXTRA))
+    roots = [REPO / s for s in SCOPES]
+    found = {p for r in roots for pattern in ("*.yaml", "*.yml") for p in r.rglob(pattern)}
+    found |= {p for pattern in ("*.yaml", "*.yml") for p in (REPO / "scripts" / "product").glob(pattern)}
+    return sorted(p.relative_to(REPO).as_posix() for p in found)
+
+
+def has_flow_mapping(text: str) -> bool:
+    """True for any `{...}` mapping in YAML flow style, including list items; comments and strings never count."""
+    return any(isinstance(ev, yaml.MappingStartEvent) and ev.flow_style for ev in yaml.parse(text))
+
+
+@pytest.mark.parametrize(("text", "flagged"), [
+    ("a: {b: 1}\n", True),
+    ("items:\n  - {name: x, gb: 1}\n", True),
+    ("# e.g. key: {..}\na: 1\n", False),
+    ('a: "literal {braces}"\n', False),
+    ("a: [x, y]\n", False),
+])
+def test_flow_mapping_detector(text, flagged):
+    assert has_flow_mapping(text) is flagged
 
 
 def _check(rel: str) -> None:
@@ -37,7 +54,7 @@ def _check(rel: str) -> None:
     assert first.startswith("#"), "missing header comment"
     version = doc.get("schema_version")
     assert isinstance(version, str) and SEMVER.match(version), f"schema_version={version!r}"
-    assert not re.search(r":\s*\{", text), "flow-style mapping"
+    assert not has_flow_mapping(text), "flow-style mapping"
     bad = [k for k in doc if not SNAKE.match(str(k))]
     assert not bad, f"non-snake_case keys {bad}"
 
