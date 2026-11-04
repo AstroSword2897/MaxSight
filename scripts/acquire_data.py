@@ -11,6 +11,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
@@ -24,6 +25,16 @@ from ml.datasets.label_map import DEFAULT_PATH as DEFAULT_LABEL_MAP  # noqa: E40
 from ml.datasets.label_map import LabelMap  # noqa: E402
 from ml.datasets.manifest import write_manifest  # noqa: E402
 from ml.datasets.sources import write_acquired_marker  # noqa: E402
+
+
+def code_revision() -> str:
+    """The git commit that ran this acquisition, so every marker can be traced to its code."""
+    try:
+        out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True,  # noqa: S603,S607
+                             check=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    return out.stdout.strip()
 
 
 def cmd_coco(args: argparse.Namespace) -> int:
@@ -41,12 +52,25 @@ def cmd_coco(args: argparse.Namespace) -> int:
     ok, failed = coco.download_images(records, root, max_gb=args.max_gb, workers=args.workers)
     out = Path(args.manifest or coco.manifest_path(root, args.split))
     write_manifest(ok, out)
-    write_acquired_marker(root, verified=False, split=args.split, reason="COCO publishes no per-image checksum",
-                          images=len(ok), failures=len(failed), manifest=str(out))
+    archive = root / "annotations" / Path(coco.ANNOTATIONS_URL).name
+    write_acquired_marker(
+        root, verified=False, split=args.split,
+        reason="COCO publishes no per-image checksum; run data_sources.py verify",
+        source_url=coco.ANNOTATIONS_URL,
+        code_revision=code_revision(),
+        images=len(ok),
+        failures=len(failed),
+        failure_reasons=fetch.summarize_failures(failed),
+        manifest=str(out),
+        selection={"per_class_cap": args.per_class, "max_gb": args.max_gb, "seed": args.seed},
+        files={archive.name: {"size": archive.stat().st_size, "sha256": fetch.file_hash(archive, "sha256")}},
+    )
     print(f"downloaded {len(ok)} images, {len(failed)} failures -> {out}")
     for image_id, err in failed[:10]:
         print(f"  FAILED {image_id}: {err}")
-    return 0 if not failed else 1
+    if failed:
+        print("failure reasons:", fetch.summarize_failures(failed))
+    return 1 if fetch.has_real_errors(failed) else 0
 
 
 def cmd_openimages(args: argparse.Namespace) -> int:
@@ -83,13 +107,26 @@ def cmd_openimages(args: argparse.Namespace) -> int:
     records = oim.to_records(sel, wanted, args.split, root, lm)
     out = Path(args.manifest or root / f"manifest_{args.split}.jsonl")
     write_manifest(records, out)
-    write_acquired_marker(root, verified=False, reason="Open Images S3 publishes no per-image checksum",
-                          split=args.split, images=len(ok), failures=len(failed), records=len(records),
-                          manifest=str(out))
+    write_acquired_marker(
+        root, verified=False, split=args.split,
+        reason="Open Images S3 publishes no per-image checksum; run data_sources.py verify",
+        source_url=oim.URLS[f"bbox_{args.split}"],
+        code_revision=code_revision(),
+        images=len(ok),
+        failures=len(failed),
+        failure_reasons=fetch.summarize_failures(failed),
+        records=len(records),
+        manifest=str(out),
+        selection={"per_class_cap": args.per_class, "max_images": args.max_images, "seed": args.seed},
+        files={path.name: {"size": path.stat().st_size, "sha256": fetch.file_hash(path, "sha256")}
+               for path in (classes, bbox)},
+    )
     print(f"downloaded {len(ok)} images, {len(failed)} failures, {len(records)} records -> {out}")
     for key, err in failed[:10]:
         print(f"  FAILED {key}: {err}")
-    return 0 if not failed else 1
+    if failed:
+        print("failure reasons:", fetch.summarize_failures(failed))
+    return 1 if fetch.has_real_errors(failed) else 0
 
 
 def main() -> int:

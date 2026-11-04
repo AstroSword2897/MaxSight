@@ -21,6 +21,23 @@ _UA = {"User-Agent": "maxsight-data/1.0"}
 _CHUNK = 1 << 20
 
 
+BUDGET_REASON = "byte budget reached"  # an intended cut by --max-gb, not a download error
+
+
+def summarize_failures(failures: list[tuple[str, str]]) -> dict[str, int]:
+    """Count failures per reason. Real errors are grouped by exception type ("URLError: ..." -> "URLError")."""
+    counts: dict[str, int] = {}
+    for _item, reason in failures:
+        key = reason if reason == BUDGET_REASON else reason.split(":", 1)[0]
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def has_real_errors(failures: list[tuple[str, str]]) -> bool:
+    """True if any failure is something other than an intended budget cut."""
+    return any(reason != BUDGET_REASON for _item, reason in failures)
+
+
 def file_hash(path: Path, algo: str) -> str:
     h = hashlib.new(algo)
     with path.open("rb") as fh:
