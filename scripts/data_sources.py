@@ -14,6 +14,7 @@ Nothing is downloaded unless ``fetch`` is given ``--approve-gb`` large enough fo
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
@@ -23,7 +24,14 @@ sys.path.insert(0, str(REPO))
 
 from ml.datasets.acquisition import fetch  # noqa: E402
 from ml.datasets.acquisition import plan as acq_plan  # noqa: E402
-from ml.datasets.sources import DEFAULT_DATA_ROOT, current_state, load_registry  # noqa: E402
+from ml.datasets.integrity import verify_raw  # noqa: E402
+from ml.datasets.sources import (  # noqa: E402
+    ACQUIRED_MARKER,
+    DEFAULT_DATA_ROOT,
+    load_registry,
+    status_label,
+    write_acquired_marker,
+)
 
 
 def _plan_for(src, args) -> acq_plan.Plan:
@@ -39,10 +47,43 @@ def _plan_for(src, args) -> acq_plan.Plan:
 
 
 def cmd_status(reg, args) -> int:
-    print(f"{'dataset':22s} {'role':10s} {'access':20s} {'commercial':11s} state")
+    print(f"{'dataset':22s} {'role':10s} {'access':20s} {'commercial':11s} status")
     for s in reg.values():
-        print(f"{s.id:22s} {s.role:10s} {s.access_kind:20s} {s.commercial_use:11s} {current_state(s, Path(args.data_root)).name}")
+        print(f"{s.id:22s} {s.role:10s} {s.access_kind:20s} {s.commercial_use:11s} {status_label(s, Path(args.data_root))}")
     return 0
+
+
+def cmd_verify(reg, args) -> int:
+    """Check every image of every acquired split, then record the result in the ACQUIRED marker."""
+    raw = Path(args.data_root) / "raw" / args.dataset
+    marker = raw / ACQUIRED_MARKER
+    if not marker.exists():
+        print(f"{args.dataset}: nothing acquired (no {marker})")
+        return 1
+
+    info = json.loads(marker.read_text(encoding="utf-8"))
+    splits = info.get("splits") or ({info["split"]: info} if "split" in info else {})
+    if not splits:
+        print(f"{args.dataset}: marker has no per-split manifests to verify")
+        return 1
+
+    all_ok = True
+    for split, entry in splits.items():
+        manifest = Path(entry["manifest"])
+        if not manifest.is_absolute():
+            manifest = REPO / manifest
+        report = verify_raw(manifest, raw)
+        all_ok &= report.ok
+        print(f"{args.dataset}/{split}: checked {report.checked}, passed {report.passed}, failed {len(report.failures)}")
+        for path, reason in report.failures[:10]:
+            print(f"  FAILED {path}: {reason}")
+
+        # Keep everything already recorded for the split; update only the verification result.
+        kept = {key: value for key, value in entry.items() if key not in ("verified", "split", "integrity")}
+        write_acquired_marker(raw, verified=report.ok, split=split, integrity=report.as_dict(), **kept)
+
+    print("RAW_VERIFIED" if all_ok else "verification FAILED")
+    return 0 if all_ok else 1
 
 
 def cmd_plan(reg, args) -> int:
@@ -84,6 +125,7 @@ def main() -> int:
     ap.add_argument("--data-root", default=str(DEFAULT_DATA_ROOT))
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("status")
+    sub.add_parser("verify", help="check every acquired image: present, decodes, sha256 unchanged").add_argument("dataset")
     for name in ("plan", "fetch"):
         sp = sub.add_parser(name)
         sp.add_argument("dataset")
@@ -102,7 +144,8 @@ def main() -> int:
     if args.cmd != "status" and args.dataset not in reg:
         ap.error(f"unknown dataset {args.dataset!r}; choose from {sorted(reg)}")
     try:
-        return {"status": cmd_status, "plan": cmd_plan, "fetch": cmd_fetch}[args.cmd](reg, args)
+        commands = {"status": cmd_status, "verify": cmd_verify, "plan": cmd_plan, "fetch": cmd_fetch}
+        return commands[args.cmd](reg, args)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

@@ -25,11 +25,21 @@ VALIDATED_MARKER = "VALIDATED.json"  # written under processed/<id>/ after the a
 
 
 class State(IntEnum):
-    CONFIGURED = 0
-    DOWNLOADED = 1  # files present, integrity not yet verified
-    VERIFIED = 2
-    PROCESSED = 3
-    VALIDATED = 4
+    """How far a dataset has been checked. Each step needs evidence on disk, never configuration."""
+
+    NOT_DOWNLOADED = 0  # registered only
+    DOWNLOADED_UNVERIFIED = 1  # files present, integrity not yet checked
+    RAW_VERIFIED = 2  # every split passed the integrity check
+    PREPROCESSED_UNVERIFIED = 3  # processed output exists, quality audit not passed yet
+    VALIDATED = 4  # quality audit passed; see status_label() for what it is ready for
+
+
+# A validated dataset is ready only for the purpose its registry role allows.
+READY_LABEL_BY_ROLE = {
+    "pretrain": "READY_FOR_DETECTOR_PRETRAINING",
+    "eval_only": "READY_FOR_EVALUATION_ONLY",
+    "research": "READY_FOR_RESEARCH_EXPERIMENTS",
+}
 
 
 @dataclass(frozen=True)
@@ -73,19 +83,61 @@ def current_state(src: Source, data_root: Path = DEFAULT_DATA_ROOT) -> State:
     if validated.exists():
         return State.VALIDATED
     if (data_root / "processed" / src.id).is_dir() and any((data_root / "processed" / src.id).iterdir()):
-        return State.PROCESSED
+        return State.PREPROCESSED_UNVERIFIED
     marker = data_root / "raw" / src.id / ACQUIRED_MARKER
     if marker.exists():
         info = json.loads(marker.read_text(encoding="utf-8"))
-        return State.VERIFIED if info.get("verified") else State.DOWNLOADED
-    return State.CONFIGURED
+        return State.RAW_VERIFIED if info.get("verified") else State.DOWNLOADED_UNVERIFIED
+    return State.NOT_DOWNLOADED
 
 
-def write_acquired_marker(raw: Path, *, verified: bool, **info) -> Path:
-    """Record that files are on disk. ``verified`` is True only when published checksums were checked."""
+def status_label(src: Source, data_root: Path = DEFAULT_DATA_ROOT) -> str:
+    """The state name, except that VALIDATED is reported as the purpose it is ready for."""
+    state = current_state(src, data_root)
+    if state is State.VALIDATED:
+        return READY_LABEL_BY_ROLE[src.role]
+    return state.name
+
+
+def _utc_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _read_marker_splits(marker: Path) -> dict[str, dict]:
+    """Existing per-split entries. A legacy marker (one top-level ``split``) becomes one entry."""
+    if not marker.exists():
+        return {}
+    old = json.loads(marker.read_text(encoding="utf-8"))
+    if "splits" in old:
+        return dict(old["splits"])
+    if "split" in old:
+        legacy = {key: value for key, value in old.items() if key != "split"}
+        return {old["split"]: legacy}
+    return {}
+
+
+def write_acquired_marker(raw: Path, *, verified: bool, split: str | None = None, **info) -> Path:
+    """Record that files are on disk.
+
+    ``verified`` is True only after an integrity check has passed. With ``split``, the entry is
+    added under ``splits`` and the other splits are kept; the top-level ``verified`` is True only
+    when every split is verified. Without ``split`` (single-archive sources such as DIODE), the
+    marker describes the whole dataset.
+    """
     raw.mkdir(parents=True, exist_ok=True)
     marker = raw / ACQUIRED_MARKER
-    payload = {"verified": verified, "acquired_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **info}
+
+    if split is None:
+        payload = {"verified": verified, "acquired_at": _utc_now(), **info}
+    else:
+        splits = _read_marker_splits(marker)
+        splits[split] = {"verified": verified, "acquired_at": _utc_now(), **info}
+        payload = {
+            "verified": all(entry.get("verified") for entry in splits.values()),
+            "updated_at": _utc_now(),
+            "splits": splits,
+        }
+
     marker.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return marker
 
