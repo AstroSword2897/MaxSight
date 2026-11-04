@@ -1,7 +1,7 @@
 # Safety-gate thresholds (placeholders until ADR-02 sets values from real eval).
 # Sourced from ml/runtime_constants.py numeric defaults.
 
-version: "1.0.0"
+schema_version: "1.0.0"
 
 thresholds:
   hazard_recall_min: 0.95

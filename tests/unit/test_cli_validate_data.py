@@ -50,3 +50,22 @@ def test_validate_data_fails_a_skewed_manifest(tmp_path):
     manifest = _dataset(tmp_path, ["person"] * 20)
     out = _run("validate_data.py", "--manifest", str(manifest), "--root", str(tmp_path), "--split")
     assert out.returncode == 1 and "AUDIT FAILED" in out.stdout and "class_share_exceeds" in out.stdout
+
+
+def test_validate_data_writes_the_validated_marker_only_when_the_audit_passes(tmp_path):
+    manifest = _dataset(tmp_path, ["person", "chair", "door", "stairs", "bench", "couch", "table", "animal"] * 3)
+    data_root = tmp_path / "datasets"
+    out = _run("validate_data.py", "--manifest", str(manifest), "--root", str(tmp_path), "--split",
+               "--dataset-id", "open_images_v7", "--data-root", str(data_root))
+    marker = data_root / "processed" / "open_images_v7" / "VALIDATED.json"
+    assert out.returncode == 0 and json.loads(marker.read_text())["ok"] is True
+
+
+def test_failed_audit_removes_a_stale_validated_marker(tmp_path):
+    manifest = _dataset(tmp_path, ["person"] * 20)
+    marker = tmp_path / "datasets" / "processed" / "open_images_v7" / "VALIDATED.json"
+    marker.parent.mkdir(parents=True)
+    marker.write_text('{"ok": true}')
+    out = _run("validate_data.py", "--manifest", str(manifest), "--root", str(tmp_path), "--split",
+               "--dataset-id", "open_images_v7", "--data-root", str(tmp_path / "datasets"))
+    assert out.returncode == 1 and not marker.exists()

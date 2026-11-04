@@ -7,6 +7,8 @@
 # Phase 2 (epochs 40+): All tasks enabled, GradNorm rebalances
 
 # Model Configuration
+schema_version: "1.0.0"
+
 model:
   tier: "T5_TEMPORAL"
   num_classes: 622  # Full COCO_BASE + ACCESSIBILITY vocabulary

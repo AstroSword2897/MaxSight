@@ -20,6 +20,11 @@ from ml.datasets.audit import audit  # noqa: E402
 from ml.datasets.cleaning import clean  # noqa: E402
 from ml.datasets.label_map import DEFAULT_PATH, LabelMap  # noqa: E402
 from ml.datasets.manifest import read_manifest, write_manifest  # noqa: E402
+from ml.datasets.sources import (  # noqa: E402
+    DEFAULT_DATA_ROOT,
+    clear_validated_marker,
+    write_validated_marker,
+)
 from ml.datasets.splits import assign_splits  # noqa: E402
 
 
@@ -35,6 +40,8 @@ def main() -> int:
     p.add_argument("--max-class-share", type=float, default=0.15)
     p.add_argument("--out", help="write the cleaned/split manifest here")
     p.add_argument("--report", help="write the audit JSON here")
+    p.add_argument("--dataset-id", help="registry id; a pass writes processed/<id>/VALIDATED.json, a fail clears it")
+    p.add_argument("--data-root", default=str(DEFAULT_DATA_ROOT))
     args = p.parse_args()
 
     lm = LabelMap.load(args.label_map)
@@ -62,6 +69,14 @@ def main() -> int:
     if args.report:
         Path(args.report).parent.mkdir(parents=True, exist_ok=True)
         Path(args.report).write_text(json.dumps({**res.as_dict(), "clean": clean_info}, indent=2))
+    if args.dataset_id:
+        data_root = Path(args.data_root)
+        if res.ok:
+            write_validated_marker(data_root, args.dataset_id, {
+                "ok": True, "manifest": args.out or args.manifest, "split_counts": dict(res.split_counts),
+                "class_counts": dict(res.class_counts), "warnings": res.warnings})
+        elif clear_validated_marker(data_root, args.dataset_id):
+            print("removed stale VALIDATED marker for", args.dataset_id)
     print("AUDIT", "PASSED" if res.ok else "FAILED")
     return 0 if res.ok else 1
 
