@@ -39,9 +39,9 @@ def cmd_coco(args: argparse.Namespace) -> int:
     if args.dry_run:
         return 0
     ok, failed = coco.download_images(records, root, max_gb=args.max_gb, workers=args.workers)
-    out = Path(args.manifest or root / "manifest.jsonl")
+    out = Path(args.manifest or coco.manifest_path(root, args.split))
     write_manifest(ok, out)
-    write_acquired_marker(root, verified=False, reason="COCO publishes no per-image checksum",
+    write_acquired_marker(root, verified=False, split=args.split, reason="COCO publishes no per-image checksum",
                           images=len(ok), failures=len(failed), manifest=str(out))
     print(f"downloaded {len(ok)} images, {len(failed)} failures -> {out}")
     for image_id, err in failed[:10]:
