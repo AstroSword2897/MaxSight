@@ -6,6 +6,7 @@ images come from each record's ``coco_url`` with a hard byte budget.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import time
@@ -15,7 +16,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ml.datasets.acquisition.fetch import download_resumable
+from ml.datasets.acquisition.fetch import download_resumable, file_hash
 from ml.datasets.label_map import LabelMap
 from ml.datasets.manifest import BoxRecord, ImageRecord
 
@@ -118,9 +119,13 @@ def manifest_path(root: Path, split: str) -> Path:
 
 
 def _download_one(rec: ImageRecord, root: Path, retries: int = 3) -> tuple[ImageRecord, int, str]:
+    """Download one image. Returns (record with its sha256 filled in, bytes on disk, error or "")."""
     dest = root / rec.path
+
+    # Resumed run: the file is already here. Hash it so the manifest still records its sha256.
     if dest.exists() and dest.stat().st_size > 0:
-        return rec, dest.stat().st_size, ""
+        return rec.with_(sha256=file_hash(dest, "sha256")), dest.stat().st_size, ""
+
     dest.parent.mkdir(parents=True, exist_ok=True)
     last = ""
     for attempt in range(retries):
@@ -128,10 +133,11 @@ def _download_one(rec: ImageRecord, root: Path, retries: int = 3) -> tuple[Image
             req = urllib.request.Request(rec.url, headers=_UA)
             with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
                 data = resp.read()
+            # Write to a .part file first, so an interrupted write never looks like a finished image.
             tmp = dest.with_suffix(dest.suffix + ".part")
             tmp.write_bytes(data)
             tmp.replace(dest)
-            return rec, len(data), ""
+            return rec.with_(sha256=hashlib.sha256(data).hexdigest()), len(data), ""
         except Exception as exc:  # noqa: BLE001 - retried, then reported
             last = f"{type(exc).__name__}: {exc}"
             time.sleep(1.5 * (attempt + 1))

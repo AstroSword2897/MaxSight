@@ -22,6 +22,7 @@ from typing import Protocol
 
 from PIL import Image
 
+from ml.datasets.acquisition.fetch import file_hash
 from ml.datasets.label_map import LabelMap
 from ml.datasets.manifest import BoxRecord, ImageRecord
 
@@ -224,5 +225,6 @@ def to_records(
             out.append(ImageRecord(
                 f"{SOURCE}:{image_id}", SOURCE, rel, w, h, f"{SOURCE}:{image_id}", tuple(recs),
                 tuple(ignores), license=LICENSE, extra={"split": split},
+                sha256=file_hash(root / rel, "sha256"),  # recorded so raw verification can detect changes
             ))
     return out
