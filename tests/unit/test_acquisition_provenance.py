@@ -371,3 +371,45 @@ def test_rerunning_an_acquisition_keeps_the_first_acquisition_time(tmp_path):
     entry = read_marker(raw_dir)["splits"]["val2017"]
     assert entry["first_acquired_at"] == first_time
     assert "acquired_at" in entry
+
+
+# ----------------------------------------------------------------------------------------------
+# 6. Failure reasons: a budget cut must be distinguishable from a real download error
+# ----------------------------------------------------------------------------------------------
+
+def test_failures_are_counted_by_reason():
+    """The marker stores counts per reason, so 9,405 'failures' can be shown to be a budget cut."""
+    from ml.datasets.acquisition.fetch import BUDGET_REASON, summarize_failures
+
+    failures = [
+        ("coco:1", BUDGET_REASON),
+        ("coco:2", BUDGET_REASON),
+        ("coco:3", "URLError: <urlopen error timed out>"),
+        ("coco:4", "HTTPError: HTTP Error 404: Not Found"),
+        ("coco:5", "URLError: <urlopen error refused>"),
+    ]
+
+    summary = summarize_failures(failures)
+
+    assert summary == {BUDGET_REASON: 2, "URLError": 2, "HTTPError": 1}
+
+
+def test_only_budget_cuts_are_not_errors():
+    from ml.datasets.acquisition.fetch import BUDGET_REASON, has_real_errors
+
+    assert has_real_errors([]) is False
+    assert has_real_errors([("coco:1", BUDGET_REASON)]) is False
+    assert has_real_errors([("coco:1", BUDGET_REASON), ("coco:2", "URLError: timed out")]) is True
+
+
+def test_coco_budget_cut_uses_the_shared_reason(tmp_path, monkeypatch):
+    from ml.datasets.acquisition.fetch import BUDGET_REASON
+
+    # Every image "downloads" as 2 GB, so a 1 GB budget cuts the rest.
+    monkeypatch.setattr(coco, "_download_one", lambda rec, root, retries=3: (rec, 2 * 1024**3, ""))
+    records = [make_record(f"images/{i}.jpg") for i in range(100)]
+
+    _ok, failed = coco.download_images(records, tmp_path, max_gb=1, workers=1)
+
+    assert failed
+    assert {reason for _image_id, reason in failed} == {BUDGET_REASON}
