@@ -56,15 +56,18 @@ def select_records(
     """
     cats = {c["id"]: c["name"] for c in annotations["categories"]}
     images = {im["id"]: im for im in annotations["images"]}
+    # Each COCO image has its own Flickr licence (many are NonCommercial or NoDerivs).
+    licence_names = {lic["id"]: lic["name"] for lic in annotations.get("licenses", [])}
     by_image: dict[int, list[dict]] = defaultdict(list)
     for ann in annotations["annotations"]:
         by_image[ann["image_id"]].append(ann)
 
-    mapped: dict[int, tuple[list[BoxRecord], list[tuple[float, float, float, float]]]] = {}
+    mapped: dict[int, tuple[list[BoxRecord], list[tuple[float, float, float, float]], list[str]]] = {}
     freq: Counter[str] = Counter()
     for image_id, anns in by_image.items():
         boxes: list[BoxRecord] = []
         ignores: list[tuple[float, float, float, float]] = []
+        box_annotation_ids: list[str] = []  # original COCO ids of the kept boxes, in order ("" if absent)
         for ann in anns:
             name = cats[ann["category_id"]]
             x, y, w, h = ann["bbox"]
@@ -78,8 +81,9 @@ def select_records(
                 ignores.append(xyxy)  # real but too small to train on: ignore it, never leave it as background
                 continue
             boxes.append(BoxRecord(target, xyxy, name))
+            box_annotation_ids.append(str(ann.get("id", "")))
         if boxes:
-            mapped[image_id] = (boxes, ignores)
+            mapped[image_id] = (boxes, ignores, box_annotation_ids)
             freq.update({b.cls for b in boxes})
 
     rarity = {c: freq.get(c, 0) for c in label_map.classes}
@@ -91,11 +95,16 @@ def select_records(
     counts: Counter[str] = Counter()
     out: list[ImageRecord] = []
     for image_id in ids:
-        boxes, ignores = mapped[image_id]
+        boxes, ignores, box_annotation_ids = mapped[image_id]
         if all(counts[b.cls] >= per_class_cap for b in boxes):
             continue
         counts.update(b.cls for b in boxes)
         im = images[image_id]
+        provenance = {
+            "image_license": licence_names.get(im.get("license"), "unknown"),
+            "flickr_url": im.get("flickr_url", ""),
+            "annotation_ids": ",".join(box_annotation_ids),
+        }
         out.append(
             ImageRecord(
                 image_id=f"coco:{image_id}",
@@ -108,6 +117,7 @@ def select_records(
                 ignore_regions=tuple(ignores),
                 url=im.get("coco_url", ""),
                 license=LICENSE,
+                extra=provenance,
             )
         )
     return out
