@@ -9,7 +9,8 @@ python scripts/data_sources.py plan <dataset> [...]     # always a dry run
 python scripts/data_sources.py fetch <dataset> --approve-gb N [--execute]
 ```
 
-States: CONFIGURED -> DOWNLOADED -> VERIFIED -> PROCESSED -> VALIDATED. Access kinds: automatic, registration,
+States: NOT_DOWNLOADED -> DOWNLOADED_UNVERIFIED -> RAW_VERIFIED -> PREPROCESSED_UNVERIFIED -> VALIDATED (reported as
+READY_FOR_<purpose> from the role). Check raw files with `python scripts/data_sources.py verify <dataset>`. Access kinds: automatic, registration,
 license_acceptance, credentials, manual_download.
 
 | Dataset | Role | Access | Licence | How |
@@ -36,4 +37,4 @@ license_acceptance, credentials, manual_download.
 ## Not yet implemented (needs real data to verify formats)
 
 Vistas v2 polygon -> pole_bollard converter, PIE annotation reader, SANPO session reader, Ego4D annotation linker,
-PIE/BDD download automation. No data for any dataset has been downloaded.
+PIE/BDD download automation. Current per-dataset status: `DATASET_STATUS.md`.
