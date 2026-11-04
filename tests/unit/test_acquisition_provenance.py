@@ -298,3 +298,63 @@ def test_verify_raw_reports_an_empty_manifest_as_a_failure(tmp_path):
 
     assert report.checked == 0
     assert report.ok is False
+
+
+# ----------------------------------------------------------------------------------------------
+# 5. Per-image licence
+# ----------------------------------------------------------------------------------------------
+
+def test_coco_records_keep_each_images_own_flickr_licence():
+    """COCO images carry different Flickr licences (many NonCommercial or NoDerivs).
+
+    The dataset-wide licence string is not enough: each record must name its own image's licence
+    so a commercial export can exclude the images it may not use.
+    """
+    # Arrange: two images under different licences, each with one person box.
+    annotations = {
+        "licenses": [
+            {"id": 1, "name": "Attribution-NonCommercial-ShareAlike License"},
+            {"id": 4, "name": "Attribution License"},
+        ],
+        "categories": [{"id": 1, "name": "person"}],
+        "images": [
+            {"id": 10, "file_name": "a.jpg", "width": 100, "height": 100, "license": 1,
+             "coco_url": "http://example.invalid/a.jpg", "flickr_url": "http://flickr.invalid/a"},
+            {"id": 11, "file_name": "b.jpg", "width": 100, "height": 100, "license": 4,
+             "coco_url": "http://example.invalid/b.jpg", "flickr_url": "http://flickr.invalid/b"},
+        ],
+        "annotations": [
+            {"id": 100, "image_id": 10, "category_id": 1, "bbox": [0, 0, 50, 50], "iscrowd": 0},
+            {"id": 101, "image_id": 11, "category_id": 1, "bbox": [0, 0, 50, 50], "iscrowd": 0},
+        ],
+    }
+
+    # Act
+    records = coco.select_records(annotations, LabelMap.load(), per_class_cap=10)
+
+    # Assert
+    licence_by_id = {record.image_id: record.extra["image_license"] for record in records}
+    assert licence_by_id == {
+        "coco:10": "Attribution-NonCommercial-ShareAlike License",
+        "coco:11": "Attribution License",
+    }
+    flickr_by_id = {record.image_id: record.extra["flickr_url"] for record in records}
+    assert flickr_by_id["coco:10"] == "http://flickr.invalid/a"
+
+
+def test_coco_records_keep_source_annotation_ids():
+    """Every converted box must trace back to its original COCO annotation id."""
+    annotations = {
+        "licenses": [{"id": 4, "name": "Attribution License"}],
+        "categories": [{"id": 1, "name": "person"}],
+        "images": [{"id": 10, "file_name": "a.jpg", "width": 100, "height": 100, "license": 4}],
+        "annotations": [
+            {"id": 555, "image_id": 10, "category_id": 1, "bbox": [0, 0, 50, 50], "iscrowd": 0},
+            {"id": 556, "image_id": 10, "category_id": 1, "bbox": [10, 10, 40, 40], "iscrowd": 0},
+        ],
+    }
+
+    records = coco.select_records(annotations, LabelMap.load(), per_class_cap=10)
+
+    assert len(records) == 1
+    assert records[0].extra["annotation_ids"] == "555,556"
