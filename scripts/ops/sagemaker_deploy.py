@@ -3,14 +3,16 @@
 
 Usage
 -----
+Top-level options (--bucket, --prefix, --region, --role) go before the subcommand.
+
 # Deploy best checkpoint from a completed training job
-python scripts/ops/sagemaker_deploy.py deploy \
-    --bucket my-bucket --role arn:aws:iam::123:role/SageMakerRole \
+python scripts/ops/sagemaker_deploy.py \
+    --bucket my-bucket --role arn:aws:iam::123:role/SageMakerRole deploy \
     --job-name maxsight-t5-temporal-20260301-120000
 
 # Deploy a specific model.tar.gz
-python scripts/ops/sagemaker_deploy.py deploy \
-    --bucket my-bucket --role ... \
+python scripts/ops/sagemaker_deploy.py \
+    --bucket my-bucket --role ... deploy \
     --model-data s3://my-bucket/maxsight/output/model.tar.gz
 
 # Invoke the endpoint with a test image
@@ -21,8 +23,8 @@ python scripts/ops/sagemaker_deploy.py invoke \
 python scripts/ops/sagemaker_deploy.py delete --endpoint maxsight-inference
 
 # Batch transform over a folder of images in S3
-python scripts/ops/sagemaker_deploy.py batch \
-    --bucket my-bucket --role ... \
+python scripts/ops/sagemaker_deploy.py \
+    --bucket my-bucket --role ... batch \
     --model-data s3://my-bucket/.../model.tar.gz \
     --input s3://my-bucket/frames/ --output s3://my-bucket/predictions/
 

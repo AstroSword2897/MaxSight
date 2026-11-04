@@ -48,9 +48,10 @@ Wait for **Succeeded** in the SageMaker console. Note `TrainingJobName`.
 ## 5. Deploy endpoint
 
 ```bash
-python scripts/ops/sagemaker_deploy.py deploy \
+python scripts/ops/sagemaker_deploy.py \
   --bucket "$MAXSIGHT_S3_BUCKET" \
   --role "$SAGEMAKER_ROLE_ARN" \
+  deploy \
   --job-name YOUR_TRAINING_JOB_NAME \
   --endpoint maxsight-inference-dev
 ```
@@ -60,18 +61,20 @@ Do **not** use `--skip-registry-check` in production (`MAXSIGHT_ENV=production` 
 ## 6. Invoke
 
 ```bash
-python scripts/ops/sagemaker_deploy.py invoke \
-  --endpoint maxsight-inference-dev \
+python scripts/ops/sagemaker_deploy.py \
   --region "$AWS_DEFAULT_REGION" \
+  invoke \
+  --endpoint maxsight-inference-dev \
   --payload '{"ping":true}'
 ```
 
 Then with a small test image:
 
 ```bash
-python scripts/ops/sagemaker_deploy.py invoke \
-  --endpoint maxsight-inference-dev \
+python scripts/ops/sagemaker_deploy.py \
   --region "$AWS_DEFAULT_REGION" \
+  invoke \
+  --endpoint maxsight-inference-dev \
   --image tests/fixtures/test_frame.jpg
 ```
 

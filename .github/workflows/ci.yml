@@ -552,9 +552,10 @@ jobs:
           --role "$SAGEMAKER_ROLE_ARN" \
           --config ml/training/configs/t0_baseline.yaml \
           --dry-run
-        python scripts/ops/sagemaker_deploy.py deploy \
+        python scripts/ops/sagemaker_deploy.py \
           --bucket "$MAXSIGHT_S3_BUCKET" \
           --role "$SAGEMAKER_ROLE_ARN" \
+          deploy \
           --model-data "s3://$MAXSIGHT_S3_BUCKET/maxsight/output/model.tar.gz" \
           --endpoint ci-dry-run \
           --skip-registry-check \

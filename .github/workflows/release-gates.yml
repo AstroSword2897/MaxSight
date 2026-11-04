@@ -1,0 +1,13 @@
+name: release-gates
+# Placeholder: manual trigger only, and it FAILS until the corresponding gate is implemented
+# (a green run would read as a passing gate that never ran)
+# (see docs/architecture/v1/08-safety-validation.md).
+on:
+  workflow_dispatch:
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "release-gates is not implemented yet; failing on purpose" >&2
+          exit 1
