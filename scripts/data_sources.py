@@ -23,7 +23,7 @@ sys.path.insert(0, str(REPO))
 
 from ml.datasets.acquisition import fetch  # noqa: E402
 from ml.datasets.acquisition import plan as acq_plan  # noqa: E402
-from ml.datasets.sources import DEFAULT_DATA_ROOT, current_state, load_registry  # noqa: E402
+from ml.datasets.sources import DEFAULT_DATA_ROOT, load_registry, status_label  # noqa: E402
 
 
 def _plan_for(src, args) -> acq_plan.Plan:
@@ -39,9 +39,9 @@ def _plan_for(src, args) -> acq_plan.Plan:
 
 
 def cmd_status(reg, args) -> int:
-    print(f"{'dataset':22s} {'role':10s} {'access':20s} {'commercial':11s} state")
+    print(f"{'dataset':22s} {'role':10s} {'access':20s} {'commercial':11s} status")
     for s in reg.values():
-        print(f"{s.id:22s} {s.role:10s} {s.access_kind:20s} {s.commercial_use:11s} {current_state(s, Path(args.data_root)).name}")
+        print(f"{s.id:22s} {s.role:10s} {s.access_kind:20s} {s.commercial_use:11s} {status_label(s, Path(args.data_root))}")
     return 0
 
 
