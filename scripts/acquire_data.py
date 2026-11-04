@@ -60,6 +60,7 @@ def cmd_coco(args: argparse.Namespace) -> int:
         code_revision=code_revision(),
         images=len(ok),
         failures=len(failed),
+        failure_reasons=fetch.summarize_failures(failed),
         manifest=str(out),
         selection={"per_class_cap": args.per_class, "max_gb": args.max_gb, "seed": args.seed},
         files={archive.name: {"size": archive.stat().st_size, "sha256": fetch.file_hash(archive, "sha256")}},
@@ -67,7 +68,9 @@ def cmd_coco(args: argparse.Namespace) -> int:
     print(f"downloaded {len(ok)} images, {len(failed)} failures -> {out}")
     for image_id, err in failed[:10]:
         print(f"  FAILED {image_id}: {err}")
-    return 0 if not failed else 1
+    if failed:
+        print("failure reasons:", fetch.summarize_failures(failed))
+    return 1 if fetch.has_real_errors(failed) else 0
 
 
 def cmd_openimages(args: argparse.Namespace) -> int:
@@ -111,6 +114,7 @@ def cmd_openimages(args: argparse.Namespace) -> int:
         code_revision=code_revision(),
         images=len(ok),
         failures=len(failed),
+        failure_reasons=fetch.summarize_failures(failed),
         records=len(records),
         manifest=str(out),
         selection={"per_class_cap": args.per_class, "max_images": args.max_images, "seed": args.seed},
@@ -120,7 +124,9 @@ def cmd_openimages(args: argparse.Namespace) -> int:
     print(f"downloaded {len(ok)} images, {len(failed)} failures, {len(records)} records -> {out}")
     for key, err in failed[:10]:
         print(f"  FAILED {key}: {err}")
-    return 0 if not failed else 1
+    if failed:
+        print("failure reasons:", fetch.summarize_failures(failed))
+    return 1 if fetch.has_real_errors(failed) else 0
 
 
 def main() -> int:
