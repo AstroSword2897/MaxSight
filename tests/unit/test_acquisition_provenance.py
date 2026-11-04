@@ -358,3 +358,16 @@ def test_coco_records_keep_source_annotation_ids():
 
     assert len(records) == 1
     assert records[0].extra["annotation_ids"] == "555,556"
+
+
+def test_rerunning_an_acquisition_keeps_the_first_acquisition_time(tmp_path):
+    """A resumed or repeated run updates the split entry but must not erase when it was first acquired."""
+    raw_dir = tmp_path / "raw" / "coco2017"
+    write_acquired_marker(raw_dir, verified=False, split="val2017", images=3648)
+    first_time = read_marker(raw_dir)["splits"]["val2017"]["first_acquired_at"]
+
+    write_acquired_marker(raw_dir, verified=False, split="val2017", images=3648)
+
+    entry = read_marker(raw_dir)["splits"]["val2017"]
+    assert entry["first_acquired_at"] == first_time
+    assert "acquired_at" in entry
