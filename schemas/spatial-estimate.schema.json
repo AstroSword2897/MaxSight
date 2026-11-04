@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.dev/schemas/spatial-estimate.schema.json",
+  "title": "SpatialEstimate",
+  "description": "Unknown values are null plus a reason; a null distance must never be treated as 0 or safe (ADR DR-021).",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "maxsight.stage_a/2.0"
+    },
+    "track_id": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "azimuth_deg": {
+      "type": "number",
+      "minimum": -90,
+      "maximum": 90
+    },
+    "sector": {
+      "enum": [
+        "left",
+        "center_left",
+        "center",
+        "center_right",
+        "right"
+      ]
+    },
+    "ground_x_m": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "ground_z_m": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0.3,
+      "maximum": 8
+    },
+    "distance_m": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0.3,
+      "maximum": 8
+    },
+    "distance_sigma_m": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "distance_method": {
+      "enum": [
+        "ground_plane",
+        "mono_depth",
+        "none"
+      ]
+    },
+    "approach_rate_per_s": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "ttc_s": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "ego_compensated": {
+      "type": "boolean"
+    },
+    "unknown_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Why a nullable value is unknown (never default unknown to 0)."
+    }
+  },
+  "required": [
+    "schema_version",
+    "track_id",
+    "azimuth_deg",
+    "sector",
+    "distance_method",
+    "ego_compensated",
+    "unknown_reasons"
+  ],
+  "additionalProperties": false
+}
