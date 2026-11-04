@@ -1,6 +1,8 @@
 # Canonical entry point: python scripts/product/run.py
 # Deprecated paths redirect here; removed after two release cycles.
 
+schema_version: "1.0.0"
+
 deprecated:
   - path: scripts/research_archive/export_7_coreml_only.py
     replacement: scripts/product/run.py export

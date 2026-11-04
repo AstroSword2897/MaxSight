@@ -1,7 +1,7 @@
 # Detector class space (DR-202 default, 17 classes) and per-source name mapping.
 # Source class names not listed here are dropped; names under `ignore` become
 # ignore regions so they are not penalised as background.
-version: 1
+schema_version: "1.0.0"
 classes:
   - person
   - bicycle
@@ -76,5 +76,5 @@ sources:
     truck: vehicle
 ignore:
   bdd100k: [rider]
-  coco: [bed, toilet, tv, refrigerator, oven, sink, bicycle seat]
+  coco: [bed, toilet, tv, refrigerator, oven, sink]
   openimages: [Cabinetry, Shelf, Desk, Bed, Wall]
