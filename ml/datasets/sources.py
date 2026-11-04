@@ -25,11 +25,21 @@ VALIDATED_MARKER = "VALIDATED.json"  # written under processed/<id>/ after the a
 
 
 class State(IntEnum):
-    CONFIGURED = 0
-    DOWNLOADED = 1  # files present, integrity not yet verified
-    VERIFIED = 2
-    PROCESSED = 3
-    VALIDATED = 4
+    """How far a dataset has been checked. Each step needs evidence on disk, never configuration."""
+
+    NOT_DOWNLOADED = 0  # registered only
+    DOWNLOADED_UNVERIFIED = 1  # files present, integrity not yet checked
+    RAW_VERIFIED = 2  # every split passed the integrity check
+    PREPROCESSED_UNVERIFIED = 3  # processed output exists, quality audit not passed yet
+    VALIDATED = 4  # quality audit passed; see status_label() for what it is ready for
+
+
+# A validated dataset is ready only for the purpose its registry role allows.
+READY_LABEL_BY_ROLE = {
+    "pretrain": "READY_FOR_DETECTOR_PRETRAINING",
+    "eval_only": "READY_FOR_EVALUATION_ONLY",
+    "research": "READY_FOR_RESEARCH_EXPERIMENTS",
+}
 
 
 @dataclass(frozen=True)
@@ -73,12 +83,20 @@ def current_state(src: Source, data_root: Path = DEFAULT_DATA_ROOT) -> State:
     if validated.exists():
         return State.VALIDATED
     if (data_root / "processed" / src.id).is_dir() and any((data_root / "processed" / src.id).iterdir()):
-        return State.PROCESSED
+        return State.PREPROCESSED_UNVERIFIED
     marker = data_root / "raw" / src.id / ACQUIRED_MARKER
     if marker.exists():
         info = json.loads(marker.read_text(encoding="utf-8"))
-        return State.VERIFIED if info.get("verified") else State.DOWNLOADED
-    return State.CONFIGURED
+        return State.RAW_VERIFIED if info.get("verified") else State.DOWNLOADED_UNVERIFIED
+    return State.NOT_DOWNLOADED
+
+
+def status_label(src: Source, data_root: Path = DEFAULT_DATA_ROOT) -> str:
+    """The state name, except that VALIDATED is reported as the purpose it is ready for."""
+    state = current_state(src, data_root)
+    if state is State.VALIDATED:
+        return READY_LABEL_BY_ROLE[src.role]
+    return state.name
 
 
 def write_acquired_marker(raw: Path, *, verified: bool, **info) -> Path:
