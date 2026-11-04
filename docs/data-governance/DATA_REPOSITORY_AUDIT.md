@@ -1,6 +1,6 @@
 # Data repository audit
 
-- **Audited:** 2026-11-03, branch `pr/6-data-governance`, commit `5465174` (stacked on PRs #16–#20).
+- **Audited:** 2026-11-03, branch `pr/6-data-governance`, commit `1d11ff2` (stacked on `pr/2-stage-a-schemas`, PR #22).
 - **Scope:** everything that acquires, converts, cleans, splits, registers or loads data for training and evaluation.
 - **Method:** file inventory, import graph (`git grep`), registry path checks, the torch-free test suites run locally,
   and the CI log of run `41767501868`. Every claim below names its evidence. Nothing here was assumed from a plan.

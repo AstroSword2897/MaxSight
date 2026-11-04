@@ -1,6 +1,6 @@
 # Dataset status
 
-- **As of:** 2026-11-03, branch `pr/6-data-governance`, code revision `37731e6`.
+- **As of:** 2026-11-03, branch `pr/6-data-governance`, code revision `d17aaad`.
 - **Live check:** `python scripts/data_sources.py status` (derived from marker files; this page is a snapshot).
 - **Owner decisions:** research use; SANPO and Ego4D not acquired; full downloads wait for the S3 bucket.
 
@@ -90,3 +90,18 @@ Run with `scripts/validate_data.py --clean --split`. Outputs are revision-tagged
 | Depth experiments (DIODE) | Not downloaded (needs S3 or space) |
 | Temporal experiments (PIE) | Not downloaded; video terms unverified; no reader |
 | Assistance necessity (Problem 2) | No public source has these labels; needs MaxSight's own reviewed recordings |
+
+## Code revisions recorded in markers
+
+The acquisitions in this slice ran before the branch was moved onto the published `pr/2-stage-a-schemas`, so the
+`code_revision` values inside `ACQUIRED.json` name the pre-move commits. The code is identical; the published
+equivalents are:
+
+| Recorded in markers | Published commit | Change |
+|---|---|---|
+| `5465174` | `1d11ff2` | status ladder, per-split markers, per-image SHA-256, raw verify |
+| `4cbc501` | `e12f91b` | governance fields, per-image COCO licence |
+| `11c7723` | `46908f4` | keep first acquisition time |
+| `37731e6` | `d17aaad` | failure reasons |
+
+Audit outputs are tagged with the same pre-move hashes (`*.11c7723.*`, `*.37731e6.*`).
