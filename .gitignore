@@ -48,7 +48,7 @@ checkpoints/*.pth
 !checkpoints/.gitkeep
 
 # Datasets
-datasets/
+/datasets/
 *.jpg
 *.jpeg
 *.png
