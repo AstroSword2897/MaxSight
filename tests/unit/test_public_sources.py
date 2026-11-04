@@ -149,3 +149,53 @@ def test_open_images_instructions_match_the_manual_boto3_route():
     text = " ".join(acq_plan.manual_plan(REG["open_images_v7"]).manual) + " " + REG["open_images_v7"].access_note
     assert "boto3" in text and "acquire_data.py openimages" in text
     assert "fiftyone" not in text.lower()
+
+
+# ----------------------------------------------------------------------------------------------
+# Governance fields: every source must say how it may be used, not just where it comes from.
+# ----------------------------------------------------------------------------------------------
+
+GOVERNANCE_KEYS = {
+    "intended_use", "subset_policy", "attribution", "redistribution",
+    "archive_format", "annotations", "preprocessing", "limitations",
+}
+
+
+def test_every_source_records_its_governance_fields():
+    for source in REG.values():
+        missing = GOVERNANCE_KEYS - set(source.governance)
+        assert not missing, f"{source.id} is missing governance fields: {sorted(missing)}"
+        for key in GOVERNANCE_KEYS:
+            assert source.governance[key], f"{source.id}: governance.{key} is empty"
+
+
+def test_subset_policy_is_one_of_the_allowed_values():
+    for source in REG.values():
+        assert source.governance["subset_policy"] in ("full", "selective"), source.id
+
+
+def test_sources_that_must_never_be_pulled_whole_are_selective():
+    """SANPO (~6 TB), Ego4D (~7 TB), DIODE (214 GB) and Open Images must be acquired by subset."""
+    for source_id in ("sanpo", "ego4d", "diode", "open_images_v7"):
+        assert REG[source_id].governance["subset_policy"] == "selective", source_id
+
+
+def test_registry_rejects_a_source_without_governance(tmp_path):
+    registry_text = """
+schema_version: "1.0.0"
+sources:
+  demo:
+    name: Demo
+    role: research
+    version: "1"
+    homepage: https://example.invalid
+    license:
+      id: MIT
+      commercial_use: true
+    access:
+      kind: automatic
+"""
+    path = tmp_path / "sources.yaml"
+    path.write_text(registry_text)
+    with pytest.raises(ValueError, match="governance"):
+        load_registry(path)

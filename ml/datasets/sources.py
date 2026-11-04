@@ -20,6 +20,13 @@ DEFAULT_DATA_ROOT = REPO / "datasets"
 
 ROLES = ("pretrain", "eval_only", "research")
 ACCESS_KINDS = ("automatic", "registration", "license_acceptance", "credentials", "manual_download")
+SUBSET_POLICIES = ("full", "selective")
+
+# Every source must say how it may be used, not only where it comes from.
+GOVERNANCE_KEYS = (
+    "intended_use", "subset_policy", "attribution", "redistribution",
+    "archive_format", "annotations", "preprocessing", "limitations",
+)
 ACQUIRED_MARKER = "ACQUIRED.json"  # written under raw/<id>/ after files are present and checksummed
 VALIDATED_MARKER = "VALIDATED.json"  # written under processed/<id>/ after the audit passes
 
@@ -54,10 +61,22 @@ class Source:
     access_kind: str
     access_note: str
     raw: dict
+    governance: dict
 
     @property
     def non_commercial(self) -> bool:
         return self.commercial_use != "true"
+
+
+def _check_governance(source_id: str, entry: dict) -> dict:
+    """Return the governance block, or raise if any required field is missing or empty."""
+    governance = entry.get("governance") or {}
+    missing = [key for key in GOVERNANCE_KEYS if not governance.get(key)]
+    if missing:
+        raise ValueError(f"{source_id}: governance is missing {missing}")
+    if governance["subset_policy"] not in SUBSET_POLICIES:
+        raise ValueError(f"{source_id}: governance.subset_policy must be one of {SUBSET_POLICIES}")
+    return governance
 
 
 def load_registry(path: Path | str = DEFAULT_REGISTRY) -> dict[str, Source]:
@@ -73,6 +92,7 @@ def load_registry(path: Path | str = DEFAULT_REGISTRY) -> dict[str, Source]:
             id=sid, name=d["name"], role=d["role"], version=str(d["version"]), homepage=d["homepage"],
             license_id=lic["id"], commercial_use=str(lic["commercial_use"]).lower(),
             access_kind=d["access"]["kind"], access_note=d["access"].get("note", ""), raw=d,
+            governance=_check_governance(sid, d),
         )
     return out
 
