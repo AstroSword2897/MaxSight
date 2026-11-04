@@ -32,16 +32,16 @@ def test_registry_has_all_eight_sources_with_roles():
 
 
 def test_configured_sources_are_never_reported_downloaded(tmp_path):
-    assert all(current_state(s, tmp_path) is State.CONFIGURED for s in REG.values())
+    assert all(current_state(s, tmp_path) is State.NOT_DOWNLOADED for s in REG.values())
 
 
 def test_state_follows_marker_files(tmp_path):
     raw = tmp_path / "raw" / "diode"
     raw.mkdir(parents=True)
     (raw / ACQUIRED_MARKER).write_text(json.dumps({"verified": False}))
-    assert current_state(REG["diode"], tmp_path) is State.DOWNLOADED
+    assert current_state(REG["diode"], tmp_path) is State.DOWNLOADED_UNVERIFIED
     (raw / ACQUIRED_MARKER).write_text(json.dumps({"verified": True}))
-    assert current_state(REG["diode"], tmp_path) is State.VERIFIED
+    assert current_state(REG["diode"], tmp_path) is State.RAW_VERIFIED
 
 
 @pytest.mark.parametrize("bad", ["bdd100k", "sanpo", "diode", "pie", "ego4d"])
@@ -142,7 +142,7 @@ def test_acquired_marker_records_download_without_claiming_verification(tmp_path
     write_acquired_marker(raw, verified=False, reason="no published per-image checksum", images=300, failures=0)
     info = json.loads((raw / ACQUIRED_MARKER).read_text())
     assert info["verified"] is False and info["images"] == 300 and info["acquired_at"].endswith("Z")
-    assert current_state(REG["open_images_v7"], tmp_path) is State.DOWNLOADED
+    assert current_state(REG["open_images_v7"], tmp_path) is State.DOWNLOADED_UNVERIFIED
 
 
 def test_open_images_instructions_match_the_manual_boto3_route():
