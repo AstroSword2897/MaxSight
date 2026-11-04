@@ -68,3 +68,36 @@ def test_pre_sagemaker_gate_job_asserts_torch_is_absent():
     steps = _load(REPO / ".github/workflows/quality.yml")["jobs"]["pre-sagemaker-gate"]["steps"]
     runs = " ".join(s.get("run", "") for s in steps)
     assert "find_spec('torch')" in runs and "pre_sagemaker_gate.py" in runs
+
+
+def _script_invocations(script: str) -> list[list[str]]:
+    """Every `python <script> ...` call in ci.yml, as argv after the script path."""
+    import shlex
+
+    calls = []
+    for job_id, job in _load(REPO / ".github/workflows/ci.yml")["jobs"].items():
+        commands = (job.get("with") or {}).get("commands", "")
+        for line in commands.replace("\\\n", " ").splitlines():
+            tokens = shlex.split(line)
+            if script in tokens:
+                calls.append((job_id, tokens[tokens.index(script) + 1 :]))
+    return calls
+
+
+def test_ci_sagemaker_deploy_calls_parse(monkeypatch):
+    """Top-level options (--bucket, --role) must precede the subcommand, or argparse exits 2."""
+    import importlib.util
+    import sys
+
+    script = "scripts/ops/sagemaker_deploy.py"
+    calls = _script_invocations(script)
+    assert calls, f"ci.yml no longer invokes {script}; update this test"
+    spec = importlib.util.spec_from_file_location("sagemaker_deploy_cli", REPO / script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for job_id, argv in calls:
+        monkeypatch.setattr(sys, "argv", [script, *argv])
+        try:
+            module.parse_args()
+        except SystemExit as exc:
+            pytest.fail(f"ci.yml:{job_id}: {script} rejects its arguments {argv} (exit {exc.code})")
