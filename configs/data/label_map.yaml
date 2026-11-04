@@ -67,6 +67,14 @@ sources:
     object--support--pole: pole_bollard
     object--support--utility-pole: pole_bollard
     object--bollard: pole_bollard
+  bdd100k:  # evaluation only; rider is ambiguous (person on cycle) so it is an ignore region, not forced
+    person: person
+    bicycle: bicycle
+    motorcycle: motorcycle
+    car: vehicle
+    bus: vehicle
+    truck: vehicle
 ignore:
+  bdd100k: [rider]
   coco: [bed, toilet, tv, refrigerator, oven, sink, bicycle seat]
   openimages: [Cabinetry, Shelf, Desk, Bed, Wall]

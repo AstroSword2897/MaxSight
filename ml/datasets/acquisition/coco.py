@@ -6,7 +6,6 @@ images come from each record's ``coco_url`` with a hard byte budget.
 
 from __future__ import annotations
 
-import io
 import json
 import random
 import time
@@ -16,6 +15,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from ml.datasets.acquisition.fetch import download_resumable
 from ml.datasets.label_map import LabelMap
 from ml.datasets.manifest import BoxRecord, ImageRecord
 
@@ -26,15 +26,16 @@ _UA = {"User-Agent": "maxsight-data/1.0"}
 
 
 def fetch_annotations(dest: Path, split: str = "train2017", url: str = ANNOTATIONS_URL) -> Path:
-    """Download the annotations zip and extract instances_<split>.json (skips if present)."""
+    """Extract instances_<split>.json, keeping the annotations zip on disk.
+
+    The zip is downloaded once (resumable, never replaced) and read from disk, so a second split
+    neither downloads ~250 MB again nor holds the archive in memory.
+    """
     target = dest / f"instances_{split}.json"
     if target.exists():
         return target
-    dest.mkdir(parents=True, exist_ok=True)
-    req = urllib.request.Request(url, headers=_UA)
-    with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310 - fixed https/http COCO host
-        blob = resp.read()
-    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+    archive = download_resumable(url, dest / Path(url).name)
+    with zipfile.ZipFile(archive) as zf:
         target.write_bytes(zf.read(f"annotations/instances_{split}.json"))
     return target
 

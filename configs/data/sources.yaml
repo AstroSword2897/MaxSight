@@ -1,0 +1,161 @@
+# Public dataset registry for the V1 data plan (DR-112 plus supplementary research sets).
+# Loader: ml/datasets/sources.py (load_registry). Owner: ML data. Style: docs/data-governance/yaml-standard.md.
+#
+# This file records WHAT each source is and HOW it may be used. It never records that
+# anything was downloaded: that is derived from marker files by ml.datasets.sources.
+#
+# role:
+#   pretrain   - may enter the detector pretraining mix (DR-112)
+#   eval_only  - held-out evaluation, never in a training mix (DR-112: BDD100K)
+#   research   - separate experiment, never in the detector mix
+# access.kind: automatic | registration | license_acceptance | credentials | manual_download
+# license.commercial_use: true | false | unverified
+schema_version: "1.0.0"
+
+sources:
+
+  coco2017:
+    name: COCO 2017
+    role: pretrain
+    label_source: coco
+    version: "2017"
+    homepage: https://cocodataset.org/#download
+    license:
+      id: "annotations CC BY 4.0; images per Flickr terms"
+      commercial_use: unverified
+    access:
+      kind: automatic
+      note: "Annotations zip (~250 MB) plus a class-capped image subset."
+    urls:
+      annotations: http://images.cocodataset.org/annotations/annotations_trainval2017.zip
+    est_gb:
+      annotations: 0.25
+      val2017_images: 0.8
+      train2017_images_full: 19
+    acquire_with: scripts/acquire_data.py coco
+
+  open_images_v7:
+    name: Open Images V7
+    role: pretrain
+    label_source: openimages
+    version: "v7"
+    homepage: https://storage.googleapis.com/openimages/web/download_v7.html
+    license:
+      id: "annotations CC BY 4.0; images CC BY 2.0"
+      commercial_use: unverified
+    access:
+      kind: automatic
+      note: "Official CSVs plus the anonymous open-images-dataset S3 bucket via scripts/acquire_data.py openimages (pip install boto3); downloads only selected images."
+    # Verified against oidv7-class-descriptions-boxable.csv: Pole and Traffic cone are NOT boxable classes.
+    requested_classes: [Door, Stairs, Waste container, Traffic cone, Box, Street light, Pole]
+    unavailable_classes: [Traffic cone, Pole]
+    max_images_per_class: 4000
+    acquire_with: scripts/acquire_data.py openimages
+    # Official "download manually" sources; mirrored in ml/datasets/acquisition/openimages_manual.py (test-checked).
+    urls:
+      class_descriptions: https://storage.googleapis.com/openimages/v7/oidv7-class-descriptions-boxable.csv
+      bbox_train: https://storage.googleapis.com/openimages/v6/oidv6-train-annotations-bbox.csv
+      bbox_validation: https://storage.googleapis.com/openimages/v5/validation-annotations-bbox.csv
+      bbox_test: https://storage.googleapis.com/openimages/v5/test-annotations-bbox.csv
+    s3_bucket: open-images-dataset
+
+  mapillary_vistas_v2:
+    name: Mapillary Vistas v2.0
+    role: pretrain
+    label_source: vistas
+    version: "2.0"
+    homepage: https://www.mapillary.com/dataset/vistas
+    license:
+      id: "CC BY-NC-SA 4.0"
+      commercial_use: false
+      note: "Non-commercial research data. Replace before any commercial release (spec D7)."
+    access:
+      kind: license_acceptance
+      note: "Registration and terms acceptance on mapillary.com; manual download. Access terms not verifiable from this environment."
+    est_gb:
+      full: unverified
+    priority: [pole instances, bollard instances, curb segmentation (later)]
+
+  bdd100k:
+    name: BDD100K
+    role: eval_only
+    label_source: bdd100k
+    version: "detection-2020"
+    homepage: https://bdd-data.berkeley.edu/
+    license:
+      id: "BDD100K research licence"
+      commercial_use: unverified
+    access:
+      kind: registration
+      note: "Account required on bdd-data.berkeley.edu (site certificate was expired when checked). Manual download of 100K Images and Detection 2020 Labels."
+    notes: "Vehicle-mounted camera domain; evaluation only. Keep weather/scene/timeofday attributes."
+
+  sanpo:
+    name: SANPO
+    role: research
+    version: "v0"
+    homepage: https://github.com/google-research-datasets/sanpo_dataset
+    license:
+      id: "CC BY 4.0"
+      commercial_use: true
+    access:
+      kind: automatic
+      note: "gcloud storage from gs://gresearch/sanpo_dataset/v0 (public). Full set ~6 TB: never pulled."
+    bucket: gs://gresearch/sanpo_dataset/v0
+    est_gb:
+      full: 6000
+    notes: "No IMU dependency. Stereo depth is not evidence of monocular iPhone depth. Use fixed_camera_poses.csv for SANPO-Real poses."
+
+  diode:
+    name: DIODE
+    role: research
+    version: "val"
+    homepage: https://diode-dataset.org/
+    license:
+      id: MIT
+      commercial_use: true
+    access:
+      kind: automatic
+      note: "Direct HTTP; MD5 published."
+    archives:
+      val:
+        url: http://diode-dataset.s3.amazonaws.com/val.tar.gz
+        md5: 5c895d09201b88973c8fe4552a67dd85
+        gb: 2.6
+      data_list:
+        url: "https://diode-1254389886.cos.ap-hongkong.myqcloud.com/data_list.zip"
+        md5: null
+        gb: 0.01
+    deferred_archives:
+      train: 81
+      train_normals: 126
+      val_normals: 4.6
+
+  pie:
+    name: PIE
+    role: research
+    version: "2019"
+    homepage: https://data.nvision2.eecs.yorku.ca/PIE_dataset/
+    license:
+      id: "code MIT; video terms not stated on repo page"
+      commercial_use: unverified
+    access:
+      kind: manual_download
+      note: "Clips at http://data.nvision2.eecs.yorku.ca/PIE_dataset/PIE_clips/ (6 sets, ~74 GB total); annotations in github.com/aras62/PIE. File names not verified."
+    notes: "Crossing intention is NOT an assistance-necessity label. Keep a separate schema."
+
+  ego4d:
+    name: Ego4D
+    role: research
+    version: "v1"
+    homepage: https://ego4d-data.org/docs/start-here/
+    license:
+      id: "Ego4D licence (must be signed)"
+      commercial_use: unverified
+    access:
+      kind: credentials
+      note: "Sign licence, receive AWS credentials, configure an aws profile (default name: ego4d). pip install ego4d."
+    est_gb:
+      full: 7000
+      annotations: unverified
+    notes: "Supplementary contextual data; not a detector pretraining source."

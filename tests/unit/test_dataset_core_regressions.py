@@ -8,6 +8,13 @@ from collections import Counter
 import pytest
 from ml.datasets.cleaning import clean
 from ml.datasets.manifest import BoxRecord, ImageRecord, read_manifest, write_manifest
+from ml.datasets.sources import (
+    ACQUIRED_MARKER,
+    VALIDATED_MARKER,
+    State,
+    current_state,
+    load_registry,
+)
 from ml.datasets.splits import assign_splits
 from PIL import Image
 
@@ -133,3 +140,21 @@ def test_coco_byte_budget_reports_the_images_it_did_not_download(tmp_path, monke
     ok, failed = coco.download_images([_rec(i) for i in range(100)], tmp_path, max_gb=1, workers=1)
     assert len(ok) + len(failed) == 100
     assert failed and all(reason == "byte budget reached" for _, reason in failed)
+
+
+def test_access_state_ladder_reaches_validated_only_with_evidence(tmp_path):
+    src = load_registry()["bdd100k"]
+    assert current_state(src, tmp_path) is State.CONFIGURED
+    raw = tmp_path / "raw" / src.id
+    raw.mkdir(parents=True)
+    (raw / ACQUIRED_MARKER).write_text(json.dumps({"verified": False}))
+    assert current_state(src, tmp_path) is State.DOWNLOADED
+    (raw / ACQUIRED_MARKER).write_text(json.dumps({"verified": True}))
+    assert current_state(src, tmp_path) is State.VERIFIED
+    processed = tmp_path / "processed" / src.id
+    processed.mkdir(parents=True)
+    assert current_state(src, tmp_path) is State.VERIFIED  # empty processed dir is not evidence
+    (processed / "manifest.jsonl").write_text("")
+    assert current_state(src, tmp_path) is State.PROCESSED
+    (processed / VALIDATED_MARKER).write_text("{}")
+    assert current_state(src, tmp_path) is State.VALIDATED
