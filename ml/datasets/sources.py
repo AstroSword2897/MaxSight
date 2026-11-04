@@ -99,11 +99,45 @@ def status_label(src: Source, data_root: Path = DEFAULT_DATA_ROOT) -> str:
     return state.name
 
 
-def write_acquired_marker(raw: Path, *, verified: bool, **info) -> Path:
-    """Record that files are on disk. ``verified`` is True only when published checksums were checked."""
+def _utc_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _read_marker_splits(marker: Path) -> dict[str, dict]:
+    """Existing per-split entries. A legacy marker (one top-level ``split``) becomes one entry."""
+    if not marker.exists():
+        return {}
+    old = json.loads(marker.read_text(encoding="utf-8"))
+    if "splits" in old:
+        return dict(old["splits"])
+    if "split" in old:
+        legacy = {key: value for key, value in old.items() if key != "split"}
+        return {old["split"]: legacy}
+    return {}
+
+
+def write_acquired_marker(raw: Path, *, verified: bool, split: str | None = None, **info) -> Path:
+    """Record that files are on disk.
+
+    ``verified`` is True only after an integrity check has passed. With ``split``, the entry is
+    added under ``splits`` and the other splits are kept; the top-level ``verified`` is True only
+    when every split is verified. Without ``split`` (single-archive sources such as DIODE), the
+    marker describes the whole dataset.
+    """
     raw.mkdir(parents=True, exist_ok=True)
     marker = raw / ACQUIRED_MARKER
-    payload = {"verified": verified, "acquired_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **info}
+
+    if split is None:
+        payload = {"verified": verified, "acquired_at": _utc_now(), **info}
+    else:
+        splits = _read_marker_splits(marker)
+        splits[split] = {"verified": verified, "acquired_at": _utc_now(), **info}
+        payload = {
+            "verified": all(entry.get("verified") for entry in splits.values()),
+            "updated_at": _utc_now(),
+            "splits": splits,
+        }
+
     marker.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return marker
 
