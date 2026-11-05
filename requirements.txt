@@ -20,6 +20,9 @@ opencv-python>=4.8.0
 # Text Encoding (OCR encoder)
 sentence-transformers>=2.0.0
 
+# Retrieval index (ml/retrieval/indexing imports faiss at module level)
+faiss-cpu>=1.7.4
+
 # Caching
 redis>=5.0.0
 
