@@ -190,6 +190,8 @@ def cmd_certify(args) -> int:
     ]
     if getattr(args, "artifact", None):
         cmd += ["--artifact", args.artifact]
+    if getattr(args, "ground_truth_manifest", None):
+        cmd += ["--ground-truth-manifest", args.ground_truth_manifest]
     if getattr(args, "hazard_gt", False):
         cmd.append("--hazard-gt")
     if getattr(args, "tools_missing", False):
@@ -299,7 +301,8 @@ def main():
     p_cert.add_argument("--output", required=True, help="Manifest JSON path")
     p_cert.add_argument("--platform", default="torch_ref")
     p_cert.add_argument("--artifact", help="Artifact path for hashing/signing")
-    p_cert.add_argument("--hazard-gt", action="store_true")
+    p_cert.add_argument("--ground-truth-manifest", help="Human-reviewed hazard ground truth manifest (JSONL)")
+    p_cert.add_argument("--hazard-gt", action="store_true", help="Deprecated: requires --ground-truth-manifest")
     p_cert.add_argument("--tools-missing", action="store_true")
     p_cert.add_argument("--sign", action="store_true", help="Sign only when all_passed")
 
