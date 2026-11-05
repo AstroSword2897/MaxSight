@@ -78,9 +78,11 @@ def _make_train_loop(tmp_path: Path) -> ProductionTrainLoop:
     )
 
 
-def test_load_checkpoint_missing_returns_false(tmp_path: Path) -> None:
+def test_load_checkpoint_missing_raises(tmp_path: Path) -> None:
+    """Ticket 402: an explicit resume from a missing checkpoint fails instead of training from scratch."""
     loop = _make_train_loop(tmp_path)
-    assert loop._load_checkpoint(str(tmp_path / "missing.pt")) is False
+    with pytest.raises(FileNotFoundError):
+        loop._load_checkpoint(str(tmp_path / "missing.pt"))
     assert loop.checkpoint_resume_status == "missing"
 
 

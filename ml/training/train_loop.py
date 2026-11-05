@@ -94,23 +94,8 @@ def write_atomic_json(path: Path, payload: Dict[str, Any]) -> None:
         raise
 
 
-def write_atomic_torch(path: Path, payload: Any) -> None:
-    """Write a torch checkpoint atomically so crash mid-write never corrupts the file."""
-    import os
-    import tempfile
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-    os.close(fd)
-    try:
-        torch.save(payload, tmp_path)
-        os.replace(tmp_path, path)
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+# write_atomic_torch lives in checkpoint_io; re-exported here because runner.py and tests import it from this module.
+from ml.training.checkpoint_io import CheckpointError, read_checkpoint, write_atomic_torch  # noqa: E402,F401
 
 
 def move_targets_to_device(targets: Dict[str, torch.Tensor], device: str) -> Dict[str, torch.Tensor]:
@@ -1273,14 +1258,22 @@ class ProductionTrainLoop:
             pass
     
     def _load_checkpoint(self, checkpoint_path: str, model_only: bool = False) -> bool:
-        """Load checkpoint and resume training. If model_only=True, load only model + epoch (and best/history); use current optimizer/scheduler (e.g. new LRs)."""
-        checkpoint_path_obj = Path(checkpoint_path)
-        if not checkpoint_path_obj.exists():
-            self.checkpoint_resume_status = "missing"
-            self.logger.warning("Checkpoint not found: %s", checkpoint_path)
-            return False
+        """Load checkpoint and resume training. If model_only=True, load only model + epoch (and best/history); use current optimizer/scheduler (e.g. new LRs).
+
+        Raises FileNotFoundError if the checkpoint is missing and CheckpointError if it is corrupt: an explicit
+        resume never falls back to training from scratch.
+        """
         try:
-            checkpoint = torch.load(str(checkpoint_path_obj), map_location=self.device, weights_only=True)
+            checkpoint = read_checkpoint(checkpoint_path, map_location=self.device)
+        except FileNotFoundError:
+            self.checkpoint_resume_status = "missing"
+            self.logger.error("Checkpoint not found: %s", checkpoint_path)
+            raise
+        except CheckpointError as e:
+            self.checkpoint_resume_status = "corrupt"
+            self.logger.error("Checkpoint %s is unusable: %s", checkpoint_path, e)
+            raise
+        try:
             state = checkpoint['model_state_dict']
             result = self.model.load_state_dict(state, strict=False)
             if result.missing_keys or result.unexpected_keys:
@@ -1318,10 +1311,6 @@ class ProductionTrainLoop:
                 )
             self.checkpoint_resume_status = "loaded"
             return True
-        except EOFError as e:
-            self.checkpoint_resume_status = "corrupt"
-            self.logger.error("Checkpoint %s is corrupted (EOFError): %s", checkpoint_path, e)
-            raise
         except Exception as e:
             self.checkpoint_resume_status = "failed"
             self.logger.error("Failed to load checkpoint %s: %s", checkpoint_path, e)
