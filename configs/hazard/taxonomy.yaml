@@ -1,0 +1,137 @@
+# MaxSight V1 hazard taxonomy, DRAFT for DR-202 (ticket 301). Checked by tests/unit/test_hazard_taxonomy.py; no runtime consumer yet. Owner: project owner.
+#
+# PROPOSED, NOT APPROVED. Status becomes "approved" and schema_version "1.0.0" only after owner sign-off.
+# Human-readable version and rationale: docs/contracts/hazard-taxonomy.md
+#
+# Three separate fields, never merged:
+#   class     what the object is (this file; fixed by annotation)
+#   category  how it behaves now: dynamic | static | environmental | context_dependent
+#             (assigned per frame by the hazard assessor, D3.4; a class lists the categories it may take)
+#   urgency   0-3, computed by the rule table R1-R7 (DR-019, DR-023); never annotated, never stored per class
+schema_version: "0.9.0"
+status: proposed
+
+categories:
+  - dynamic
+  - static
+  - environmental
+  - context_dependent
+
+urgency:
+  levels:
+    0: informational
+    1: caution
+    2: high
+    3: critical
+  computed_by: "rule table R1-R7 in docs/architecture/v1/03-stage-a-specification.md (D3.4)"
+  unknown_handling: "Unknown or insufficient evidence is a perception state (DR-020), never an urgency number."
+
+# critical: a miss can cause a fall or a high-energy collision. Critical classes get the stricter
+# coverage and review rules (DR-113 proposal G2; ticket 307 second-person review).
+classes:
+  curb_dropoff:
+    critical: true
+    allowed_categories: [environmental, context_dependent]
+    detector_labels: []
+    include:
+      - "kerb edge between pavement and road"
+      - "platform or loading-dock edge"
+      - "step down off a raised path or ramp side"
+    exclude:
+      - "painted kerb markings with no height change"
+      - "flush kerb cuts (no drop)"
+      - "a full flight of steps (use stairs)"
+  stairs:
+    critical: true
+    allowed_categories: [environmental, context_dependent]
+    detector_labels:
+      - stairs
+    include:
+      - "indoor or outdoor flights, up or down"
+      - "two or more steps"
+      - "escalators when stopped"
+    exclude:
+      - "a single kerb step (use curb_dropoff)"
+      - "ladders"
+      - "pictures of stairs"
+  static_obstacle:
+    critical: true
+    allowed_categories: [static, context_dependent]
+    detector_labels:
+      - chair
+      - couch
+      - table
+      - bench
+      - potted_plant
+      - bag_box
+      - trash_bin
+      - pole_bollard
+      - fire_hydrant
+      - traffic_cone
+    include:
+      - "furniture, bins, poles, bollards, hydrants, cones, boxes or bags standing in a walking path"
+      - "low or head-height obstacles"
+    exclude:
+      - "walls and building facades"
+      - "objects behind glass or barriers"
+      - "flat ground markings"
+  door:
+    critical: false
+    allowed_categories: [context_dependent]
+    detector_labels:
+      - door
+    include:
+      - "hinged, sliding and revolving doors, open or closed"
+      - "gates in a walking path"
+    exclude:
+      - "windows"
+      - "cupboard and vehicle doors"
+  person:
+    critical: false
+    allowed_categories: [dynamic, static, context_dependent]
+    detector_labels:
+      - person
+    include:
+      - "pedestrians, standing or moving"
+      - "people seated in the walking path"
+    exclude:
+      - "people in posters, screens or reflections"
+      - "riders on a bicycle or motorcycle (ignore region; the vehicle is the hazard)"
+  bicycle:
+    critical: true
+    allowed_categories: [dynamic, static, context_dependent]
+    detector_labels:
+      - bicycle
+    include:
+      - "bicycles moving or parked, with or without a rider"
+      - "e-scooters (to confirm with the owner)"
+    exclude:
+      - "bicycle racks with no bicycle"
+      - "pictures of bicycles"
+  vehicle:
+    critical: true
+    allowed_categories: [dynamic, context_dependent]
+    detector_labels:
+      - vehicle
+      - motorcycle
+    include:
+      - "cars, buses, trucks and motorcycles, moving or parked across a path"
+    exclude:
+      - "vehicles behind barriers"
+      - "toy and model vehicles"
+
+# Detector labels in configs/data/label_map.yaml that map to no V1 hazard class. Each needs an owner decision.
+unmapped_detector_labels:
+  animal: "Not in the V1 class list from ticket 301. Decide: add an animal class, fold into person-like dynamic hazards, or drop."
+
+# Explicit Data Role Rule (ticket 301): applies to every dataset document and pipeline.
+data_roles:
+  training:
+    purpose: "Learn detector parameters"
+    allowed_use: "Training only"
+  validation:
+    purpose: "Model selection and hyperparameter tuning"
+    allowed_use: "Selection and tuning only"
+  independent_safety_evaluation:
+    purpose: "Measure real performance"
+    allowed_use: "SG-01 and SG-02 only. Never used for training or model selection."
