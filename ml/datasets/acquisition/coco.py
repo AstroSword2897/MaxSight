@@ -22,6 +22,7 @@ from ml.datasets.manifest import BoxRecord, ImageRecord
 
 ANNOTATIONS_URL = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
 SOURCE = "coco"
+DATASET_VERSION = "2017"
 LICENSE = "annotations CC BY 4.0; images per Flickr terms"
 _UA = {"User-Agent": "maxsight-data/1.0"}
 
@@ -41,6 +42,21 @@ def fetch_annotations(dest: Path, split: str = "train2017", url: str = ANNOTATIO
     return target
 
 
+def licence_id_from_url(url: str) -> str:
+    """Short licence id from a COCO licence URL, e.g. .../licenses/by-nc-sa/2.0/ -> CC-BY-NC-SA-2.0."""
+    parts = [part for part in url.split("/") if part]
+    if "creativecommons.org" in url and "licenses" in parts:
+        code_and_version = parts[parts.index("licenses") + 1 : parts.index("licenses") + 3]
+        if len(code_and_version) == 2:
+            return f"CC-{code_and_version[0].upper()}-{code_and_version[1]}"
+        return ""  # truncated URL: leave empty so validation flags the record
+    if "flickr.com/commons" in url:
+        return "flickr-no-known-copyright-restrictions"
+    if "usa.gov/copyright" in url:
+        return "us-government-work"
+    return ""
+
+
 def select_records(
     annotations: dict,
     label_map: LabelMap,
@@ -58,6 +74,7 @@ def select_records(
     images = {im["id"]: im for im in annotations["images"]}
     # Each COCO image has its own Flickr licence (many are NonCommercial or NoDerivs).
     licence_names = {lic["id"]: lic["name"] for lic in annotations.get("licenses", [])}
+    licence_ids = {lic["id"]: licence_id_from_url(lic.get("url", "")) for lic in annotations.get("licenses", [])}
     by_image: dict[int, list[dict]] = defaultdict(list)
     for ann in annotations["annotations"]:
         by_image[ann["image_id"]].append(ann)
@@ -117,6 +134,10 @@ def select_records(
                 ignore_regions=tuple(ignores),
                 url=im.get("coco_url", ""),
                 license=LICENSE,
+                dataset_version=DATASET_VERSION,
+                licence_id=licence_ids.get(im.get("license"), ""),
+                label_map_version=label_map.version,
+                annotation_source="source_dataset",
                 extra=provenance,
             )
         )
