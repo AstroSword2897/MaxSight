@@ -20,7 +20,8 @@ def _run(script: str, *args: str) -> subprocess.CompletedProcess:
 
 
 
-def _dataset(tmp_path: Path, classes: list[str]) -> Path:
+def _dataset(tmp_path: Path, classes: list[str], licence_id: str = "CC-BY-4.0") -> Path:
+    import hashlib
     import random
 
     rng = random.Random(0)
@@ -30,11 +31,22 @@ def _dataset(tmp_path: Path, classes: list[str]) -> Path:
         im = Image.new("RGB", (64, 48))
         im.putdata([(rng.randrange(256), rng.randrange(256), rng.randrange(256)) for _ in range(64 * 48)])
         im.save(tmp_path / "images" / f"{i}.png")
+        sha256 = hashlib.sha256((tmp_path / "images" / f"{i}.png").read_bytes()).hexdigest()
         recs.append(ImageRecord(f"t:{i}", "t", f"images/{i}.png", 64, 48, f"g:{i}",
-                                (BoxRecord(cls, (4.0, 4.0, 40.0, 40.0)),)))
+                                (BoxRecord(cls, (4.0, 4.0, 40.0, 40.0)),), sha256=sha256,
+                                dataset_version="1", licence_id=licence_id, label_map_version="1.0.0",
+                                annotation_source="source_dataset"))
     manifest = tmp_path / "m.jsonl"
     write_manifest(recs, manifest)
     return manifest
+
+
+def test_validate_data_fails_a_sample_without_a_licence_id(tmp_path):
+    """Ticket 303: a sample without licence_id must fail the gate before anything else runs."""
+    manifest = _dataset(tmp_path, ["person", "chair", "door"], licence_id="")
+    out = _run("validate_data.py", "--manifest", str(manifest), "--root", str(tmp_path))
+    assert out.returncode == 1
+    assert "SCHEMA FAILED" in out.stdout and "missing_licence_id:t:0" in out.stdout
 
 
 def test_validate_data_passes_a_balanced_manifest_and_writes_a_report(tmp_path):
