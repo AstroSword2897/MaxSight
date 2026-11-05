@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Pre-training dataset gate: clean (optional), split, audit a manifest.
 
-  python scripts/validate_data.py --manifest data/raw/coco/manifest.jsonl --root data/raw/coco \
+  python scripts/validate_data.py --manifest datasets/raw/coco2017/manifest_val2017.jsonl --root datasets/raw/coco2017 \
       --clean --split --out data/gold/coco_clean.jsonl --report artifacts/evaluation-reports/data_audit.json
-Exit code 0 only if the audit has no errors.
+Exit code 0 only if every record passes the manifest schema and the audit has no errors.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ sys.path.insert(0, str(REPO))
 from ml.datasets.audit import audit  # noqa: E402
 from ml.datasets.cleaning import clean  # noqa: E402
 from ml.datasets.label_map import DEFAULT_PATH, LabelMap  # noqa: E402
-from ml.datasets.manifest import read_manifest, write_manifest  # noqa: E402
+from ml.datasets.manifest import read_manifest, validate_records, write_manifest  # noqa: E402
 from ml.datasets.sources import (  # noqa: E402
     DEFAULT_DATA_ROOT,
     clear_validated_marker,
@@ -47,6 +47,19 @@ def main() -> int:
     lm = LabelMap.load(args.label_map)
     root = Path(args.root)
     records = list(read_manifest(args.manifest))
+
+    # Schema first: a sample without licence_id, checksum or provenance fails before anything else runs.
+    schema_errors = validate_records(records)
+    if schema_errors:
+        for error in schema_errors[:25]:
+            print("ERROR", error)
+        if len(schema_errors) > 25:
+            print(f"... {len(schema_errors) - 25} more schema errors")
+        if args.dataset_id and clear_validated_marker(Path(args.data_root), args.dataset_id):
+            print("removed stale VALIDATED marker for", args.dataset_id)
+        print("SCHEMA FAILED")
+        return 1
+
     clean_info = None
     if args.clean:
         records, rep = clean(records, root, per_class_cap=args.per_class_cap)

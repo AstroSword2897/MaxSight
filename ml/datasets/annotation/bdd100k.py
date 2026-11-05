@@ -11,11 +11,14 @@ from pathlib import Path
 
 from PIL import Image
 
+from ml.datasets.acquisition.fetch import file_hash
 from ml.datasets.label_map import LabelMap
 from ml.datasets.manifest import BoxRecord, ImageRecord
 
 SOURCE = "bdd100k"
+DATASET_VERSION = "detection-2020"
 LICENSE = "BDD100K research licence (evaluation only)"
+LICENCE_ID = "BDD100K-LICENSE"  # terms still to be read at registration (licence register)
 DEFAULT_SIZE = (1280, 720)  # BDD100K frames are 1280x720; verified from the file when it exists
 
 
@@ -27,9 +30,11 @@ def to_records(labels_path: Path, label_map: LabelMap, image_root: Path | None =
         name = item["name"]
         w, h = DEFAULT_SIZE
         rel = f"{image_subdir}/{name}"
+        sha256 = ""  # stays empty (and fails validation) until the image is on disk
         if image_root is not None and (image_root / rel).exists():
             with Image.open(image_root / rel) as im:
                 w, h = im.size
+            sha256 = file_hash(image_root / rel, "sha256")
         boxes: list[BoxRecord] = []
         ignores: list[tuple[float, float, float, float]] = []
         for lab in item.get("labels", []):
@@ -47,7 +52,9 @@ def to_records(labels_path: Path, label_map: LabelMap, image_root: Path | None =
         out.append(ImageRecord(
             image_id=f"{SOURCE}:{name}", source=SOURCE, path=rel, width=w, height=h,
             group_id=f"{SOURCE}:{name.split('-')[0]}",  # id prefix groups frames of one drive
-            boxes=tuple(boxes), ignore_regions=tuple(ignores), split="eval", license=LICENSE,
+            boxes=tuple(boxes), ignore_regions=tuple(ignores), split="eval", license=LICENSE, sha256=sha256,
+            dataset_version=DATASET_VERSION, licence_id=LICENCE_ID, label_map_version=label_map.version,
+            annotation_source="source_dataset",
             extra={"weather": str(attrs.get("weather", "")), "scene": str(attrs.get("scene", "")),
                    "timeofday": str(attrs.get("timeofday", "")), "camera_domain": "vehicle_mounted"},
         ))
