@@ -31,7 +31,7 @@ class TherapyConstraints:
         unc = raw.get("uncertainty", {})
         contra = raw.get("contraindications", {})
         return cls(
-            version=str(raw.get("version", "0")),
+            version=str(raw.get("schema_version", raw.get("version", "0"))),
             max_prompts_per_minute=float(rate.get("max_prompts_per_minute", 2)),
             min_gap_between_prompts_s=float(rate.get("min_gap_between_prompts_s", 10)),
             suppress_threshold=float(unc.get("suppress_threshold", 0.7)),

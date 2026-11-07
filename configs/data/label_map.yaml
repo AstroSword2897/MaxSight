@@ -1,0 +1,80 @@
+# Detector class space (DR-202 default, 17 classes) and per-source name mapping.
+# Source class names not listed here are dropped; names under `ignore` become
+# ignore regions so they are not penalised as background.
+schema_version: "1.0.0"
+classes:
+  - person
+  - bicycle
+  - motorcycle
+  - vehicle
+  - animal
+  - chair
+  - couch
+  - table
+  - bench
+  - potted_plant
+  - bag_box
+  - trash_bin
+  - pole_bollard
+  - fire_hydrant
+  - traffic_cone
+  - door
+  - stairs
+sources:
+  coco:
+    person: person
+    bicycle: bicycle
+    motorcycle: motorcycle
+    car: vehicle
+    bus: vehicle
+    truck: vehicle
+    dog: animal
+    cat: animal
+    chair: chair
+    couch: couch
+    dining table: table
+    bench: bench
+    potted plant: potted_plant
+    suitcase: bag_box
+    backpack: bag_box
+    handbag: bag_box
+    fire hydrant: fire_hydrant
+  openimages:
+    Person: person
+    Bicycle: bicycle
+    Motorcycle: motorcycle
+    Car: vehicle
+    Bus: vehicle
+    Truck: vehicle
+    Dog: animal
+    Cat: animal
+    Chair: chair
+    Couch: couch
+    Table: table
+    Bench: bench
+    Houseplant: potted_plant
+    Box: bag_box
+    Suitcase: bag_box
+    Backpack: bag_box
+    Handbag: bag_box
+    Waste container: trash_bin
+    Traffic cone: traffic_cone
+    Street light: pole_bollard
+    Fire hydrant: fire_hydrant
+    Door: door
+    Stairs: stairs
+  vistas:
+    object--support--pole: pole_bollard
+    object--support--utility-pole: pole_bollard
+    object--bollard: pole_bollard
+  bdd100k:  # evaluation only; rider is ambiguous (person on cycle) so it is an ignore region, not forced
+    person: person
+    bicycle: bicycle
+    motorcycle: motorcycle
+    car: vehicle
+    bus: vehicle
+    truck: vehicle
+ignore:
+  bdd100k: [rider]
+  coco: [bed, toilet, tv, refrigerator, oven, sink]
+  openimages: [Cabinetry, Shelf, Desk, Bed, Wall]

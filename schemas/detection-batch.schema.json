@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.dev/schemas/detection-batch.schema.json",
+  "title": "DetectionBatch",
+  "description": "DetectionBatch (see docs/architecture/v1/03-stage-a-specification.md, D3.3).",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "maxsight.stage_a/2.0"
+    },
+    "frame_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "model_version": {
+      "type": "string"
+    },
+    "inference_ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "skipped_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "detections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "det_id": {
+            "type": "string"
+          },
+          "class_name": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "bbox_xyxy": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4,
+            "description": "xyxy, source pixels"
+          }
+        },
+        "required": [
+          "det_id",
+          "class_name",
+          "score",
+          "bbox_xyxy"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "frame_id",
+    "model_version",
+    "inference_ms",
+    "detections"
+  ],
+  "additionalProperties": false
+}

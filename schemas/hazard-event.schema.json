@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.dev/schemas/hazard-event.schema.json",
+  "title": "HazardEvent",
+  "description": "HazardEvent (see docs/architecture/v1/03-stage-a-specification.md, D3.3).",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "maxsight.stage_a/2.0"
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "hazard_id": {
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "NEW",
+        "ACTIVE",
+        "UPDATED",
+        "RESOLVED",
+        "EXPIRED"
+      ]
+    },
+    "urgency_max": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "first_seen_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "last_update_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "delivery": {
+      "enum": [
+        "PENDING",
+        "DELIVERED",
+        "DISMISSED",
+        "SUPPRESSED_DUP"
+      ],
+      "description": "Separate from state; dismissal never resolves the hazard."
+    }
+  },
+  "required": [
+    "schema_version",
+    "event_id",
+    "hazard_id",
+    "state",
+    "urgency_max",
+    "first_seen_ns",
+    "last_update_ns",
+    "delivery"
+  ],
+  "additionalProperties": false
+}

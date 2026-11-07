@@ -1,6 +1,6 @@
 # Tunable weights for deterministic assistive labels (COCO + derived targets).
 # Loaded by ml.data.assistive_supervision.load_assistive_spec(); unknown keys ignored.
-version: 1
+schema_version: "1.0.0"
 weights:
   class: 0.52
   proximity: 0.33
