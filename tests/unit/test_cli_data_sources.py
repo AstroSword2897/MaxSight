@@ -15,12 +15,12 @@ def _run(script: str, *args: str) -> subprocess.CompletedProcess:
 
 
 
-def test_status_lists_all_eight_datasets_as_configured(tmp_path):
+def test_status_lists_all_eight_datasets_as_not_downloaded(tmp_path):
     out = _run("data_sources.py", "--data-root", str(tmp_path), "status")
     assert out.returncode == 0
     for sid in ("coco2017", "open_images_v7", "mapillary_vistas_v2", "bdd100k", "sanpo", "diode", "pie", "ego4d"):
         assert sid in out.stdout
-    assert out.stdout.count("CONFIGURED") == 8
+    assert out.stdout.count("NOT_DOWNLOADED") == 8
 
 
 def test_plan_sanpo_requires_explicit_sessions(tmp_path):
