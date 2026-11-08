@@ -33,6 +33,21 @@ sources:
       val2017_images: 0.8
       train2017_images_full: 19
     acquire_with: scripts/acquire_data.py coco
+    governance:
+      intended_use: "Detector pretraining (DR-112) for the 12 label-map classes COCO covers."
+      subset_policy: selective
+      attribution: "Cite Lin et al., Microsoft COCO: Common Objects in Context (ECCV 2014). Annotations CC BY 4.0. Each image keeps its own Flickr licence (manifest extra.image_license)."
+      redistribution: "Annotations with attribution. Images follow their own Flickr licence; in train2017 68.9% are NonCommercial and 32.3% NoDerivs (measured 2026-11-03), so images and derived images are not redistributed."
+      archive_format: "annotations_trainval2017.zip (COCO JSON); images fetched one by one from each record's coco_url"
+      annotations:
+        - instance bounding boxes
+        - category ids
+        - iscrowd flags
+      preprocessing: "ml/datasets/acquisition/coco.py select_records -> manifest_<split>.jsonl -> scripts/validate_data.py"
+      limitations:
+        - "No door, stairs, trash_bin, pole_bollard or traffic_cone classes."
+        - "Flickr photographs, not a handheld walking viewpoint."
+        - "Selection keeps only images with a mapped box, so there is no negative pool yet."
 
   open_images_v7:
     name: Open Images V7
@@ -58,6 +73,20 @@ sources:
       bbox_validation: https://storage.googleapis.com/openimages/v5/validation-annotations-bbox.csv
       bbox_test: https://storage.googleapis.com/openimages/v5/test-annotations-bbox.csv
     s3_bucket: open-images-dataset
+    governance:
+      intended_use: "Detector pretraining for door, stairs, trash_bin, pole_bollard and bag_box, only after its audit passes."
+      subset_policy: selective
+      attribution: "Annotations CC BY 4.0 (Google). Images are listed as CC BY 2.0, which requires crediting each image's author; per-image author data is not downloaded yet."
+      redistribution: "Annotations with attribution. Images are not redistributed until per-image licence and author are recorded and confirmed."
+      archive_format: "CSV annotation files; images as individual JPEGs from the open-images-dataset S3 bucket"
+      annotations:
+        - bounding boxes
+        - IsGroupOf and IsDepiction flags (become ignore regions)
+      preprocessing: "ml/datasets/acquisition/openimages_manual.py -> manifest_<split>.jsonl -> scripts/validate_data.py"
+      limitations:
+        - "Pole and Traffic cone are not boxable classes."
+        - "Validation-split audit failed on class share (2026-11-03)."
+        - "Boxes are not exhaustive for every object in an image, so unlabelled objects can look like background."
 
   mapillary_vistas_v2:
     name: Mapillary Vistas v2.0
@@ -75,6 +104,20 @@ sources:
     est_gb:
       full: unverified
     priority: [pole instances, bollard instances, curb segmentation (later)]
+    governance:
+      intended_use: "Research and development pretraining for pole and bollard instances; curb segmentation later."
+      subset_policy: full
+      attribution: "CC BY-NC-SA 4.0: credit Mapillary and keep the licence attached to every derived record."
+      redistribution: "Non-commercial only; derivatives must use the same licence. Never part of a commercial release (spec D7)."
+      archive_format: "Archive download after registration: images plus segmentation annotations (exact layout to confirm on download)"
+      annotations:
+        - semantic segmentation
+        - instance segmentation
+      preprocessing: "Not implemented: segmentation -> pole_bollard converter (needs real files to confirm the format)."
+      limitations:
+        - "Street-level imagery from mixed capture devices."
+        - "Non-commercial licence."
+        - "Segmentation labels are not converted to boxes unless an experiment requires it."
 
   bdd100k:
     name: BDD100K
@@ -89,6 +132,19 @@ sources:
       kind: registration
       note: "Account required on bdd-data.berkeley.edu (site certificate was expired when checked). Manual download of 100K Images and Detection 2020 Labels."
     notes: "Vehicle-mounted camera domain; evaluation only. Keep weather/scene/timeofday attributes."
+    governance:
+      intended_use: "Evaluation only: robustness under night, rain and other conditions for person and vehicle classes."
+      subset_policy: selective
+      attribution: "Cite Yu et al., BDD100K (CVPR 2020). Further licence terms to confirm at registration."
+      redistribution: "Unverified: read the BDD100K licence at registration. Treated as not redistributable until then."
+      archive_format: "Zip archives: 100K images and Detection 2020 labels (JSON)"
+      annotations:
+        - bounding boxes
+        - weather, scene and timeofday attributes
+      preprocessing: "ml/datasets/annotation/bdd100k.py (eval split; rider becomes an ignore region)"
+      limitations:
+        - "Vehicle-mounted camera, not handheld."
+        - "Never in training, replay or augmentation."
 
   sanpo:
     name: SANPO
@@ -105,6 +161,20 @@ sources:
     est_gb:
       full: 6000
     notes: "No IMU dependency. Stereo depth is not evidence of monocular iPhone depth. Use fixed_camera_poses.csv for SANPO-Real poses."
+    governance:
+      intended_use: "Separate research: egocentric temporal context, segmentation and depth reference. Never in the detector mix."
+      subset_policy: selective
+      attribution: "CC BY 4.0: cite the SANPO dataset paper and credit Google Research."
+      redistribution: "Allowed with attribution (CC BY 4.0)."
+      archive_format: "Session folders in gs://gresearch/sanpo_dataset/v0"
+      annotations:
+        - panoptic segmentation
+        - stereo depth
+        - camera poses
+      preprocessing: "Not implemented: session reader."
+      limitations:
+        - "Stereo depth is not evidence of monocular iPhone depth."
+        - "Not acquired: excluded by owner decision (2026-11-03)."
 
   diode:
     name: DIODE
@@ -130,6 +200,20 @@ sources:
       train: 81
       train_normals: 126
       val_normals: 4.6
+    governance:
+      intended_use: "Separate research: depth-reference evaluation for spatial estimation. RGB is the model input; depth and mask are reference only."
+      subset_policy: selective
+      attribution: "Cite Vasiljevic et al., DIODE (2019) and keep the MIT licence notice."
+      redistribution: "Allowed with the MIT licence notice."
+      archive_format: "tar.gz per split: RGB PNG, depth .npy, validity mask .npy"
+      annotations:
+        - dense depth
+        - depth validity masks
+      preprocessing: "ml/datasets/annotation/diode.py (RGB/depth/mask triplet scan)"
+      limitations:
+        - "Captured with a laser scanner, not an iPhone camera."
+        - "Does not prove monocular distance accuracy on a phone."
+        - "Train split (81 GB) and surface normals are deferred."
 
   pie:
     name: PIE
@@ -143,6 +227,20 @@ sources:
       kind: manual_download
       note: "Clips at http://data.nvision2.eecs.yorku.ca/PIE_dataset/PIE_clips/ (6 sets, ~74 GB total); annotations in github.com/aras62/PIE. File names not verified."
     notes: "Crossing intention is NOT an assistance-necessity label. Keep a separate schema."
+    governance:
+      intended_use: "Separate research: pedestrian behaviour and temporal tracking."
+      subset_policy: selective
+      attribution: "Cite Rasouli et al., PIE (ICCV 2019)."
+      redistribution: "Unverified: video terms are not stated on the repository page. Treated as not redistributable."
+      archive_format: "MP4 clips in 6 sets (~74 GB); annotations in the PIE GitHub repository"
+      annotations:
+        - pedestrian bounding boxes
+        - track ids
+        - crossing intention
+      preprocessing: "Not implemented: annotation reader."
+      limitations:
+        - "Vehicle dashcam viewpoint."
+        - "Crossing intention is not a hazard or assistance-necessity label."
 
   ego4d:
     name: Ego4D
@@ -159,3 +257,16 @@ sources:
       full: 7000
       annotations: unverified
     notes: "Supplementary contextual data; not a detector pretraining source."
+    governance:
+      intended_use: "Separate research: first-person context experiments on named clips only."
+      subset_policy: selective
+      attribution: "As required by the signed Ego4D licence; cite Grauman et al., Ego4D (CVPR 2022)."
+      redistribution: "Not permitted outside the signed licence."
+      archive_format: "Per-clip video and annotation JSON through the ego4d CLI"
+      annotations:
+        - benchmark-specific annotations
+        - narrations
+      preprocessing: "Not implemented: annotation linker."
+      limitations:
+        - "Head-mounted cameras."
+        - "Not acquired: excluded by owner decision (2026-11-03)."
