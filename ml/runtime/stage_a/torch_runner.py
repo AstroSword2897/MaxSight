@@ -13,6 +13,7 @@ from ml.runtime.stage_a.types import CameraFrame, HazardResult
 
 _ZONE_NAMES = ("near", "medium", "far")
 _DIR_NAMES = ("left", "center", "right")
+_WEIGHT_SUFFIXES = frozenset({".pt", ".pth"})
 
 
 class TorchStageARunner:
@@ -49,20 +50,19 @@ class TorchStageARunner:
             return self._model
         from ml.models.maxsight_cnn import CapabilityTier, TierConfig, create_model
 
+        from ml.training.checkpoint_io import CheckpointError, load_model_weights
+
+        if self.artifact_path.suffix not in _WEIGHT_SUFFIXES:
+            # Hazard output from random weights is worse than no output: callers fall back to REFUSED.
+            raise CheckpointError(
+                f"unsupported Stage A artifact {self.artifact_path.name}: expected {sorted(_WEIGHT_SUFFIXES)}"
+            )
         model = create_model(
             condition_mode=None if self.condition_mode == "none" else self.condition_mode,
             use_audio=False,
             tier_config=TierConfig.for_tier(CapabilityTier.T0_BASELINE_CNN),
         )
-        if self.artifact_path.is_file() and self.artifact_path.suffix in {".pt", ".pth"}:
-            try:
-                ckpt = torch.load(self.artifact_path, map_location="cpu", weights_only=True)
-                state = ckpt.get("model_state_dict", ckpt) if isinstance(ckpt, dict) else ckpt
-                if isinstance(state, dict):
-                    model.load_state_dict(state, strict=False)
-            except Exception:
-                # Random-init fallback keeps the frozen HazardResult path testable.
-                pass
+        load_model_weights(model, self.artifact_path)
         model.eval()
         model.to(self.device)
         self._model = model

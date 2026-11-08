@@ -113,19 +113,15 @@ def model_fn(model_dir: str) -> dict[str, Any]:
     except (KeyError, Exception) as exc:
         raise ModelLoadError(f"Failed to initialise model architecture: {exc}") from exc
 
+    from ml.training.checkpoint_io import load_model_weights
+
+    # An endpoint must never serve random weights: a missing or mismatched best.pt fails the load.
     ckpt_path = Path(model_dir) / "best.pt"
-    if ckpt_path.exists():
-        try:
-            state = torch.load(str(ckpt_path), map_location="cpu")
-            if "model_state_dict" in state:
-                model.load_state_dict(state["model_state_dict"], strict=False)
-            else:
-                model.load_state_dict(state, strict=False)
-            logger.info("Loaded checkpoint: %s", ckpt_path)
-        except Exception as exc:
-            raise ModelLoadError(f"Failed to load checkpoint {ckpt_path}: {exc}") from exc
-    else:
-        logger.warning("No checkpoint at %s — using random weights", ckpt_path)
+    try:
+        load_model_weights(model, ckpt_path)
+    except Exception as exc:
+        raise ModelLoadError(f"Failed to load checkpoint {ckpt_path}: {exc}") from exc
+    logger.info("Loaded checkpoint: %s", ckpt_path)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device).eval()
