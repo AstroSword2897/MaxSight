@@ -33,10 +33,16 @@ def _boom_probe(frame: CameraFrame, artifact_path: Path) -> HazardResult:
     raise RuntimeError("smoke failed")
 
 
+def _exists(path: Path) -> bool:
+    # These tests cover the ACTIVE -> LKG -> REFUSED state machine, not signatures (see
+    # tests/test_artifact_signature_contract.py); the default verifier refuses unsigned artifacts.
+    return path.is_file()
+
+
 def test_active_selected_when_healthy(tmp_path: Path) -> None:
     active = tmp_path / "active.pt"
     active.write_bytes(b"active-artifact")
-    handle = resolve_model_handle(active_path=active, lkg_path=LKG, smoke_probe=_ok_probe)
+    handle = resolve_model_handle(active_path=active, lkg_path=LKG, smoke_probe=_ok_probe, verify_signature=_exists)
     assert handle.state is ResolutionState.ACTIVE
     assert handle.artifact_path == active
 
@@ -50,7 +56,7 @@ def test_falls_through_to_lkg_on_active_failure(tmp_path: Path) -> None:
             raise RuntimeError("active smoke fail")
         return _ok_probe(frame, artifact_path)
 
-    handle = resolve_model_handle(active_path=active, lkg_path=LKG, smoke_probe=probe)
+    handle = resolve_model_handle(active_path=active, lkg_path=LKG, smoke_probe=probe, verify_signature=_exists)
     assert handle.state is ResolutionState.LAST_KNOWN_GOOD
     assert handle.artifact_path == LKG
 
@@ -58,7 +64,7 @@ def test_falls_through_to_lkg_on_active_failure(tmp_path: Path) -> None:
 def test_refused_when_both_fail(tmp_path: Path) -> None:
     active = tmp_path / "active.pt"
     active.write_bytes(b"x")
-    handle = resolve_model_handle(active_path=active, lkg_path=LKG, smoke_probe=_boom_probe)
+    handle = resolve_model_handle(active_path=active, lkg_path=LKG, smoke_probe=_boom_probe, verify_signature=_exists)
     assert handle.state is ResolutionState.REFUSED
     assert handle.refusal_message == HAZARD_UNAVAILABLE_MESSAGE
 

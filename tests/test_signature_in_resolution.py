@@ -1,76 +1,80 @@
-"""Signature verification inserted into resolution (MAXS-203b)."""
+"""Signature verification inside model resolution (MAXS-203b), Ed25519 instance contract."""
 
 from __future__ import annotations
 
-import hashlib
-import hmac
+from dataclasses import replace
 from pathlib import Path
 
-from ml.runtime.stage_a.messages import HAZARD_UNAVAILABLE_MESSAGE
-from ml.runtime.stage_a.model_handle import ResolutionState, resolve_model_handle
-from ml.runtime.stage_a.types import CameraFrame, HazardResult
-from ml.runtime.stage_a.verify import verify_artifact_signature
+import pytest
 
-KEYS = Path(__file__).resolve().parents[1] / "ml" / "runtime" / "stage_a" / "keys"
-FIXTURES = Path(__file__).resolve().parents[1] / "ml" / "runtime" / "stage_a" / "fixtures"
-LKG = FIXTURES / "last_known_good" / "weights.stub"
+serialization = pytest.importorskip("cryptography.hazmat.primitives.serialization")
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
+
+from ml.infra.artifact_signing import sign_artifact  # noqa: E402
+from ml.runtime.stage_a.messages import HAZARD_UNAVAILABLE_MESSAGE  # noqa: E402
+from ml.runtime.stage_a.model_handle import ResolutionState, resolve_model_handle  # noqa: E402
+from ml.runtime.stage_a.signature_contract import load_policy, verify_artifact_signature  # noqa: E402
+from ml.runtime.stage_a.types import CameraFrame, HazardResult  # noqa: E402
+
+MANIFEST = {"all_passed": True, "cells": []}
 
 
 def _ok_probe(frame: CameraFrame, artifact_path: Path) -> HazardResult:
     return HazardResult(
-        event_type="none",
-        urgency=0,
-        direction="center",
-        distance_zone="far",
-        confidence=0.5,
-        uncertainty=0.5,
-        latency_ms=1.0,
-        model_version="probe",
-        model_hash=artifact_path.name,
-        condition_mode="none",
-        timestamp_source=frame.timestamp,
-        timestamp_emit=frame.timestamp,
+        event_type="none", urgency=0, direction="center", distance_zone="far", confidence=0.5,
+        uncertainty=0.5, latency_ms=1.0, model_version="probe", model_hash=artifact_path.name,
+        condition_mode="none", timestamp_source=frame.timestamp, timestamp_emit=frame.timestamp,
     )
 
 
-def _sign(path: Path, key: bytes) -> None:
-    digest = hashlib.sha256(path.read_bytes()).digest()
-    (Path(str(path) + ".sig")).write_bytes(hmac.new(key, digest, hashlib.sha256).digest())
+@pytest.fixture
+def signer(tmp_path: Path):
+    private = Ed25519PrivateKey.generate()
+    key_file = tmp_path / "signing.pem"
+    key_file.write_bytes(private.private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+    keys_dir = tmp_path / "keys"
+    keys_dir.mkdir()
+    (keys_dir / "current.ed25519.pub").write_bytes(private.public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
+    policy = replace(load_policy(), public_keys_dir=keys_dir, unsigned_allowed=())
+
+    def sign(path: Path) -> None:
+        sign_artifact(path, MANIFEST, private_key_path=key_file, policy=policy)
+
+    return sign, (lambda p: verify_artifact_signature(p, policy=policy))
 
 
-def test_tampered_active_falls_to_lkg(tmp_path: Path) -> None:
-    key = (KEYS / "current.hmac").read_bytes().strip()
+def test_signed_active_is_selected(tmp_path: Path, signer) -> None:
+    sign, verify = signer
     active = tmp_path / "active.bin"
     active.write_bytes(b"good-active")
-    _sign(active, key)
-    # Flip one byte after signing.
-    active.write_bytes(b"hood-active")
-    assert verify_artifact_signature(active, keys_dir=KEYS) is False
+    sign(active)
+    handle = resolve_model_handle(active_path=active, lkg_path=tmp_path / "none", smoke_probe=_ok_probe,
+                                  verify_signature=verify)
+    assert handle.state is ResolutionState.ACTIVE
 
-    handle = resolve_model_handle(
-        active_path=active,
-        lkg_path=LKG,
-        smoke_probe=_ok_probe,
-        verify_signature=lambda p: (
-            verify_artifact_signature(p, keys_dir=KEYS)
-            if Path(str(p) + ".sig").is_file()
-            else p.is_file()
-        ),
-    )
+
+def test_tampered_active_falls_to_signed_lkg(tmp_path: Path, signer) -> None:
+    sign, verify = signer
+    active, lkg = tmp_path / "active.bin", tmp_path / "lkg.bin"
+    active.write_bytes(b"good-active")
+    lkg.write_bytes(b"lkg-bytes")
+    sign(active)
+    sign(lkg)
+    active.write_bytes(b"hood-active")  # one byte changed after signing
+    assert verify(active) is False
+    handle = resolve_model_handle(active_path=active, lkg_path=lkg, smoke_probe=_ok_probe, verify_signature=verify)
     assert handle.state is ResolutionState.LAST_KNOWN_GOOD
 
 
-def test_tampered_lkg_refuses(tmp_path: Path) -> None:
-    key = (KEYS / "current.hmac").read_bytes().strip()
-    lkg = tmp_path / "lkg.bin"
+def test_unsigned_active_and_tampered_lkg_refuse(tmp_path: Path, signer) -> None:
+    sign, verify = signer
+    active, lkg = tmp_path / "active.bin", tmp_path / "lkg.bin"
+    active.write_bytes(b"unsigned")
     lkg.write_bytes(b"lkg-bytes")
-    _sign(lkg, key)
+    sign(lkg)
     lkg.write_bytes(b"lkg-BYTEZ")
-    handle = resolve_model_handle(
-        active_path=None,
-        lkg_path=lkg,
-        smoke_probe=_ok_probe,
-        verify_signature=lambda p: verify_artifact_signature(p, keys_dir=KEYS),
-    )
+    handle = resolve_model_handle(active_path=active, lkg_path=lkg, smoke_probe=_ok_probe, verify_signature=verify)
     assert handle.state is ResolutionState.REFUSED
     assert handle.refusal_message == HAZARD_UNAVAILABLE_MESSAGE
