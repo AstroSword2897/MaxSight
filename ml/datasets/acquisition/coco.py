@@ -134,8 +134,7 @@ def _download_one(rec: ImageRecord, root: Path, retries: int = 3) -> tuple[Image
 
     # Resumed run: the file is already here. Hash it so the manifest still records its sha256.
     if dest.exists() and dest.stat().st_size > 0:
-        return rec.with_(sha256=file_hash(dest, "sha256")), dest.stat().st_size, ""
-
+        return rec.with_(sha256=file_hash(dest, "sha256")), 0, ""
     dest.parent.mkdir(parents=True, exist_ok=True)
     last = ""
     for attempt in range(retries):
