@@ -4,6 +4,7 @@ environment held out as test, and a leakage check that fails when any group or h
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -24,12 +25,12 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 def frames(session: str, environment: str, count: int = 3) -> list[ImageRecord]:
-    """``count`` frames of one recording session in one environment."""
+    """``count`` distinct frames of one recording session in one environment (cleaned records carry sha256)."""
     return [
         ImageRecord(
             image_id=f"{session}:{i}", source="maxsight", path=f"{session}/{i}.jpg", width=10, height=10,
             group_id=session, boxes=(BoxRecord("stairs", (0.0, 0.0, 5.0, 5.0)),),
-            extra={"environment": environment},
+            sha256=hashlib.sha256(f"{session}:{i}".encode()).hexdigest(), extra={"environment": environment},
         )
         for i in range(count)
     ]
