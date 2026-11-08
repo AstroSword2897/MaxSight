@@ -1,12 +1,16 @@
-"""Artifact signing fail-closed tests (MAXS-201b)."""
+"""Artifact signing fail-closed tests (MAXS-201b); full contract coverage in test_artifact_signature_contract.py."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
-from ml.infra.artifact_signing import ManifestNotAllPassedError, sign_artifact
+serialization = pytest.importorskip("cryptography.hazmat.primitives.serialization")
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
+
+from ml.infra.artifact_signing import ManifestNotAllPassedError, sign_artifact  # noqa: E402
 
 
 def _pass_manifest() -> dict:
@@ -41,8 +45,9 @@ def test_sign_refuses_blocked_manifest(tmp_path: Path) -> None:
 def test_sign_succeeds_on_all_pass(tmp_path: Path) -> None:
     artifact = tmp_path / "model.bin"
     artifact.write_bytes(b"weights")
-    key = tmp_path / "hmac.key"
-    key.write_bytes(b"unit-test-hmac-key-32-bytes-long!!")
-    sig = sign_artifact(artifact, _pass_manifest(), output_dir=tmp_path, private_key_pem=key)
-    assert sig.is_file()
-    assert (tmp_path / "model.bin.certification.json").is_file()
+    key = tmp_path / "signing.pem"
+    key.write_bytes(Ed25519PrivateKey.generate().private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+    instance = sign_artifact(artifact, _pass_manifest(), private_key_path=key)
+    assert instance == tmp_path / "model.bin.sig.json"
+    assert json.loads(instance.read_text())["certification"]["all_passed"] is True

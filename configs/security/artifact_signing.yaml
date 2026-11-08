@@ -1,0 +1,26 @@
+# Model artifact signing policy. Loaded and strictly validated by ml/runtime/stage_a/signature_contract.py
+# (unknown keys or another algorithm are refused). Paths are relative to the repository root.
+#
+# How signing works:
+#   build   - scripts/product/run.py certify --sign  ->  ml/infra/artifact_signing.sign_artifact writes
+#             <artifact>.sig.json, an instance of the contract below, signed with the Ed25519 PRIVATE key.
+#   device  - ml/runtime/stage_a/model_handle.default_verify_signature checks the instance against the
+#             PUBLIC keys in the trust window before a model may load.
+#
+# Never commit private keys. The private key lives in the build environment (e.g. AWS Secrets Manager
+# mounted as a file) and is passed by path through the environment variable named below.
+
+schema_version: 1
+algorithm: ed25519
+contract: docs/contracts/schemas/artifact_signature.json
+
+build:
+  private_key_env: MAXSIGHT_SIGNING_KEY_FILE   # path to a PKCS#8 PEM Ed25519 private key; never the key itself
+
+device:
+  public_keys_dir: ml/runtime/stage_a/keys
+  trust_window:                                # either key verifies; ship "next" one release before rotating
+    - current.ed25519.pub
+    - next.ed25519.pub
+  require_signature: true                      # an artifact without <artifact>.sig.json is refused
+  unsigned_allowed: []                         # explicit dev-only exceptions (repo-relative paths); keep empty in releases
