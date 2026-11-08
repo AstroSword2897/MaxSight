@@ -89,12 +89,16 @@ jobs:
             stage_a:
               - 'ml/runtime/stage_a/**'
               - 'ml/infra/artifact_signing.py'
+              - 'configs/security/artifact_signing.yaml'
+              - 'docs/contracts/schemas/artifact_signature.json'
+              - 'scripts/infra/generate_signing_keypair.py'
               - 'scripts/infra/validate_stage_a_isolation.py'
               - 'tests/test_stage_a_*.py'
               - 'tests/test_torch_stage_a_*.py'
               - 'tests/test_model_handle_resolution.py'
               - 'tests/test_signature_in_resolution.py'
               - 'tests/test_artifact_signing.py'
+              - 'tests/test_artifact_signature_contract.py'
             safety:
               - 'ml/evaluation/**'
               - 'ml/config/safety_gates.yaml'
@@ -257,6 +261,7 @@ jobs:
                tests/test_model_handle_resolution.py \
                tests/test_signature_in_resolution.py \
                tests/test_artifact_signing.py \
+               tests/test_artifact_signature_contract.py \
                -q --tb=short --junitxml=artifacts/stage-a-junit.xml
         python scripts/infra/validate_stage_a_isolation.py --self-test
         python scripts/infra/validate_stage_a_isolation.py

@@ -1,18 +1,45 @@
-"""Artifact signing: fail-closed unless certification manifest all_passed."""
+"""Artifact signing: fail-closed unless the certification manifest is all-pass.
+
+Writes ``<artifact>.sig.json``, an instance of docs/contracts/schemas/artifact_signature.json, signed with
+the Ed25519 private key named by configs/security/artifact_signing.yaml (build.private_key_env). Devices
+verify it with public keys only (ml/runtime/stage_a/signature_contract.py).
+
+Removed on purpose: the HMAC mode (a verifying device could also sign, and the committed keys were public),
+the random-key fallback (it signed with a key nobody had), and KMS ECDSA (devices cannot verify it).
+"""
 
 from __future__ import annotations
 
-import hashlib
-import hmac
+import base64
 import json
 import os
-import secrets
+import tempfile
+import time
 from pathlib import Path
 from typing import Any
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from ml.runtime.stage_a.signature_contract import (
+    ALGORITHM,
+    INSTANCE_SUFFIX,
+    SCHEMA_VERSION,
+    SigningPolicy,
+    canonical_payload,
+    file_sha256,
+    key_id,
+    load_policy,
+    validate_instance,
+)
 
 
 class ManifestNotAllPassedError(RuntimeError):
     """Raised when signing is attempted without an all-pass certification manifest."""
+
+
+class SigningKeyError(RuntimeError):
+    """The build private key is missing or is not an Ed25519 key."""
 
 
 def _require_all_passed(manifest: dict[str, Any]) -> None:
@@ -23,26 +50,32 @@ def _require_all_passed(manifest: dict[str, Any]) -> None:
             "refuse to sign: certification manifest all_passed is not True "
             f"(got {manifest.get('all_passed')!r})"
         )
-    cells = manifest.get("cells") or []
-    for cell in cells:
+    for cell in manifest.get("cells") or []:
         if cell.get("status") != "passed":
-            raise ManifestNotAllPassedError(
-                f"refuse to sign: cell status {cell.get('status')!r} is not passed"
-            )
+            raise ManifestNotAllPassedError(f"refuse to sign: cell status {cell.get('status')!r} is not passed")
 
 
-def _artifact_digest(path: Path) -> bytes:
-    h = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(65536), b""):
-            h.update(chunk)
-    return h.digest()
+def _load_private_key(private_key_path: Path | str | None, policy: SigningPolicy) -> Ed25519PrivateKey:
+    location = private_key_path or os.environ.get(policy.private_key_env, "")
+    if not location or not Path(location).is_file():
+        raise SigningKeyError(
+            f"no signing key: pass private_key_path or set {policy.private_key_env} to a PKCS#8 PEM file"
+        )
+    key = serialization.load_pem_private_key(Path(location).read_bytes(), password=None)
+    if not isinstance(key, Ed25519PrivateKey):
+        raise SigningKeyError(f"signing key at {location} is not an Ed25519 private key")
+    return key
 
 
-def _local_hmac_key(key_path: Path | None = None) -> bytes:
-    if key_path and key_path.is_file():
-        return key_path.read_bytes().strip()
-    return secrets.token_bytes(32)
+def _write_atomic(path: Path, text: str) -> None:
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def sign_artifact(
@@ -50,55 +83,38 @@ def sign_artifact(
     manifest: dict[str, Any],
     *,
     output_dir: Path | str | None = None,
-    private_key_pem: Path | str | None = None,
+    private_key_path: Path | str | None = None,
+    policy: SigningPolicy | None = None,
 ) -> Path:
-    """Sign artifact only when manifest is all-pass. Returns signature path.
+    """Sign an all-pass artifact; return the path of ``<artifact>.sig.json``.
 
-    Local mode uses HMAC-SHA256 (stdlib). Set MAXSIGHT_SIGNING_MODE=kms for AWS KMS.
+    The instance belongs next to the artifact (devices look there); ``output_dir`` is for staging only.
     """
     _require_all_passed(manifest)
+    if os.environ.get("MAXSIGHT_SIGNING_MODE", "local").strip().lower() == "kms":
+        raise RuntimeError("kms signing mode is not supported: devices verify Ed25519 instances only")
+    policy = policy or load_policy()
     artifact = Path(artifact_path)
     if not artifact.is_file():
         raise FileNotFoundError(artifact)
+    private_key = _load_private_key(private_key_path, policy)
+
+    instance: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "artifact_name": artifact.name,
+        "artifact_sha256": file_sha256(artifact),
+        "algorithm": ALGORITHM,
+        "key_id": key_id(private_key.public_key()),
+        "signed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "certification": manifest,
+    }
+    instance["signature"] = base64.b64encode(private_key.sign(canonical_payload(instance))).decode("ascii")
+    errors = validate_instance(instance)
+    if errors:
+        raise ValueError(f"refuse to write a signature instance that breaks the contract: {errors}")
+
     out = Path(output_dir) if output_dir else artifact.parent
     out.mkdir(parents=True, exist_ok=True)
-
-    mode = os.environ.get("MAXSIGHT_SIGNING_MODE", "local").strip().lower()
-    digest = _artifact_digest(artifact)
-
-    if mode == "kms":
-        import boto3  # type: ignore[import-not-found]  # optional AWS dep stubs missing in CI venv
-
-        key_id = os.environ.get("MAXSIGHT_KMS_SIGNING_KEY_ID", "")
-        if not key_id:
-            raise RuntimeError("MAXSIGHT_KMS_SIGNING_KEY_ID required for kms mode")
-        client = boto3.client("kms")
-        resp = client.sign(
-            KeyId=key_id,
-            Message=digest,
-            MessageType="DIGEST",
-            SigningAlgorithm="ECDSA_SHA_256",
-        )
-        signature = resp["Signature"]
-        meta: dict[str, Any] = {"mode": "kms", "key_id": key_id}
-    else:
-        key = _local_hmac_key(Path(private_key_pem) if private_key_pem else None)
-        signature = hmac.new(key, digest, hashlib.sha256).digest()
-        meta = {"mode": "local", "algorithm": "hmac-sha256"}
-
-    sig_path = out / f"{artifact.name}.sig"
-    man_path = out / f"{artifact.name}.certification.json"
-    tmp_sig = out / f".{artifact.name}.sig.tmp"
-    tmp_man = out / f".{artifact.name}.certification.json.tmp"
-    tmp_sig.write_bytes(signature)
-    payload = {"manifest": manifest, "signing": meta, "artifact_sha256": digest.hex()}
-    tmp_man.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    tmp_sig.replace(sig_path)
-    tmp_man.replace(man_path)
-    return sig_path
-
-
-def verify_local_hmac(artifact_path: Path, signature: bytes, key: bytes) -> bool:
-    digest = _artifact_digest(Path(artifact_path))
-    expected = hmac.new(key, digest, hashlib.sha256).digest()
-    return hmac.compare_digest(expected, signature)
+    instance_path = out / f"{artifact.name}{INSTANCE_SUFFIX}"
+    _write_atomic(instance_path, json.dumps(instance, indent=2, sort_keys=True) + "\n")
+    return instance_path
