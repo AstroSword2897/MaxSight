@@ -1,5 +1,6 @@
 """Batched Scene Graph + GNN Encoder for MaxSight 3.0 - Efficient GPU computation - Supports multiple scene graphs per batch - Trainable spatial and semantic relation scoring - Edge-aware GNN."""
 
+import hashlib
 from dataclasses import dataclass
 
 import torch
@@ -97,6 +98,19 @@ class SceneGraphEncoder(nn.Module):
 
         return relations
 
+    def _semantic_index(self, predicate: str) -> int:
+        """Row offset of a semantic predicate inside the semantic block of ``relation_embedding``.
+
+        The classifier's own prediction ``semantic_k`` is row ``k``. A rule predicate gets a row from
+        a SHA-256 digest: built-in ``hash()`` of a str is salted per process (PYTHONHASHSEED), so
+        training and inference used to look up different rows for the same relation.
+        """
+        prefix, _, suffix = predicate.partition("_")
+        if prefix == "semantic" and suffix.isdigit() and int(suffix) < self.num_semantic_relations:
+            return int(suffix)
+        digest = hashlib.sha256(predicate.encode("utf-8")).digest()
+        return int.from_bytes(digest[:8], "big") % self.num_semantic_relations
+
     def extract_semantic_relations(
         self, object_classes: list[str], object_embeddings: torch.Tensor
     ) -> list[SceneRelation]:
@@ -178,11 +192,7 @@ class SceneGraphEncoder(nn.Module):
                     except ValueError:
                         pred_idx = 0
                 else:
-                    # Semantic relation - use num_spatial_relations + semantic index.
-                    pred_idx = (
-                        self.num_spatial_relations
-                        + hash(rel.predicate) % self.num_semantic_relations
-                    )
+                    pred_idx = self.num_spatial_relations + self._semantic_index(rel.predicate)
                 relation_indices.append(pred_idx)
 
             relation_indices_tensor = torch.tensor(
