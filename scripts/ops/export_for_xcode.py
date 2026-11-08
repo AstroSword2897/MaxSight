@@ -5,8 +5,6 @@ import logging
 import sys
 from pathlib import Path
 
-import torch
-
 # Ensure project root is on path so ml and scripts resolve.
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -36,13 +34,9 @@ def main():
     model = create_model()
 
     try:
-        checkpoint = torch.load(str(checkpoint_path), map_location="cpu", weights_only=True)
-        state = (
-            checkpoint.get("model_state_dict", checkpoint)
-            if isinstance(checkpoint, dict)
-            else checkpoint
-        )
-        model.load_state_dict(state, strict=False)
+        from ml.training.checkpoint_io import load_model_weights
+
+        load_model_weights(model, checkpoint_path)
         logger.info("Checkpoint loaded successfully")
     except Exception as e:
         logger.error(f"Failed to load checkpoint: {e}")

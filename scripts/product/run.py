@@ -63,14 +63,10 @@ def cmd_validate(args) -> int:
             import torch
             from ml.models.maxsight_cnn import create_model
 
+            from ml.training.checkpoint_io import load_model_weights
+
             model = create_model()
-            ckpt_data = torch.load(str(ckpt), map_location="cpu", weights_only=True)
-            state = (
-                ckpt_data.get("model_state_dict", ckpt_data)
-                if isinstance(ckpt_data, dict)
-                else ckpt_data
-            )
-            model.load_state_dict(state, strict=False)
+            load_model_weights(model, ckpt)
             model.eval()
             x = torch.randn(1, 3, 224, 224)
             with torch.no_grad():
