@@ -23,6 +23,7 @@ import numpy as np
 
 from ml.training.stability_manager import StabilityManager
 from ml.training.reproducibility import (
+    CHECKPOINT_HASH_SCHEME,
     checkpoint_content_hash,
     set_deterministic_seed,
     reproducibility_manifest,
@@ -1223,6 +1224,7 @@ class ProductionTrainLoop:
                     self.seed,
                     extra={
                         "checkpoint_hash": content_hash,
+                        "checkpoint_hash_scheme": CHECKPOINT_HASH_SCHEME,
                         "config_hash": checkpoint.get("config", {}).get("config_hash"),
                         "epoch": epoch,
                     },

@@ -74,16 +74,36 @@ def reproducibility_manifest(
     return manifest
 
 
+CHECKPOINT_HASH_SCHEME = "sha256-v2:key,dtype,shape,bytes"
+
+
+def _framed(digest: Any, field: bytes) -> None:
+    """Length-prefix each field so no two different state dicts produce the same byte stream."""
+    digest.update(len(field).to_bytes(8, "big"))
+    digest.update(field)
+
+
 def checkpoint_content_hash(state_dict: dict[str, Any]) -> str:
-    """Return a stable SHA256 hash over sorted state-dict tensor bytes."""
+    """SHA-256 over sorted keys, each with its dtype, shape and raw element bytes (``CHECKPOINT_HASH_SCHEME``).
+
+    Dtype and shape are part of the identity: the same bytes as ``[2, 3]`` and ``[3, 2]``, or as
+    int32 and float32, are different checkpoints. Bytes are read through a uint8 view, so every
+    dtype works (numpy has no bfloat16) and a non-contiguous tensor hashes like its values.
+    """
     import hashlib
+
+    import torch
 
     digest = hashlib.sha256()
     for key in sorted(state_dict.keys()):
-        digest.update(key.encode("utf-8"))
+        _framed(digest, key.encode("utf-8"))
         value = state_dict[key]
-        if hasattr(value, "detach"):
-            digest.update(value.detach().cpu().numpy().tobytes())
+        if isinstance(value, torch.Tensor):
+            tensor = value.detach().cpu().contiguous()
+            _framed(digest, str(tensor.dtype).encode("utf-8"))
+            _framed(digest, repr(tuple(tensor.shape)).encode("utf-8"))
+            _framed(digest, tensor.reshape(-1).view(torch.uint8).numpy().tobytes())
         else:
-            digest.update(repr(value).encode("utf-8"))
+            _framed(digest, b"repr")
+            _framed(digest, repr(value).encode("utf-8"))
     return digest.hexdigest()
