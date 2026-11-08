@@ -106,7 +106,7 @@ Locally, torch fails to load (`libtorch_cpu.dylib` missing), so torch-dependent 
 |---|---|---|
 | Public-source identity, roles, licences, access | `configs/data/sources.yaml` | Legacy `datasets.yaml` source rows (`bdd100k`, `kinetics700`, …) |
 | Detector classes and source mappings | `configs/data/label_map.yaml` (a DR-202 *default*, not frozen) | `accessibility_622` label space |
-| Acquisition, cleaning, splitting, audit | `ml/datasets/*` (decision 2026-11-03: the current stack is authoritative) | `ml/data/download_datasets.py`, `dataset_cleaning.py`, `coco_dataset_splitter.py` |
+| Acquisition, cleaning, splitting, audit | `ml/datasets/*` (decision 2026-11-03: the current stack is authoritative). Since 2026-11-07 the split manifest and audit refuse the same image (sha256 or near-equal dhash) in two splits. | `ml/data/download_datasets.py`, `dataset_cleaning.py`, `coco_dataset_splitter.py` (still called by `scripts/ops/gather_training_data.py` and `medallion_build.py`; the splitter now groups byte-identical images but has no near-duplicate check) |
 | Architecture decisions | `docs/architecture/v1/01-decision-register.md`, ADRs | Older text that treats IMU/LiDAR as open (plan §12) |
 | Training-time loading (today) | `ml/data/gold/*` + legacy registry | — (to be bridged, not replaced blindly) |
 

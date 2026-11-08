@@ -55,7 +55,7 @@ These run in two execution stages:
 **Current state (verified):**
 - The repo has reusable foundations `[E]`:
   - Stage A types and model-handle resolution
-  - HMAC artifact verification
+  - Ed25519 artifact signature verification (instance contract `artifact_signature.json`, policy `configs/security/artifact_signing.yaml`; replaced HMAC on 2026-11-07, see `docs/architecture/MAXSIGHT_ARCHITECTURE.md` §12.3)
   - connectivity monitor
   - Stage B client with timeout
   - OTA staging and rollback

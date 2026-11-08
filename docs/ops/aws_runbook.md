@@ -9,6 +9,17 @@ End-to-end steps to prove training, registry, deploy, invoke, and CloudWatch met
 - Bucket: versioning on, lifecycle optional, encryption chosen (SSE-S3 or SSE-KMS).
 - Optional: `MAXSIGHT_MODEL_PACKAGE_GROUP` created in SageMaker console.
 - Optional VPC: `SM_SUBNET_IDS` and `SM_SECURITY_GROUP_IDS` set if jobs must run in private subnets.
+- **Full test suite in AWS (prep gate):** on an instance with ≥ 10 GB free disk, install `requirements.txt`
+  (includes `faiss-cpu`, `cryptography`) and run `pytest -q`. The last clean local baseline was 1301 passed,
+  5 skipped, 12 xfailed, 0 failed; the 2026-11-07 revision was verified locally with targeted suites only,
+  because the local disk filled up. Checklist:
+  [../architecture/MAXSIGHT_ARCHITECTURE.md §15](../architecture/MAXSIGHT_ARCHITECTURE.md#15-aws-preparation-checklist).
+- **Model packages:** `model.tar.gz` must contain `best.pt` and `model_meta.json` (with `tier`). The
+  endpoint refuses to start without `best.pt` or with a checkpoint that does not match the model exactly
+  (it no longer serves random weights).
+- **Signing (releases for devices):** store the Ed25519 private key in Secrets Manager, mount it as a file,
+  and set `MAXSIGHT_SIGNING_KEY_FILE`; sign with `scripts/product/run.py certify --sign --artifact <model.pt>`.
+  Never put the key in the repository or an image. Provisioning: `ml/runtime/stage_a/keys/README.md`.
 
 ## 2. Dry-run (no AWS mutation beyond optional S3 upload in train script)
 

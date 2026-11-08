@@ -1,6 +1,9 @@
 # MaxSight architecture
 
-This document describes the model and system architecture end to end.
+This document is a short model overview. The detailed reference, covering every input, configuration,
+environment variable, integrity control and known gap, is
+[architecture/MAXSIGHT_ARCHITECTURE.md](architecture/MAXSIGHT_ARCHITECTURE.md); the component registry is
+[architecture/SYSTEM_ARCHITECTURE.md](architecture/SYSTEM_ARCHITECTURE.md).
 
 ## Overview
 
@@ -12,7 +15,8 @@ The codebase uses capability tiers (T0–T5) that control which components are e
 
 - **T0 (baseline):** ResNet50 + FPN + core detection heads only.
 - **T1:** Adds attention (CBAM, SE).
-- **T2:** Adds hybrid CNN–ViT backbone.
+- **T2_DETECTOR:** T1 features for the detector (the SageMaker default tier; no hybrid).
+- **T2_HYBRID_VIT:** Adds the hybrid CNN–ViT backbone (also on in T3, T4, T5).
 - **T3:** Adds cross-task attention.
 - **T4:** Adds cross-modal (audio–visual) fusion.
 - **T5:** Adds temporal encoder (ConvLSTM / TimeSformer) and full retrieval.
@@ -21,9 +25,9 @@ Stage A (ResNet50 + FPN) is always used for safety-critical, low-latency feature
 
 ## Backbone and FPN
 
-- **Backbone:** ResNet50 (or hybrid CNN–ViT in T2+) in `ml/models/backbone/`. Produces multi-scale feature maps.
+- **Backbone:** ResNet50 in Stage A; the hybrid CNN–ViT (`ml/models/backbone/hybrid_backbone.py`) runs in Stage B for T2_HYBRID_VIT and above and adds its middle FPN level to the Stage A features. Produces multi-scale feature maps.
 - **FPN:** Feature Pyramid Network in the main model builds C2–C5 and P2–P5 for multi-scale detection.
-- **Dynamic convolution:** Optional adaptive convolutions in `ml/models/backbone/dynamic_conv.py` for condition-adaptive processing.
+- **Dynamic convolution:** `ml/models/backbone/dynamic_conv.py`, per-sample kernels conditioned on lighting, occlusion and motion (not on the vision condition). With `use_dynamic_conv` it is added to Stage B as a zero-initialised residual; the flag is **off in every tier and training YAML** until a model is retrained with it.
 
 ## Heads
 
