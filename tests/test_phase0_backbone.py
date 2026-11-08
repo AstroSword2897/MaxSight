@@ -91,14 +91,11 @@ class TestHybridBackbone:
         model.eval()
 
         x = torch.randn(2, 3, 224, 224)
-        try:
-            output = model(x)
-            assert output is not None
-            # Output can be tensor or dict depending on return_all_features.
-            assert isinstance(output, (torch.Tensor, dict))
-        except Exception as e:
-            # May fail due to shape issues, skip for now.
-            pytest.skip(f"Hybrid backbone forward test skipped: {e}")
+        # Shape errors used to be skipped here, hiding that forward() fed raw ResNet maps
+        # (512/1024/2048 ch) to projections built for the FPN width.
+        fused, aux = model(x, return_all_features=True)
+        assert fused.shape == (2, 512)
+        assert [f.shape[1] for f in aux["fpn_features"]] == [256, 256, 256]
 
 
 class TestDynamicConvolution:
@@ -125,12 +122,10 @@ class TestDynamicConvolution:
         conv.eval()
 
         x = torch.randn(2, 64, 32, 32)
-        try:
-            output = conv(x)
-            assert output.shape == (2, 128, 32, 32)
-        except Exception as e:
-            # May fail due to shape issues in dynamic kernel computation.
-            pytest.skip(f"Dynamic conv forward test skipped: {e}")
+        assert conv(x).shape == (2, 128, 32, 32)
+        attention = torch.rand(2, 32, 32)
+        motion = torch.rand(2, 1)
+        assert conv(x, attention=attention, motion=motion).shape == (2, 128, 32, 32)
 
 
 class TestAttentionModules:
@@ -263,12 +258,7 @@ class TestTemporalModules:
 
         # TimeSformer expects [B, T, N, D] where T matches num_frames.
         x = torch.randn(2, 8, 196, 768)  # [B, T, N_patches, embed_dim].
-        try:
-            output = timesformer(x)
-            assert output.shape == (2, 768)
-        except Exception as e:
-            # May fail due to tensor shape issues, skip for now.
-            pytest.skip(f"TimeSformer test skipped: {e}")
+        assert timesformer(x).shape == (2, 768)
 
     def test_temporal_encoder_forward(self):
         """Test Temporal Encoder forward pass."""
@@ -285,13 +275,9 @@ class TestTemporalModules:
 
         # Temporal encoder expects [B, C, T, H, W] format.
         x = torch.randn(2, 256, 8, 32, 32)  # [B, C, T, H, W].
-        try:
-            output = encoder(x)
-            assert isinstance(output, dict)
-            assert "motion" in output or "motion_features" in output
-        except Exception as e:
-            # May fail due to shape mismatches, skip for now.
-            pytest.skip(f"Temporal encoder test skipped: {e}")
+        output = encoder(x)
+        assert isinstance(output, dict)
+        assert "motion" in output or "motion_features" in output
 
 
 def run_all_tests():

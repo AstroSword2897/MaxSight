@@ -121,14 +121,14 @@ class DynamicConv2d(nn.Module):
     @staticmethod
     def compute_lighting_condition(x: torch.Tensor) -> torch.Tensor:
         """Compute brightness and contrast for each sample. Returns [B, 2]."""
-        brightness = x.mean(dim=(1, 2, 3), keepdim=True)  # [B,1,1,1].
-        contrast = x.std(dim=(1, 2, 3), keepdim=True)  # [B,1,1,1].
+        brightness = x.mean(dim=(1, 2, 3)).unsqueeze(1)  # [B,1].
+        contrast = x.std(dim=(1, 2, 3)).unsqueeze(1)  # [B,1].
         return torch.cat([brightness, contrast], dim=1)  # [B,2].
 
     @staticmethod
     def compute_occlusion_score(attention: torch.Tensor) -> torch.Tensor:
         """Compute occlusion score from attention map [B,H,W] Returns [B,1]."""
-        return 1 - attention.mean(dim=(1, 2), keepdim=True)
+        return 1 - attention.mean(dim=(1, 2)).unsqueeze(1)  # [B,1].
 
     @staticmethod
     def compute_motion_condition(motion: torch.Tensor) -> torch.Tensor:

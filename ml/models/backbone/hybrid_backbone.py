@@ -360,7 +360,9 @@ class HybridCNNViTBackbone(nn.Module):
 
         # === Cross-layer interaction ===.
         if self.use_cross_layer_connections:
-            cnn_enhanced, vit_enhanced = self.cnn_vit_interaction(cnn_feats, vit_patches)
+            # The projections are built for the FPN width (cnn_out_channels); the raw ResNet maps
+            # (512/1024/2048 ch) raised on every call.
+            cnn_enhanced, vit_enhanced = self.cnn_vit_interaction(fpn_features, vit_patches)
         else:
             cnn_enhanced, vit_enhanced = fpn_features, vit_patches
 

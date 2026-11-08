@@ -1517,48 +1517,24 @@ class MaxSightCNN(nn.Module):
 
         # T5: Hybrid backbone (raw images, not Stage A features)
         if self.use_hybrid and self.hybrid_backbone is not None:
-            try:
-                # Hybrid backbone processes raw images independently.
-                hybrid_fused, aux_features = self.hybrid_backbone(images, return_all_features=True)
-
-                if aux_features is not None and "fpn_features" in aux_features:
-                    # Get hybrid FPN features.
-                    hybrid_fpn = aux_features["fpn_features"]
-
-                    # Extract a representative feature from hybrid FPN (e.g., p4 equivalent)
-                    if len(hybrid_fpn) >= 3:
-                        hybrid_p4 = hybrid_fpn[1]  # Middle FPN level.
-
-                        # Resize hybrid features to match Stage A spatial dimensions.
-                        if hybrid_p4.shape[2:] != stage_b_features.shape[2:]:
-                            hybrid_p4 = F.interpolate(
-                                hybrid_p4,
-                                size=stage_b_features.shape[2:],
-                                mode="bilinear",
-                                align_corners=False,
-                            )
-
-                        # Project channels if needed (create adapter if not exists)
-                        if hybrid_p4.shape[1] != stage_b_features.shape[1]:
-                            # Use a 1x1 conv adapter to match channels.
-                            if not hasattr(self, "_stage_b_channel_adapter"):
-                                self._stage_b_channel_adapter = nn.Conv2d(
-                                    hybrid_p4.shape[1],
-                                    stage_b_features.shape[1],
-                                    kernel_size=1,
-                                    bias=False,
-                                ).to(stage_b_features.device)
-                            hybrid_p4 = self._stage_b_channel_adapter(hybrid_p4)
-
-                        # Fuse: Add hybrid features to Stage A features (additive enhancement)
-                        stage_b_features = stage_b_features + 0.3 * hybrid_p4  # Weighted fusion.
-            except Exception as e:
-                # Fallback: If hybrid fails, use Stage A features only.
-                if not hasattr(self, "_hybrid_backbone_warnings"):
-                    self._hybrid_backbone_warnings = []
-                if isinstance(self._hybrid_backbone_warnings, list):
-                    self._hybrid_backbone_warnings.append(f"Hybrid backbone failed: {e}")
-                pass  # Keep stage_b_features as Stage A features.
+            # No fallback: silently dropping the branch made inference differ from what the tier
+            # promises (it failed on every call and the model ran without it).
+            _, aux_features = self.hybrid_backbone(images, return_all_features=True)
+            hybrid_p4 = aux_features["fpn_features"][1]  # Middle FPN level.
+            if hybrid_p4.shape[1] != stage_b_features.shape[1]:
+                # Both are built with fpn_channels; a mismatch is a construction bug. (An adapter
+                # created here would be missing from the optimizer and from checkpoints.)
+                raise RuntimeError(
+                    f"hybrid FPN has {hybrid_p4.shape[1]} channels, Stage A has {stage_b_features.shape[1]}"
+                )
+            if hybrid_p4.shape[2:] != stage_b_features.shape[2:]:
+                hybrid_p4 = F.interpolate(
+                    hybrid_p4,
+                    size=stage_b_features.shape[2:],
+                    mode="bilinear",
+                    align_corners=False,
+                )
+            stage_b_features = stage_b_features + 0.3 * hybrid_p4  # Additive enhancement.
 
         # T5: Temporal processing (Stage A features, not raw images)
         if (
