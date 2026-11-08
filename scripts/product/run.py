@@ -200,7 +200,7 @@ def cmd_certify(args) -> int:
         return 0
     import json
 
-    from ml.infra.artifact_signing import ManifestNotAllPassedError, sign_artifact
+    from ml.infra.artifact_signing import ManifestNotAllPassedError, SigningKeyError, sign_artifact
 
     manifest = json.loads(out.read_text(encoding="utf-8"))
     artifact = Path(args.artifact) if args.artifact else None
@@ -208,8 +208,9 @@ def cmd_certify(args) -> int:
         print("certify: --artifact required to sign", file=sys.stderr)
         return 1
     try:
-        sig = sign_artifact(artifact, manifest, output_dir=out.parent)
-    except ManifestNotAllPassedError as exc:
+        # <artifact>.sig.json is written next to the artifact: that is where devices look for it.
+        sig = sign_artifact(artifact, manifest)
+    except (ManifestNotAllPassedError, SigningKeyError) as exc:
         print(f"certify: {exc}", file=sys.stderr)
         return 1
     print(f"certify: signed {sig}")
