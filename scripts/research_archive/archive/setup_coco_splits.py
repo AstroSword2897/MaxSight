@@ -131,6 +131,7 @@ def main():
                 val_split=args.val_split,
                 test_split=args.test_split,
                 seed=args.seed,
+                image_dir=image_dir,
             )
         else:
             train_file, val_file, test_file = create_maxsight_splits_from_coco(

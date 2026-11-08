@@ -1,11 +1,58 @@
 """COCO Dataset Splitter for MaxSight Creates train/test/validation splits from COCO dataset. Handles both COCO 2017 format and custom MaxSight annotations."""
 
+import hashlib
 import json
 import random
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+
+_HASH_CHUNK_BYTES = 1 << 20
+
+
+def _file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(_HASH_CHUNK_BYTES), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _content_groups(items: list[Any], path_of: Callable[[Any], Path | None]) -> list[list[Any]]:
+    """Group items whose image files hold identical bytes (first-appearance order).
+
+    Different COCO ids can point at the same picture; splitting by id alone put such twins in train and
+    test. An item whose file cannot be read cannot be cleared, so the split is refused.
+    """
+    missing = [str(path_of(item)) for item in items if path_of(item) is None or not path_of(item).is_file()]
+    if missing:
+        raise ValueError(
+            f"cannot check the content of {len(missing)} images (missing files or no image_dir), e.g. {missing[:3]}"
+        )
+    groups: dict[str, list[Any]] = {}
+    for item in items:
+        groups.setdefault(_file_sha256(path_of(item)), []).append(item)
+    duplicates = sum(len(g) - 1 for g in groups.values())
+    if duplicates:
+        print(f"  {duplicates} images duplicate another image's bytes; each set is kept in one split")
+    return list(groups.values())
+
+
+def _assign_groups(groups: list[list[Any]], train_end: int, val_end: int) -> tuple[list, list, list]:
+    """Shuffle whole content groups (global numpy RNG, seeded by the caller) and fill train, val, test in order."""
+    train: list[Any] = []
+    val: list[Any] = []
+    test: list[Any] = []
+    filled = 0
+    for index in np.random.permutation(len(groups)):
+        group = groups[int(index)]
+        target = train if filled < train_end else val if filled < val_end else test
+        target.extend(group)
+        filled += len(group)
+    return train, val, test
 
 
 def split_coco_dataset(
@@ -16,8 +63,10 @@ def split_coco_dataset(
     test_split: float = 0.15,
     seed: int = 42,
     min_objects_per_image: int = 1,
+    *,
+    image_dir: Path,
 ) -> tuple[Path, Path, Path]:
-    """Split COCO dataset into train/val/test splits."""
+    """Split COCO dataset into train/val/test splits; byte-identical images always share a split."""
     # Validate splits.
     if abs(train_split + val_split + test_split - 1.0) > 1e-6:
         raise ValueError(f"Splits must sum to 1.0, got {train_split + val_split + test_split}")
@@ -57,8 +106,6 @@ def split_coco_dataset(
 
     print(f"Found {len(valid_image_ids)} valid images (with >= {min_objects_per_image} objects)")
 
-    valid_image_ids = list(np.random.permutation(valid_image_ids))
-
     # Calculate split indices.
     total = len(valid_image_ids)
     if total == 0:
@@ -66,9 +113,9 @@ def split_coco_dataset(
     train_end = int(total * train_split)
     val_end = train_end + int(total * val_split)
 
-    train_ids = valid_image_ids[:train_end]
-    val_ids = valid_image_ids[train_end:val_end]
-    test_ids = valid_image_ids[val_end:]
+    image_root = Path(image_dir)
+    groups = _content_groups(valid_image_ids, lambda i: image_root / image_map[i]["file_name"])
+    train_ids, val_ids, test_ids = _assign_groups(groups, train_end, val_end)
 
     print("Split sizes:")
     print(f"  Train: {len(train_ids)} ({len(train_ids) / total * 100:.1f}%)")
@@ -258,10 +305,11 @@ def create_maxsight_splits_from_coco(
 
         maxsight_annotations.append(maxsight_ann)
 
-    maxsight_annotations = list(np.random.permutation(maxsight_annotations))
-
     # Calculate split indices.
     total = len(maxsight_annotations)
+    groups = _content_groups(
+        maxsight_annotations, lambda ann: Path(ann["image_path"]) if image_dir is not None else None
+    )
 
     if use_absolute_counts:
         # Narrowed by the absolute-count branch above; assert for the type checker.
@@ -271,9 +319,7 @@ def create_maxsight_splits_from_coco(
         train_end = min(train_count, total)
         val_end = min(train_end + val_count, total)
 
-        train_annotations = maxsight_annotations[:train_end]
-        val_annotations = maxsight_annotations[train_end:val_end]
-        test_annotations = maxsight_annotations[val_end:]
+        train_annotations, val_annotations, test_annotations = _assign_groups(groups, train_end, val_end)
 
         print("\nSplit sizes (absolute counts):")
         print(f"  Train: {len(train_annotations):,} samples (requested: {train_count:,})")
@@ -286,9 +332,7 @@ def create_maxsight_splits_from_coco(
         train_end = int(total * train_ratio)
         val_end = train_end + int(total * val_ratio)
 
-        train_annotations = maxsight_annotations[:train_end]
-        val_annotations = maxsight_annotations[train_end:val_end]
-        test_annotations = maxsight_annotations[val_end:]
+        train_annotations, val_annotations, test_annotations = _assign_groups(groups, train_end, val_end)
 
         print("\nSplit sizes (ratios):")
         print(f"  Train: {len(train_annotations):,} ({len(train_annotations) / total * 100:.1f}%)")
@@ -320,8 +364,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--image_dir",
         type=Path,
-        required=False,
-        help="Directory containing COCO images for the input",
+        required=True,
+        help="Directory containing the COCO images (their bytes are hashed so duplicates share a split)",
     )
     parser.add_argument(
         "--output_dir", type=Path, required=True, help="Output directory for split annotation files"
@@ -349,10 +393,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Validate image_dir requirement for MaxSight format.
-    if args.format == "maxsight" and args.image_dir is None:
-        parser.error("--image_dir is required for MaxSight format")
-
     if args.format == "coco":
         train_file, val_file, test_file = split_coco_dataset(
             coco_annotation_file=args.coco_annotations,
@@ -361,6 +401,7 @@ if __name__ == "__main__":
             val_split=args.val_split,
             test_split=args.test_split,
             seed=args.seed,
+            image_dir=args.image_dir,
         )
     else:
         train_file, val_file, test_file = create_maxsight_splits_from_coco(

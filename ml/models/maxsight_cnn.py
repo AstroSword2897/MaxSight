@@ -955,11 +955,18 @@ class MaxSightCNN(nn.Module):
             self.hybrid_backbone = None
             self.use_hybrid = False
 
-        # T5: Dynamic convolution (Stage B)
-        if tier_config.use_dynamic_conv:
-            self.use_dynamic_conv = True
+        # Dynamic convolution (Stage B): a residual DynamicConv2d whose gate starts at zero, so a newly
+        # enabled layer leaves outputs unchanged until it is trained. Built here (not in forward) so it is
+        # in the optimizer and in checkpoints.
+        self.use_dynamic_conv = bool(tier_config.use_dynamic_conv)
+        if self.use_dynamic_conv:
+            from ml.models.backbone.dynamic_conv import DynamicConv2d
+
+            self.dynamic_conv = DynamicConv2d(fpn_channels, fpn_channels, kernel_size=3, num_kernels=4)
+            self.dynamic_conv_gate = nn.Parameter(torch.zeros(1))
         else:
-            self.use_dynamic_conv = False
+            self.dynamic_conv = None
+            self.dynamic_conv_gate = None
         self.gap = nn.AdaptiveAvgPool2d(1)
 
         # Scene-level features from all FPN levels.
@@ -1535,6 +1542,9 @@ class MaxSightCNN(nn.Module):
                     align_corners=False,
                 )
             stage_b_features = stage_b_features + 0.3 * hybrid_p4  # Additive enhancement.
+
+        if self.dynamic_conv is not None:
+            stage_b_features = stage_b_features + self.dynamic_conv_gate * self.dynamic_conv(stage_b_features)
 
         # T5: Temporal processing (Stage A features, not raw images)
         if (
@@ -2828,7 +2838,7 @@ class TierConfig:
     use_se_attention: bool = True
     use_cbam_attention: bool = True
     use_hybrid_backbone: bool = True
-    use_dynamic_conv: bool = True
+    use_dynamic_conv: bool = False  # Off until retrained with it; see test_dynamic_conv_flag.py.
     use_cross_task_attention: bool = True
     use_cross_modal_attention: bool = True
     use_temporal_modeling: bool = True
@@ -2878,7 +2888,7 @@ class TierConfig:
                 use_se_attention=True,
                 use_cbam_attention=True,
                 use_hybrid_backbone=False,
-                use_dynamic_conv=True,
+                use_dynamic_conv=False,
                 use_cross_task_attention=False,
                 use_cross_modal_attention=False,
                 use_temporal_modeling=False,
@@ -2890,7 +2900,7 @@ class TierConfig:
                 use_se_attention=True,
                 use_cbam_attention=True,
                 use_hybrid_backbone=True,
-                use_dynamic_conv=True,
+                use_dynamic_conv=False,
                 use_cross_task_attention=False,
                 use_cross_modal_attention=False,
                 use_temporal_modeling=False,
@@ -2902,7 +2912,7 @@ class TierConfig:
                 use_se_attention=True,
                 use_cbam_attention=True,
                 use_hybrid_backbone=True,
-                use_dynamic_conv=True,
+                use_dynamic_conv=False,
                 use_cross_task_attention=True,
                 use_cross_modal_attention=False,
                 use_temporal_modeling=False,
@@ -2914,7 +2924,7 @@ class TierConfig:
                 use_se_attention=True,
                 use_cbam_attention=True,
                 use_hybrid_backbone=True,
-                use_dynamic_conv=True,
+                use_dynamic_conv=False,
                 use_cross_task_attention=True,
                 use_cross_modal_attention=True,
                 use_temporal_modeling=False,

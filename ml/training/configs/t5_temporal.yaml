@@ -11,7 +11,7 @@ model:
   use_se_attention: true
   use_cbam_attention: true
   use_hybrid_backbone: true
-  use_dynamic_conv: true
+  use_dynamic_conv: false  # enable together with TierConfig.for_tier when retraining
   use_cross_task_attention: true
   use_cross_modal_attention: true
   use_temporal_modeling: true  # Temporal modeling enabled
