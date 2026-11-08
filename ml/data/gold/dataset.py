@@ -181,16 +181,16 @@ class GoldManifestDataset(Dataset):
         self._missing_warned = False
 
     def _verify_shard_integrity(self, sha_map: dict[str, str]) -> None:
-        """Re-hash every shard against meta sha256; raises ``GoldIOError`` on mismatch."""
+        """Re-hash every shard against meta sha256; raises ``GoldIOError`` on mismatch.
+
+        A shard the meta does not list has no recorded hash, so it cannot be verified and is refused
+        (it used to be loaded after a warning).
+        """
+        unlisted = [reader.uri for reader in self._readers if not sha_map.get(reader.uri)]
+        if unlisted:
+            raise ValueError(f"GoldManifestDataset: shards not listed in meta cannot be verified: {unlisted[:5]}")
         for reader in self._readers:
-            expected = sha_map.get(reader.uri)
-            if expected:
-                reader.verify_sha256(expected)
-            else:
-                logger.warning(
-                    "GoldManifestDataset: no sha256 in meta for shard %s; skipping verification",
-                    reader.uri,
-                )
+            reader.verify_sha256(sha_map[reader.uri])
 
     def __len__(self) -> int:
         return len(self._index)

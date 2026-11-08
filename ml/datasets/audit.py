@@ -66,16 +66,46 @@ def audit(
             groups[r.group_id].add(r.split)
     res.errors += [f"group_leak:{g}:{sorted(s)}" for g, s in groups.items() if len(s) > 1]
 
-    # Chunk index (same pigeonhole trick as cleaning): exact for Hamming <= 4 at any dataset size, so the
-    # check is never skipped. It used to be skipped above 3000 images while the audit still passed.
-    hashed = [(r, int(r.dhash, 16)) for r in records if r.dhash and r.split]
+    in_splits = [r for r in records if r.split]
+    unverified = sum(1 for r in in_splits if not has_content_hash(r))
+    if unverified:
+        res.warnings.append(f"content_unverified:{unverified}_split_records_without_sha256_or_dhash")
+    res.errors += [f"{kind}_across_splits:{a.image_id}:{b.image_id}"
+                   for a, b, kind in content_duplicates(in_splits) if a.split != b.split]
+    return res
+
+
+def has_content_hash(record: ImageRecord) -> bool:
+    return bool(record.sha256 or record.dhash)
+
+
+def content_duplicates(records: list[ImageRecord]) -> list[tuple[ImageRecord, ImageRecord, str]]:
+    """Pairs ``(earlier, later, kind)`` of records holding the same image.
+
+    ``same_content``: equal sha256. Each record is paired with the first record of its hash, which is
+    enough to expose any pair that differs in split or group (one of the two must differ from the first).
+    ``near_duplicate``: dhash within NEAR_DUP_MAX_HAMMING, found with the chunk index (same pigeonhole
+    trick as cleaning), exact at any dataset size so the check is never skipped. It used to be skipped
+    above 3000 images while the audit still passed.
+    """
+    pairs: list[tuple[ImageRecord, ImageRecord, str]] = []
+    first_by_sha: dict[str, ImageRecord] = {}
+    for r in records:
+        if not r.sha256:
+            continue
+        first = first_by_sha.setdefault(r.sha256, r)
+        if first is not r:
+            pairs.append((first, r, "same_content"))
+
+    hashed = [(r, int(r.dhash, 16)) for r in records if r.dhash]
     index: dict[tuple[int, int], list[int]] = defaultdict(list)
     for i, (a, ha) in enumerate(hashed):
         candidates = {j for key in _chunk_keys(ha) for j in index[key]}
         for j in sorted(candidates):
             b, hb = hashed[j]
-            if a.split != b.split and hamming(ha, hb) <= NEAR_DUP_MAX_HAMMING:
-                res.errors.append(f"near_duplicate_across_splits:{b.image_id}:{a.image_id}")
+            exact_already = bool(a.sha256) and a.sha256 == b.sha256
+            if not exact_already and hamming(ha, hb) <= NEAR_DUP_MAX_HAMMING:
+                pairs.append((b, a, "near_duplicate"))
         for key in _chunk_keys(ha):
             index[key].append(i)
-    return res
+    return pairs
