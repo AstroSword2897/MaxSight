@@ -29,6 +29,9 @@ redis>=5.0.0
 # Scene-graph GNN path
 torch-geometric>=2.4.0
 
+# Artifact signing
+cryptography>=42.0.0  # Ed25519 model-artifact signatures (ml/runtime/stage_a/signature_contract.py)
+
 # Testing
 pytest>=9.0.1
 
