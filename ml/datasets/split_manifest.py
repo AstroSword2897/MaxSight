@@ -17,6 +17,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ml.datasets.audit import content_duplicates, has_content_hash
 from ml.datasets.manifest import ImageRecord
 from ml.datasets.splits import assign_splits
 
@@ -80,6 +81,7 @@ def build_split_manifest(
     unknown = sorted(set(holdout_environments) - set(environments.values()))
     if unknown:
         raise SplitManifestError(f"held-out environments not in the data: {unknown}")
+    _refuse_content_shared_across_groups(records)
 
     split_records = assign_splits(records, ratios=ratios, holdout_groups=frozenset(holdout_environments), seed=seed)
     problems = check_leakage(split_records)
@@ -94,12 +96,32 @@ def build_split_manifest(
     )
 
 
+def _missing_content_hashes(records: list[ImageRecord]) -> list[str]:
+    return [f"missing_content_hash:{r.image_id}" for r in records if not has_content_hash(r)]
+
+
+def _refuse_content_shared_across_groups(records: list[ImageRecord]) -> None:
+    """Groups are assigned at random, so a shared image would leak on some seeds only: refuse it up front."""
+    missing = _missing_content_hashes(records)
+    if missing:
+        raise SplitManifestError(f"records without sha256 or dhash cannot be checked for leakage: {missing[:5]}")
+    shared = [f"content_shared_across_groups:{a.image_id}:{b.image_id}"
+              for a, b, _ in content_duplicates(records) if a.group_id != b.group_id]
+    if shared:
+        raise SplitManifestError(f"the same image is in more than one group; dedupe or merge them first: {shared[:5]}")
+
+
 def check_leakage(records: list[ImageRecord]) -> list[str]:
     """Problems that would let evaluation data leak into training; empty means none.
 
+    * a record has neither sha256 nor dhash, so its content cannot be cleared;
+    * the same image (equal sha256, or dhash within the near-duplicate distance) is in two splits;
     * a group (session/video) appears in more than one split;
     * an environment that has any ``test_holdout`` records also appears in another split.
     """
+    problems = _missing_content_hashes(records)
+    problems += [f"{kind}_across_splits:{a.image_id}:{b.image_id}"
+                 for a, b, kind in content_duplicates(records) if a.split != b.split]
     group_splits: dict[str, set[str]] = {}
     environment_splits: dict[str, set[str]] = {}
     for record in records:
@@ -108,8 +130,8 @@ def check_leakage(records: list[ImageRecord]) -> list[str]:
         if environment:
             environment_splits.setdefault(environment, set()).add(record.split)
 
-    problems = [f"group_in_multiple_splits:{group}:{sorted(splits)}"
-                for group, splits in sorted(group_splits.items()) if len(splits) > 1]
+    problems += [f"group_in_multiple_splits:{group}:{sorted(splits)}"
+                 for group, splits in sorted(group_splits.items()) if len(splits) > 1]
     problems += [f"environment_split_across_holdout:{env}:{sorted(splits)}"
                  for env, splits in sorted(environment_splits.items())
                  if HOLDOUT_SPLIT in splits and len(splits) > 1]

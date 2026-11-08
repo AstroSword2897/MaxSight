@@ -1,6 +1,5 @@
 """User-specific personalization for fusion weights, exploration, and output scaling."""
 
-import hashlib
 import logging
 from dataclasses import dataclass, field
 from typing import Any, cast
@@ -61,6 +60,24 @@ class PersonalMode:
         self.active_exploration = ActiveSceneExploration(embed_dim=embed_dim)
         self.navigation_guidance = PredictiveNavigationGuidance(embed_dim=embed_dim)
         self.user_states: dict[str, PersonalizationState] = {}
+        self._user_rows: dict[str, int] = {}
+
+    def _user_row(self, user_id: str) -> int | None:
+        """This user's own row in the fusion user embedding, assigned on first use.
+
+        Rows are never shared: when every row is taken a new user gets ``None`` (no user embedding)
+        rather than another user's row. Hashing ids into the table let users collide after ~35 ids.
+        """
+        row = self._user_rows.get(user_id)
+        if row is not None:
+            return row
+        capacity = self.meta_fusion.user_embedding.num_embeddings
+        if len(self._user_rows) >= capacity:
+            logger.warning("personalization rows exhausted (%d); user gets no user embedding", capacity)
+            return None
+        row = len(self._user_rows)
+        self._user_rows = {**self._user_rows, user_id: row}
+        return row
 
     def get_user_state(self, user_id: str) -> PersonalizationState:
         """Return existing user state or create a new one.
@@ -147,11 +164,10 @@ class PersonalMode:
             Raises if ``modality_embeddings`` is empty.
         """
         user_id_tensor = None
-        if user_id is not None:
-            digest = hashlib.sha256(user_id.encode("utf-8")).hexdigest()
-            user_hash = int(digest, 16) % 1000
+        row = self._user_row(user_id) if user_id is not None else None
+        if row is not None:
             user_id_tensor = torch.tensor(
-                [user_hash], device=next(iter(modality_embeddings.values())).device
+                [row], device=next(iter(modality_embeddings.values())).device
             )
 
         fused_embedding, fusion_weights = self.meta_fusion(

@@ -106,15 +106,10 @@ def run_inference_for_checkpoint(
         condition_mode=condition,
         tier_config=TierConfig.for_tier(CapabilityTier[tier]),
     )
-    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=True)
-    state = ckpt.get("model_state_dict", ckpt)
-    result = model.load_state_dict(state, strict=False)
-    if result.missing_keys or result.unexpected_keys:
-        logger.debug(
-            "Load strict=False: missing=%s unexpected=%s",
-            len(result.missing_keys),
-            len(result.unexpected_keys),
-        )
+    from ml.training.checkpoint_io import load_model_weights
+
+    # Metrics from a partly random model would be reported as the checkpoint's: load all or nothing.
+    load_model_weights(model, checkpoint_path, map_location=device)
     model.to(device)
     model.eval()
 

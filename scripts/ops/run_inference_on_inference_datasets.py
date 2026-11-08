@@ -103,6 +103,7 @@ def main():
         TierConfig,
         create_model,
     )
+    from ml.training.checkpoint_io import load_model_weights
 
     device = args.device
     tier_config = TierConfig.for_tier(CapabilityTier["T5_TEMPORAL"])
@@ -143,9 +144,7 @@ def main():
                     condition_mode=cond,
                     tier_config=tier_config,
                 )
-                ckpt = torch.load(ckpt_path, map_location=device, weights_only=True)
-                state = ckpt.get("model_state_dict", ckpt)
-                model.load_state_dict(state, strict=False)
+                load_model_weights(model, ckpt_path, map_location=device)
                 model.to(device)
                 try:
                     loader = create_inference_dataloader(

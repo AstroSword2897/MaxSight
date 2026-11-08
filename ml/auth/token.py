@@ -7,9 +7,22 @@ import json
 import os
 import time
 
-# Secret key from environment (must be set in production)
-SECRET = os.environ.get("MAXSIGHT_SECRET_KEY", "change_me_in_production")
 TTL = int(os.environ.get("MAXSIGHT_SESSION_TIMEOUT", 3600))  # Default 1 hour.
+
+MIN_SECRET_BYTES = 32
+_PLACEHOLDER_SECRETS = frozenset({"change_me_in_production"})
+
+
+def _secret() -> bytes:
+    """Signing key from MAXSIGHT_SECRET_KEY, read on every call; refuse missing or weak keys.
+
+    There is no default: the old fallback was a public string, so a deployment without the variable
+    accepted tokens anyone could mint.
+    """
+    value = os.environ.get("MAXSIGHT_SECRET_KEY", "")
+    if value in _PLACEHOLDER_SECRETS or len(value.encode()) < MIN_SECRET_BYTES:
+        raise RuntimeError(f"MAXSIGHT_SECRET_KEY must be set to a secret of at least {MIN_SECRET_BYTES} bytes")
+    return value.encode()
 
 
 def make_token(payload: dict) -> str:
@@ -21,7 +34,7 @@ def make_token(payload: dict) -> str:
     payload_b = json.dumps(payload, separators=(",", ":")).encode()
 
     # Generate HMAC signature.
-    sig = hmac.new(SECRET.encode(), payload_b, hashlib.sha256).digest()
+    sig = hmac.new(_secret(), payload_b, hashlib.sha256).digest()
 
     # Encode both as URL-safe base64.
     token_payload = base64.urlsafe_b64encode(payload_b).rstrip(b"=")
@@ -50,7 +63,7 @@ def verify_token(token: str) -> dict:
         sig = base64.urlsafe_b64decode(s_b + "==")
 
         # Verify signature.
-        expected = hmac.new(SECRET.encode(), payload_b, hashlib.sha256).digest()
+        expected = hmac.new(_secret(), payload_b, hashlib.sha256).digest()
         if not hmac.compare_digest(expected, sig):
             raise ValueError("Bad signature - token tampered with")
 
