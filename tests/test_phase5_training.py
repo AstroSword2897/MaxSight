@@ -152,17 +152,34 @@ class TestDataAugmentation:
 
         augment = MultiModalAugmentation()
 
-        # MultiModalAugmentation expects single image tensor, not batch.
-        image = torch.randn(3, 224, 224)  # [C, H, W] not [B, C, H, W].
-        audio = torch.randn(128)  # Single audio sample.
-
-        try:
+        # One float image in [0, 1] and MFCC audio [1, 13, T], as ml/data/dataset.py produces. This used
+        # to skip on any exception: the 1-D audio hid that RandomEqualize rejects float images (~50% of calls).
+        for seed in range(20):
+            torch.manual_seed(seed)
+            image = torch.rand(3, 224, 224)
+            audio = torch.randn(1, 13, 100)
             aug_image, aug_audio = augment(image, audio)
-            assert aug_image.shape == image.shape
-            assert aug_audio is None or aug_audio.shape == audio.shape
-        except Exception as e:
-            # May fail due to transform requirements.
-            pytest.skip(f"Multi-modal augmentation test skipped: {e}")
+            assert aug_image.shape == image.shape and aug_image.dtype == torch.float32
+            assert 0.0 <= float(aug_image.min()) and float(aug_image.max()) <= 1.0
+            assert aug_audio.shape == audio.shape
+
+    def test_multi_modal_augment_keeps_uint8_images_uint8(self):
+        from ml.data.multi_modal_augment import MultiModalAugmentation
+
+        image = (torch.rand(3, 64, 64) * 255).to(torch.uint8)
+        aug_image, aug_audio = MultiModalAugmentation()(image)
+        assert aug_image.dtype == torch.uint8 and aug_image.shape == image.shape and aug_audio is None
+
+    @pytest.mark.parametrize(
+        "image,audio",
+        [(torch.randn(3, 32, 32), None), (torch.rand(3, 32, 32), torch.randn(128))],
+        ids=["normalised_image", "raw_waveform"],
+    )
+    def test_multi_modal_augment_refuses_inputs_it_would_corrupt(self, image, audio):
+        from ml.data.multi_modal_augment import MultiModalAugmentation
+
+        with pytest.raises(ValueError):
+            MultiModalAugmentation()(image, audio)
 
     def test_synthetic_scene_generator_import(self):
         """Test that Synthetic Scene Generator can be imported."""
@@ -184,21 +201,17 @@ class TestCrossViewTraining:
         """Test Cross-View Training forward pass."""
         from ml.retrieval.cross_view.cv_training import CrossViewTrainer
 
-        try:
-            cv_training = CrossViewTrainer(embed_dim=256, temperature=0.07)
-            cv_training.eval()
+        cv_training = CrossViewTrainer(embed_dim=256, temperature=0.07)
+        cv_training.eval()
 
-            view1 = torch.randn(2, 256)
-            view2 = torch.randn(2, 256)
-            negatives = torch.randn(5, 256)
+        view1 = torch.randn(2, 256)
+        view2 = torch.randn(2, 256)
+        negatives = torch.randn(5, 256)
 
-            loss = cv_training.contrastive_loss(view1, view2, negatives)
+        loss = cv_training.contrastive_loss(view1, view2, negatives)
 
-            assert loss is not None
-            assert isinstance(loss, torch.Tensor)
-        except Exception as e:
-            # May fail if dependencies missing.
-            pytest.skip(f"Cross-view training test skipped: {e}")
+        assert isinstance(loss, torch.Tensor)
+        assert torch.isfinite(loss).all() and float(loss) >= 0.0
 
 
 def run_all_tests():
