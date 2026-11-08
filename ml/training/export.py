@@ -960,8 +960,25 @@ See `processing_reference.py` for complete reference:
     logger.info(f"  - runtime_config.json")
     logger.info(f"  - processing_reference.py")
     logger.info(f"  - README_XCODE.md")
-    
+
     return bundle_path
+
+
+def load_export_model(checkpoint: Optional[str], model_factory: Any) -> nn.Module:
+    """Build the model to export; a named checkpoint must exist and match exactly.
+
+    ``checkpoint=None`` is the only way to export untrained weights, and it is logged as such.
+    A checkpoint path that is missing or does not match the model raises instead of being skipped.
+    """
+    from ml.training.checkpoint_io import load_model_weights
+
+    model = model_factory()
+    if checkpoint is None:
+        logger.warning("No --checkpoint given: exporting an UNTRAINED model")
+        return model
+    load_model_weights(model, checkpoint)
+    logger.info("Loaded checkpoint %s", checkpoint)
+    return model
 
 
 if __name__ == "__main__":
@@ -975,14 +992,7 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, choices=["cpu", "cuda"], default="cpu", help="Device for export")
     args = parser.parse_args()
 
-    model = create_model()
-    if args.checkpoint and Path(args.checkpoint).exists():
-        ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
-        if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
-            model.load_state_dict(ckpt["model_state_dict"], strict=False)
-        else:
-            model.load_state_dict(ckpt, strict=False)
-        logger.info("Loaded checkpoint %s", args.checkpoint)
+    model = load_export_model(args.checkpoint, model_factory=create_model)
     model = model.to(args.device)
     model.eval()
 
