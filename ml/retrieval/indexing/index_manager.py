@@ -4,8 +4,11 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-import faiss
 import numpy as np
+
+from ml.retrieval.indexing.faiss_runtime import load_faiss
+
+faiss = load_faiss()
 
 
 class IndexManager:

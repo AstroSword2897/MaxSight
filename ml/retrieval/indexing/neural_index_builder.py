@@ -1,8 +1,12 @@
 """Neural Index Builder for Multi-Vector Retrieval Builds FAISS indices with learned quantization."""
 
-import faiss
-import numpy as np
 from typing import Any, cast
+
+import numpy as np
+
+from ml.retrieval.indexing.faiss_runtime import load_faiss
+
+faiss = load_faiss()
 
 
 class NeuralIndexBuilder:
@@ -36,8 +40,8 @@ class NeuralIndexBuilder:
         index_path: str | None = None,
     ) -> faiss.Index:
         """Build FAISS index."""
-        N, D = embeddings.shape
-        assert self.embed_dim == D, f"Expected dimension {self.embed_dim}, got {D}"
+        n_vectors, dimension = embeddings.shape
+        assert self.embed_dim == dimension, f"Expected dimension {self.embed_dim}, got {dimension}"
 
         # Convert to float32.
         embeddings = embeddings.astype("float32")
@@ -47,24 +51,26 @@ class NeuralIndexBuilder:
 
         if index_type_upper == "HNSW":
             # HNSW: Hierarchical Navigable Small World.
-            M = 32  # Number of connections.
+            connections = 32
             if self.metric.lower() == "cosine":
                 # For cosine similarity, normalize embeddings.
                 faiss.normalize_L2(embeddings)
-                self.index = faiss.IndexHNSWFlat(D, M, faiss.METRIC_INNER_PRODUCT)
+                self.index = faiss.IndexHNSWFlat(
+                    dimension, connections, faiss.METRIC_INNER_PRODUCT
+                )
             else:
-                self.index = faiss.IndexHNSWFlat(D, M)
+                self.index = faiss.IndexHNSWFlat(dimension, connections)
             self.index.hnsw.efConstruction = 200
 
         elif index_type_upper == "IVF-PQ" or index_type_upper == "IVFPQ":
             # IVF-PQ: Inverted File with Product Quantization.
-            nlist = min(16384, N // 10)  # Number of clusters (adjust for small datasets)
+            nlist = min(16384, n_vectors // 10)  # Number of clusters (adjust for small datasets)
             m = 64  # Number of subquantizers.
-            quantizer = faiss.IndexFlatL2(D)
-            self.index = faiss.IndexIVFPQ(quantizer, D, nlist, m, 8)
+            quantizer = faiss.IndexFlatL2(dimension)
+            self.index = faiss.IndexIVFPQ(quantizer, dimension, nlist, m, 8)
 
             # Train on subset.
-            n_train = min(100000, N)
+            n_train = min(100000, n_vectors)
             if n_train < nlist:
                 n_train = nlist  # Need at least nlist samples.
             train_embeddings = embeddings[:n_train]
@@ -75,9 +81,9 @@ class NeuralIndexBuilder:
             # Flat: Exact search.
             if self.metric.lower() == "cosine":
                 faiss.normalize_L2(embeddings)
-                self.index = faiss.IndexFlatIP(D)  # Inner product for cosine.
+                self.index = faiss.IndexFlatIP(dimension)  # Inner product for cosine.
             else:
-                self.index = faiss.IndexFlatL2(D)
+                self.index = faiss.IndexFlatL2(dimension)
 
         else:
             raise ValueError(
