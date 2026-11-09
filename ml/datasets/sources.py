@@ -100,13 +100,26 @@ def load_registry(path: Path | str = DEFAULT_REGISTRY) -> dict[str, Source]:
 def current_state(src: Source, data_root: Path = DEFAULT_DATA_ROOT) -> State:
     """Highest state with on-disk evidence."""
     validated = data_root / "processed" / src.id / VALIDATED_MARKER
+    acquired = data_root / "raw" / src.id / ACQUIRED_MARKER
+    processed = data_root / "processed" / src.id
+
+    # A new acquisition invalidates every older processed artifact and audit.
+    # Comparing evidence mtimes also covers callers that cannot explicitly clear
+    # the processed directory or validation marker.
+    processed_mtime = max(
+        (path.stat().st_mtime_ns for path in processed.rglob("*") if path.is_file()),
+        default=-1,
+    )
+    if acquired.exists() and acquired.stat().st_mtime_ns > processed_mtime:
+        info = json.loads(acquired.read_text(encoding="utf-8"))
+        return State.RAW_VERIFIED if info.get("verified") else State.DOWNLOADED_UNVERIFIED
+
     if validated.exists():
         return State.VALIDATED
-    if (data_root / "processed" / src.id).is_dir() and any((data_root / "processed" / src.id).iterdir()):
+    if processed.is_dir() and any(processed.iterdir()):
         return State.PREPROCESSED_UNVERIFIED
-    marker = data_root / "raw" / src.id / ACQUIRED_MARKER
-    if marker.exists():
-        info = json.loads(marker.read_text(encoding="utf-8"))
+    if acquired.exists():
+        info = json.loads(acquired.read_text(encoding="utf-8"))
         return State.RAW_VERIFIED if info.get("verified") else State.DOWNLOADED_UNVERIFIED
     return State.NOT_DOWNLOADED
 
