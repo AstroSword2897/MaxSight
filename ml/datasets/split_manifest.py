@@ -139,10 +139,21 @@ def check_leakage(records: list[ImageRecord]) -> list[str]:
 
 
 def apply_split_manifest(records: list[ImageRecord], manifest: SplitManifest) -> list[ImageRecord]:
-    """Set each record's split from the manifest; a group the manifest does not know is an error."""
+    """Apply assignments only when group identities and environments still match."""
     missing = sorted({r.group_id for r in records} - set(manifest.assignments))
     if missing:
         raise SplitManifestError(f"groups not in the split manifest (new version needed): {missing[:5]}")
+
+    changed_environments = sorted({
+        (record.group_id, manifest.environments.get(record.group_id, ""), record.extra.get("environment", ""))
+        for record in records
+        if manifest.environments.get(record.group_id, "") != record.extra.get("environment", "")
+    })
+    if changed_environments:
+        raise SplitManifestError(
+            "group environments differ from the split manifest (new version needed): "
+            f"{changed_environments[:5]}"
+        )
     return [record.with_(split=manifest.assignments[record.group_id]) for record in records]
 
 
