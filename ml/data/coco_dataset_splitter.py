@@ -27,14 +27,21 @@ def _content_groups(items: list[Any], path_of: Callable[[Any], Path | None]) -> 
     Different COCO ids can point at the same picture; splitting by id alone put such twins in train and
     test. An item whose file cannot be read cannot be cleared, so the split is refused.
     """
-    missing = [str(path_of(item)) for item in items if path_of(item) is None or not path_of(item).is_file()]
+    resolved: list[tuple[Any, Path]] = []
+    missing: list[str] = []
+    for item in items:
+        path = path_of(item)
+        if path is None or not path.is_file():
+            missing.append(str(path))
+        else:
+            resolved.append((item, path))
     if missing:
         raise ValueError(
             f"cannot check the content of {len(missing)} images (missing files or no image_dir), e.g. {missing[:3]}"
         )
     groups: dict[str, list[Any]] = {}
-    for item in items:
-        groups.setdefault(_file_sha256(path_of(item)), []).append(item)
+    for item, path in resolved:
+        groups.setdefault(_file_sha256(path), []).append(item)
     duplicates = sum(len(g) - 1 for g in groups.values())
     if duplicates:
         print(f"  {duplicates} images duplicate another image's bytes; each set is kept in one split")
@@ -90,7 +97,6 @@ def split_coco_dataset(
 
     # Build mappings.
     image_map = {img["id"]: img for img in coco_data["images"]}
-    category_map = {cat["id"]: cat["name"] for cat in coco_data.get("categories", [])}
 
     # Group annotations by image_id.
     image_annotations = defaultdict(list)
@@ -226,7 +232,7 @@ def create_maxsight_splits_from_coco(
     # Filter images with minimum objects.
     valid_image_ids = [
         img_id
-        for img_id in image_annotations.keys()
+        for img_id in image_annotations
         if len(image_annotations.get(img_id, [])) >= min_objects_per_image
     ]
 
