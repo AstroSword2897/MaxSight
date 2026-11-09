@@ -106,7 +106,16 @@ def finalize(
     ]) if len(boxes) else np.zeros((0, 4))
 
     candidates = [
-        (float(scores[i]), int(classes[i]), tuple(float(v) for v in clipped[i]))
+        (
+            float(scores[i]),
+            int(classes[i]),
+            (
+                float(clipped[i, 0]),
+                float(clipped[i, 1]),
+                float(clipped[i, 2]),
+                float(clipped[i, 3]),
+            ),
+        )
         for i in range(len(scores))
         if scores[i] >= config.score_threshold and clipped[i, 2] > clipped[i, 0] and clipped[i, 3] > clipped[i, 1]
     ]

@@ -149,6 +149,14 @@ def test_applying_a_manifest_to_an_unknown_session_fails():
         apply_split_manifest(frames("new-session", "env0"), build())
 
 
+def test_applying_a_manifest_rejects_a_changed_group_environment():
+    manifest = build()
+    changed = [record.with_(extra={"environment": "different"}) for record in frames("s0", "env0")]
+
+    with pytest.raises(SplitManifestError, match="environments differ"):
+        apply_split_manifest(changed, manifest)
+
+
 # --- command line ------------------------------------------------------------------------------
 
 def run_cli(*args: str) -> subprocess.CompletedProcess:
