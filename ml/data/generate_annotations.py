@@ -6,22 +6,15 @@ from collections import defaultdict
 from pathlib import Path
 
 from ml.data.assistive_supervision import load_assistive_spec, object_distance_and_urgency
-from ml.models.maxsight_cnn import COCO_CLASSES
+from ml.data.coco_categories import COCO_BASE_CLASSES
 
 _GEN_SPEC = load_assistive_spec()
 
 
 def map_coco_to_environmental(coco_category_name: str) -> str:
-    """Map COCO category to environmental category in comprehensive class list."""
+    """Normalize a COCO category without importing the Torch-backed model package."""
     normalized = coco_category_name.lower().strip()
-
-    # Find exact match in comprehensive class list.
-    for cls in COCO_CLASSES:
-        if cls.lower() == normalized:
-            return cls
-
-    # Fallback if no match found.
-    return COCO_CLASSES[0] if COCO_CLASSES else "person"
+    return normalized if normalized in COCO_BASE_CLASSES else "person"
 
 
 def assign_urgency_score(
@@ -140,7 +133,6 @@ def generate_annotations_from_coco(
             cy = (bbox[1] + bbox[3] / 2) / img_height
             w = bbox[2] / img_width
             h = bbox[3] / img_height
-            box_size = w * h
             distance_zone, urgency = object_distance_and_urgency(
                 cx, cy, w, h, env_category, _GEN_SPEC
             )
