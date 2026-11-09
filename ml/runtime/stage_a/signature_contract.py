@@ -67,8 +67,10 @@ def load_policy(path: Path | str | None = None) -> SigningPolicy:
     policy_path = Path(path or os.environ.get(POLICY_ENV) or DEFAULT_POLICY_PATH)
     raw = _expect_keys(yaml.safe_load(policy_path.read_text(encoding="utf-8")),
                        {"schema_version", "algorithm", "contract", "build", "device"}, "top level")
-    if raw["schema_version"] != 1:
-        raise ValueError(f"signing policy schema_version must be 1, got {raw['schema_version']!r}")
+    if raw["schema_version"] != "1.0.0":
+        raise ValueError(
+            f"signing policy schema_version must be '1.0.0', got {raw['schema_version']!r}"
+        )
     if raw["algorithm"] != ALGORITHM:
         raise ValueError(f"signing policy algorithm must be {ALGORITHM!r} (devices verify nothing else)")
     build = _expect_keys(raw["build"], {"private_key_env"}, "build")
