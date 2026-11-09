@@ -34,7 +34,7 @@ def _coco(tmp_path: Path) -> tuple[Path, Path]:
 
 def _coco_split_of(files: tuple[Path, ...]) -> dict[int, str]:
     out = {}
-    for path, split in zip(files, ("train", "val", "test")):
+    for path, split in zip(files, ("train", "val", "test"), strict=True):
         for img in json.loads(path.read_text())["images"]:
             out[img["id"]] = split
     return out
@@ -42,7 +42,7 @@ def _coco_split_of(files: tuple[Path, ...]) -> dict[int, str]:
 
 def _maxsight_split_of(files: tuple[Path, ...]) -> dict[int, str]:
     out = {}
-    for path, split in zip(files, ("train", "val", "test")):
+    for path, split in zip(files, ("train", "val", "test"), strict=True):
         for ann in json.loads(path.read_text()):
             out[ann["image_id"]] = split
     return out
