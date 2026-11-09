@@ -27,7 +27,6 @@ def test_resolve_returns_preferred_when_free() -> None:
 
 def test_resolve_scans_when_preferred_held() -> None:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(("127.0.0.1", 0))
     held = s.getsockname()[1]
     try:
@@ -41,7 +40,6 @@ def test_resolve_scans_when_preferred_held() -> None:
 
 def test_strict_raises_when_busy() -> None:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(("127.0.0.1", 0))
     held = s.getsockname()[1]
     try:
