@@ -142,6 +142,21 @@ def test_coco_byte_budget_reports_the_images_it_did_not_download(tmp_path, monke
     assert failed and all(reason == "byte budget reached" for _, reason in failed)
 
 
+def test_coco_resume_does_not_charge_existing_images_to_download_budget(tmp_path):
+    from ml.datasets.acquisition import coco
+
+    records = [_rec(i) for i in range(40)]
+    for record in records:
+        path = tmp_path / record.path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"already downloaded")
+
+    ok, failed = coco.download_images(records, tmp_path, max_gb=1 / 1024**3, workers=1)
+
+    assert len(ok) == len(records)
+    assert failed == []
+
+
 def test_access_state_ladder_reaches_validated_only_with_evidence(tmp_path):
     src = load_registry()["bdd100k"]
     assert current_state(src, tmp_path) is State.NOT_DOWNLOADED
@@ -158,3 +173,7 @@ def test_access_state_ladder_reaches_validated_only_with_evidence(tmp_path):
     assert current_state(src, tmp_path) is State.PREPROCESSED_UNVERIFIED
     (processed / VALIDATED_MARKER).write_text("{}")
     assert current_state(src, tmp_path) is State.VALIDATED
+
+    # Reacquiring raw data after validation makes the previous audit stale.
+    (raw / ACQUIRED_MARKER).write_text(json.dumps({"verified": False}))
+    assert current_state(src, tmp_path) is State.DOWNLOADED_UNVERIFIED
