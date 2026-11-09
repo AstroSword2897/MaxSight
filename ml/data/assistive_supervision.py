@@ -119,8 +119,8 @@ def load_assistive_spec(path: str | None = None) -> AssistiveSupervisionSpec:
 
 @lru_cache(maxsize=1)
 def _coco_base_priors() -> dict[str, float]:
-    """Static risk table for COCO-80 names (exact string keys as in maxsight_cnn)."""
-    from ml.models.maxsight_cnn import COCO_BASE_CLASSES
+    """Static risk table for COCO-80 names without importing the Torch model."""
+    from ml.data.coco_categories import COCO_BASE_CLASSES
 
     high = {
         "car",
