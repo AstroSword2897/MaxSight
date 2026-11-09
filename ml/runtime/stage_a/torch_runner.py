@@ -49,7 +49,6 @@ class TorchStageARunner:
         if self._model is not None:
             return self._model
         from ml.models.maxsight_cnn import CapabilityTier, TierConfig, create_model
-
         from ml.training.checkpoint_io import CheckpointError, load_model_weights
 
         if self.artifact_path.suffix not in _WEIGHT_SUFFIXES:
