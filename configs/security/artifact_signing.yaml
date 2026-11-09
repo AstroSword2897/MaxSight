@@ -10,7 +10,7 @@
 # Never commit private keys. The private key lives in the build environment (e.g. AWS Secrets Manager
 # mounted as a file) and is passed by path through the environment variable named below.
 
-schema_version: 1
+schema_version: "1.0.0"
 algorithm: ed25519
 contract: docs/contracts/schemas/artifact_signature.json
 
