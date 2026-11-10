@@ -144,17 +144,17 @@ def test_coco_byte_budget_reports_the_images_it_did_not_download(tmp_path, monke
 
 def test_access_state_ladder_reaches_validated_only_with_evidence(tmp_path):
     src = load_registry()["bdd100k"]
-    assert current_state(src, tmp_path) is State.CONFIGURED
+    assert current_state(src, tmp_path) is State.NOT_DOWNLOADED
     raw = tmp_path / "raw" / src.id
     raw.mkdir(parents=True)
     (raw / ACQUIRED_MARKER).write_text(json.dumps({"verified": False}))
-    assert current_state(src, tmp_path) is State.DOWNLOADED
+    assert current_state(src, tmp_path) is State.DOWNLOADED_UNVERIFIED
     (raw / ACQUIRED_MARKER).write_text(json.dumps({"verified": True}))
-    assert current_state(src, tmp_path) is State.VERIFIED
+    assert current_state(src, tmp_path) is State.RAW_VERIFIED
     processed = tmp_path / "processed" / src.id
     processed.mkdir(parents=True)
-    assert current_state(src, tmp_path) is State.VERIFIED  # empty processed dir is not evidence
+    assert current_state(src, tmp_path) is State.RAW_VERIFIED  # empty processed dir is not evidence
     (processed / "manifest.jsonl").write_text("")
-    assert current_state(src, tmp_path) is State.PROCESSED
+    assert current_state(src, tmp_path) is State.PREPROCESSED_UNVERIFIED
     (processed / VALIDATED_MARKER).write_text("{}")
     assert current_state(src, tmp_path) is State.VALIDATED

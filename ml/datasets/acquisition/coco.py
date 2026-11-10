@@ -112,6 +112,11 @@ def select_records(
     return out
 
 
+def manifest_path(root: Path, split: str) -> Path:
+    """One manifest per split, so acquiring val2017 never overwrites the train2017 records."""
+    return root / f"manifest_{split}.jsonl"
+
+
 def _download_one(rec: ImageRecord, root: Path, retries: int = 3) -> tuple[ImageRecord, int, str]:
     dest = root / rec.path
     if dest.exists() and dest.stat().st_size > 0:
