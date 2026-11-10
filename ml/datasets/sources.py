@@ -164,7 +164,15 @@ def write_acquired_marker(raw: Path, *, verified: bool, split: str | None = None
         payload = {"verified": verified, "acquired_at": _utc_now(), **info}
     else:
         splits = _read_marker_splits(marker)
-        splits[split] = {"verified": verified, "acquired_at": _utc_now(), **info}
+        previous = splits.get(split, {})
+        # Keep when the split was first acquired, even when a later run rewrites the entry.
+        first_acquired_at = previous.get("first_acquired_at") or previous.get("acquired_at") or _utc_now()
+        splits[split] = {
+            "verified": verified,
+            "acquired_at": _utc_now(),
+            **info,
+            "first_acquired_at": first_acquired_at,
+        }
         payload = {
             "verified": all(entry.get("verified") for entry in splits.values()),
             "updated_at": _utc_now(),

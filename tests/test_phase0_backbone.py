@@ -199,13 +199,13 @@ class TestCrossTaskAttention:
 
     def test_cross_task_import(self):
         """Test that Cross-Task Attention can be imported."""
-        from ml.models.attention.cross_task_attention import CrossTaskAttention
+        from ml.models.attention.attention import CrossTaskAttention
 
         assert CrossTaskAttention is not None
 
     def test_cross_task_forward(self):
         """Test Cross-Task Attention forward pass."""
-        from ml.models.attention.cross_task_attention import CrossTaskAttention
+        from ml.models.attention.attention import CrossTaskAttention
 
         attn = CrossTaskAttention(
             detection_dim=256, ocr_dim=128, description_dim=512, embed_dim=512
