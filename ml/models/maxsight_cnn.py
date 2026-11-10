@@ -955,11 +955,18 @@ class MaxSightCNN(nn.Module):
             self.hybrid_backbone = None
             self.use_hybrid = False
 
-        # T5: Dynamic convolution (Stage B)
-        if tier_config.use_dynamic_conv:
-            self.use_dynamic_conv = True
+        # Dynamic convolution (Stage B): a residual DynamicConv2d whose gate starts at zero, so a newly
+        # enabled layer leaves outputs unchanged until it is trained. Built here (not in forward) so it is
+        # in the optimizer and in checkpoints.
+        self.use_dynamic_conv = bool(tier_config.use_dynamic_conv)
+        if self.use_dynamic_conv:
+            from ml.models.backbone.dynamic_conv import DynamicConv2d
+
+            self.dynamic_conv = DynamicConv2d(fpn_channels, fpn_channels, kernel_size=3, num_kernels=4)
+            self.dynamic_conv_gate = nn.Parameter(torch.zeros(1))
         else:
-            self.use_dynamic_conv = False
+            self.dynamic_conv = None
+            self.dynamic_conv_gate = None
         self.gap = nn.AdaptiveAvgPool2d(1)
 
         # Scene-level features from all FPN levels.
@@ -1517,48 +1524,27 @@ class MaxSightCNN(nn.Module):
 
         # T5: Hybrid backbone (raw images, not Stage A features)
         if self.use_hybrid and self.hybrid_backbone is not None:
-            try:
-                # Hybrid backbone processes raw images independently.
-                hybrid_fused, aux_features = self.hybrid_backbone(images, return_all_features=True)
+            # No fallback: silently dropping the branch made inference differ from what the tier
+            # promises (it failed on every call and the model ran without it).
+            _, aux_features = self.hybrid_backbone(images, return_all_features=True)
+            hybrid_p4 = aux_features["fpn_features"][1]  # Middle FPN level.
+            if hybrid_p4.shape[1] != stage_b_features.shape[1]:
+                # Both are built with fpn_channels; a mismatch is a construction bug. (An adapter
+                # created here would be missing from the optimizer and from checkpoints.)
+                raise RuntimeError(
+                    f"hybrid FPN has {hybrid_p4.shape[1]} channels, Stage A has {stage_b_features.shape[1]}"
+                )
+            if hybrid_p4.shape[2:] != stage_b_features.shape[2:]:
+                hybrid_p4 = F.interpolate(
+                    hybrid_p4,
+                    size=stage_b_features.shape[2:],
+                    mode="bilinear",
+                    align_corners=False,
+                )
+            stage_b_features = stage_b_features + 0.3 * hybrid_p4  # Additive enhancement.
 
-                if aux_features is not None and "fpn_features" in aux_features:
-                    # Get hybrid FPN features.
-                    hybrid_fpn = aux_features["fpn_features"]
-
-                    # Extract a representative feature from hybrid FPN (e.g., p4 equivalent)
-                    if len(hybrid_fpn) >= 3:
-                        hybrid_p4 = hybrid_fpn[1]  # Middle FPN level.
-
-                        # Resize hybrid features to match Stage A spatial dimensions.
-                        if hybrid_p4.shape[2:] != stage_b_features.shape[2:]:
-                            hybrid_p4 = F.interpolate(
-                                hybrid_p4,
-                                size=stage_b_features.shape[2:],
-                                mode="bilinear",
-                                align_corners=False,
-                            )
-
-                        # Project channels if needed (create adapter if not exists)
-                        if hybrid_p4.shape[1] != stage_b_features.shape[1]:
-                            # Use a 1x1 conv adapter to match channels.
-                            if not hasattr(self, "_stage_b_channel_adapter"):
-                                self._stage_b_channel_adapter = nn.Conv2d(
-                                    hybrid_p4.shape[1],
-                                    stage_b_features.shape[1],
-                                    kernel_size=1,
-                                    bias=False,
-                                ).to(stage_b_features.device)
-                            hybrid_p4 = self._stage_b_channel_adapter(hybrid_p4)
-
-                        # Fuse: Add hybrid features to Stage A features (additive enhancement)
-                        stage_b_features = stage_b_features + 0.3 * hybrid_p4  # Weighted fusion.
-            except Exception as e:
-                # Fallback: If hybrid fails, use Stage A features only.
-                if not hasattr(self, "_hybrid_backbone_warnings"):
-                    self._hybrid_backbone_warnings = []
-                if isinstance(self._hybrid_backbone_warnings, list):
-                    self._hybrid_backbone_warnings.append(f"Hybrid backbone failed: {e}")
-                pass  # Keep stage_b_features as Stage A features.
+        if self.dynamic_conv is not None:
+            stage_b_features = stage_b_features + self.dynamic_conv_gate * self.dynamic_conv(stage_b_features)
 
         # T5: Temporal processing (Stage A features, not raw images)
         if (
@@ -2852,7 +2838,7 @@ class TierConfig:
     use_se_attention: bool = True
     use_cbam_attention: bool = True
     use_hybrid_backbone: bool = True
-    use_dynamic_conv: bool = True
+    use_dynamic_conv: bool = False  # Off until retrained with it; see test_dynamic_conv_flag.py.
     use_cross_task_attention: bool = True
     use_cross_modal_attention: bool = True
     use_temporal_modeling: bool = True
@@ -2902,7 +2888,7 @@ class TierConfig:
                 use_se_attention=True,
                 use_cbam_attention=True,
                 use_hybrid_backbone=False,
-                use_dynamic_conv=True,
+                use_dynamic_conv=False,
                 use_cross_task_attention=False,
                 use_cross_modal_attention=False,
                 use_temporal_modeling=False,
@@ -2914,7 +2900,7 @@ class TierConfig:
                 use_se_attention=True,
                 use_cbam_attention=True,
                 use_hybrid_backbone=True,
-                use_dynamic_conv=True,
+                use_dynamic_conv=False,
                 use_cross_task_attention=False,
                 use_cross_modal_attention=False,
                 use_temporal_modeling=False,
@@ -2926,7 +2912,7 @@ class TierConfig:
                 use_se_attention=True,
                 use_cbam_attention=True,
                 use_hybrid_backbone=True,
-                use_dynamic_conv=True,
+                use_dynamic_conv=False,
                 use_cross_task_attention=True,
                 use_cross_modal_attention=False,
                 use_temporal_modeling=False,
@@ -2938,7 +2924,7 @@ class TierConfig:
                 use_se_attention=True,
                 use_cbam_attention=True,
                 use_hybrid_backbone=True,
-                use_dynamic_conv=True,
+                use_dynamic_conv=False,
                 use_cross_task_attention=True,
                 use_cross_modal_attention=True,
                 use_temporal_modeling=False,
