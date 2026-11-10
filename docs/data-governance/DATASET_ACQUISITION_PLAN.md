@@ -2,7 +2,7 @@
 
 - **Registry:** [configs/data/sources.yaml](../../configs/data/sources.yaml). **Live status:**
   `python scripts/data_sources.py status` and [DATASET_STATUS.md](DATASET_STATUS.md).
-- **Owner decisions (2026-11-03):** research use ([licence register](DATASET_LICENSE_REGISTER.md)); SANPO and Ego4D
+- **Owner decisions (2026-11-03):** research use ([licence register](licence-register.md)); SANPO and Ego4D
   not acquired; full datasets wanted where they are needed; training through deployment will run in AWS on an S3
   bucket that has not been created yet.
 
