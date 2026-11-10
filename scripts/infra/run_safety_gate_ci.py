@@ -13,6 +13,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
+from ml.evaluation.ground_truth_guard import GroundTruthRejected, load_ground_truth  # noqa: E402
 from ml.evaluation.safety_gates import (  # noqa: E402
     build_certification_manifest,
     evaluate_condition_platform_cell,
@@ -35,9 +36,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--platform", default="torch_ref")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
+        "--ground-truth-manifest",
+        type=Path,
+        default=None,
+        help="Human-reviewed hazard ground truth (manifest JSONL). Without it SG-01/02 stay blocked.",
+    )
+    parser.add_argument(
         "--hazard-gt",
         action="store_true",
-        help="Declare hazard ground truth available (default: blocked SG-01/02)",
+        help="Deprecated: requires --ground-truth-manifest; ground truth is never declared by a flag alone",
     )
     parser.add_argument(
         "--tools-missing",
@@ -50,6 +57,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Force xfail_known_issue [XFAIL] for all cells (test harness)",
     )
     args = parser.parse_args(argv)
+    if args.hazard_gt and args.ground_truth_manifest is None:
+        parser.error("--hazard-gt requires --ground-truth-manifest (ground truth cannot be declared by a flag)")
+
+    hazard_ground_truth_available = False
+    if args.ground_truth_manifest is not None:
+        try:
+            records = load_ground_truth(args.ground_truth_manifest)
+        except GroundTruthRejected as exc:
+            print(f"GROUND TRUTH REJECTED: {exc}")
+            return 2
+        print(f"ground truth: {len(records)} human-reviewed records from {args.ground_truth_manifest}")
+        hazard_ground_truth_available = True
 
     modes = [m for m in CONDITION_MODE_IDS if m != "none"]
     cells = []
@@ -58,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         cell = evaluate_condition_platform_cell(
             condition_mode=mode,
             platform=args.platform,
-            hazard_ground_truth_available=bool(args.hazard_gt),
+            hazard_ground_truth_available=hazard_ground_truth_available,
             tools_available=not bool(args.tools_missing),
             force_status=force,
         )
