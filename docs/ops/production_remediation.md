@@ -21,8 +21,10 @@ This document is the canonical reference for the May 2026 production remediation
 
 - **Best checkpoint filename:** `best_model.pt` (local loop and SageMaker entrypoint).
 - **Resume behavior:**
-  - Missing checkpoint path → `checkpoint_resume_status = "missing"`, training starts fresh.
+  - Missing checkpoint path → **raises** `FileNotFoundError` (ticket 402; it used to start fresh silently).
   - Corrupt or incompatible checkpoint → **raises** (does not silently continue).
+  - Resume tolerates *new* layers (logged missing/unexpected keys); inference, export and deploy never do
+    (`ml/training/checkpoint_io.load_model_weights` is all-or-nothing).
 - **Composite best model:** Early stopping considers validation loss and optional val mAP.
 
 ### Skipped-batch ratio

@@ -34,7 +34,7 @@ Transfer learning lets you reuse weights from a trained model (e.g. T2) when tra
 ## Fine-tuning and partial loading
 
 - **Fine-tuning:** After transfer, you can fine-tune all parameters or only the new heads (e.g. temporal, retrieval) by setting `requires_grad=False` on the transferred backbone and training only the rest. This is script-specific; the transfer module itself only copies weights.
-- **Partial load in scripts:** Training or export scripts often load a checkpoint with `model.load_state_dict(state, strict=False)` so that only matching keys are loaded. This allows loading a T2 checkpoint into a T5 model for inference or further training even without using TierTransferManager explicitly.
+- **Partial loading is for training only.** `TierTransferManager.transfer_weights` and training resume (`train_loop`, which logs missing/unexpected keys) load with `strict=False`. Everything that produces predictions or shipped models (Stage A runner, SageMaker `model_fn`, `ml/training/export.py`, deploy/export/evaluation scripts) loads through `ml/training/checkpoint_io.load_model_weights`, which refuses any missing, unexpected or reshaped key. To evaluate a T2 checkpoint in a T5 model, transfer and fine-tune first; do not load it partially for inference.
 
 ## Best practices
 

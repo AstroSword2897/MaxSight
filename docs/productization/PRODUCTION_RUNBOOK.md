@@ -45,6 +45,13 @@ python scripts/product/run.py export --checkpoint checkpoints/amd/best_model.pt 
 - All mandatory gates in `docs/productization/02_safety_first_release_gates.md` must pass.
 - Run `python scripts/product/run.py validate` and review any safety-gate report.
 - No release without safety owner sign-off.
+- **Sign the certified artifact:** `MAXSIGHT_SIGNING_KEY_FILE=<mounted secret> python scripts/product/run.py certify --platform torch_ref --sign --artifact <model.pt>`
+  writes `<model.pt>.sig.json` next to the artifact (Ed25519, contract `docs/contracts/schemas/artifact_signature.json`,
+  policy `configs/security/artifact_signing.yaml`). Only all-pass certifications are signed. Ship the `.sig.json` with
+  the model: devices refuse unsigned or modified artifacts, and refuse everything until public keys are provisioned
+  (`ml/runtime/stage_a/keys/README.md`).
+- **Export and deploy load strictly:** `run.py export --checkpoint` and the deploy scripts refuse a missing or
+  mismatched checkpoint; omitting `--checkpoint` exports an explicitly untrained model.
 
 ## Real-world deployment (glasses)
 

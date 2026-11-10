@@ -4,7 +4,8 @@
 Helps users better navigate their environment and, over time, helps them learn from their environment and help improve their vision and spatial awareness.
 **Last Updated**: 2026-05-30  
 **Status**: Production-ready training and data pipeline. Use `python scripts/product/run.py` for canonical `train/validate/export/package/smoke/gate` (or call ops scripts directly under `scripts/ops/`). See **docs/status.md** and **docs/ops/production_remediation.md** for current contracts and remediation details.  
-**Setup:** **[docs/DOWNLOAD_AND_START.md](docs/DOWNLOAD_AND_START.md)** (clone, install, data, simulator, train).
+**Setup:** **[docs/DOWNLOAD_AND_START.md](docs/DOWNLOAD_AND_START.md)** (clone, install, data, simulator, train).  
+**Architecture reference:** **[docs/architecture/MAXSIGHT_ARCHITECTURE.md](docs/architecture/MAXSIGHT_ARCHITECTURE.md)** — every input (runtime, model artifacts, data, configs, environment variables, CLIs), integrity and security controls (strict weight loading, Ed25519 artifact signatures, split leakage rules), known gaps, and the AWS preparation checklist.
 
 ---
 
@@ -14,7 +15,7 @@ Full reference: **[docs/ops/production_remediation.md](docs/ops/production_remed
 
 - **Local training:** Use `python scripts/product/run.py train --config <tier-yaml>` or `python scripts/ops/sagemaker_train.py --dry-run` for launcher validation before cloud execution.
 - **SageMaker training:** `ml/training/sagemaker_entry.py` resolves `SM_CHANNEL_TRAIN` and `SM_CHANNEL_VAL` into `ResolvedTrainingConfig.data.*` paths and asserts both channels exist before launching.
-- **Checkpoint contract:** Best checkpoint filename is `best_model.pt`. Saves use atomic writes (`write_atomic_torch`); corrupt resume files raise; missing files start fresh. Reproducibility manifest includes `checkpoint_hash` on best save.
+- **Checkpoint contract:** Best checkpoint filename is `best_model.pt`. Saves use atomic writes (`write_atomic_torch`); a corrupt or missing resume file raises (ticket 402). Reproducibility manifest includes `checkpoint_hash` and `checkpoint_hash_scheme` (`sha256-v2:key,dtype,shape,bytes`) on best save.
 - **Observability:** Each epoch emits `health_summary` logs with skipped-batch ratio. Structured events (`therapy.suppressed`, `rag.degraded`, `runtime.tier_resolved`) use JSON `event=` lines in `ml/training/observability.py`. CI validates schema via `scripts/infra/validate_train_loop_contracts.py`.
 - **Runtime contracts:** `ml/runtime/contracts.py` — `RuntimeRequest`/`RuntimeResponse`, `ModelOutputContract`, `validate_model_outputs()`. JSON schema at `docs/contracts/schemas/model_output.json`.
 - **Compute tiers:** Bronze/Silver/Gold routing via `ml/runtime/tier_router.py` and YAML under `ml/config/tiers/`.
@@ -23,6 +24,16 @@ Full reference: **[docs/ops/production_remediation.md](docs/ops/production_remed
 - **Personalization:** `app/personal_mode.py` — instantiate in session orchestration; call `update_preferences()` + `fuse_with_personalization()` per user.
 - **Haptic backends:** `app/ui/haptic_feedback.py` → `app/ui/haptic_backends.py`. Set `MAXSIGHT_HAPTIC_BACKEND` to `auto`, `darwin`, `linux`, `log`, or `none`. Simulator uses `log` when `MAXSIGHT_ENABLE_HAPTICS_STUB=1`.
 - **Model CI envelope:** ~393M params; bounds in `ml/runtime_constants.py` (`DEFAULT_MODEL_MAX_PARAMS`, `DEFAULT_MODEL_INT8_MAX_MB`).
+
+## Integrity and Security Contracts (2026-11)
+
+Full reference: **[docs/architecture/MAXSIGHT_ARCHITECTURE.md](docs/architecture/MAXSIGHT_ARCHITECTURE.md)** §12–§15.
+
+- **No partly random models:** inference, export and deploy load weights through `ml/training/checkpoint_io.load_model_weights`, which refuses missing, unexpected or reshaped keys before copying anything. The Stage A runner and SageMaker `model_fn` refuse unloadable or missing checkpoints.
+- **Signed model artifacts:** each artifact ships `<artifact>.sig.json` (contract `docs/contracts/schemas/artifact_signature.json`, Ed25519) under the policy `configs/security/artifact_signing.yaml`. Devices refuse unsigned or tampered artifacts and hold public keys only. Sign in the build with `run.py certify --sign --artifact <model.pt>` and `MAXSIGHT_SIGNING_KEY_FILE`. Provision keys with `scripts/infra/generate_signing_keypair.py`; see `ml/runtime/stage_a/keys/README.md`.
+- **No image in two splits:** split manifests refuse images shared across groups and records without `sha256`/`dhash`; the audit flags exact and near duplicates across splits; the legacy COCO splitter groups byte-identical images.
+- **Verified training data:** training verifies gold shards against the meta `sha256` and refuses unlisted shards.
+- **Fail loudly:** the hybrid CNN–ViT branch raises on errors instead of silently switching off; Phase 0/5 tests assert instead of skipping on exceptions.
 
 ### Quality baseline (Tier 1 production core)
 
@@ -251,7 +262,7 @@ This is the **master checklist** of what the repo implements today. Deep module 
 - **Two-stage inference**: Stage A (ResNet50+FPN, ≤80 ms target) for objectness, class, boxes, distance zones, urgency, uncertainty; optional Stage B skip on latency/uncertainty (`ml/models/maxsight_cnn.py`, `ml/runtime_constants.py`).
 - **Progressive tiers T0–T5**: Baseline → attention → hybrid ViT → cross-task → cross-modal (audio) → temporal (ConvLSTM / TimeSformer on Stage A feature sequences).
 - **30+ task heads**: Detection stack, contrast/edge, motion, depth, fatigue & therapy state, ROI/findability, navigation difficulty, glare, predictive alerts, OCR/text, scene description, scene graph, sound events, personalization, color when enabled.
-- **Thirteen vision condition modes**: Simulated preprocessing per condition (`ml/utils/preprocessing.py`); optional dynamic conv and condition strings on forward.
+- **Thirteen vision condition modes**: Simulated preprocessing per condition (`ml/utils/preprocessing.py`); condition strings / one-hot condition tensor on forward.
 - **MVP runtime contract**: `ModelOutputContract` + `validate_model_outputs()` in `ml/runtime/contracts.py` (sources `MVP_MODEL_OUTPUT_KEYS` from `ml/runtime_constants.py`). Prefer this over direct `filter_mvp_model_outputs()` in app paths.
 - **Output scheduling**: `CrossModalScheduler` merges voice/haptic/visual with caps, cooldowns, and critical-urgency priority (`ml/utils/output_scheduler.py`).
 
@@ -545,7 +556,7 @@ The shipped T5 MVP must depend only on **MVP output keys** in `ml.runtime_consta
 - Implemented ResNet50+FPN backbone for Stage A (safety-critical)
 - Implemented Hybrid CNN-ViT backbone for Stage B (context enhancement)
 - Implemented Vision Transformer components
-- Implemented Dynamic Convolution for adaptive processing
+- Implemented Dynamic Convolution for adaptive processing (wired into Stage B behind `use_dynamic_conv`, off in every tier until retrained with it)
 - Created backbone abstraction layer
 
 **Results**:
@@ -944,7 +955,7 @@ Below is a feature-by-feature reference: module location, purpose, and main inpu
 | **FPN** | `ml/models/maxsight_cnn.py` | Top-down pyramid P2–P5, 256 ch | In: C2–C5; Out: P2–P5, 256 ch |
 | **Detection fusion** | Same | P3,P4,P5 → 14×14 concat [B,768,14,14] | Feeds detection and many Tier 2 heads |
 | **Hybrid CNN-ViT** | `ml/models/backbone/hybrid_backbone.py` | Stage B: CNN + ViT, AdaptiveFeatureFusion, CrossModalAttention | In: images; Out: F_cnn, Z_cls, fused features |
-| **Dynamic convolution** | `ml/models/backbone/dynamic_conv.py` | Condition-adaptive convs (optional) | Condition → kernel modulation |
+| **Dynamic convolution** | `ml/models/backbone/dynamic_conv.py` | Per-sample kernels from lighting/occlusion/motion; zero-gated Stage B residual (flag off in every tier) | Lighting, occlusion, motion → kernel mix |
 | **ViT backbone** | `ml/models/backbone/vit_backbone.py` | Patch embed, transformer blocks, CLS token | In: [B,3,224,224]; Out: [B,768] or patch tokens |
 
 #### Tier 1 (safety-critical) heads
@@ -1848,7 +1859,7 @@ Use the test suite and training benchmark: `pytest tests/` and `python -m ml.tra
 - **ResNet50+FPN**: ResNet50 from `torchvision` (e.g. `ResNet50_Weights.IMAGENET1K_V2`); outputs C2–C5 at strides 4, 8, 16, 32. FPN in `maxsight_cnn.py` builds P2–P5 (256 channels each); lateral 1×1 convs and top-down bilinear upsample. Fused detection features: P3, P4, P5 resized to same spatial size (e.g. 14×14) and concatenated → 768 channels. Used for all Tier 1 heads and as base for Tier 2/3 when Stage B runs.
 - **Hybrid CNN-ViT** (`ml/models/backbone/hybrid_backbone.py`): Class `HybridCNNViTBackbone`. Args: img_size=224, patch_size=16, etc. CNN branch: ResNet-like; ViT branch: patch embed (196 patches, 768 dim), 12 transformer blocks, CLS token. `AdaptiveFeatureFusion(cnn_dim, vit_dim, fused_dim)` does gated fusion; `CrossModalAttention(dim, num_heads)` does CNN↔ViT cross-attention. Used when `tier_config.use_hybrid_backbone` is True.
 - **Vision Transformer** (`ml/models/backbone/vit_backbone.py`): Standalone ViT; used if pipeline is configured for ViT-only or extra ViT path.
-- **Dynamic Convolution** (`ml/models/backbone/dynamic_conv.py`): Condition-adaptive conv layers; condition (e.g. string or embedding) modulates kernel or channel weights. Used in Stage B when `tier_config.use_dynamic_conv` is True.
+- **Dynamic Convolution** (`ml/models/backbone/dynamic_conv.py`): Per-sample mixture of base kernels weighted by lighting (brightness/contrast), occlusion and motion. Added to Stage B as `stage_b + gate * DynamicConv2d(stage_b)` (gate starts at 0) when `tier_config.use_dynamic_conv` is True; the flag is off in every tier preset and training YAML, so enabling it requires retraining with both switched on.
 
 ### 3. Head Components
 
@@ -1910,7 +1921,7 @@ Below, every major component is described in two ways: **what it does** and **wh
 
 **Hybrid CNN–ViT (Stage B)** — **What:** Combines a CNN branch (spatial features) and a ViT branch (patch tokens + transformer) with learnable fusion and optional CNN↔ViT cross-attention. **Why:** CNN gives local detail; ViT gives global context; together they support better scene understanding and Tier 2/3 heads without touching Stage A.
 
-**Dynamic convolution** — **What:** Modulates conv kernels or channels by vision condition (e.g. glaucoma, AMD). **Why:** Lets the same model adapt preprocessing/features to the user’s condition for better accessibility.
+**Dynamic convolution** — **What:** Mixes several base kernels per sample according to lighting, occlusion and motion. **Why:** Lets the same model adapt to scene conditions. Off by default (see `use_dynamic_conv`).
 
 **CBAM / SE (T1)** — **What:** Channel and spatial attention (CBAM) or channel-only (SE) on FPN feature maps. **Why:** Lightweight way to emphasize informative channels and locations without changing the safety path.
 
@@ -2423,14 +2434,14 @@ This index lists **every source and documentation file** under the main code tre
 ### `ml/`
 
 - **`ml/__init__.py`** — *(see file)*
-- **`ml/auth/token.py`** — HMAC-Signed Session Tokens for MaxSight Provides stateless HMAC token generation and verification for secure session ...
+- **`ml/auth/token.py`** — HMAC-signed session tokens with expiry; `MAXSIGHT_SECRET_KEY` is required (≥ 32 bytes, no default).
 - **`ml/cache/redis_cache.py`** — Redis Caching Utilities for MaxSight Provides Redis-based caching for model outputs and responses with TTL support.
 - **`ml/config.py`** — MaxSight Configuration and Dependency Management Centralized configuration with versioning and dependency tracking.
 - **`ml/data/__init__.py`** — *(see file)*
 - **`ml/data/assistive_supervision.py`** — Deterministic class/geometry-derived urgency and distance zones (shared across loaders and gold).
 - **`ml/config/assistive_supervision.yaml`** — Tunable weights and bin edges for assistive_supervision.
 - **`ml/data/advanced_augmentation.py`** — Advanced Data Augmentation for Real-World Robustness.
-- **`ml/data/coco_dataset_splitter.py`** — COCO Dataset Splitter for MaxSight Creates train/test/validation splits from COCO dataset. Handles both COCO 2017 for...
+- **`ml/data/coco_dataset_splitter.py`** — Legacy COCO splitter (used by two ops scripts); requires `image_dir`, groups byte-identical images into one split, refuses unreadable images.
 - **`ml/data/create_accessibility_dataset.py`** — MaxSight Accessibility Dataset (Production Version)
 - **`ml/data/data_pipeline.py`** — Data pipeline for MaxSight training.
 - **`ml/data/dataset.py`** — Dataset loader with environmental context, audio, and condition-specific augmentations.

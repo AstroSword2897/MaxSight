@@ -32,7 +32,8 @@ MaxSight is an assistive multi-task vision runtime for on-device hazard awarenes
 | Stage A types + runner protocol | `ml/runtime/stage_a/types.py` (`CameraFrame`, `HazardResult`, `StageARunner`) | shipped |
 | Model handle resolution | `ml/runtime/stage_a/model_handle.py` (`ACTIVE` → `LAST_KNOWN_GOOD` → `REFUSED`) | shipped |
 | Torch Stage A runner | `ml/runtime/stage_a/torch_runner.py` | shipped |
-| Artifact signing / hash verify | `ml/infra/artifact_signing.py`, `ml/runtime/stage_a/verify.py` | shipped |
+| Artifact signing / verify | `ml/infra/artifact_signing.py`, `ml/runtime/stage_a/signature_contract.py`, `configs/security/artifact_signing.yaml`, `docs/contracts/schemas/artifact_signature.json` | shipped (Ed25519 instance contract; no public keys provisioned yet, so devices refuse every model until the key ceremony) |
+| Strict inference weight loading | `ml/training/checkpoint_io.py` (`load_model_weights`) | shipped |
 | Runtime contracts / tiers / degraded modes | `ml/runtime/contracts.py`, `ml/runtime/tier_router.py` | shipped |
 | Condition tensor contract | `ml/runtime_constants.py` (`CONDITION_MODE_IDS`, width 14), `docs/contracts/schemas/condition_tensor.json` | shipped |
 | MaxSightCNN + heads | `ml/models/maxsight_cnn.py`, `ml/models/heads/*`, `ml/models/backbone/` | shipped |
@@ -193,22 +194,22 @@ Every component uses the contract: **Purpose · Inputs · Outputs · Owns · Doe
 | | |
 |---|---|
 | **Purpose** | Resolve a trustworthy on-device model for Stage A. |
-| **What it does** | State machine `ACTIVE → LAST_KNOWN_GOOD → REFUSED` with hash/signature and optional smoke probe. |
+| **What it does** | State machine `ACTIVE → LAST_KNOWN_GOOD → REFUSED`. Each candidate must pass Ed25519 signature verification under `configs/security/artifact_signing.yaml` (unsigned artifacts are refused unless the policy lists them as a dev exception) and a smoke probe. |
 | **Why it exists** | Never run missing or untrusted weights for hazards. |
 | **What it is used for** | Startup and post-OTA activation. |
-| **Inputs** | Artifact paths, expected hashes, `SmokeProbe` protocol implementations. |
+| **Inputs** | Artifact paths, `<artifact>.sig.json` instances, trust-window public keys, `SmokeProbe` implementations. |
 | **Outputs** | `ModelHandle`, `ResolutionState`; refused path surfaces `HAZARD_UNAVAILABLE_MESSAGE`. |
 | **Owns** | Resolution policy and handle metadata. |
 | **Does not own** | Training; **must not** import `MaxSightCNN` here. |
-| **Dependencies** | Artifact signing/verify helpers. |
-| **Files** | `ml/runtime/stage_a/model_handle.py`, `ml/runtime/stage_a/messages.py`, `ml/runtime/stage_a/verify.py`, `ml/infra/artifact_signing.py` |
+| **Dependencies** | `signature_contract` (PyYAML, `cryptography`); no networking (isolation validator). |
+| **Files** | `ml/runtime/stage_a/model_handle.py`, `ml/runtime/stage_a/messages.py`, `ml/runtime/stage_a/signature_contract.py`, `ml/runtime/stage_a/verify.py`, `ml/runtime/stage_a/keys/README.md`, `ml/infra/artifact_signing.py` |
 
 #### Torch Stage A runner
 
 | | |
 |---|---|
 | **Purpose** | Canonical Python Stage A inference for CI and reference devices. |
-| **What it does** | Preprocesses `CameraFrame`, runs local torch artifact, maps outputs to `HazardResult` including zone/direction names. |
+| **What it does** | Preprocesses `CameraFrame`, loads a `.pt`/`.pth` artifact all-or-nothing (`load_model_weights`; a corrupt, stub, foreign-suffix or missing artifact raises `CheckpointError`, so resolution refuses it), maps outputs to `HazardResult` including zone/direction names. |
 | **Why it exists** | Executable Stage A behind the protocol for `torch_ref` certification. |
 | **What it is used for** | Stage A tests; `torch_ref` safety-gate platform. |
 | **Inputs** | `CameraFrame`; resolved model path/handle. |
@@ -660,7 +661,8 @@ query embedding
 
 | Mechanism | Scope | Notes |
 |---|---|---|
-| HMAC session tokens | `ml/auth/token.py` | Secret `MAXSIGHT_SECRET_KEY`; TTL via `MAXSIGHT_SESSION_TIMEOUT` (default ~1h) |
+| HMAC session tokens | `ml/auth/token.py` | Secret `MAXSIGHT_SECRET_KEY` (required, ≥ 32 bytes, read per call; no default); TTL via `MAXSIGHT_SESSION_TIMEOUT` (default ~1h); no callers yet |
+| Model artifact signatures | `ml/runtime/stage_a/signature_contract.py`, `ml/infra/artifact_signing.py` | Ed25519; private key only in the build (`MAXSIGHT_SIGNING_KEY_FILE`), public keys in `ml/runtime/stage_a/keys/`; policy `configs/security/artifact_signing.yaml` |
 | Image upload validation | `ml/security/validation.py`, `magic.py` | Base64 + magic-byte checks |
 | Security headers / error sanitizer | `ml/middleware/*` | HTTP hardening for simulator/API surfaces |
 | IAM SageMaker execution | `infra/iam/sagemaker_execution_role.json` | Cloud train |
@@ -683,7 +685,7 @@ There is **no** full product RBAC (no resident/clerk-style role matrix). Access 
 7. **Latency budget:** Critical path targets `LATENCY_MEDIAN_MS` / `LATENCY_P95_MS` (80 ms) per productization gates.
 8. **Overload guardrails:** `ALERTS_PER_MINUTE_CAP` and channel interval `MIN_CHANNEL_INTERVAL_S`.
 9. **CI gate ownership:** Path filters in `.github/workflows/ci.yml` own which jobs run; slim `contracts` profile must not require torch except where jobs opt into `torch-cpu`.
-10. **Artifact integrity:** Hash/signature verification participates in resolution and OTA activation.
+10. **Artifact integrity:** Ed25519 signature verification (instance contract + YAML policy) participates in resolution and OTA activation; inference loads weights all-or-nothing.
 11. **MVP output discipline:** Runtime consumers should depend only on `MVP_MODEL_OUTPUT_KEYS` unless explicitly tier-gated.
 12. **Degraded modes are explicit:** D0–D3 in `DegradedMode` — no silent half-failure.
 
@@ -693,6 +695,7 @@ There is **no** full product RBAC (no resident/clerk-style role matrix). Access 
 
 | Doc | Role |
 |---|---|
+| `docs/architecture/MAXSIGHT_ARCHITECTURE.md` | **Detailed reference**: every input (runtime, artifacts, data, configs, env vars, CLIs), integrity and security controls, known gaps, AWS preparation checklist |
 | `docs/architecture.md` | Shorter model/system overview (superseded as canonical by this file) |
 | `docs/therapy_architecture.md` | Therapy closed-loop detail |
 | `docs/training_architecture.md` | Training architecture |
@@ -712,7 +715,8 @@ There is **no** full product RBAC (no resident/clerk-style role matrix). Access 
 
 | Tier | Command (representative) | Protects |
 |---|---|---|
-| Stage A contracts | `pytest tests/test_stage_a_*.py tests/test_model_handle_resolution.py tests/test_signature_in_resolution.py tests/test_artifact_signing.py -q` | Isolation, types, handle/signature |
+| Stage A contracts | `pytest tests/test_stage_a_*.py tests/test_model_handle_resolution.py tests/test_signature_in_resolution.py tests/test_artifact_signing.py tests/test_artifact_signature_contract.py tests/test_strict_weight_loading.py -q` | Isolation, types, handle/signature contract, strict loading |
+| Data integrity | `pytest tests/unit/test_split_content_leakage.py tests/unit/test_coco_splitter_content.py tests/test_gold_shard_verification.py tests/test_checkpoint_content_hash.py -q` | No image in two splits, shard sha256, checkpoint hash |
 | Safety gates | `pytest tests/test_safety_gates_*.py tests/test_run_safety_gate_ci.py tests/test_certification_manifest_schema.py tests/test_per_platform_certification.py -q` + `python scripts/infra/run_safety_gate_ci.py --platform torch_ref --output artifacts/ci_manifest_torch_ref.json` | Fail-closed cert |
 | Phone app layer | `pytest tests/test_connectivity_state_machine.py tests/test_stage_b_timeout.py tests/test_ota_staging.py tests/test_local_rollback.py tests/test_haptic_urgency.py -q` | Connectivity/OTA/haptics |
 | RAG reliability | `pytest tests/test_rag_reliability.py -q` | Advisory SLO / events |

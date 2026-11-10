@@ -97,7 +97,7 @@ Status: `[E]` exists in repo (path), `[P]` planned.
 | C-25 | Cognito | Short-lived tokens | sign-in → JWT | — | AWS | — | — | no embedded creds | integration | [P] |
 | C-26 | CloudWatch | Logs/metrics/alarms | events | — | AWS | — | — | no PII | ops tests | [P] |
 | C-27 | Training & evaluation | Datasets, training, eval, benchmark, selection | data → checkpoints, reports | SageMaker, local | Mac/AWS | batch | — | licence tags | pytest + gates | partial `[E] ml/training/*`, `scripts/ops/sagemaker_train.py` |
-| C-28 | Release & signing | Certify → manifest → sign → publish | artifacts → packages | KMS, S3, CI | CI/AWS | per release | any gate fail → no package | signing key isolation | `gate_release` | partial `[E] ml/infra/artifact_signing.py` (must fix) |
+| C-28 | Release & signing | Certify → manifest → sign → publish | artifacts → packages | KMS, S3, CI | CI/AWS | per release | any gate fail → no package | signing key isolation | `gate_release` | partial `[E] ml/infra/artifact_signing.py`: Ed25519 instance contract + YAML policy shipped 2026-11-07; key custody (file key in secret store vs KMS) open |
 | C-29 | Python reference pipeline | Same 7 components in Python for eval + golden vectors | clips → `HazardResult` JSONL | C-27 | Mac | dev | — | dev data only | pytest | [P] |
 | C-30 | Web simulator | Visual debugging of reference pipeline | uploads → overlays | C-29 | Mac/local | dev | — | local only | Playwright | `[E] tools/simulation/web_simulator.py` |
 

@@ -1,6 +1,6 @@
 # Project status and health
 
-*Last updated: May 30 2026 — post Phase 0–7 integration pass.*
+*Last updated: Nov 7 2026 — integrity and security remediation (PRs #35, #38, #39, #40). Detailed reference: [architecture/MAXSIGHT_ARCHITECTURE.md](architecture/MAXSIGHT_ARCHITECTURE.md).*
 
 This document summarizes the current status of the MaxSight repo: what is implemented, what is tested, and what to watch when running or deploying.
 
@@ -39,7 +39,10 @@ This document summarizes the current status of the MaxSight repo: what is implem
 - **SageMaker entry:** `ml/training/sagemaker_entry.py` — S3 path safety pre-flight check on startup.
 - **Security policy:** `ml/infra/security_policy.py` — validates IAM stubs against overly permissive principal patterns.
 - **Pre-SageMaker gate:** `scripts/infra/pre_sagemaker_gate.py` — 7-check gate (tiers, contracts, security, reproducibility, ontology, constraints, deprecations). Run before any SM job.
-- **Canonical runner:** `scripts/product/run.py` — `train | validate | export | package | transfer | smoke | gate`.
+- **Canonical runner:** `scripts/product/run.py` — `train | validate | export | package | transfer | smoke | gate | certify` (`certify --sign` signs all-pass artifacts).
+- **Model artifact signatures:** Ed25519 instance contract (`docs/contracts/schemas/artifact_signature.json`) under `configs/security/artifact_signing.yaml`; devices refuse unsigned/tampered artifacts. The former HMAC keys were public and are no longer trusted. **No public keys are provisioned yet**, so devices refuse every model until the key ceremony (`ml/runtime/stage_a/keys/README.md`).
+- **Strict weight loading:** inference, export and deploy use `ml/training/checkpoint_io.load_model_weights` (all-or-nothing); the Stage A runner and SageMaker `model_fn` refuse unloadable or missing checkpoints.
+- **Data integrity:** split manifests and the audit refuse the same image in two splits; training verifies gold shard `sha256`; the legacy COCO splitter groups byte-identical images.
 
 ### Haptics and app
 - **Haptic backends:** `app/ui/haptic_backends.py` — `MAXSIGHT_HAPTIC_BACKEND` selects Darwin / Linux / Log / Noop.
@@ -57,7 +60,11 @@ This document summarizes the current status of the MaxSight repo: what is implem
 | Runtime mode + orchestrator | `tests/test_runtime_mode.py` | varies |
 | Integration structure (GradNorm, timing) | `tests/test_integration_structure.py` | 7 tests |
 
+| Integrity and security (2026-11) | `tests/test_strict_weight_loading.py`, `tests/test_artifact_signature_contract.py`, `tests/unit/test_split_content_leakage.py`, `tests/unit/test_coco_splitter_content.py`, `tests/test_gold_shard_verification.py`, `tests/test_checkpoint_content_hash.py`, `tests/test_hybrid_backbone_integration.py`, `tests/test_dynamic_conv_flag.py`, `tests/test_scene_graph_relation_index.py`, `tests/test_personal_mode_user_rows.py`, `tests/test_auth_token_secret.py` | targeted, all passing locally |
+
 Run key suite: `pytest tests/test_phase0_contracts.py tests/test_phase1_foundations.py tests/test_production_remediation.py tests/test_therapy.py -q`
+
+Full suite: last clean local baseline 1301 passed / 5 skipped / 12 xfailed / 0 failed; the 2026-11-07 revision must be re-verified in AWS (the local run was invalidated by a full disk).
 
 Pre-SageMaker gate: `python scripts/product/run.py gate` (must exit 0 before any SM launch)
 
@@ -68,6 +75,8 @@ Pre-SageMaker gate: `python scripts/product/run.py gate` (must exit 0 before any
 - **Haptics:** macOS requires PyObjC/Swift; Linux requires `evdev` with FF-capable hardware. Use `log` backend in CI.
 - **JIT / ExecuTorch export:** Tracing can hit unsupported ops; use CPU + JIT-only for stability.
 - **CLIP:** Unavailable in this environment (CVE-2025-32434 / torch.load restriction) — falls back to internal encoder. Upgrade torch ≥ 2.6 or use safetensors checkpoints.
+- **Hybrid tiers:** T2_HYBRID_VIT, T3, T4 and T5 now run the hybrid CNN–ViT branch (it previously failed silently on every call); checkpoints trained before 2026-11-07 carry untrained hybrid weights.
+- **Dynamic convolution:** real layer behind `use_dynamic_conv`, off in every tier and training YAML until retrained.
 - **Silver tier RAG:** Gold tier enables RAG; Bronze tier disables it. Silver depends on `enable_rag` in `ml/config/tiers/silver.yaml`.
 
 ## How to use this doc

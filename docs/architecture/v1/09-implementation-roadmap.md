@@ -83,7 +83,7 @@ Every task starts as `Not started`. `Partial` means some existing code is reused
 | P5-03 | Cloud | Bedrock integration per task (SB-OCR, SCENE, VQA, FIND synonyms) with grounding prompts | P5-02, DR-213 | D4.1 | D4.5 eval run | eval | report | Not started | hallucination |
 | P5-04 | Cloud | Knowledge retrieval over the approved corpus | P5-02 | corpus licence register; index | citation eval | eval | report | Not started | corpus approval |
 | P5-05 | iOS | SpeechInput + Router + StageBClient + on-device OCR | P4-08, P5-02 | D6.1 | T-B-04/05/06 pass; INV-1/2 on device | XCTest | recording | Not started | ASR accuracy |
-| P5-06 | Release | Signing pipeline: certification → manifest → KMS sign → S3 releases; fix `artifact_signing.py:42-45` random key; ECDSA verify replacing HMAC in `verify.py:20-53` | P3-05 | D2.13 | tamper/rotation tests pass | T-M | CI graph | Partial | key custody |
+| P5-06 | Release | Signing pipeline: certification → manifest → KMS sign → S3 releases; fix `artifact_signing.py:42-45` random key; ECDSA verify replacing HMAC in `verify.py:20-53` | P3-05 | D2.13 | tamper/rotation tests pass | T-M | CI graph | Partial (2026-11-07: random key removed; HMAC replaced by an **Ed25519** instance contract with tamper/untrusted-key/rotation-slot tests; S3 publish and KMS custody not done) | key custody: plan said KMS ECDSA, implementation uses an Ed25519 file key from the secret store; owner decision |
 
 ### D9.6 Phase 6: Validation
 
