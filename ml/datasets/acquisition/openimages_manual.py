@@ -27,7 +27,9 @@ from ml.datasets.label_map import LabelMap
 from ml.datasets.manifest import BoxRecord, ImageRecord
 
 SOURCE = "openimages"
+DATASET_VERSION = "v7"
 LICENSE = "annotations CC BY 4.0; images CC BY 2.0"
+LICENCE_ID = "CC-BY-2.0"  # the images' listed licence; per-image author still to be recorded
 BUCKET = "open-images-dataset"
 SPLITS = ("train", "validation", "test")
 URLS = {
@@ -226,5 +228,7 @@ def to_records(
                 f"{SOURCE}:{image_id}", SOURCE, rel, w, h, f"{SOURCE}:{image_id}", tuple(recs),
                 tuple(ignores), license=LICENSE, extra={"split": split},
                 sha256=file_hash(root / rel, "sha256"),  # recorded so raw verification can detect changes
+                dataset_version=DATASET_VERSION, licence_id=LICENCE_ID, label_map_version=label_map.version,
+                annotation_source="source_dataset",
             ))
     return out

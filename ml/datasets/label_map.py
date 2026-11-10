@@ -15,6 +15,7 @@ class LabelMap:
     classes: tuple[str, ...]
     sources: dict[str, dict[str, str]]
     ignore: dict[str, frozenset[str]]
+    version: str = ""  # schema_version of the label map file, recorded on every manifest record
 
     @classmethod
     def load(cls, path: Path | str = DEFAULT_PATH) -> LabelMap:
@@ -26,7 +27,7 @@ class LabelMap:
             if unknown:
                 raise ValueError(f"{src}: maps to classes not in the class space: {sorted(unknown)}")
         ignore = {src: frozenset(names) for src, names in raw.get("ignore", {}).items()}
-        return cls(classes=classes, sources=sources, ignore=ignore)
+        return cls(classes=classes, sources=sources, ignore=ignore, version=str(raw.get("schema_version", "")))
 
     def map(self, source: str, name: str) -> str | None:
         """Return the MaxSight class for a source class name, or None if unmapped."""
