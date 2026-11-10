@@ -44,14 +44,19 @@ def _sha256_file(path: Path) -> str:
 
 
 def default_verify_signature(artifact_path: Path) -> bool:
-    """Verify signature when a .sig exists; unsigned stubs (LKG fixtures) pass checksum-only."""
-    from ml.runtime.stage_a.verify import verify_artifact_signature
+    """Trust the artifact only under configs/security/artifact_signing.yaml.
 
-    sig = Path(str(artifact_path) + ".sig")
-    if not sig.is_file():
-        # Development/LKG fixtures may be unsigned until build-time signing lands.
-        return artifact_path.is_file()
-    return verify_artifact_signature(artifact_path, sig)
+    An unsigned artifact is refused unless the policy lists it as an explicit dev exception (it used to
+    pass whenever no .sig file existed, so deleting the .sig bypassed verification).
+    """
+    from ml.runtime.stage_a.signature_contract import SignatureError, check_artifact_signature
+
+    try:
+        check_artifact_signature(artifact_path)
+    except SignatureError as exc:
+        logger.info("stage_a.verify refused path=%s reason=%s", artifact_path, exc)
+        return False
+    return True
 
 
 @dataclass

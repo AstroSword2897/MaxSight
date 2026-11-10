@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maxsight.local/schemas/artifact_signature.json",
+  "title": "ArtifactSignature",
+  "description": "Instance contract for <artifact>.sig.json. The Ed25519 signature covers the canonical JSON of every other field (sorted keys, no whitespace), so the artifact hash, key id, time and certification are all bound to it. Runtime mirror: ml/runtime/stage_a/signature_contract.validate_instance. Policy: configs/security/artifact_signing.yaml.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_name",
+    "artifact_sha256",
+    "algorithm",
+    "key_id",
+    "signed_at",
+    "certification",
+    "signature"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "artifact_name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/\\\\]+$",
+      "description": "File name of the signed artifact; the instance sits next to it as <artifact_name>.sig.json."
+    },
+    "artifact_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "algorithm": { "type": "string", "const": "ed25519" },
+    "key_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$",
+      "description": "First 16 hex chars of SHA-256 over the raw 32-byte Ed25519 public key."
+    },
+    "signed_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "certification": {
+      "type": "object",
+      "description": "The model certification manifest (model_certification_manifest.json); only all-pass artifacts are signed.",
+      "required": ["all_passed"],
+      "properties": { "all_passed": { "const": true } }
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]{86}==$",
+      "description": "Base64 of the 64-byte Ed25519 signature."
+    }
+  }
+}
