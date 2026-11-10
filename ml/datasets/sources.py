@@ -20,6 +20,13 @@ DEFAULT_DATA_ROOT = REPO / "datasets"
 
 ROLES = ("pretrain", "eval_only", "research")
 ACCESS_KINDS = ("automatic", "registration", "license_acceptance", "credentials", "manual_download")
+SUBSET_POLICIES = ("full", "selective")
+
+# Every source must say how it may be used, not only where it comes from.
+GOVERNANCE_KEYS = (
+    "intended_use", "subset_policy", "attribution", "redistribution",
+    "archive_format", "annotations", "preprocessing", "limitations",
+)
 ACQUIRED_MARKER = "ACQUIRED.json"  # written under raw/<id>/ after files are present and checksummed
 VALIDATED_MARKER = "VALIDATED.json"  # written under processed/<id>/ after the audit passes
 
@@ -54,10 +61,22 @@ class Source:
     access_kind: str
     access_note: str
     raw: dict
+    governance: dict
 
     @property
     def non_commercial(self) -> bool:
         return self.commercial_use != "true"
+
+
+def _check_governance(source_id: str, entry: dict) -> dict:
+    """Return the governance block, or raise if any required field is missing or empty."""
+    governance = entry.get("governance") or {}
+    missing = [key for key in GOVERNANCE_KEYS if not governance.get(key)]
+    if missing:
+        raise ValueError(f"{source_id}: governance is missing {missing}")
+    if governance["subset_policy"] not in SUBSET_POLICIES:
+        raise ValueError(f"{source_id}: governance.subset_policy must be one of {SUBSET_POLICIES}")
+    return governance
 
 
 def load_registry(path: Path | str = DEFAULT_REGISTRY) -> dict[str, Source]:
@@ -73,6 +92,7 @@ def load_registry(path: Path | str = DEFAULT_REGISTRY) -> dict[str, Source]:
             id=sid, name=d["name"], role=d["role"], version=str(d["version"]), homepage=d["homepage"],
             license_id=lic["id"], commercial_use=str(lic["commercial_use"]).lower(),
             access_kind=d["access"]["kind"], access_note=d["access"].get("note", ""), raw=d,
+            governance=_check_governance(sid, d),
         )
     return out
 
@@ -80,13 +100,26 @@ def load_registry(path: Path | str = DEFAULT_REGISTRY) -> dict[str, Source]:
 def current_state(src: Source, data_root: Path = DEFAULT_DATA_ROOT) -> State:
     """Highest state with on-disk evidence."""
     validated = data_root / "processed" / src.id / VALIDATED_MARKER
+    acquired = data_root / "raw" / src.id / ACQUIRED_MARKER
+    processed = data_root / "processed" / src.id
+
+    # A new acquisition invalidates every older processed artifact and audit.
+    # Comparing evidence mtimes also covers callers that cannot explicitly clear
+    # the processed directory or validation marker.
+    processed_mtime = max(
+        (path.stat().st_mtime_ns for path in processed.rglob("*") if path.is_file()),
+        default=-1,
+    )
+    if acquired.exists() and acquired.stat().st_mtime_ns > processed_mtime:
+        info = json.loads(acquired.read_text(encoding="utf-8"))
+        return State.RAW_VERIFIED if info.get("verified") else State.DOWNLOADED_UNVERIFIED
+
     if validated.exists():
         return State.VALIDATED
-    if (data_root / "processed" / src.id).is_dir() and any((data_root / "processed" / src.id).iterdir()):
+    if processed.is_dir() and any(processed.iterdir()):
         return State.PREPROCESSED_UNVERIFIED
-    marker = data_root / "raw" / src.id / ACQUIRED_MARKER
-    if marker.exists():
-        info = json.loads(marker.read_text(encoding="utf-8"))
+    if acquired.exists():
+        info = json.loads(acquired.read_text(encoding="utf-8"))
         return State.RAW_VERIFIED if info.get("verified") else State.DOWNLOADED_UNVERIFIED
     return State.NOT_DOWNLOADED
 
@@ -131,7 +164,15 @@ def write_acquired_marker(raw: Path, *, verified: bool, split: str | None = None
         payload = {"verified": verified, "acquired_at": _utc_now(), **info}
     else:
         splits = _read_marker_splits(marker)
-        splits[split] = {"verified": verified, "acquired_at": _utc_now(), **info}
+        previous = splits.get(split, {})
+        # Keep when the split was first acquired, even when a later run rewrites the entry.
+        first_acquired_at = previous.get("first_acquired_at") or previous.get("acquired_at") or _utc_now()
+        splits[split] = {
+            "verified": verified,
+            "acquired_at": _utc_now(),
+            **info,
+            "first_acquired_at": first_acquired_at,
+        }
         payload = {
             "verified": all(entry.get("verified") for entry in splits.values()),
             "updated_at": _utc_now(),

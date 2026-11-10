@@ -6,6 +6,7 @@ images come from each record's ``coco_url`` with a hard byte budget.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import time
@@ -15,7 +16,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ml.datasets.acquisition.fetch import download_resumable
+from ml.datasets.acquisition.fetch import download_resumable, file_hash
 from ml.datasets.label_map import LabelMap
 from ml.datasets.manifest import BoxRecord, ImageRecord
 
@@ -55,15 +56,18 @@ def select_records(
     """
     cats = {c["id"]: c["name"] for c in annotations["categories"]}
     images = {im["id"]: im for im in annotations["images"]}
+    # Each COCO image has its own Flickr licence (many are NonCommercial or NoDerivs).
+    licence_names = {lic["id"]: lic["name"] for lic in annotations.get("licenses", [])}
     by_image: dict[int, list[dict]] = defaultdict(list)
     for ann in annotations["annotations"]:
         by_image[ann["image_id"]].append(ann)
 
-    mapped: dict[int, tuple[list[BoxRecord], list[tuple[float, float, float, float]]]] = {}
+    mapped: dict[int, tuple[list[BoxRecord], list[tuple[float, float, float, float]], list[str]]] = {}
     freq: Counter[str] = Counter()
     for image_id, anns in by_image.items():
         boxes: list[BoxRecord] = []
         ignores: list[tuple[float, float, float, float]] = []
+        box_annotation_ids: list[str] = []  # original COCO ids of the kept boxes, in order ("" if absent)
         for ann in anns:
             name = cats[ann["category_id"]]
             x, y, w, h = ann["bbox"]
@@ -77,8 +81,9 @@ def select_records(
                 ignores.append(xyxy)  # real but too small to train on: ignore it, never leave it as background
                 continue
             boxes.append(BoxRecord(target, xyxy, name))
+            box_annotation_ids.append(str(ann.get("id", "")))
         if boxes:
-            mapped[image_id] = (boxes, ignores)
+            mapped[image_id] = (boxes, ignores, box_annotation_ids)
             freq.update({b.cls for b in boxes})
 
     rarity = {c: freq.get(c, 0) for c in label_map.classes}
@@ -90,11 +95,16 @@ def select_records(
     counts: Counter[str] = Counter()
     out: list[ImageRecord] = []
     for image_id in ids:
-        boxes, ignores = mapped[image_id]
+        boxes, ignores, box_annotation_ids = mapped[image_id]
         if all(counts[b.cls] >= per_class_cap for b in boxes):
             continue
         counts.update(b.cls for b in boxes)
         im = images[image_id]
+        provenance = {
+            "image_license": licence_names.get(im.get("license"), "unknown"),
+            "flickr_url": im.get("flickr_url", ""),
+            "annotation_ids": ",".join(box_annotation_ids),
+        }
         out.append(
             ImageRecord(
                 image_id=f"coco:{image_id}",
@@ -107,6 +117,7 @@ def select_records(
                 ignore_regions=tuple(ignores),
                 url=im.get("coco_url", ""),
                 license=LICENSE,
+                extra=provenance,
             )
         )
     return out
@@ -118,9 +129,12 @@ def manifest_path(root: Path, split: str) -> Path:
 
 
 def _download_one(rec: ImageRecord, root: Path, retries: int = 3) -> tuple[ImageRecord, int, str]:
+    """Download one image. Returns (record with its sha256 filled in, bytes on disk, error or "")."""
     dest = root / rec.path
+
+    # Resumed run: the file is already here. Hash it so the manifest still records its sha256.
     if dest.exists() and dest.stat().st_size > 0:
-        return rec, dest.stat().st_size, ""
+        return rec.with_(sha256=file_hash(dest, "sha256")), 0, ""
     dest.parent.mkdir(parents=True, exist_ok=True)
     last = ""
     for attempt in range(retries):
@@ -128,10 +142,11 @@ def _download_one(rec: ImageRecord, root: Path, retries: int = 3) -> tuple[Image
             req = urllib.request.Request(rec.url, headers=_UA)
             with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
                 data = resp.read()
+            # Write to a .part file first, so an interrupted write never looks like a finished image.
             tmp = dest.with_suffix(dest.suffix + ".part")
             tmp.write_bytes(data)
             tmp.replace(dest)
-            return rec, len(data), ""
+            return rec.with_(sha256=hashlib.sha256(data).hexdigest()), len(data), ""
         except Exception as exc:  # noqa: BLE001 - retried, then reported
             last = f"{type(exc).__name__}: {exc}"
             time.sleep(1.5 * (attempt + 1))

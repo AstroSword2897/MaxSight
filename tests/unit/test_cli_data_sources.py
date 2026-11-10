@@ -23,6 +23,14 @@ def test_status_lists_all_eight_datasets_as_not_downloaded(tmp_path):
     assert out.stdout.count("NOT_DOWNLOADED") == 8
 
 
+def test_verify_fails_when_nothing_was_acquired(tmp_path):
+    """verify must never report success for a dataset with no ACQUIRED marker."""
+    out = _run("data_sources.py", "--data-root", str(tmp_path), "verify", "coco2017")
+    assert out.returncode == 1
+    assert "nothing acquired" in out.stdout
+    assert "Traceback" not in out.stderr
+
+
 def test_plan_sanpo_requires_explicit_sessions(tmp_path):
     out = _run("data_sources.py", "--data-root", str(tmp_path), "plan", "sanpo")
     assert out.returncode == 2 and "ERROR" in out.stderr and "Traceback" not in out.stderr
