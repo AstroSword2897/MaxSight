@@ -300,7 +300,10 @@ def _gold_shard_uris_from_cfg(
                 uris.append(str((meta_dir / uri).resolve()))
         if not uris:
             raise ValueError(f"{split_label}: gold meta at {meta_path} has no shard entries")
-        return uris, meta
+        # The dataset looks up each shard's sha256 by URI, so the meta must name the resolved URIs too;
+        # with the relative names every lookup missed and verification silently skipped every shard.
+        resolved_shards = [{**shard, "uri": uri} for shard, uri in zip(meta["shards"], uris)]
+        return uris, {**meta, "shards": resolved_shards}
 
     if shard_paths:
         uris = []
@@ -356,6 +359,7 @@ def _create_gold_data_loaders_for_resolved(
         strict_images=True,
         expected_label_space=label_space,
         num_classes=num_classes,
+        verify_shards=train_meta is not None,
     )
     val_ds = GoldManifestDataset(
         val_uris,
@@ -365,6 +369,7 @@ def _create_gold_data_loaders_for_resolved(
         strict_images=True,
         expected_label_space=label_space,
         num_classes=num_classes,
+        verify_shards=val_meta is not None,
     )
     train_loader = DataLoader(
         train_ds,
@@ -401,6 +406,7 @@ def _create_gold_data_loaders_for_resolved(
             strict_images=True,
             expected_label_space=label_space,
             num_classes=num_classes,
+            verify_shards=test_meta is not None,
         )
         test_loader = DataLoader(
             test_ds,
