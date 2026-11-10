@@ -16,7 +16,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ml.datasets.acquisition.fetch import download_resumable, file_hash
+from ml.datasets.acquisition.fetch import BUDGET_REASON, download_resumable, file_hash
 from ml.datasets.label_map import LabelMap
 from ml.datasets.manifest import BoxRecord, ImageRecord
 
@@ -170,7 +170,7 @@ def download_images(
     with ThreadPoolExecutor(max_workers=workers) as pool:
         for i in range(0, len(records), batch):
             if used >= budget:
-                failed.extend((rec.image_id, "byte budget reached") for rec in records[i:])
+                failed.extend((rec.image_id, BUDGET_REASON) for rec in records[i:])
                 break
             for rec, size, err in pool.map(lambda r: _download_one(r, root), records[i : i + batch]):
                 if err:
